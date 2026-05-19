@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3L Skills 追踪</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #0f0f1a;
+    color: #e0e0e0;
+    min-height: 100vh;
+}
+.header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    border-bottom: 2px solid #e94560;
+    padding: 24px 20px;
+    text-align: center;
+}
+.header h1 { font-size: 22px; color: #fff; letter-spacing: 2px; }
+.header .sub { color: #a0a0b0; font-size: 13px; margin-top: 6px; }
+.container { max-width: 960px; margin: 0 auto; padding: 20px; }
+
+.nav { display:flex; gap:10px; justify-content:center; margin-top:10px; flex-wrap:wrap; }
+.nav a { color:#4ecdc4; text-decoration:none; font-size:12px; }
+.nav .sep { color:#333; }
+.nav .cur { color:#a855f7; font-size:12px; }
+
+.section {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 1px solid #2a2a4e;
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+}
+.section-title {
+    font-size: 18px; color: #4ecdc4; margin-bottom: 14px;
+    padding-bottom: 8px; border-bottom: 1px solid #2a2a4e;
+}
+
+/* Skill list */
+.skill-item {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid #2a2a4e;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 6px;
+}
+.skill-item .name { font-size: 13px; font-weight: 600; color: #4ecdc4; }
+.skill-item .desc { font-size: 12px; color: #888; margin-top: 2px; }
+.tag { display: inline-block; font-size: 10px; padding: 1px 8px; border-radius: 8px; margin-left: 6px; }
+.tag.created { background: #e94560; color: #fff; }
+.tag.updated { background: #ffd700; color: #000; }
+.tag.existing { background: #444; color: #aaa; }
+
+/* Update record - day card */
+.day-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid #2a2a4e;
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 14px;
+}
+.day-card .date-badge {
+    display: inline-block;
+    background: #e94560;
+    color: #fff;
+    padding: 4px 16px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+.day-card .change-item {
+    padding: 8px 12px;
+    border-left: 3px solid #2a2a4e;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,0.02);
+    border-radius: 0 6px 6px 0;
+}
+.day-card .change-item .sname { font-size: 13px; font-weight: 600; }
+.day-card .change-item .sdesc { font-size: 12px; color: #888; margin-top: 2px; }
+.day-card .change-item .spoints { font-size: 11px; color: #666; margin-top: 3px; padding-left: 12px; }
+.day-card .change-item .spoints li { margin-bottom: 1px; }
+
+.footer { text-align: center; padding: 20px; color: #444; font-size: 11px; border-top: 1px solid #1a1a2e; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>📖 Skills 追踪</h1>
+    <div class="sub">所有Skills一览 + 逐日更新记录</div>
+    <div class="nav">
+        <a href="/">🏠 成果跟踪</a>
+        <span class="sep">|</span>
+        <a href="/review.html">📋 每日复盘</a>
+        <span class="sep">|</span>
+        <a href="/simulation.html">📊 模拟交易</a>
+        <span class="sep">|</span>
+        <span class="cur">📖 Skills追踪</span>
+    </div>
+</div>
+
+<div class="container">
+
+<!-- ===== Part 1: All Skills ===== -->
+<div class="section">
+    <div class="section-title">📦 全部Skills</div>
+
+    <div class="skill-item">
+        <div class="name">daily-achievements-page <span class="tag updated">更新</span></div>
+        <div class="desc">成果看板持久化工作日志 · PDF生成 · 历史归档 · 隔离规则</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">daily-3l-review <span class="tag created">创建</span></div>
+        <div class="desc">每日复盘页面完整规范 — 4步骤 · 历史存档 · 自选买点 · 关键点图</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-kline-keypoint-chart <span class="tag updated">更新</span></div>
+        <div class="desc">A股3L关键点标注K线图生成（SVG/PNG/PDF），暗色风格</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">stock-simulation-v33</div>
+        <div class="desc">3L模拟交易v33引擎 — 跑完整4周模拟、生成报告</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-data-sources <span class="tag updated">更新</span></div>
+        <div class="desc">5个稳定A股数据源分层使用方案（mootdx/腾讯/akshare/同花顺）</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-3l-analysis</div>
+        <div class="desc">个股3L体系分析（动量主线/最强逻辑/量价择时）</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-3l-simulation-v2</div>
+        <div class="desc">3L模拟交易引擎（中继+突破双选，板块动量加权分配）</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">main-line-judgment</div>
+        <div class="desc">20日动量+个股活跃度动态主线板块判定</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">market-scan-workflow</div>
+        <div class="desc">系统化扫描8大方向自选股，30日K线缓存买点分析</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">market-peak-trough</div>
+        <div class="desc">综合评分法判断大盘波峰/波谷/波中，决定总仓位策略</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">acceleration-judgment</div>
+        <div class="desc">3L量价语言判断个股加速信号</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">weekly-report-standard</div>
+        <div class="desc">每周交易报告9部分标准格式，含逐日主线跟踪+买点信号</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-chart-pdf</div>
+        <div class="desc">批量生成A股K线关键点SVG/PNG图，生成可分享PDF报告</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-simulation</div>
+        <div class="desc">基础模拟交易引擎（自定义本金/日期/选股/仓位）</div>
+    </div>
+</div>
+
+<!-- ===== Part 2: Update Records ===== -->
+<div class="section">
+    <div class="section-title">📝 更新记录</div>
+
+    <!-- Day card: 2026-05-20 -->
+    <div class="day-card">
+        <div class="date-badge">2026-05-20</div>
+
+        <div class="change-item">
+            <div class="sname">daily-achievements-page <span class="tag updated">大幅更新</span></div>
+            <div class="sdesc">成果看板持久化工作日志 · PDF生成 · 历史归档 · 隔离规则</div>
+            <ul class="spoints">
+                <li>更新成果完整流程（专项PDF生成→fileDesc映射→当日不archive）</li>
+                <li>新增重点记忆章节（每个待办挂PDF/0→1描述/不碰旧PDF/模拟隔离）</li>
+                <li>新增复盘已知约定（toggleChart TR判断/📊无字/独立卡片区）</li>
+                <li>新增pitfall 10~13（图表布局/TR判断/图标统一/onclick规范）</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">daily-3l-review <span class="tag created">创建</span></div>
+            <div class="sdesc">每日复盘页面完整规范 — 4步骤 · 历史存档 · 自选买点 · 关键点图</div>
+            <ul class="spoints">
+                <li>页面4步骤结构+导航栏+历史复盘列表</li>
+                <li>JS加载逻辑（初始加载/历史跳转/图表切换/toggleChart）</li>
+                <li>行业板块TOP15数据源+领涨股图表方案</li>
+                <li>15条pitfalls（含本次调试总结的所有坑）</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">a-stock-kline-keypoint-chart <span class="tag updated">更新</span></div>
+            <div class="sdesc">A股3L关键点标注K线图生成（SVG/PNG/PDF）</div>
+            <ul class="spoints">
+                <li>新增方式C（复盘页面领涨股快速预览图700×380）</li>
+                <li>新增展示规则说明（object标签/独立卡片容器）</li>
+                <li>新增codeMap股票代码映射说明</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">a-stock-data-sources <span class="tag updated">更新</span></div>
+            <div class="sdesc">5个稳定A股数据源分层使用方案</div>
+            <ul class="spoints">
+                <li>新增同花顺行业板块实时排名章节</li>
+                <li>新增大盘资金流向数据章节</li>
+                <li>新增IP封锁验证日志（2026-05-20实测）</li>
+            </ul>
+        </div>
+    </div>
+
+</div>
+
+</div>
+
+<div class="footer">3L 交易体系 · Hermes Agent · 2026</div>
+</body>
+</html>

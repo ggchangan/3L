@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3L 模拟交易 · v33</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', monospace;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-bottom: 2px solid #e94560;
+            padding: 24px 20px;
+            text-align: center;
+        }
+        .header h1 { font-size: 24px; color: #fff; letter-spacing: 3px; }
+        .header .sub { color: #a0a0b0; font-size: 13px; margin-top: 6px; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
+
+        /* Summary cards */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .summary-card {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4e;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        .summary-card .num { font-size: 26px; font-weight: 700; color: #4ecdc4; }
+        .summary-card .num.pos { color: #f44336; }
+        .summary-card .label { font-size: 11px; color: #888; margin-top: 4px; }
+
+        /* Week cards */
+        .week-card {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4e;
+            border-radius: 14px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .week-card .w-title {
+            font-size: 16px; font-weight: 700; color: #e67e22;
+            margin-bottom: 10px;
+        }
+        .week-card .w-title .w-pnl { color: #f44336; margin-left: 12px; }
+        .week-card .w-title .w-pnl.neg { color: #4caf50; }
+        .week-card table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .week-card th {
+            text-align: left;
+            color: #4ecdc4;
+            padding: 6px 8px;
+            border-bottom: 1px solid #2a2a4e;
+            font-weight: 600;
+        }
+        .week-card td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #1a1a2e;
+            color: #ccc;
+        }
+        .week-card td.buy { color: #f44336; }
+        .week-card td.sell { color: #4caf50; }
+        .week-card td.half { color: #ffd700; }
+
+        /* Section title */
+        .section-title {
+            font-size: 16px;
+            color: #4ecdc4;
+            margin: 28px 0 14px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #2a2a4e;
+        }
+
+        /* Back link */
+        .nav-bar {
+            display: flex; gap: 12px; justify-content: center; margin-bottom: 20px;
+        }
+        .nav-bar a {
+            color: #4ecdc4; text-decoration: none; font-size: 13px;
+            padding: 6px 16px; border: 1px solid #2a2a4e; border-radius: 8px;
+        }
+        .nav-bar a:hover { background: rgba(78,205,196,0.1); }
+
+        .footer {
+            text-align: center; padding: 24px; color: #555; font-size: 12px;
+            border-top: 1px solid #1a1a2e; margin-top: 30px;
+        }
+
+        @media (max-width: 600px) {
+            .week-card table { font-size: 10px; }
+            .week-card td, .week-card th { padding: 4px 4px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 3L 模拟交易 · v33</h1>
+        <div class="sub">动量主线 · 最强逻辑 · 量价择时 · 细分赛道聚类</div>
+        <div style="margin-top:10px; display:flex; gap:10px; justify-content:center;">
+<a href="/" style="color:#4ecdc4; text-decoration:none; font-size:12px;">🏠 成果跟踪</a>
+            <span style="color:#333;">|</span>
+            <a href="/review.html" style="color:#e94560; text-decoration:none; font-size:12px;">📋 每日复盘</a>
+            <span style="color:#333;">|</span>
+            <span style="color:#e67e22; font-size:12px; font-weight:bold;">📊 模拟交易</span>
+            <span style="color:#333;">|</span>
+            <a href="/skills.html" style="color:#a855f7; text-decoration:none; font-size:12px;">📖 Skills追踪</a>
+        </div>
+    </div>
+    <div class="container">
+        <!-- Summary -->
+        <div class="summary-grid" id="summaryCards">
+            <div class="summary-card"><div class="num" id="sWeeks">4</div><div class="label">模拟周数</div></div>
+            <div class="summary-card"><div class="num" id="sTotalPct">+0.43%</div><div class="label">4周累计收益 <a href="/files/模拟交易v33_总体报告.pdf" target="_blank" style="color:#4ecdc4;text-decoration:none;font-size:11px;margin-left:4px;">📄 总体</a></div></div>
+            <div class="summary-card"><div class="num" id="sTrades">73</div><div class="label">总交易笔数</div></div>
+            <div class="summary-card"><div class="num" id="sVersion">v33</div><div class="label">引擎版本</div></div>
+        </div>
+
+        <div id="weeksContainer"></div>
+    </div>
+
+    <div class="footer">
+        3L 交易体系 · 模拟交易v33 · 细分赛道聚类 · Hermes Agent · 2026
+    </div>
+
+    <script>
+        // 各周交易数据和PKL文件名
+        const WEEKS = ['w1', 'w2', 'w3', 'w4'];
+        const WEEK_LABELS = { w1: '第1周 (4/7~4/10)', w2: '第2周 (4/13~4/17)', w3: '第3周 (4/20~4/24)', w4: '第4周 (4/27~4/30)' };
+        const WEEK_PNLS = { w1: '+0.49%', w2: '+0.53%', w3: '+0.77%', w4: '+0.43%' };
+        const WEEK_TRADES = { w1: 13, w2: 19, w3: 22, w4: 19 };
+        const WEEK_MAIN = { w1: '半导体', w2: '创新药→半导体', w3: '算力→商业航天', w4: '半导体' };
+        const WEEK_REPORT = { w1: '/files/模拟交易v33_第1周报告.pdf', w2: '/files/模拟交易v33_第2周报告.pdf', w3: '/files/模拟交易v33_第3周报告.pdf', w4: '/files/模拟交易v33_第4周报告.pdf' };
+
+        // 交易数据（从PKL中提取的缩略版）
+        const TRADE_DATA = {
+            w1: [
+                {date:'0407', dir:'买入', code:'688548', name:'688548', sector:'半导体', type:'突破买点', qty:7500, price:24.54},
+                {date:'0407', dir:'买入', code:'688347', name:'688347', sector:'半导体', type:'突破买点', qty:700, price:120.28},
+                {date:'0407', dir:'买入', code:'300604', name:'300604', sector:'半导体', type:'突破买点', qty:300, price:130.51},
+                {date:'0407', dir:'买入', code:'600584', name:'600584', sector:'半导体', type:'突破买点', qty:3700, price:41.98},
+                {date:'0407', dir:'买入', code:'002222', name:'002222', sector:'算力', type:'中继买点', qty:1200, price:80.78},
+                {date:'0408', dir:'买入', code:'688548', name:'688548', sector:'半导体', type:'突破买点', qty:7500, price:24.54},
+                {date:'0408', dir:'买入', code:'688347', name:'688347', sector:'半导体', type:'突破买点', qty:700, price:120.28},
+                {date:'0408', dir:'买入', code:'300604', name:'300604', sector:'半导体', type:'突破买点', qty:300, price:130.51},
+                {date:'0408', dir:'买入', code:'600584', name:'600584', sector:'半导体', type:'突破买点', qty:700, price:41.98},
+                {date:'0408', dir:'买入', code:'300346', name:'300346', sector:'半导体', type:'突破买点', qty:300, price:48.18},
+                {date:'0409', dir:'-', code:'', name:'', sector:'', type:'持仓不动', qty:'', price:''},
+                {date:'0410', dir:'-', code:'', name:'', sector:'', type:'持仓不动', qty:'', price:''},
+            ],
+            w2: [
+                {date:'0413', dir:'买入', code:'300436', name:'300436', sector:'创新药', type:'中继买点', qty:800, price:113.48},
+                {date:'0413', dir:'买入', code:'688428', name:'688428', sector:'创新药', type:'中继买点', qty:3400, price:28.90},
+                {date:'0413', dir:'买入', code:'603259', name:'603259', sector:'创新药', type:'中继买点', qty:900, price:105.71},
+                {date:'0413', dir:'买入', code:'300347', name:'300347', sector:'创新药', type:'中继买点', qty:1700, price:56.06},
+                {date:'0413', dir:'买入', code:'688235', name:'688235', sector:'创新药', type:'中继买点', qty:400, price:241.95},
+                {date:'0413', dir:'买入', code:'002222', name:'002222', sector:'算力', type:'中继买点', qty:1100, price:86.40},
+                {date:'0413', dir:'买入', code:'000338', name:'000338', sector:'算力', type:'中继买点', qty:3700, price:26.88},
+                {date:'0414', dir:'买入', code:'688234', name:'688234', sector:'半导体', type:'中继买点', qty:1000, price:92.44},
+                {date:'0414', dir:'买入', code:'002371', name:'002371', sector:'半导体', type:'中继买点', qty:200, price:481.60},
+                {date:'0414', dir:'买入', code:'600584', name:'600584', sector:'半导体', type:'突破买点', qty:2700, price:44.34},
+                {date:'0414', dir:'买入', code:'688126', name:'688126', sector:'半导体', type:'中继买点', qty:3300, price:17.80},
+                {date:'0414', dir:'买入', code:'300054', name:'300054', sector:'半导体', type:'中继买点', qty:500, price:53.05},
+                {date:'0417', dir:'买入', code:'000831', name:'000831', sector:'资源股', type:'中继买点', qty:1900, price:52.11},
+            ],
+            w3: [
+                {date:'0420', dir:'买入', code:'001339', name:'001339', sector:'算力', type:'中继买点', qty:1400, price:71.22},
+                {date:'0420', dir:'买入', code:'688519', name:'688519', sector:'算力', type:'中继买点', qty:600, price:148.95},
+                {date:'0420', dir:'买入', code:'002353', name:'002353', sector:'算力', type:'中继买点', qty:800, price:118.02},
+                {date:'0420', dir:'买入', code:'688316', name:'688316', sector:'算力', type:'中继买点', qty:1300, price:76.46},
+                {date:'0420', dir:'买入', code:'300502', name:'300502', sector:'算力', type:'中继买点', qty:100, price:583.00},
+                {date:'0420', dir:'买入', code:'605006', name:'605006', sector:'算力', type:'中继买点', qty:9500, price:10.44},
+                {date:'0420', dir:'买入', code:'301526', name:'301526', sector:'算力', type:'中继买点', qty:7200, price:13.87},
+                {date:'0421', dir:'买入', code:'001208', name:'001208', sector:'商业航天', type:'中继买点', qty:4400, price:22.49},
+                {date:'0421', dir:'买入', code:'300726', name:'300726', sector:'商业航天', type:'中继买点', qty:2100, price:45.94},
+                {date:'0421', dir:'买入', code:'600118', name:'600118', sector:'商业航天', type:'突破买点', qty:800, price:100.20},
+                {date:'0421', dir:'买入', code:'600391', name:'600391', sector:'商业航天', type:'中继买点', qty:1000, price:40.94},
+                {date:'0421', dir:'买入', code:'562510', name:'562510', sector:'商业航天', type:'中继买点', qty:31100, price:0.693},
+                {date:'0423', dir:'买入', code:'300788', name:'300788', sector:'半导体', type:'中继买点', qty:2500, price:39.23},
+                {date:'0424', dir:'买入', code:'688234', name:'688234', sector:'半导体', type:'中继买点', qty:900, price:105.55},
+            ],
+            w4: [
+                {date:'0427', dir:'买入', code:'688127', name:'688127', sector:'半导体', type:'中继买点', qty:1400, price:69.31},
+                {date:'0427', dir:'买入', code:'300788', name:'300788', sector:'半导体', type:'中继买点', qty:2700, price:36.70},
+                {date:'0427', dir:'买入', code:'603986', name:'603986', sector:'半导体', type:'中继买点', qty:300, price:303.42},
+                {date:'0427', dir:'买入', code:'688766', name:'688766', sector:'半导体', type:'中继买点', qty:300, price:262.41},
+                {date:'0427', dir:'买入', code:'000338', name:'000338', sector:'算力', type:'中继买点', qty:3300, price:29.66},
+                {date:'0427', dir:'买入', code:'002353', name:'002353', sector:'算力', type:'中继买点', qty:700, price:129.30},
+                {date:'0427', dir:'买入', code:'601179', name:'601179', sector:'算力', type:'中继买点', qty:5900, price:16.92},
+                {date:'0428', dir:'买入', code:'688126', name:'688126', sector:'半导体', type:'中继买点', qty:4800, price:20.58},
+                {date:'0428', dir:'买入', code:'688234', name:'688234', sector:'半导体', type:'中继买点', qty:900, price:104.62},
+                {date:'0428', dir:'买入', code:'688347', name:'688347', sector:'半导体', type:'中继买点', qty:700, price:138.08},
+                {date:'0428', dir:'买入', code:'688041', name:'688041', sector:'半导体', type:'中继买点', qty:200, price:289.00},
+                {date:'0428', dir:'买入', code:'300346', name:'300346', sector:'半导体', type:'中继买点', qty:800, price:50.90},
+                {date:'0428', dir:'买入', code:'002222', name:'002222', sector:'算力', type:'中继买点', qty:200, price:85.60},
+            ],
+        };
+
+        const container = document.getElementById('weeksContainer');
+
+        WEEKS.forEach(wk => {
+            const div = document.createElement('div');
+            div.className = 'week-card';
+
+            const pnl = WEEK_PNLS[wk];
+            const pnlClass = pnl.startsWith('+') ? 'w-pnl' : 'w-pnl neg';
+
+            let html = `<div class="w-title">${WEEK_LABELS[wk]} <span class="${pnlClass}">${pnl}</span> <span style="color:#888;font-size:12px;font-weight:normal;margin-left:8px;">方向: ${WEEK_MAIN[wk]} | ${WEEK_TRADES[wk]}笔</span> <a href="${WEEK_REPORT[wk]}" target="_blank" style="color:#4ecdc4;text-decoration:none;font-size:11px;margin-left:8px;">📄 周报告</a></div>`;
+
+            const trades = TRADE_DATA[wk];
+            if (trades && trades.length > 0) {
+                html += '<table><thead><tr><th>日期</th><th>方向</th><th>代码</th><th>名称</th><th>方向</th><th>买点类型</th><th>数量</th><th>价格</th></tr></thead><tbody>';
+                trades.forEach(t => {
+                    const dirClass = t.dir === '买入' ? 'buy' : t.dir === '卖出' ? 'sell' : '';
+                    html += `<tr>
+                        <td>${t.date}</td>
+                        <td class="${dirClass}">${t.dir}</td>
+                        <td>${t.code}</td>
+                        <td>${t.name}</td>
+                        <td>${t.sector}</td>
+                        <td>${t.type}</td>
+                        <td>${t.qty}</td>
+                        <td>${t.price}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
+
+            div.innerHTML = html;
+            container.appendChild(div);
+        });
+    </script>
+</body>
+</html>

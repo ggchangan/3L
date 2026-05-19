@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3L 交易体系 · 成果跟踪</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-bottom: 2px solid #e94560;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 28px;
+            color: #fff;
+            letter-spacing: 4px;
+        }
+        .header .subtitle {
+            color: #a0a0b0;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        .header .date-badge {
+            display: inline-block;
+            background: #e94560;
+            color: #fff;
+            padding: 4px 18px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        /* Main */
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        /* Today's Report Card */
+        .card-today {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4e;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .card-today::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(233,69,96,0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .card-today .card-title {
+            font-size: 20px;
+            color: #e94560;
+            margin-bottom: 12px;
+        }
+        .card-today .card-meta {
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+        .card-today .file-list {
+            list-style: none;
+        }
+        .card-today .file-list li {
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid #2a2a4e;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .card-today .file-list li:hover {
+            background: rgba(255,255,255,0.08);
+        }
+        .file-name {
+            font-size: 14px;
+        }
+        .file-name .tag {
+            display: inline-block;
+            background: #e94560;
+            color: #fff;
+            font-size: 11px;
+            padding: 1px 8px;
+            border-radius: 10px;
+            margin-left: 8px;
+        }
+        .file-name .tag.pdf { background: #e94560; }
+        .file-name .tag.new { background: #4ecdc4; }
+        .btn-download {
+            display: inline-block;
+            background: #e94560;
+            color: #fff;
+            padding: 6px 18px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+        .btn-download:hover {
+            background: #d63851;
+        }
+
+        /* Timeline / History */
+        .section-title {
+            font-size: 18px;
+            color: #4ecdc4;
+            margin: 32px 0 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #2a2a4e;
+        }
+        .history-list {
+            list-style: none;
+        }
+        .history-list li {
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid #2a2a4e;
+            border-radius: 10px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .history-list .h-date {
+            color: #4ecdc4;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .history-list .h-title {
+            color: #ccc;
+            font-size: 13px;
+        }
+        .history-list .h-link a {
+            color: #e94560;
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .history-list .h-link a:hover {
+            text-decoration: underline;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #2a2a4e;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        .stat-card .num {
+            font-size: 28px;
+            font-weight: 700;
+            color: #4ecdc4;
+        }
+        .stat-card .label {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #555;
+            font-size: 12px;
+            border-top: 1px solid #1a1a2e;
+            margin-top: 40px;
+        }
+
+        /* Empty state */
+        .empty {
+            color: #666;
+            text-align: center;
+            padding: 30px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 3L 交易体系 · 成果跟踪</h1>
+        <div class="subtitle">动量主线 · 最强逻辑 · 量价择时</div>
+        <div class="date-badge" id="todayDate">加载中...</div>
+        <div style="margin-top:10px; display:flex; gap:10px; justify-content:center;">
+            <a href="/review.html" style="color:#e94560; text-decoration:none; font-size:12px; font-weight:bold;">📋 每日复盘</a>
+            <span style="color:#333;">|</span>
+            <a href="/simulation.html" style="color:#e67e22; text-decoration:none; font-size:12px; font-weight:bold;">📊 模拟交易</a>
+            <span style="color:#333;">|</span>
+            <a href="/skills.html" style="color:#a855f7; text-decoration:none; font-size:12px; font-weight:bold;">📖 Skills追踪</a>
+            <span style="color:#333;">|</span>
+            <span style="color:#4ecdc4; font-size:12px;">🏠 成果跟踪</span>
+        </div>
+    </div>
+
+    <div class="container" id="app">
+        <!-- Today's Report -->
+        <div class="card-today">
+            <div class="card-title">📄 今日报告</div>
+            <div class="card-meta" id="todayMeta">2026-05-19 生成</div>
+            <ul class="file-list" id="todayFiles">
+                <!-- dynamically loaded from /files/ -->
+            </ul>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="section-title">📊 整体完成进度</div>
+        <div class="card-today" style="padding: 20px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <span style="color:#e0e0e0; font-size:14px;">数据管线 + 看板 + 交易系统</span>
+                <span style="color:#4ecdc4; font-size:18px; font-weight:bold;" id="progressPct">70%</span>
+            </div>
+            <div style="width:100%; height:16px; background:#1a1a2e; border-radius:10px; overflow:hidden; border:1px solid #2a2a4e;">
+                <div id="progressBar" style="width:70%; height:100%; background:linear-gradient(90deg, #e94560, #4ecdc4); border-radius:10px; transition: width 0.5s;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:6px; color:#666; font-size:11px;">
+                <span>数据源 7/8 ✅</span>
+                <span>看板 3/3 ✅</span>
+                <span>交易系统 2/3 ⏳</span>
+            </div>
+        </div>
+
+        <!-- Pending Tasks -->
+        <div class="section-title">✅ 今日完成</div>
+        <div class="card-today" style="padding: 20px;">
+            <ul class="file-list" id="doneList">
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">🌐 Web看板系统完善</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">持仓页面API修复 · 下载按钮点击修复 · 浏览器缓存控制</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📋 每日复盘页面 · 0→1上线</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            从零搭建完整复盘页面：大盘判定+同花顺行业板块TOP15实时排行+领涨股K线图（SVG+object展示）+持仓个股诊断+自选股买点信号+历史复盘列表+统一导航栏。同步修复图表布局/点击交互/图标统一问题
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📄 PDF报告生成系统</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">用fpdf2替代reportlab，支持中文字体，生成每日报告</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📊 模拟交易v33 · 完整4周</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">细分赛道聚类版本跑完4周：W1+0.49% W2+0.53% W3+0.77% W4+0.43%</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📊 模拟交易独立页面</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">开发 /simulation.html 展示4周交易明细和汇总报告</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📄 周报HTML→PDF生成系统</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">重新生成W1~W4完整8部分报告（2.7~3.3MB/份）+ 4周总体报告</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📊 模拟交易页面优化</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">各周报告链接放入每周卡片，导航栏只留总体报告，累计收益修正</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📋 weekly-report-standard skill更新</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">补全总体报告流程、部署命令、工作流规范</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="section-title">⏳ 待办任务</div>
+        <div class="card-today" style="padding: 20px;">
+            <ul class="file-list" id="pendingList">
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📋 交易纪律 · 规则确认</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">个人交易参数（持仓成本等）待确认</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#ffd700; font-size:12px; white-space:nowrap;">⏳ 待确认</span>
+                        <a href="/files/%E5%BE%85%E5%8A%9E_%E4%BA%A4%E6%98%93%E7%BA%AA%E5%BE%8B.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📋 每日复盘 · 数据接入</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">行业板块TOP15+领涨股K线图已接入，图表布局已修复。但大盘实时数据/持仓个股复盘/自选股买点信号仍需自动化填充</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#ffd700; font-size:12px; white-space:nowrap;">⏳ 部分完成</span>
+                        <a href="/files/%E5%BE%85%E5%8A%9E_%E6%AF%8F%E6%97%A5%E5%A4%8D%E7%9B%98.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📋 3L体系 · 复盘功能完善</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            ① 动量主线：手动评分/持续性跟踪/板块轮动分析&nbsp;
+                            ② 最强逻辑：个股所属主线归类+板块内排名+选股逻辑说明&nbsp;
+                            ③ 量价择时：买点验证+关键点识别+止损/止盈位计算+仓位建议&nbsp;
+                            ④ 大盘周期：波峰波谷判定与仓位匹配确认&nbsp;
+                            ⑤ 每日交易计划：基于复盘生成次日操作计划
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#e94560; font-size:12px; white-space:nowrap;">🔧 待开发</span>
+                        <a href="/files/%E5%BE%85%E5%8A%9E_3L%E4%BD%93%E7%B3%BB%E5%A4%8D%E7%9B%98%E5%8A%9F%E8%83%BD.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">🎨 PDF生成风格统一</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">所有PDF统一用SVG深色主题方案（背景#1a1a2e + monospace），不再混用不同工具</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#ffd700; font-size:12px; white-space:nowrap;">🔄 待规范</span>
+                        <a href="/files/%E5%BE%85%E5%8A%9E_PDF%E9%A3%8E%E6%A0%BC%E7%BB%9F%E4%B8%80.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">🔧 模拟交易v33 · 产业链聚类优化</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">细分赛道聚类规则待用产业链重新定义，而非走势相关系数</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#e94560; font-size:12px; white-space:nowrap;">🔄 待优化</span>
+                        <a href="/files/%E5%BE%85%E5%8A%9E_%E4%BA%A7%E4%B8%9A%E9%93%BE%E8%81%9A%E7%B1%BB.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">🔍 iwencai 替代方案</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">akshare v1.18.62已移除iwencai，需找其他语义搜索方案</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#e94560; font-size:12px; white-space:nowrap;">🔍 待调研</span>
+                        <a href="/files/%E5%BE%85%E5%8A%9E_iwencai.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <!-- History -->
+        <div class="section-title">📅 历史成果</div>
+        <ul class="history-list" id="historyList">
+            <!-- dynamically loaded from /files/ -->
+        </ul>
+    </div>
+
+    <div class="footer">
+        3L 交易体系 · 每日成果看板 · Hermes Agent · 2026
+    </div>
+
+    <script>
+        // Set today's date
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        const wd = weekdays[d.getDay()];
+        const todayStr = `${y}-${m}-${day}`;
+        document.getElementById('todayDate').textContent = `${todayStr} 星期${wd}`;
+        document.getElementById('todayMeta').textContent = `${todayStr} 生成`;
+
+        // File descriptions mapping
+        const fileDesc = {
+            'A股数据源验证报告_20260519.pdf': 'A股数据源验证报告 · 5数据源全测',
+            '每日成果_20260519.pdf': '3L每日成果记录 · 持仓修复+下载修复+模拟引擎',
+            '每日成果_20260520.pdf': '3L每日成果记录 · 复盘页面上线+图表修复+Skills更新日志',
+            '每日复盘上线_20260520.pdf': '📋 每日复盘页面 · 首版上线报告（大盘/行业/个股/信号全模块）',
+        };
+
+        // Load files from /files/ directory listing
+        fetch('/files/?v=' + Date.now())
+            .then(r => r.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const links = doc.querySelectorAll('a');
+                const pdfs = [];
+                const otherFiles = [];
+                
+                links.forEach(a => {
+                    const href = a.getAttribute('href');
+                    if (href && !href.endsWith('/')) {
+                        const name = decodeURIComponent(href);
+                        if (name.endsWith('.pdf')) {
+                            pdfs.push({ name, url: '/files/' + href });
+                        } else {
+                            otherFiles.push({ name, url: '/files/' + href });
+                        }
+                    }
+                });
+
+                // Sort: newest first (by name which has date prefix)
+                pdfs.sort().reverse();
+
+                // Update stats (optional - no longer displayed but kept for data)
+                const totalPdfs = pdfs.length;
+
+                // Populate today's files (only today's PDFs)
+                const todayFiles = document.getElementById('todayFiles');
+                todayFiles.innerHTML = '';
+                const todayCompact = todayStr.replace(/-/g, ''); // '20260519'
+                const todayPDFs = pdfs.filter(p => p.name.includes(todayCompact));
+                
+                todayPDFs.forEach((pdf, idx) => {
+                    const desc = fileDesc[pdf.name] || pdf.name.replace('.pdf', '').replace(/_/g, ' ');
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span class="file-name">${desc} <span class="tag pdf">PDF</span>${idx === 0 ? ' <span class="tag new">NEW</span>' : ''}</span>
+                        <a href="${pdf.url}" target="_blank" style="color:#e94560; text-decoration:none; font-size:13px;">下载</a>
+                    `;
+                    todayFiles.appendChild(li);
+                });
+
+                // Populate history (daily achievement reports grouped by date, excluding today)
+                const historyList = document.getElementById('historyList');
+                historyList.innerHTML = '';
+                
+                const dailyReports = pdfs.filter(p => p.name.match(/^\u6bcf\u65e5\u6210\u679c_\d{8}\.pdf$/));
+                const dateGroups = {};
+                dailyReports.forEach(pdf => {
+                    const match = pdf.name.match(/^\u6bcf\u65e5\u6210\u679c_(\d{8})\.pdf$/);
+                    if (match) {
+                        const d = `${match[1].slice(0,4)}-${match[1].slice(4,6)}-${match[1].slice(6,8)}`;
+                        if (d !== todayStr) {
+                            if (!dateGroups[d]) dateGroups[d] = [];
+                            dateGroups[d].push(pdf);
+                        }
+                    }
+                });
+
+                Object.keys(dateGroups).sort().reverse().forEach(date => {
+                    // Link to daily archive page, not the PDF directly
+                    const pdf = dateGroups[date][0];
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <div>
+                            <span class="h-date">${date}</span>
+                            <span class="h-title">3L每日成果 · 查看详情</span>
+                        </div>
+                        <div class="h-link"><a href="/archive/${date}.html" target="_blank">查看</a></div>
+                    `;
+                    historyList.appendChild(li);
+                });
+            })
+            .catch(() => {
+                // Fallback - keep empty
+            });
+    </script>
+</body>
+</html>

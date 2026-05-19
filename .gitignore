@@ -1,0 +1,28 @@
+# 隐私数据
+www/private/
+www/private/holdings.json
+
+# 大盘数据缓存
+data/3l/market_data.json
+data/3l/sub_sector_clusters.json
+data/3l/all_stocks_60d.json
+
+# 复盘存档（含持仓数据）
+www/private/review_archive/
+
+# 模拟交易PKL
+data/3l/simulation/v3/*.pkl
+data/3l/simulation/v3/charts/
+data/3l/simulation/v33_week*.pkl
+
+# Python缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 系统配置
+.hermes/
+
+# 临时文件
+tmp/
+*.tmp
