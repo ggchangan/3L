@@ -167,12 +167,32 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({'error': err, 'data': []})
             return self.send_json({'data': result, 'count': len(result)})
 
+        # --- 综合复盘数据生成API（必须放在 /api/review/{date} 前面） ---
+        if path == '/api/review/generate':
+            params = urllib.parse.parse_qs(self.path.split('?')[1] if '?' in self.path else '')
+            date_arg = params.get('date', [None])[0]
+            try:
+                import subprocess
+                cmd = [sys.executable, os.path.join(WWW_DIR, 'generate_review_data.py')]
+                if date_arg:
+                    cmd.append(date_arg)
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                if result.returncode == 0:
+                    return self.send_json({'status': 'ok', 'output': result.stdout[-500:]})
+                else:
+                    return self.send_json({'status': 'error', 'output': result.stderr[-500:]})
+            except Exception as e:
+                return self.send_json({'status': 'error', 'msg': str(e)})
+
         # 复盘存档API
         if path.startswith('/api/review/'):
             parts = path.split('/')
             if len(parts) == 4 and parts[3] == 'dates':
                 # GET /api/review/dates — 获取所有存档日期
-                adir = os.path.join(WWW_DIR, 'private', 'review_archive')
+                # 优先用private目录，fallback到data目录
+                adir = os.path.join(WWW_DIR, 'data', 'review_archive')
+                if not os.path.isdir(adir):
+                    adir = os.path.join(WWW_DIR, 'private', 'review_archive')
                 dates = []
                 if os.path.isdir(adir):
                     for f in sorted(os.listdir(adir)):
@@ -182,10 +202,12 @@ class Handler(SimpleHTTPRequestHandler):
             elif len(parts) == 4:
                 # GET /api/review/YYYY-MM-DD — 获取某日复盘数据
                 date_str = parts[3]
-                fp = os.path.join(WWW_DIR, 'private', 'review_archive', f'{date_str}.json')
-                if os.path.isfile(fp):
-                    with open(fp, 'r') as f:
-                        return self.send_json(json.load(f))
+                # 尝试新格式(data目录)，fallback旧格式(private目录)
+                for base in ['data', 'private']:
+                    fp = os.path.join(WWW_DIR, base, 'review_archive', f'{date_str}.json')
+                    if os.path.isfile(fp):
+                        with open(fp, 'r') as f:
+                            return self.send_json(json.load(f))
                 return self.send_json({'error': 'not found'})
 
         if path in ('/review', '/review.html'):
@@ -211,10 +233,17 @@ class Handler(SimpleHTTPRequestHandler):
                 data = json.loads(body)
                 date = data.get('date', '')
                 if date:
-                    adir = os.path.join(WWW_DIR, 'private', 'review_archive')
+                    # 保存到 data/review_archive（新格式目录）
+                    adir = os.path.join(WWW_DIR, 'data', 'review_archive')
                     os.makedirs(adir, exist_ok=True)
                     fp = os.path.join(adir, f'{date}.json')
                     with open(fp, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+                    # 也复制一份到private兼容旧版
+                    pdir = os.path.join(WWW_DIR, 'private', 'review_archive')
+                    os.makedirs(pdir, exist_ok=True)
+                    pf = os.path.join(pdir, f'{date}.json')
+                    with open(pf, 'w', encoding='utf-8') as f:
                         json.dump(data, f, ensure_ascii=False, indent=2)
                     self.send_json({'status': 'ok'})
                 else:

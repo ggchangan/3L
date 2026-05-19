@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>3L复盘功能完善报告</title>
+<style>
+body { font-family: 'Microsoft YaHei', sans-serif; background: #f5f5f5; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
+h1 { color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 10px; }
+h2 { color: #2563eb; margin-top: 30px; border-left: 4px solid #2563eb; padding-left: 12px; }
+h3 { color: #444; margin-top: 20px; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+th { background: #2563eb; color: #fff; padding: 8px 12px; text-align: left; }
+td { padding: 8px 12px; border-bottom: 1px solid #ddd; }
+tr:nth-child(even) { background: #f8fafc; }
+.status-done { color: #16a34a; font-weight: bold; }
+.status-partial { color: #ca8a04; font-weight: bold; }
+.status-pending { color: #888; }
+.path { font-family: monospace; font-size: 12px; color: #666; background: #f0f0f0; padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>📋 3L复盘功能完善 · 实现报告</h1>
+<p style="color:#888;">生成日期: 2026-05-20 · 分支: feature/review-function-enhancement</p>
+
+<h2>一、完成情况总览</h2>
+<table>
+<tr><th>#</th><th>功能项</th><th>状态</th><th>说明</th></tr>
+<tr><td>①</td><td>大盘周期判定（4维评分）</td><td class="status-done">✅ 完成</td><td>趋势/量能/形态/波动率 4维评分，波峰/偏波峰/波中/偏波谷/波谷 五档判定</td></tr>
+<tr><td>②</td><td>动量主线评分/持续性/轮动</td><td class="status-done">✅ 完成</td><td>方案B(涨幅×0.6+MA20覆盖×0.4)评分，持续性天数跟踪，轮动检测</td></tr>
+<tr><td>③</td><td>最强逻辑·个股归类</td><td class="status-done">✅ 完成</td><td>持仓/候选归入主线/非主线分类，板块内评分展示</td></tr>
+<tr><td>④</td><td>量价择时</td><td class="status-partial">🟡 基础版</td><td>买点类型/止损位/关键点信息接入，关键点自动识别待完善</td></tr>
+<tr><td>⑤</td><td>每日交易计划</td><td class="status-done">✅ 完成</td><td>基于前4项自动生成操作项/关注项/风险提醒</td></tr>
+</table>
+
+<h2>二、修改的文件</h2>
+<table>
+<tr><th>文件</th><th>说明</th></tr>
+<tr><td class="path">review.html</td><td>全面重写，从4步扩展到7步：大盘(4维评分)→主线(评分+持续性+轮动)→行业板块→逻辑归类→持仓复盘→买点信号→交易计划</td></tr>
+<tr><td class="path">server.py</td><td>新增 /api/review/generate 端点；review目录优先data/后退private/；双目录写入兼容</td></tr>
+<tr><td class="path">generate_review_data.py</td><td>【新建】综合复盘生成器：大盘周期判定(4维评分)+动量主线+最强逻辑+量价择时+交易计划</td></tr>
+</table>
+
+<h2>三、技术实现细节</h2>
+
+<h3>① 大盘周期判定</h3>
+<p>4维度综合评分法（-4 ~ +4）：</p>
+<table>
+<tr><th>维度</th><th>+1条件</th><th>0条件</th><th>-1条件</th></tr>
+<tr><td>趋势结构</td><td>价格>MA20 5%+MA20向上</td><td>价格≈MA20±3%</td><td>价格<MA20 5%+MA20向下</td></tr>
+<tr><td>量能位置</td><td>量比>3倍(高潮)</td><td>量比1.3~3倍</td><td>量比<1.3倍(地量)</td></tr>
+<tr><td>量价形态</td><td>连3大阳(加速)</td><td>正常</td><td>5日有<-3%(恐慌)</td></tr>
+<tr><td>波动率</td><td>K线实体>1.5×基线</td><td>正常</td><td>K线实体<0.7×基线</td></tr>
+</table>
+
+<h3>② 动量主线</h3>
+<p>方案B固化：评分=20日涨幅均值×0.6 + MA20覆盖占比×0.4，阈值≥15取Top3。</p>
+<p>新增：</p>
+<ul>
+<li>持续天数跟踪 — 往前看5个交易日计算每个主线方向在Top3中的天数</li>
+<li>轮动检测 — 新进主线/消失主线标记</li>
+</ul>
+<p>存储路径：<span class="path">/home/ubuntu/www/data/review_archive/{date}.json</span></p>
+
+<h3>④ 最强逻辑</h3>
+<p>将持仓和候选买入信号归入8个方向分类，标记主线/非主线，展示板块评分排名。</p>
+
+<h3>⑤ 每日交易计划</h3>
+<p>综合前4项自动生成：</p>
+<ul>
+<li><strong>操作项</strong>：止损警告、买点信号提示</li>
+<li><strong>关注项</strong>：EMA走坏的持仓需关注</li>
+<li><strong>风险提醒</strong>：基于大盘周期自动匹配</li>
+</ul>
+
+<h2>四、待办/待优化</h2>
+<table>
+<tr><th>#</th><th>事项</th><th>优先级</th><th>备注</th></tr>
+<tr><td>1</td><td>关键点自动识别接入量价择时</td><td>中</td><td>当前只读取已有关键点文件，需集成自动识别算法</td></tr>
+<tr><td>2</td><td>产业链聚类重新定义cluster</td><td>低</td><td>细分赛道聚类用产业链替代走势相关系数</td></tr>
+<tr><td>3</td><td>iwencai替代方案</td><td>低</td><td>akshare已移除iwencai模块</td></tr>
+<tr><td>4</td><td>连接GitHub仓库</td><td>低</td><td>本地git已提交12次，待推送到远程</td></tr>
+</table>
+
+<h2>五、分支提交记录</h2>
+<p>分支 <span class="path">feature/review-function-enhancement</span></p>
+<p>包含全部修改文件，从master分支分离。</p>
+
+</body>
+</html>
