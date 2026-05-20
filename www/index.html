@@ -335,45 +335,7 @@
             </ul>
         </div>
 
-        <!-- 今天新增：盈利模式1+业绩检查 -->
-        <div class="card-today" style="padding:20px; border-color:#4ecdc4;">
-            <div style="display:flex; align-items:center; margin-bottom:12px;">
-                <span style="font-size:16px; color:#4ecdc4; font-weight:bold;">🔥 2026-05-19 新增</span>
-                <span style="margin-left:12px; font-size:11px; color:#888;">盈利模式1 · 业绩质量检查</span>
-            </div>
-            <ul class="file-list">
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name">📋 盈利模式1自动打标 — 条件④业绩好接入 <span class="tag new">NEW</span></span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            条件④从默认通过改为自动检查：扣非净利润增长率>30% + 营收增长率>30% + 扣非净利润>1亿<br>
-                            247只自选股扫描：48只通过业绩检查 ✅ | 复盘买点信号3只🏆（普冉股份/海光信息/鹏辉能源）
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name">📦 profit-quality-check skill 新建 <span class="tag new">NEW</span></span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            trading/profit-quality-check — 业绩质量判断标准封装为skill，支持单只检查和批量扫描
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name">🛠 buy_point_detection.py 代码健壮性重构 <span class="tag new">NEW</span></span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            check_zhongji/check_tupo/check_profit_model1 统一兼容SH/SZ前缀+日期格式(横杠/无横杠)
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
-            </ul>
-        </div>
-
-        <div class="section-title">⏳ 待办任务</div>
+        <!-- ===== 待办任务 ===== -->
         <div class="card-today" style="padding: 20px;">
             <ul class="file-list" id="pendingList">
                 <li>
@@ -431,6 +393,94 @@
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span style="color:#e94560; font-size:12px; white-space:nowrap;">🔄 待优化</span>
                         <a href="/files/%E5%BE%85%E5%8A%9E_%E4%BA%A7%E4%B8%9A%E9%93%BE%E8%81%9A%E7%B1%BB.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#e94560;">🔴 3L盯盘 · 主线板块实时评分</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            当前板块监测只展示今日/5日涨幅，缺3L主线判定。需展示 get_main_lines() 的20日涨幅×0.6+MA20覆盖率×0.4评分结果，标识评分≥15的真正主线板块及评分变化趋势
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#e94560; font-size:12px; white-space:nowrap;">🔴 待开发</span>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#e94560;">🔴 3L盯盘 · 卖点预警（左侧+右侧）</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            当前只有买点扫描，缺完整3L卖点预警。左侧止盈(加速/放量滞涨/动力减弱)+右侧止盈(反转/破关键点)。对持仓股+自选股同时监测
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#e94560; font-size:12px; white-space:nowrap;">🔴 待开发</span>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#eab308;">🟡 3L盯盘 · 板块轮动检测</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            监测20日动量从&lt;15突增至≥15（新主线冒头），或评分跌破15（主线衰退），在板块监测区给出轮动警示标签
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#eab308; font-size:12px; white-space:nowrap;">🟡 待开发</span>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#eab308;">🟡 3L盯盘 · 主线板块个股分层扫描</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            确定主线板块后，板块内领涨龙头/跟风/突破分层展示，结合市场龙头扫描结果
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#eab308; font-size:12px; white-space:nowrap;">🟡 待开发</span>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#eab308;">🟡 3L盯盘 · 大盘仓位策略联动</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            根据market-peak-trough结果，页面顶部显示建议总仓位（波谷≥80%/波中50%/波峰≤30%）及单只个股仓位限制
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#eab308; font-size:12px; white-space:nowrap;">🟡 待开发</span>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">🔲 3L盯盘 · 逻辑观测实现</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            当前占位"功能开发中"。需展示主线板块驱动逻辑（政策/产业/业绩）+催化事件日历
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#888; font-size:12px; white-space:nowrap;">🔲 待开发</span>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">🔲 3L盯盘 · 个股3L综合评分</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            自选股/持仓股3L评分仪表盘：动量分(所属板块主线评分)+逻辑分(板块驱动强度)+量价分(买点/卖点状态)
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#888; font-size:12px; white-space:nowrap;">🔲 待开发</span>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">🔲 3L盯盘 · 大盘异常事件检测</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            盘中异常波动/关键点位突破失败/量价背离等自动检测并警示
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#888; font-size:12px; white-space:nowrap;">🔲 待开发</span>
                     </div>
                 </li>
                 <li>

@@ -106,12 +106,20 @@ body {
         <div class="desc">成果看板持久化工作日志 · PDF生成 · 历史归档 · 隔离规则</div>
     </div>
     <div class="skill-item">
+        <div class="name">daily-3l-monitor <span class="tag updated">大幅更新</span></div>
+        <div class="desc">盘中实时盯盘页面 — 成交额对比+板块监测+行业/市场龙头+买点扫描+止损预警</div>
+    </div>
+    <div class="skill-item">
         <div class="name">daily-3l-review <span class="tag created">创建</span></div>
         <div class="desc">每日复盘页面完整规范 — 4步骤 · 历史存档 · 自选买点 · 关键点图</div>
     </div>
     <div class="skill-item">
         <div class="name">a-stock-kline-keypoint-chart <span class="tag updated">更新</span></div>
-        <div class="desc">A股3L关键点标注K线图生成（SVG/PNG/PDF），暗色风格</div>
+        <div class="desc">A股3L关键点标注K线图生成（SVG/PNG/PDF），暗色风格，新增支撑/压力线</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">ema10-trend-judgment <span class="tag updated">大幅更新</span></div>
+        <div class="desc">基于EMA10形态法+线性回归的板块/个股结构阶段判断，区间震荡支撑压力定位</div>
     </div>
     <div class="skill-item">
         <div class="name">stock-simulation-v33</div>
@@ -138,6 +146,10 @@ body {
         <div class="desc">系统化扫描8大方向自选股，30日K线缓存买点分析</div>
     </div>
     <div class="skill-item">
+        <div class="name">market-leaders-scan <span class="tag created">创建</span></div>
+        <div class="desc">市场龙头动态扫描 — 5日涨幅行业第一+成交额第一+MA10向上+换手率>3%</div>
+    </div>
+    <div class="skill-item">
         <div class="name">market-peak-trough</div>
         <div class="desc">综合评分法判断大盘波峰/波谷/波中，决定总仓位策略</div>
     </div>
@@ -152,6 +164,10 @@ body {
     <div class="skill-item">
         <div class="name">a-stock-chart-pdf</div>
         <div class="desc">批量生成A股K线关键点SVG/PNG图，生成可分享PDF报告</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">profit-model1-check <span class="tag created">创建</span></div>
+        <div class="desc">盈利模式1检查 — MA10朝上+涨停+回踩买点+业绩好(自动)，含7个数据坑</div>
     </div>
     <div class="skill-item">
         <div class="name">profit-quality-check <span class="tag created">创建</span></div>
@@ -170,6 +186,90 @@ body {
     <!-- Day card: 2026-05-20 (newest first) -->
     <div class="day-card">
         <div class="date-badge">2026-05-20</div>
+
+        <div class="change-item">
+            <div class="sname">profit-model1-check <span class="tag created">创建</span></div>
+            <div class="sdesc">盈利模式1检查 — MA10朝上+涨停+回踩买点+业绩好(自动)，7个数据坑</div>
+            <ul class="spoints">
+                <li>判断个股是否符合各盈利模式的标志条件（盈利模式1/2/3...）</li>
+                <li>条件④已自动化：用profit-quality-check判断扣非净利润增速+营收增速是否达标</li>
+                <li>可扩展多个模式的判断规则</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">profit-quality-check <span class="tag created">创建</span></div>
+            <div class="sdesc">业绩质量自动判断模块 — 扣非净利润增速>30%+营收增速>30%+扣非利润>1亿</div>
+            <ul class="spoints">
+                <li>247只自选股批量扫描，48只通过业绩检查</li>
+                <li>数据源：akshare stock_financial_abstract_ths（同花顺财务摘要）</li>
+                <li>带缓存机制，自动按日缓存 financial_data_cache.json</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">profit-model1-check <span class="tag created">创建</span></div>
+            <div class="sdesc">盈利模式1检查 — MA10朝上+涨停+回踩买点+业绩好(自动)，7个数据坑</div>
+            <ul class="spoints">
+                <li>判断个股是否符合各盈利模式的标志条件（盈利模式1/2/3...）</li>
+                <li>条件④已自动化：用profit-quality-check判断扣非净利润增速+营收增速是否达标</li>
+                <li>可扩展多个模式的判断规则</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">daily-3l-monitor <span class="tag updated">大幅更新</span></div>
+            <div class="sdesc">盘中实时盯盘页面完整规范 — 7卡片·市场龙头·缓存策略·80条pitfalls</div>
+            <ul class="spoints">
+                <li>新增市场龙头动态扫描API文档（4条件筛选链+过滤漏斗+缓存持久化）</li>
+                <li>新增Badge标注规则（去"交易时间"前缀，只写刷新频率）</li>
+                <li>新增数据持久化约定（收盘后缓存可见）</li>
+                <li>新增腾讯批量行情接口说明（key匹配问题+可用字段索引）</li>
+                <li>新增Bug修复笔记（负涨幅误杀 rank_gain_1st > 0 修复）</li>
+                <li>新增pitfall 18~20（缓存层删除/结构判断5次迭代/板块tab互斥）</li>
+                <li>累计80条pitfalls覆盖所有调试中踩过的坑</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">market-leaders-scan <span class="tag created">创建</span></div>
+            <div class="sdesc">市场龙头动态扫描完整算法文档</div>
+            <ul class="spoints">
+                <li>4条件筛选链：5日涨幅行业第一+成交额行业第一+MA10向上+换手率>3%</li>
+                <li>缓存策略：交易日10分钟刷新+非交易时间持久化</li>
+                <li>已知边界情况：负涨幅处理/日K线不足/腾讯停机/成交额单位</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">ema10-trend-judgment <span class="tag updated">大幅更新</span></div>
+            <div class="sdesc">基于EMA10形态法+线性回归的板块/个股结构阶段判断</div>
+            <ul class="spoints">
+                <li>结构算法修正：从端点对比(e10[-1]/e10[-6])改为形态法(涨天数比70%/30%阈值)</li>
+                <li>阶段算法新增：线性回归半段对比法（加速>1.8倍/滞涨<0.4倍/转跌/转涨）</li>
+                <li>区间震荡位置判断定稿v4：支撑=突破点，压力=15日最高，区间底部/中段/顶部</li>
+                <li>完整版本演进记录(v1→v4)，含电池/白酒/能源金属真实数据案例</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">每日更新记录补正 <span class="tag updated">修正</span></div>
+            <div class="sdesc">ema10-trend-judgment 更新描述修正 — 最终定稿为EMA10极值位置法</div>
+            <ul class="spoints">
+                <li>原记录描述为"形态法(涨天数比70%/30%阈值)"，但最终定稿是EMA10极值位置法（前25%/后25%判趋势），非涨天数比也非形态法</li>
+                <li>该算法历经5次迭代最终定稿，最终版本是看EMA10最高最低在15日的尾部/头部位置</li>
+                <li>补充EMA10固有滞后说明：价格已见顶但EMA10可能仍在走高（2-3天滞后），属正常特性</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">a-stock-kline-keypoint-chart <span class="tag updated">更新</span></div>
+            <div class="sdesc">A股3L关键点标注K线图生成（SVG/PNG/PDF）</div>
+            <ul class="spoints">
+                <li>新增板块图支撑线（绿色虚线#4caf50，最近突破点）和压力线（红色虚线#f44336，15日最高）</li>
+                <li>保存60日K线JSON缓存供区间位置判断复用</li>
+            </ul>
+        </div>
 
         <div class="change-item">
             <div class="sname">daily-achievements-page <span class="tag updated">大幅更新</span></div>
@@ -194,16 +294,6 @@ body {
         </div>
 
         <div class="change-item">
-            <div class="sname">a-stock-kline-keypoint-chart <span class="tag updated">更新</span></div>
-            <div class="sdesc">A股3L关键点标注K线图生成（SVG/PNG/PDF）</div>
-            <ul class="spoints">
-                <li>新增方式C（复盘页面领涨股快速预览图700×380）</li>
-                <li>新增展示规则说明（object标签/独立卡片容器）</li>
-                <li>新增codeMap股票代码映射说明</li>
-            </ul>
-        </div>
-
-        <div class="change-item">
             <div class="sname">a-stock-data-sources <span class="tag updated">更新</span></div>
             <div class="sdesc">5个稳定A股数据源分层使用方案</div>
             <ul class="spoints">
@@ -217,16 +307,6 @@ body {
     <!-- Day card: 2026-05-19 -->
     <div class="day-card">
         <div class="date-badge">2026-05-19</div>
-
-        <div class="change-item">
-            <div class="sname">profit-quality-check <span class="tag created">创建</span></div>
-            <div class="sdesc">业绩质量自动判断模块 — 扣非净利润增速>30%+营收增速>30%+扣非利润>1亿</div>
-            <ul class="spoints">
-                <li>247只自选股批量扫描，48只通过业绩检查</li>
-                <li>数据源：akshare stock_financial_abstract_ths（同花顺财务摘要）</li>
-                <li>带缓存机制，自动按日缓存 financial_data_cache.json</li>
-            </ul>
-        </div>
 
         <div class="change-item">
             <div class="sname">buy_point_detection <span class="tag updated">更新</span></div>

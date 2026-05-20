@@ -7,6 +7,7 @@
     const NAV_ITEMS = [
         { label: '🏠 成果跟踪',  href: '/',              id: 'home' },
         { label: '📋 每日复盘',  href: '/review.html',    id: 'review' },
+        { label: '📡 盘中盯盘',  href: '/monitor.html',   id: 'monitor' },
         { label: '📖 Skills',    href: '/skills.html',    id: 'skills' },
         { label: '📊 模拟交易',  href: '/simulation.html', id: 'simulation' },
     ];
