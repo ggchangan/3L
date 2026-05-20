@@ -510,7 +510,7 @@
         const obj = document.getElementById('leaderChartObject');
         if (area && title && obj) {
             title.textContent = '📊 ' + name + '(' + code + ')';
-            obj.data = '/review_charts/lead_' + code + '.svg';
+            obj.data = '/review_charts/lead_' + code + '.svg?t=' + Date.now();
             area.style.display = 'block';
         }
     });
@@ -624,14 +624,14 @@
                 </div>
                 <div class="row">
                     <div class="field"><span class="l">买点:</span> <span class="v">${s.buy_point || '--'}</span></div>
-                    <div class="field"><span class="l">EMA排列:</span> <span class="v">${s.ema || '--'}</span></div>
-                    <div class="field"><span class="l">关键点:</span> <span class="v">${s.key_level || '--'}</span></div>
+                    <div class="field"><span class="l">结构:</span> <span class="v">${s.structure || '--'}</span></div>
+                    <div class="field"><span class="l">阶段:</span> <span class="v">${s.stage || '--'}</span></div>
                     <div class="field"><span class="l">止损位:</span> <span class="v">${s.stop_loss || '--'}</span></div>
                     <div class="field"><span class="l" style="cursor:pointer;color:#4ecdc4;" onclick="toggleChart('${chartId}')">📊</span></div>
                 </div>
                 <div class="signal ${cls}">${signalText}${s.note ? ' · ' + s.note : ''}</div>
                 <div id="${chartId}" class="chart-container" style="display:none; margin-top:6px;">
-                    <object data="/review_charts/${s.code}.svg" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;"></object>
+                    <object data="/review_charts/${s.code}.svg?t=${Date.now()}" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;"></object>
                 </div>
             </div>
         `;
@@ -672,7 +672,7 @@
                 '<div class="field"><span class="l" style="cursor:pointer;color:#4ecdc4;" onclick="toggleChart(\'' + chartId + '\')">📊</span></div></div>' +
                 (s.stop_loss ? '<div class="field" style="margin-top:4px;"><span class="l">止损:</span> <span class="v" style="color:#e94560;">' + s.stop_loss + '</span></div>' : '') +
                 '<div id="' + chartId + '" class="chart-container" style="display:none;margin-top:8px;">' +
-                '<object data="/review_charts/' + s.code + '.svg" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;"></object></div></div>';
+                '<object data="/review_charts/' + s.code + '.svg?t=' + Date.now() + '" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;"></object></div></div>';
         }).join('');
         if (totalPages > 1) {
             html += '<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:10px;font-size:12px;">';
