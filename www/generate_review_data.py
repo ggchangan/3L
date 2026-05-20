@@ -756,7 +756,10 @@ def generate_daily_review(date_str=None):
             structure=structure, stage=stage,
             buy_point=s.get('buy_point', ''),
         )
-        buy_point_display = s.get('buy_point', '') if code_sig == 'buy' else ''
+        # 第⑤部分只展示买入信号
+        if code_sig != 'buy':
+            continue
+        buy_point_display = s.get('buy_point', '')
         ema = sc.get('ema', '--')
         vol_analysis = sc.get('vol_analysis', '--')
         buy_signals_review.append({
