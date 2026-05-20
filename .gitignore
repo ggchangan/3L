@@ -20,8 +20,9 @@ __pycache__/
 *.pyc
 *.pyo
 
-# 系统配置
-.hermes/
+# 系统配置（除skills外）
+.hermes/*
+!.hermes/profiles/3l/skills/
 
 # 临时文件
 tmp/
