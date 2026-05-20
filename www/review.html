@@ -282,8 +282,8 @@
                 // ④ 持仓复盘
                 if (data.holdings_review) updateStocksUI(data.holdings_review);
                 else if (data.holdings) updateStocksUI(data.holdings);
-                // ⑥ 买点信号
-                if (data.buy_signals) updateBuySignalsUI(data.buy_signals);
+                // ⑤ 操作决策（持仓操作建议 + 买点信号）
+                if (data.buy_signals_review || data.holdings_review) updateBuySignalsUI();
                 // ⑦ 交易计划
                 if (data.trading_plan) updateTradingPlanUI(data.trading_plan);
                 refreshMainLines();
@@ -607,81 +607,80 @@
     }
 
     function signalStockCard(s, idx) {
-        const cls = s.signal === 'hold' ? 'hold' : s.signal === 'warn' ? 'warn' : s.signal === 'danger' ? 'danger' : 'hold';
-        const signalText = s.signal === 'hold' ? '持有 · 趋势完好'
-            : s.signal === 'warn' ? '⚠️ 关注 · 出现预警信号'
-            : s.signal === 'danger' ? '❌ 危险 · 破关键点/加速'
-            : '--';
+        // 操作信号类
+        const cls = s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold';
+        const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--';
+        // 阶段图标映射
+        const stageIcons = {
+            '上行': '↑', '加速': '🚀', '缩量整理': '🔄', '滞涨': '⚠️',
+            '转弱': '📉', '下行': '↓', '加速跌': '📉', '转强': '📈',
+            '区间底部': '🟢', '区间中段': '➡️', '区间顶部': '🔴'
+        };
+        const stageColors = {
+            '上行': '#4ecdc4', '加速': '#e94560', '缩量整理': '#ffd700', '滞涨': '#ff6b6b',
+            '转弱': '#ff6b6b', '下行': '#666', '加速跌': '#e94560', '转强': '#4ecdc4',
+            '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560'
+        };
+        const structIcons = {'上涨趋势': '📈', '区间震荡': '➡️', '下降趋势': '📉'};
         const chartId = `hchart_${idx}`;
+        const icon = stageIcons[s.stage] || '•';
+        const color = stageColors[s.stage] || '#888';
+        const structIcon = structIcons[s.structure] || '';
+        // 结论文字 — 与 signal_text 无关，独立写详细
+        let conclusion = `阶段${s.stage}，${s.structure}`;
+        const volDesc = s.vol_analysis || '';
+        if (s.signal === 'buy') conclusion = `触发${s.buy_point}，${s.stage}阶段确认，可执行买入计划`;
+        else if (s.stage === '缩量整理') conclusion = `量能${volDesc}卖压枯竭，价在EMA10之上，中继蓄力形态，可持股等待放量突破`;
+        else if (s.stage === '上行') conclusion = `斜率正常，EMA10持续向上，上行趋势健康，继续持有不动`;
+        else if (s.stage === '加速') conclusion = `EMA10斜率加速变陡，拉升阶段，关注放量滞涨等左侧止盈信号`;
+        else if (s.stage === '滞涨') conclusion = `EMA10走平涨不动${volDesc ? '，量能'+volDesc+'未有效萎缩' : ''}，警惕回调，考虑减仓`;
+        else if (s.stage === '转弱') conclusion = `EMA10已拐头向下，趋势转弱，关注关键支撑位是否破位`;
+        else if (s.stage === '区间底部') conclusion = `价格在支撑位附近，区间底部企稳，可考虑加仓博反弹`;
+        else if (s.stage === '区间顶部') conclusion = `价格接近压力位，区间顶部受阻，注意减仓回避`;
+        else if (s.stage === '区间中段') conclusion = `区间中部无明确方向，等待价格靠近支撑或压力再做决定`;
         return `
-            <div class="stock-item">
-                <div>
-                    <span class="name">${s.name}</span>
-                    <span class="code">${s.code}</span>
-                    <span style="float:right; font-size:13px; color:${(s.change||0) >= 0 ? '#ff4444' : '#44aa44'};">
-                        ${s.price||'--'} ${(s.change||0) >= 0 ? '+' : ''}${s.change||0}%
-                    </span>
+            <div class="stock-item" style="border-left:3px solid ${color};">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div><span class="name">${structIcon} ${s.name}</span>
+                    <span class="code">${s.code}</span></div>
+                    <span style="font-size:13px;color:${(s.change||0)>=0?'#ff4444':'#44aa44'};">
+                        ${s.price||'--'} ${(s.change||0)>=0?'+':''}${s.change||0}%</span>
                 </div>
-                <div class="row">
-                    <div class="field"><span class="l">买点:</span> <span class="v">${s.buy_point || '--'}</span></div>
-                    <div class="field"><span class="l">结构:</span> <span class="v">${s.structure || '--'}</span></div>
-                    <div class="field"><span class="l">阶段:</span> <span class="v">${s.stage || '--'}</span></div>
-                    <div class="field"><span class="l">止损位:</span> <span class="v">${s.stop_loss || '--'}</span></div>
+                <div class="row" style="margin-top:6px;">
+                    <div class="field"><span class="l">操作:</span> <span class="v ${cls}" style="font-weight:bold;">${signalText}</span></div>
+                    <div class="field"><span class="l">结构:</span> <span class="v">${structIcon} ${s.structure||'--'}</span></div>
+                    <div class="field"><span class="l">阶段:</span> <span class="v" style="color:${color};font-weight:bold;">${icon} ${s.stage||'--'}</span></div>
+                    ${s.buy_point ? `<div class="field"><span class="l">买点:</span> <span class="v">${s.buy_point}</span></div>` : ''}
                     <div class="field"><span class="l" style="cursor:pointer;color:#4ecdc4;" onclick="toggleChart('${chartId}')">📊</span></div>
                 </div>
-                <div class="signal ${cls}">${signalText}${s.note ? ' · ' + s.note : ''}</div>
-                <div id="${chartId}" class="chart-container" style="display:none; margin-top:6px;">
+                <div style="margin-top:2px;font-size:11px;color:#aaa;padding:2px 0;">💡 ${conclusion}</div>
+                <div id="${chartId}" class="chart-container" style="display:none;margin-top:6px;">
                     <object data="/review_charts/${s.code}.svg?t=${Date.now()}" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;"></object>
                 </div>
             </div>
         `;
     }
 
-    // ====== ⑥ 买点信号 ======
-    var pgSignalPage = 1;
-    var pgSignalData = [];
-    function updateBuySignalsUI(signals) {
+    // ====== ⑤ 自选股买点信号 ======
+    function updateBuySignalsUI() {
         const container = document.getElementById('buySignalList');
-        if (!signals || signals.length === 0) {
-            container.innerHTML = '<div class="empty">暂无买点信号</div>';
-            return;
+        const signals = reviewData.buy_signals_review || [];
+        let html = '';
+        // 买点信号
+        if (signals.length > 0) {
+            html += signals.map(s => {
+                const bpTag = s.buy_point === '突破买点' ? '<span class="tag blue">突破</span>' : '<span class="tag yellow">中继</span>';
+                const pmTag = s.profit_model1 ? '<span class="tag red" style="background:#e94560;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">🏆 盈利1</span>' : '';
+                return '<div class="stock-item" style="border-left:3px solid ' + (s.buy_point === '突破买点' ? '#2196f3' : '#ffd700') + ';padding:6px 8px;">' +
+                    '<div><span class="name">' + s.name + '</span><span class="code">' + s.code + '</span>' + pmTag +
+                    '<span style="float:right;font-size:12px;color:#888;">' + (s.sector||'') + '</span></div>' +
+                    '<div class="row">' +
+                    '<div class="field"><span class="l">信号:</span> <span class="v">' + bpTag + '</span></div>' +
+                    '<div class="field"><span class="l">价格:</span> <span class="v">' + (s.price||'--') + '</span></div>' +
+                    '<div class="field"><span class="l">涨幅:</span> <span class="v" style="color:' + ((s.change||0)>=0?'#ff4444':'#44aa44') + ';">' + ((s.change||0)>=0?'+':'') + (s.change||0) + '%</span></div></div></div>';
+            }).join('');
         }
-        pgSignalData = signals;
-        pgSignalPage = 1;
-        renderSignalPage();
-    }
-    function renderSignalPage() {
-        const container = document.getElementById('buySignalList');
-        const perPage = 10;
-        const total = pgSignalData.length;
-        const totalPages = Math.ceil(total / perPage) || 1;
-        const start = (pgSignalPage - 1) * perPage;
-        const end = Math.min(start + perPage, total);
-        const pageData = pgSignalData.slice(start, end);
-        let html = pageData.map((s, idx) => {
-            const bpTag = s.buy_point === '突破买点' ? '<span class="tag blue">突破</span>' : '<span class="tag yellow">中继</span>';
-            const pmTag = s.profit_model1 ? '<span class="tag red" style="background:#e94560;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">🏆 盈利1</span>' : '';
-            const chartId = 'chart_' + start + '_' + idx;
-            return '<div class="stock-item" style="border-left:3px solid ' + (s.buy_point === '突破买点' ? '#2196f3' : '#ffd700') + ';">' +
-                '<div><span class="name">' + s.name + '</span><span class="code">' + s.code + '</span>' + pmTag +
-                '<span style="float:right;font-size:12px;color:#888;">' + (s.sector||'') + '</span></div>' +
-                '<div class="row">' +
-                '<div class="field"><span class="l">信号:</span> <span class="v">' + bpTag + '</span></div>' +
-                '<div class="field"><span class="l">价格:</span> <span class="v">' + (s.price||'--') + '</span></div>' +
-                '<div class="field"><span class="l">涨幅:</span> <span class="v" style="color:' + ((s.change||0)>=0?'#ff4444':'#44aa44') + ';">' + ((s.change||0)>=0?'+':'') + (s.change||0) + '%</span></div>' +
-                '<div class="field"><span class="l" style="cursor:pointer;color:#4ecdc4;" onclick="toggleChart(\'' + chartId + '\')">📊</span></div></div>' +
-                (s.stop_loss ? '<div class="field" style="margin-top:4px;"><span class="l">止损:</span> <span class="v" style="color:#e94560;">' + s.stop_loss + '</span></div>' : '') +
-                '<div id="' + chartId + '" class="chart-container" style="display:none;margin-top:8px;">' +
-                '<object data="/review_charts/' + s.code + '.svg?t=' + Date.now() + '" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;"></object></div></div>';
-        }).join('');
-        if (totalPages > 1) {
-            html += '<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:10px;font-size:12px;">';
-            html += '<span style="color:#888;">共' + total + '只</span>';
-            if (pgSignalPage > 1) html += '<a href="javascript:;" onclick="pgSignalPage=' + (pgSignalPage-1) + ';renderSignalPage();return false;" style="color:#4ecdc4;text-decoration:none;">‹ 上一页</a>';
-            html += '<span style="color:#e94560;font-weight:600;">' + pgSignalPage + '/' + totalPages + '</span>';
-            if (pgSignalPage < totalPages) html += '<a href="javascript:;" onclick="pgSignalPage=' + (pgSignalPage+1) + ';renderSignalPage();return false;" style="color:#4ecdc4;text-decoration:none;">下一页 ›</a>';
-            html += '</div>';
-        }
+        if (!html) html = '<div class="empty">暂无买点信号</div>';
         container.innerHTML = html;
     }
 

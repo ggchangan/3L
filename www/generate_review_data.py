@@ -294,12 +294,26 @@ def get_buy_sell_signals(holdings, buy_signals):
                     closes_60 = [k['close'] for k in _kls]
                     highs_60 = [k['high'] for k in _kls]
                     lows_60 = [k['low'] for k in _kls]
+                    vols_60 = [k.get('volume', k.get('vol', 0)) for k in _kls]
                     _structure = get_structure(closes_60)
+                    _stage = get_stage(closes_60, _structure, highs_60, lows_60, volumes=vols_60)
+                    _vol_analysis = '--'
+                    if len(vols_60) >= 13 and all(v > 0 for v in vols_60[-13:]):
+                        _vl3 = sum(vols_60[-3:]) / 3
+                        _vp10 = sum(vols_60[-13:-3]) / 10
+                        _vr = _vl3 / _vp10 if _vp10 > 0 else 1
+                        if _vr < 0.8:
+                            _vol_analysis = f'缩量{_vr:.0%}'
+                        elif _vr > 1.5:
+                            _vol_analysis = f'放量{_vr:.0%}'
+                        else:
+                            _vol_analysis = f'量能正常{_vr:.0%}'
                     cache[_code] = {
                         'close': last['close'], 'change': chg, 'date': last['date'],
                         'ema': get_ema_arrangement(closes_60),
                         'structure': _structure,
-                        'stage': get_stage(closes_60, _structure, highs_60, lows_60),
+                        'stage': _stage,
+                        'vol_analysis': _vol_analysis,
                     }
     except Exception:
         pass
@@ -324,6 +338,8 @@ def get_buy_sell_signals(holdings, buy_signals):
             'change': chg_val,
             'structure': cache.get(code, {}).get('structure', '--'),
             'stage': cache.get(code, {}).get('stage', '--'),
+            'ema': cache.get(code, {}).get('ema', '--'),
+            'vol_analysis': cache.get(code, {}).get('vol_analysis', '--'),
         })
     return signals
 
@@ -627,20 +643,66 @@ def generate_daily_review(date_str=None):
 
     # 生成持仓个股复盘（从实时买点检测结果）
     holdings_review = []
+    # 引入统一信号判断
+    import sys as _sys
+    _sys.path.insert(0, '/home/ubuntu/.hermes/profiles/3l/skills/trading/stock-action-judgment/scripts')
+    from judge_signal import judge_signal
     for h in timing_signals.get('holdings', []):
         d = holdings_data.get(h.get('code', ''), {})
+        structure = h.get('structure', '')
+        stage = h.get('stage', '--')
+        # 区间震荡：用关键点支撑位重算stage
+        if structure == '区间震荡':
+            try:
+                with open('/home/ubuntu/data/3l/all_stocks_60d.json') as _f:
+                    _all = json.load(_f)
+                code = h.get('code', '')
+                for _sec, _ss in _all.get('stocks', {}).items():
+                    if code in _ss and _ss[code] and len(_ss[code]) >= 15:
+                        _kls = _ss[code]
+                        _highs = [k['high'] for k in _kls]
+                        _lows = [k['low'] for k in _kls]
+                        _closes = [k['close'] for k in _kls]
+                        _opens = [k['open'] for k in _kls]
+                        _all_supports = sorted([
+                            max(_highs[i-10:i])
+                            for i in range(10, len(_kls))
+                            if _closes[i] > max(_highs[i-10:i]) and _closes[i] > _opens[i]
+                            and max(_highs[i-10:i]) < _closes[-1]
+                        ], reverse=True)
+                        _resistance = max(_highs[-15:])
+                        _support = None
+                        for _s in _all_supports:
+                            if (_closes[-1] - _s) / _closes[-1] >= 0.015:
+                                _support = _s
+                                break
+                        _support = _support or min(_lows[-20:])
+                        if _resistance > _support:
+                            _pct = (_closes[-1] - _support) / (_resistance - _support) * 100
+                            if _pct < 30: stage = '区间底部'
+                            elif _pct > 70: stage = '区间顶部'
+                            else: stage = '区间中段'
+                        break
+            except Exception:
+                pass
+        code_sig, signal_text, _ = judge_signal(
+            structure=structure, stage=stage, buy_point=h['action'],
+        )
+        # 买点仅在信号为buy时保留，只显示类型名不显示flags
+        buy_point = h['action'].split()[0] if code_sig == 'buy' and h['action'] else ''
         holdings_review.append({
             'name': h['name'], 'code': h['code'],
             'sector': d.get('direction', ''),
             'price': h.get('close', 0),
             'change': h.get('change', 0),
-            'buy_point': h['action'],
-            'structure': h.get('structure', '--'),
-            'stage': h.get('stage', '--'),
+            'buy_point': buy_point,
+            'structure': structure,
+            'stage': stage,
             'key_level': '--',
             'stop_loss': '',
-            'signal': 'hold' if '持有观察' in h['action'] or not h['action'] else 'buy',
-            'note': h['action'],
+            'signal': code_sig,
+            'ema': h.get('ema', '--'),
+            'vol_analysis': h.get('vol_analysis', '--'),
         })
     # 按结构优先排序：上涨趋势 > 区间震荡 > 下降趋势
     struct_priority = {'上涨趋势': 0, '区间震荡': 1, '下降趋势': 2}
