@@ -269,21 +269,128 @@ def classify_stocks_by_mainline(mainline_data, holdings, buy_signals):
 
     return result
 
-# ====== ④ 量价择时（占位） ======
+# ====== ④ 量价择时（实时数据） ======
+
+def fetch_live_kline(code, days=60):
+    """实时拉取个股K线（腾讯财经）"""
+    market = 'sz' if code.startswith(('0', '3')) else 'sh'
+    url = f'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={market}{code},day,,,{days},qfq'
+    headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'}
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        data = r.json()
+        day_data = data.get('data', {}).get(f'{market}{code}', {}).get('day', [])
+        if not day_data:
+            day_data = data.get('data', {}).get(f'{market}{code}', {}).get('qfqday', [])
+        result = []
+        for k in day_data:
+            if len(k) >= 6:
+                result.append({
+                    'date': k[0].replace('-', ''),
+                    'open': float(k[1]), 'close': float(k[2]),
+                    'high': float(k[3]), 'low': float(k[4]),
+                    'volume': int(float(k[5])),
+                })
+        return result
+    except:
+        return None
+
+def _find_idx(date_str, kls):
+    dc = date_str.replace('-', '')
+    for i, k in enumerate(kls):
+        if str(k['date']).replace('-', '') == dc:
+            return i
+    return -1
+
+def _live_check_zhongji(kls):
+    """中继买点检测"""
+    if len(kls) < 20:
+        return None
+    k = kls[-1]
+    close, vol = k['close'], k['volume']
+    ma10 = sum(kls[-10+i]['close'] for i in range(10)) / 10
+    ma10_5 = sum(kls[-5+i]['close'] for i in range(5)) / 5
+    trend_up = ma10_5 > ma10
+    ma20 = sum(kls[-20+i]['close'] for i in range(20)) / 20
+    above_ma20 = close > ma20
+    vma5 = sum(kls[-5+i]['volume'] for i in range(5)) / 5
+    shrink = vol < vma5 * 0.85 if vma5 > 0 else False
+    low = k['low']
+    near_ma10 = (low - ma10) / ma10 > -0.015 if ma10 > 0 else False
+    near_ma20 = (low - ma20) / ma20 > -0.015 if ma20 > 0 else False
+    near_support = near_ma10 or near_ma20
+    prev_close = kls[-2]['close']
+    gain = (close - prev_close) / prev_close * 100 if prev_close > 0 else 0
+    gain_small = gain < 4
+    checks = [trend_up, above_ma20, shrink, near_support, gain_small]
+    flags = ''.join('✓' if c else '✗' for c in checks)
+    return {
+        'pass': sum(checks), 'total': 5, 'flags': flags,
+        'gain': round(gain, 2), 'vol_ratio': round(vol / vma5, 2) if vma5 > 0 else 0,
+        'ma10': round(ma10, 2), 'ma20': round(ma20, 2), 'close': close,
+        'trend_up': trend_up, 'above_ma20': above_ma20, 'shrink': shrink,
+        'near_support': near_support, 'gain_small': gain_small,
+    }
+
+def _live_check_tupo(kls):
+    """突破买点检测"""
+    if len(kls) < 20:
+        return None
+    k = kls[-1]
+    close, vol = k['close'], k['volume']
+    prev_close = kls[-2]['close']
+    gain = (close - prev_close) / prev_close * 100 if prev_close > 0 else 0
+    prev_high_max = max(kls[-j]['high'] for j in range(1, 11))
+    breakout = close > prev_high_max
+    vma5 = sum(kls[-5+i]['volume'] for i in range(5)) / 5
+    vol_surge = vol > vma5 * 1.3 if vma5 > 0 else False
+    yang = close > k['open']
+    ma20 = sum(kls[-20+i]['close'] for i in range(20)) / 20
+    above_ma20 = close > ma20
+    checks = [breakout, vol_surge, yang, above_ma20]
+    flags = ''.join('✓' if c else '✗' for c in checks)
+    return {
+        'pass': sum(checks), 'total': 4, 'flags': flags,
+        'gain': round(gain, 2), 'vol_ratio': round(vol / vma5, 2) if vma5 > 0 else 0,
+        'breakout': breakout, 'vol_surge': vol_surge, 'yang': yang,
+        'above_ma20': above_ma20, 'close': close, 'ma20': round(ma20, 2),
+        'prev_high': round(prev_high_max, 2),
+    }
 
 def get_buy_sell_signals(holdings, buy_signals):
-    """量价择时分析（简化占位）"""
+    """量价择时分析 — 实时拉数据检测买点"""
     signals = {'holdings': [], 'signals': buy_signals}
     for h in holdings:
-        signals['holdings'].append({
-            'name': h.get('name', '?'),
-            'code': h.get('code', ''),
-            'action': '持有观察',
-            'key_level': '--',
-            'stop_loss': h.get('stop_loss', ''),
-            'has_stop_loss': bool(h.get('stop_loss', '')),
-            'ema_status': '多头排列',
-        })
+        code = h.get('code', '')
+        name = h.get('name', '?')
+        kls = fetch_live_kline(code)
+        if not kls or len(kls) < 20:
+            signals['holdings'].append({
+                'name': name, 'code': code, 'action': '数据不足',
+                'zhongji': '', 'tupo': '',
+            })
+            continue
+        zj = _live_check_zhongji(kls)
+        tp = _live_check_tupo(kls)
+        
+        actions = []
+        if zj and zj['pass'] >= 4:
+            actions.append(f"中继{zj['pass']}/5{zj['flags']}")
+        if tp and tp['pass'] >= 3:
+            actions.append(f"突破{tp['pass']}/4{tp['flags']}")
+        
+        entry = {
+            'name': name, 'code': code,
+            'action': ' + '.join(actions) if actions else '持有观察',
+            'close': kls[-1]['close'],
+            'zhongji': f"{zj['pass']}/{zj['total']} {zj['flags']}" if zj else '--',
+            'tupo': f"{tp['pass']}/{tp['total']} {tp['flags']}" if tp else '--',
+        }
+        if zj:
+            entry.update({'zj_gain': zj['gain'], 'zj_vol_ratio': zj['vol_ratio']})
+        if tp:
+            entry.update({'tp_gain': tp['gain'], 'tp_vol_ratio': tp['vol_ratio']})
+        signals['holdings'].append(entry)
     return signals
 
 # ====== ⑤ 每日交易计划 ======
@@ -489,6 +596,37 @@ def generate_daily_review(date_str=None):
     print("[3L复盘] ④ 量价择时分析...")
     timing_signals = get_buy_sell_signals(holdings, buy_signals)
 
+    # 构建 holdings_data 字典便于查询
+    holdings_data = {h.get('code', ''): h for h in holdings}
+
+    # 生成持仓个股复盘（从实时买点检测结果）
+    holdings_review = []
+    for h in timing_signals.get('holdings', []):
+        d = holdings_data.get(h.get('code', ''), {})
+        holdings_review.append({
+            'name': h['name'], 'code': h['code'],
+            'sector': d.get('direction', ''),
+            'price': h.get('close', 0),
+            'change': h.get('zj_gain', 0),
+            'buy_point': h['action'],
+            'ema': '多头排列',
+            'key_level': '--',
+            'stop_loss': '',
+            'signal': 'hold' if '持有观察' in h['action'] or not h['action'] else 'buy',
+            'note': h['action'],
+        })
+    
+    # 生成候选买点信号review（从盈利模式1检查结果）
+    buy_signals_review = []
+    for s in buy_signals:
+        buy_signals_review.append({
+            'name': s.get('name', '?'), 'code': s.get('code', ''),
+            'sector': s.get('sector', s.get('direction', '')),
+            'buy_point': s.get('buy_point', '--'),
+            'price': s.get('price', 0), 'change': s.get('change', 0),
+            'profit_model1': s.get('profit_model1', False),
+        })
+
     # ⑤ 每日交易计划
     print("[3L复盘] ⑤ 生成交易计划...")
     trading_plan = generate_trading_plan(market_cycle, mainline_data, logic_classify, timing_signals, holdings)
@@ -506,8 +644,8 @@ def generate_daily_review(date_str=None):
         'trading_plan': trading_plan,
         'holdings': holdings,
         'buy_signals': buy_signals,
-        'holdings_review': existing.get('holdings_review', []),
-        'buy_signals_review': existing.get('buy_signals', []),
+        'holdings_review': holdings_review,
+        'buy_signals_review': buy_signals_review,
     }
 
     # 保存
