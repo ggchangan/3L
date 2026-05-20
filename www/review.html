@@ -707,8 +707,11 @@
         const start = (page - 1) * perPage;
         const end = Math.min(start + perPage, total);
         const pageData = activeData.slice(start, end);
-        // 用 signalStockCard 渲染（同第④部分）
-        html += pageData.map((s, i) => signalStockCard(s, start + i + 1)).join('');
+        // 用 signalStockCard 渲染（同第④部分，图表ID加前缀防冲突）
+        html += pageData.map((s, i) => {
+            const card = signalStockCard(s, start + i + 1);
+            return card.replace(/id="hchart_/g, 'id="bchart_').replace(/toggleChart\('hchart_/g, "toggleChart('bchart_");
+        }).join('');
         // 分页控件
         if (totalPages > 1) {
             const pKey = tab.activeSector;
