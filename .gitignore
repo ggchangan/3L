@@ -1,19 +1,47 @@
+# 系统文件（home目录根）
+.bash_history
+.bash_logout
+.bashrc
+.cache/
+.config/
+.gnupg/
+.lesshst
+.local/
+.npm/
+.npmrc
+.oh-my-zsh/
+.openclaw/
+.orca_term/
+.pip/
+.profile
+.pydistutils.cfg
+.python_history
+.skillhub/
+.ssh/
+.sudo_as_admin_successful
+.viminfo
+.zprofile
+.zsh_history
+.zshenv
+.zshrc
+yes
+yes.pub
+Users/
+web3hermes/
+hermes-backup.tar.gz
+
 # 隐私数据
 www/private/
 www/private/holdings.json
 
 # 大盘数据缓存
-data/3l/market_data.json
-data/3l/sub_sector_clusters.json
-data/3l/all_stocks_60d.json
+data/
 
 # 复盘存档（含持仓数据）
 www/private/review_archive/
 
 # 模拟交易PKL
-data/3l/simulation/v3/*.pkl
-data/3l/simulation/v3/charts/
-data/3l/simulation/v33_week*.pkl
+www/data/simulation/
 
 # Python缓存
 __pycache__/
@@ -27,3 +55,9 @@ __pycache__/
 # 临时文件
 tmp/
 *.tmp
+
+# 自动生成的缓存和图表文件（只跟踪核心代码）
+www/data/cache/
+www/charts/
+www/files/
+www/review_charts/
