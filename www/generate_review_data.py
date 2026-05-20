@@ -341,7 +341,7 @@ def get_buy_sell_signals(holdings, buy_signals):
             'ema': cache.get(code, {}).get('ema', '--'),
             'vol_analysis': cache.get(code, {}).get('vol_analysis', '--'),
         })
-    return signals
+    return signals, cache, bs_by_code
 
 # ====== ⑤ 每日交易计划 ======
 
@@ -636,7 +636,7 @@ def generate_daily_review(date_str=None):
             print(f"[3L复盘] 全量扫描跳过: {e}")
 
     # 从最新 buy_signals 生成持仓信号（必须在扫描之后）
-    timing_signals = get_buy_sell_signals(holdings, buy_signals)
+    timing_signals, stock_cache, bs_by_code = get_buy_sell_signals(holdings, buy_signals)
 
     # 构建 holdings_data 字典便于查询
     holdings_data = {h.get('code', ''): h for h in holdings}
@@ -690,6 +690,9 @@ def generate_daily_review(date_str=None):
         )
         # 买点仅在信号为buy时保留，只显示类型名不显示flags
         buy_point = h['action'].split()[0] if code_sig == 'buy' and h['action'] else ''
+        # 查找盈利模式1标记
+        bs_lookup = bs_by_code.get(h.get('code', ''), {})
+        pm1 = bs_lookup.get('profit_model1', False)
         holdings_review.append({
             'name': h['name'], 'code': h['code'],
             'sector': d.get('direction', ''),
@@ -703,21 +706,73 @@ def generate_daily_review(date_str=None):
             'signal': code_sig,
             'ema': h.get('ema', '--'),
             'vol_analysis': h.get('vol_analysis', '--'),
+            'profit_model1': pm1,
         })
     # 按结构优先排序：上涨趋势 > 区间震荡 > 下降趋势
     struct_priority = {'上涨趋势': 0, '区间震荡': 1, '下降趋势': 2}
     holdings_review.sort(key=lambda x: struct_priority.get(x['structure'], 3))
     
-    # 生成候选买点信号review（从盈利模式1检查结果）
+    # 生成候选买点信号review（与第④部分相同判定逻辑）
     buy_signals_review = []
     for s in buy_signals:
+        code = s.get('code', '')
+        sc = stock_cache.get(code, {})
+        structure = sc.get('structure', '上涨趋势')
+        stage = sc.get('stage', '--')
+        # 区间震荡：用关键点支撑位重算stage（同holdings逻辑）
+        if structure == '区间震荡':
+            try:
+                with open('/home/ubuntu/data/3l/all_stocks_60d.json') as _f:
+                    _all = json.load(_f)
+                for _sec, _ss in _all.get('stocks', {}).items():
+                    if code in _ss and _ss[code] and len(_ss[code]) >= 15:
+                        _kls = _ss[code]
+                        _highs = [k['high'] for k in _kls]
+                        _lows = [k['low'] for k in _kls]
+                        _closes = [k['close'] for k in _kls]
+                        _opens = [k['open'] for k in _kls]
+                        _all_supports = sorted([
+                            max(_highs[i-10:i])
+                            for i in range(10, len(_kls))
+                            if _closes[i] > max(_highs[i-10:i]) and _closes[i] > _opens[i]
+                            and max(_highs[i-10:i]) < _closes[-1]
+                        ], reverse=True)
+                        _resistance = max(_highs[-15:])
+                        _support = None
+                        for _s in _all_supports:
+                            if (_closes[-1] - _s) / _closes[-1] >= 0.015:
+                                _support = _s
+                                break
+                        _support = _support or min(_lows[-20:])
+                        if _resistance > _support:
+                            _pct = (_closes[-1] - _support) / (_resistance - _support) * 100
+                            if _pct < 30: stage = '区间底部'
+                            elif _pct > 70: stage = '区间顶部'
+                            else: stage = '区间中段'
+                        break
+            except Exception:
+                pass
+        code_sig, _, _ = judge_signal(
+            structure=structure, stage=stage,
+            buy_point=s.get('buy_point', ''),
+        )
+        buy_point_display = s.get('buy_point', '') if code_sig == 'buy' else ''
+        ema = sc.get('ema', '--')
+        vol_analysis = sc.get('vol_analysis', '--')
         buy_signals_review.append({
-            'name': s.get('name', '?'), 'code': s.get('code', ''),
+            'name': s.get('name', '?'), 'code': code,
             'sector': s.get('sector', s.get('direction', '')),
-            'buy_point': s.get('buy_point', '--'),
+            'buy_point': buy_point_display,
             'price': s.get('price', 0), 'change': s.get('change', 0),
             'profit_model1': s.get('profit_model1', False),
+            'structure': structure,
+            'stage': stage,
+            'signal': code_sig,
+            'ema': ema,
+            'vol_analysis': vol_analysis,
         })
+    # 按结构优先排序
+    buy_signals_review.sort(key=lambda x: struct_priority.get(x['structure'], 3))
 
     # ⑤ 每日交易计划
     print("[3L复盘] ⑤ 生成交易计划...")

@@ -642,7 +642,8 @@
             <div class="stock-item" style="border-left:3px solid ${color};">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div><span class="name">${structIcon} ${s.name}</span>
-                    <span class="code">${s.code}</span></div>
+                    <span class="code">${s.code}</span>
+                    ${s.profit_model1 ? '<span class="tag" style="background:#e94560;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">🏆 盈利1</span>' : ''}</div>
                     <span style="font-size:13px;color:${(s.change||0)>=0?'#ff4444':'#44aa44'};">
                         ${s.price||'--'} ${(s.change||0)>=0?'+':''}${s.change||0}%</span>
                 </div>
@@ -665,22 +666,59 @@
     function updateBuySignalsUI() {
         const container = document.getElementById('buySignalList');
         const signals = reviewData.buy_signals_review || [];
-        let html = '';
-        // 买点信号
-        if (signals.length > 0) {
-            html += signals.map(s => {
-                const bpTag = s.buy_point === '突破买点' ? '<span class="tag blue">突破</span>' : '<span class="tag yellow">中继</span>';
-                const pmTag = s.profit_model1 ? '<span class="tag red" style="background:#e94560;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">🏆 盈利1</span>' : '';
-                return '<div class="stock-item" style="border-left:3px solid ' + (s.buy_point === '突破买点' ? '#2196f3' : '#ffd700') + ';padding:6px 8px;">' +
-                    '<div><span class="name">' + s.name + '</span><span class="code">' + s.code + '</span>' + pmTag +
-                    '<span style="float:right;font-size:12px;color:#888;">' + (s.sector||'') + '</span></div>' +
-                    '<div class="row">' +
-                    '<div class="field"><span class="l">信号:</span> <span class="v">' + bpTag + '</span></div>' +
-                    '<div class="field"><span class="l">价格:</span> <span class="v">' + (s.price||'--') + '</span></div>' +
-                    '<div class="field"><span class="l">涨幅:</span> <span class="v" style="color:' + ((s.change||0)>=0?'#ff4444':'#44aa44') + ';">' + ((s.change||0)>=0?'+':'') + (s.change||0) + '%</span></div></div></div>';
-            }).join('');
+        if (!signals.length) {
+            container.innerHTML = '<div class="empty">暂无买点信号</div>';
+            return;
         }
-        if (!html) html = '<div class="empty">暂无买点信号</div>';
+        // 按方向分组
+        const groups = {};
+        signals.forEach(s => {
+            const sec = s.sector || '其他';
+            if (!groups[sec]) groups[sec] = [];
+            groups[sec].push(s);
+        });
+        const secNames = Object.keys(groups).sort();
+        // 方向颜色
+        const secColors = {
+            '半导体': '#e94560', '算力': '#2196f3', '创新药': '#4CAF50',
+            '机器人': '#9C27B0', '新能源': '#FF9800', '资源股': '#8B4513',
+            'AI应用': '#00BCD4', '商业航天': '#FF5722',
+        };
+        // Tab 状态
+        if (!window._buyTab) window._buyTab = { activeSector: secNames[0], pages: {} };
+        const tab = window._buyTab;
+        if (!secNames.includes(tab.activeSector)) tab.activeSector = secNames[0];
+        // 构建Tabs
+        let html = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;border-bottom:1px solid #333;padding-bottom:6px;">';
+        secNames.forEach((sec, i) => {
+            const active = sec === tab.activeSector;
+            const color = secColors[sec] || '#888';
+            html += `<a href="javascript:;" onclick="window._buyTab.activeSector='${sec}';window._buyTab.pages['${sec}']=1;updateBuySignalsUI();return false;" style="padding:4px 12px;font-size:12px;border-radius:12px;text-decoration:none;${active?`background:${color};color:#fff;`:`color:${color};background:rgba(255,255,255,0.05);`}">${sec} (${groups[sec].length})</a>`;
+        });
+        html += '</div>';
+        // 当前Tab数据
+        const activeData = groups[tab.activeSector] || [];
+        // 分页
+        if (!tab.pages[tab.activeSector]) tab.pages[tab.activeSector] = 1;
+        const page = tab.pages[tab.activeSector];
+        const perPage = 10;
+        const total = activeData.length;
+        const totalPages = Math.ceil(total / perPage) || 1;
+        const start = (page - 1) * perPage;
+        const end = Math.min(start + perPage, total);
+        const pageData = activeData.slice(start, end);
+        // 用 signalStockCard 渲染（同第④部分）
+        html += pageData.map((s, i) => signalStockCard(s, start + i + 1)).join('');
+        // 分页控件
+        if (totalPages > 1) {
+            const pKey = tab.activeSector;
+            html += '<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:10px;font-size:12px;">';
+            html += '<span style="color:#888;">共' + total + '只</span>';
+            if (page > 1) html += '<a href="javascript:;" onclick="window._buyTab.pages[\'' + pKey + '\']=' + (page-1) + ';updateBuySignalsUI();return false;" style="color:#4ecdc4;text-decoration:none;">‹ 上一页</a>';
+            html += '<span style="color:#e94560;font-weight:600;">' + page + '/' + totalPages + '</span>';
+            if (page < totalPages) html += '<a href="javascript:;" onclick="window._buyTab.pages[\'' + pKey + '\']=' + (page+1) + ';updateBuySignalsUI();return false;" style="color:#4ecdc4;text-decoration:none;">下一页 ›</a>';
+            html += '</div>';
+        }
         container.innerHTML = html;
     }
 
