@@ -465,7 +465,17 @@ def generate_daily_review(date_str=None):
 
     # ③ 最强逻辑归类
     print("[3L复盘] ③ 归类最强逻辑...")
-    holdings = existing.get('holdings', []) or existing.get('stocks', {}).get('stocks', [])
+    # 从 holdings.json 读取最新持仓数据（来源：持仓管理页面）
+    holdings_file = os.path.join(WWW_DIR, 'private', 'holdings.json')
+    live_holdings = []
+    if os.path.isfile(holdings_file):
+        try:
+            with open(holdings_file) as f:
+                hdata = json.load(f)
+            live_holdings = hdata.get('holdings', [])
+        except:
+            pass
+    holdings = live_holdings or existing.get('holdings', []) or existing.get('stocks', {}).get('stocks', [])
     buy_signals = existing.get('buy_signals', [])
 
     # 盈利模式1检查：在归类前给买点信号打上标记
