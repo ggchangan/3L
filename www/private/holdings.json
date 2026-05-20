@@ -1,0 +1,86 @@
+{
+  "update_date": "2026-05-20",
+  "total_net_assets": 805844,
+  "cash": 215412,
+  "margin_debt": 20785,
+  "stock_equity": 590432,
+  "holdings": [
+    {
+      "name": "大族数控",
+      "code": "301200",
+      "net_value": 126962,
+      "ratio": 15.76,
+      "margin_share": 0.041
+    },
+    {
+      "name": "德业股份",
+      "code": "605117",
+      "net_value": 61118,
+      "ratio": 7.58,
+      "margin_share": 0.029
+    },
+    {
+      "name": "宏发股份",
+      "code": "600885",
+      "net_value": 31297,
+      "ratio": 3.88,
+      "margin_share": 0.02
+    },
+    {
+      "name": "伟创电气",
+      "code": "688698",
+      "net_value": 60580,
+      "ratio": 7.52,
+      "margin_share": 0.019
+    },
+    {
+      "name": "药明康德",
+      "code": "603259",
+      "net_value": 59211,
+      "ratio": 7.35,
+      "margin_share": 0.019
+    },
+    {
+      "name": "拓普集团",
+      "code": "601689",
+      "net_value": 55264,
+      "ratio": 6.86,
+      "margin_share": 0.018
+    },
+    {
+      "name": "国际复材",
+      "code": "301526",
+      "net_value": 54377,
+      "ratio": 6.75,
+      "margin_share": 0.018
+    },
+    {
+      "name": "航天电子",
+      "code": "600879",
+      "net_value": 45435,
+      "ratio": 5.64,
+      "margin_share": 0.015
+    },
+    {
+      "name": "天赐材料",
+      "code": "002709",
+      "net_value": 42213,
+      "ratio": 5.24,
+      "margin_share": 0.014
+    },
+    {
+      "name": "润泽科技",
+      "code": "300442",
+      "net_value": 28599,
+      "ratio": 3.55,
+      "margin_share": 0.009
+    },
+    {
+      "name": "深圳华强",
+      "code": "000062",
+      "net_value": 25376,
+      "ratio": 3.15,
+      "margin_share": 0.008
+    }
+  ]
+}

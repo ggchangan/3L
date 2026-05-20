@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>持仓管理 · 私密</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border-bottom: 2px solid #e94560;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 { font-size: 22px; color: #e94560; }
+        .header .hint { color: #666; font-size: 12px; margin-top: 6px; }
+        .header .update-time { color: #4ecdc4; font-size: 11px; margin-top: 4px; }
+        .container { max-width: 880px; margin: 0 auto; padding: 20px; }
+        .card {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .summary-grid {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .summary-item {
+            flex: 1;
+            min-width: 140px;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4e;
+            border-radius: 10px;
+            padding: 14px 16px;
+            text-align: center;
+        }
+        .summary-item .label { color: #888; font-size: 11px; }
+        .summary-item .value { color: #e0e0e0; font-size: 20px; font-weight: bold; margin-top: 4px; }
+        .summary-item .value.cash { color: #4ecdc4; }
+        .summary-item .value.margin { color: #ff6b6b; }
+        .card table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .card th {
+            background: #e94560;
+            color: #fff;
+            padding: 8px 10px;
+            font-size: 13px;
+            text-align: left;
+        }
+        .card td {
+            padding: 8px 10px;
+            font-size: 13px;
+            border-bottom: 1px solid #2a2a4e;
+        }
+        .card tr:hover td {
+            background: rgba(255,255,255,0.04);
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+        .tag.hold { background: #4ecdc4; color: #000; }
+        .tag.pending { background: #ffd700; color: #000; }
+        .tag.clear { background: #ff6b6b; color: #fff; }
+        .bar-bg {
+            background: #2a2a4e;
+            border-radius: 6px;
+            height: 6px;
+            width: 80px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .bar-fill {
+            height: 6px;
+            border-radius: 6px;
+            transition: width 0.5s;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #444;
+            font-size: 11px;
+        }
+        .empty { color: #666; text-align: center; padding: 40px; font-size: 14px; }
+        .back-link {
+            display: inline-block;
+            color: #4ecdc4;
+            text-decoration: none;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .refresh-btn {
+            display: inline-block;
+            background: #e94560;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 14px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .refresh-btn:hover { background: #ff6b81; }
+        .loading { color: #666; text-align: center; padding: 40px; font-size: 14px; }
+        .error { color: #ff6b6b; text-align: center; padding: 40px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔒 持仓管理 · 私密</h1>
+        <div class="hint">仅你可见 · 不在公开页面显示</div>
+        <div class="update-time" id="updateTime">加载中...</div>
+    </div>
+    <div class="container">
+        <div id="summaryArea"></div>
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>股票</th>
+                        <th>代码</th>
+                        <th>权益(¥)</th>
+                        <th>占比</th>
+                        <th>分布</th>
+                    </tr>
+                </thead>
+                <tbody id="holdingsBody">
+                    <tr><td colspan="6" class="loading">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div style="text-align:center;">
+            <button class="refresh-btn" onclick="loadHoldings()">🔄 刷新数据</button>
+        </div>
+
+        <!-- 交易记录 -->
+        <div class="card" style="margin-top:16px;">
+            <h2 style="color:#ffd700; font-size:16px; margin-bottom:12px;">📝 交易记录</h2>
+            <div id="tradesArea">
+                <div class="loading" style="text-align:center;padding:20px;color:#666;">加载中...</div>
+            </div>
+        </div>
+
+        <div style="text-align:center; margin-top:20px;">
+            <a class="back-link" href="/">← 返回主看板</a>
+        </div>
+    </div>
+    <div class="footer">
+        仅你可见 · URL请保密
+    </div>
+    <script>
+    async function loadHoldings() {
+        const body = document.getElementById('holdingsBody');
+        const summaryArea = document.getElementById('summaryArea');
+        const updateTime = document.getElementById('updateTime');
+        
+        body.innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
+        
+        try {
+            const url = '/api/holdings?_=' + Date.now();
+            console.log('Fetching:', url);
+            const resp = await fetch(url);
+            console.log('Response status:', resp.status);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            console.log('Data loaded, holdings:', data.holdings ? data.holdings.length : 0);
+            
+            // 更新时间
+            updateTime.textContent = '📅 更新于 ' + (data.update_date || '未知');
+            
+            // 汇总行
+            let marginHtml = '';
+            if (data.margin_debt && data.margin_debt > 0) {
+                marginHtml = `<div class="summary-item">
+                    <div class="label">融资负债</div>
+                    <div class="value margin">¥${data.margin_debt.toLocaleString()}</div>
+                </div>`;
+            }
+            
+            summaryArea.innerHTML = `
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <div class="label">总净资产</div>
+                        <div class="value">¥${(data.total_net_assets || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">现金</div>
+                        <div class="value cash">¥${(data.cash || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">股票权益</div>
+                        <div class="value">¥${(data.stock_equity || 0).toLocaleString()}</div>
+                    </div>
+                    ${marginHtml}
+                </div>
+            `;
+            
+            // 表格数据
+            const holdings = data.holdings || [];
+            if (holdings.length === 0) {
+                body.innerHTML = '<tr><td colspan="6" class="empty">暂无持仓数据</td></tr>';
+                return;
+            }
+            
+            // 按占比降序排列
+            holdings.sort((a, b) => b.ratio - a.ratio);
+            
+            body.innerHTML = holdings.map((h, i) => {
+                const barColor = h.ratio >= 10 ? '#e94560' : h.ratio >= 6 ? '#ffd700' : '#4ecdc4';
+                return `<tr>
+                    <td style="color:#666">${i + 1}</td>
+                    <td><strong>${h.name}</strong></td>
+                    <td style="color:#888">${h.code || '-'}</td>
+                    <td style="font-family:monospace">¥${(h.net_value || 0).toLocaleString()}</td>
+                    <td style="font-family:monospace">${(h.ratio || 0).toFixed(1)}%</td>
+                    <td>
+                        <div class="bar-bg">
+                            <div class="bar-fill" style="width:${Math.min(h.ratio, 100)}%;background:${barColor}"></div>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+            
+        } catch (err) {
+            body.innerHTML = `<tr><td colspan="6" class="error">❌ 加载失败: ${err.message}</td></tr>`;
+            updateTime.textContent = '⚠️ 数据加载失败';
+        }
+    }
+    
+    // 页面加载自动加载
+    loadHoldings();
+    loadTrades();
+
+    async function loadTrades() {
+        const area = document.getElementById('tradesArea');
+        try {
+            const resp = await fetch('/api/trades?_=' + Date.now());
+            const data = await resp.json();
+            const trades = data.trades || [];
+            if (trades.length === 0) {
+                area.innerHTML = '<div style="text-align:center;padding:20px;color:#666;">暂无交易记录</div>';
+                return;
+            }
+            let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+            html += '<tr style="border-bottom:1px solid #2a2a4e;">' +
+                '<th style="padding:6px 8px;text-align:left;color:#888;">日期</th>' +
+                '<th style="padding:6px 8px;text-align:left;color:#888;">类型</th>' +
+                '<th style="padding:6px 8px;text-align:left;color:#888;">股票</th>' +
+                '<th style="padding:6px 8px;text-align:left;color:#888;">比例</th>' +
+                '<th style="padding:6px 8px;text-align:left;color:#888;">原因</th>' +
+                '<th style="padding:6px 8px;text-align:left;color:#888;">备注</th>' +
+                '</tr>';
+            trades.reverse().forEach(t => {
+                const typeColor = t.type === '卖出' ? '#e94560' : '#4ecdc4';
+                html += `<tr style="border-bottom:1px solid #1a1a2e;">
+                    <td style="padding:6px 8px;color:#aaa;">${t.date}</td>
+                    <td style="padding:6px 8px;color:${typeColor};font-weight:bold;">${t.type}</td>
+                    <td style="padding:6px 8px;">${t.name} <span style="color:#666;font-size:10px;">${t.code}</span></td>
+                    <td style="padding:6px 8px;color:#ffd700;">${t.ratio}</td>
+                    <td style="padding:6px 8px;color:#888;">${t.reason || '-'}</td>
+                    <td style="padding:6px 8px;color:#666;font-size:11px;">${t.note || ''}</td>
+                </tr>`;
+            });
+            html += '</table>';
+            area.innerHTML = html;
+        } catch (err) {
+            area.innerHTML = `<div style="text-align:center;padding:20px;color:#e94560;">❌ 加载失败: ${err.message}</div>`;
+        }
+    }
+    </script>
+</body>
+</html>

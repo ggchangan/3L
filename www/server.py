@@ -131,10 +131,16 @@ class Handler(SimpleHTTPRequestHandler):
         if path == '/api/holdings':
             fp = os.path.join(WWW_DIR, 'private', 'holdings.json')
             if os.path.isfile(fp):
-                self._serve_file(fp, 'application/json; charset=utf-8')
-            else:
-                self.send_json({'error': 'no data'})
-            return
+                with open(fp, 'r', encoding='utf-8') as f:
+                    return self.send_json(json.load(f))
+            return self.send_json({'holdings': []})
+
+        if path == '/api/trades':
+            fp = os.path.join(WWW_DIR, 'private', 'trades.json')
+            if os.path.isfile(fp):
+                with open(fp, 'r', encoding='utf-8') as f:
+                    return self.send_json(json.load(f))
+            return self.send_json({'trades': []})
 
         if path == '/api/market':
             return self.send_json(REVIEW_DATA.get('market', {}))
