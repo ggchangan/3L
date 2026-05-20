@@ -248,6 +248,56 @@
             <ul class="file-list" id="doneList">
                 <li>
                     <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">📡 盘中盯盘页面(monitor.html) — 7卡片上线</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            大盘观测(实时行情+成交额对比+关键点SVG) · 板块监测(今日/5日涨幅·结构阶段分析) · 
+                            龙头观测(行业龙头155行业269只+市场龙头动态扫描) · 盘中机会(算力+半导体中继买点) · 止损预警
+                            <br><span style="color:#4ecdc4;">→ git分支: feature/market-monitor → merged to master</span>
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">🏆 市场龙头动态扫描上线</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            4条件筛选：近5日行业涨幅第一+成交额第一+MA10向上+换手率>3%。269只龙头股扫描，首轮结果9只。
+                            腾讯批量接口拉取，日K线按天缓存，非交易时间持久化
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">🐛 Market Leaders负涨幅误杀修复</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            rank_gain_1st > 0导致负涨幅股票全部跳过。修复后结果从6只→9只，补回锐科激光/兆驰股份/润贝航科
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已修复</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">📖 Skills页面同步更新</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            新建market-leaders-scan · 更新daily-3l-monitor(80条pitfall) · daily-3l-monitor首次录入Part 1 ·
+                            新建profit-quality-check · profit-model-check→profit-model1-check重命名 · 日期修正 · 每日更新记录补正(EMA10极值法描述)
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">📄 盘中盯盘成果追踪PDF + 3L待办梳理</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            生成盘中盯盘模块成果追踪PDF（页面设计/功能/规则/问题/skill/待办），
+                            按3L体系梳理8项盯盘增强待办（主线评分/卖点预警/轮动检测/仓位联动等），同步更新到成果页面
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
                         <span class="file-name">📋 3L复盘功能完善 · 5项核心功能上线</span>
                         <div style="color:#888; font-size:12px; margin-top:4px;">
                             ① 大盘周期判定(4维评分法/5档定位+仓位建议)&nbsp;
