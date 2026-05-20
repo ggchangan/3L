@@ -92,15 +92,7 @@ body {
 <div class="header">
     <h1>📖 Skills 追踪</h1>
     <div class="sub">所有Skills一览 + 逐日更新记录</div>
-    <div class="nav">
-        <a href="/">🏠 成果跟踪</a>
-        <span class="sep">|</span>
-        <a href="/review.html">📋 每日复盘</a>
-        <span class="sep">|</span>
-        <a href="/simulation.html">📊 模拟交易</a>
-        <span class="sep">|</span>
-        <span class="cur">📖 Skills追踪</span>
-    </div>
+    <div class="nav" id="nav-top"></div>
 </div>
 
 <div class="container">
@@ -162,6 +154,10 @@ body {
         <div class="desc">批量生成A股K线关键点SVG/PNG图，生成可分享PDF报告</div>
     </div>
     <div class="skill-item">
+        <div class="name">profit-quality-check <span class="tag created">创建</span></div>
+        <div class="desc">业绩质量自动判断 — 扣非净利润增速>30%+营收增速>30%+扣非利润>1亿</div>
+    </div>
+    <div class="skill-item">
         <div class="name">a-stock-simulation</div>
         <div class="desc">基础模拟交易引擎（自定义本金/日期/选股/仓位）</div>
     </div>
@@ -171,7 +167,7 @@ body {
 <div class="section">
     <div class="section-title">📝 更新记录</div>
 
-    <!-- Day card: 2026-05-20 -->
+    <!-- Day card: 2026-05-20 (newest first) -->
     <div class="day-card">
         <div class="date-badge">2026-05-20</div>
 
@@ -218,10 +214,37 @@ body {
         </div>
     </div>
 
-</div>
+    <!-- Day card: 2026-05-19 -->
+    <div class="day-card">
+        <div class="date-badge">2026-05-19</div>
+
+        <div class="change-item">
+            <div class="sname">profit-quality-check <span class="tag created">创建</span></div>
+            <div class="sdesc">业绩质量自动判断模块 — 扣非净利润增速>30%+营收增速>30%+扣非利润>1亿</div>
+            <ul class="spoints">
+                <li>247只自选股批量扫描，48只通过业绩检查</li>
+                <li>数据源：akshare stock_financial_abstract_ths（同花顺财务摘要）</li>
+                <li>带缓存机制，自动按日缓存 financial_data_cache.json</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">buy_point_detection <span class="tag updated">更新</span></div>
+            <div class="sdesc">盈利模式1条件④从默认通过改为业绩自动检查</div>
+            <ul class="spoints">
+                <li>check_zhongji/check_tupo/check_profit_model1 统一前缀兼容（SH/SZ/裸代码）</li>
+                <li>find_idx 日期格式兼容（横杠/无横杠）</li>
+                <li>5/19复盘3只🏆：普冉股份、海光信息、鹏辉能源</li>
+            </ul>
+        </div>
+    </div>
 
 </div>
 
+</div>
+
+<div id="nav-bottom"></div>
 <div class="footer">3L 交易体系 · Hermes Agent · 2026</div>
+<script src="/nav.js"></script>
 </body>
 </html>

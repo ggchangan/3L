@@ -111,15 +111,7 @@
     <h1>📋 3L 每日复盘</h1>
     <div class="sub">② 动量主线 · ③ 最强逻辑 · ④ 量价择时</div>
     <div class="date-badge" id="todayDate">加载中...</div>
-    <div style="margin-top:10px; display:flex; gap:10px; justify-content:center;">
-        <a href="/" style="color:#4ecdc4; text-decoration:none; font-size:12px;">🏠 成果跟踪</a>
-        <span style="color:#333;">|</span>
-        <a href="/review.html" style="color:#e94560; text-decoration:none; font-size:12px; font-weight:bold;">📌 今日复盘</a>
-        <span style="color:#333;">|</span>
-        <a href="/simulation.html" style="color:#e67e22; text-decoration:none; font-size:12px;">📊 模拟交易</a>
-        <span style="color:#333;">|</span>
-        <a href="/skills.html" style="color:#a855f7; text-decoration:none; font-size:12px;">📖 Skills追踪</a>
-    </div>
+    <div style="margin-top:10px;" id="nav-top"></div>
 </div>
 
 <div class="container">
@@ -170,72 +162,47 @@
                 <span style="cursor:pointer;color:#4ecdc4;font-size:12px;" onclick="toggleEl('scoreDetailTable')">📊 查看评分明细</span>
                 <span style="color:#333;margin:0 6px;">|</span>
                 <span style="cursor:pointer;color:#ffd700;font-size:12px;" onclick="toggleChart('fundFlowChart')">💰 资金流向</span>
+                <span style="color:#333;margin:0 6px;">|</span>
+                <span style="cursor:pointer;color:#e94560;font-size:12px;" onclick="var c=document.getElementById('indexChart');var o=document.getElementById('indexChartObj');c.style.display=c.style.display==='none'?'':'none';o.data='/review_charts/zzqz_v2.svg?t='+Date.now();">📈 中证全指关键点图</span>
             </div>
+        </div>
+        <div id="indexChart" class="chart-container" style="display:none; margin-top:8px;">
+            <object id="indexChartObj" data="/review_charts/zzqz_v2.svg" type="image/svg+xml" style="width:100%;max-width:750px;display:block;margin:0 auto;border-radius:8px;"></object>
         </div>
         <div id="fundFlowChart" class="chart-container" style="display:none; margin-top:8px;">
             <img src="/charts/fund_flow_chart.png" style="width:100%;max-width:700px;border-radius:8px;">
         </div>
     </div>
 
-    <!-- ===== ② 动量主线 ===== -->
+    <!-- ===== ② 最强动量 ===== -->
     <div class="section">
         <div class="section-title">
             <span class="step">STEP 2</span>
-            动量主线
-            <span style="font-size:12px; color:#666; font-weight:normal;">→ 评分/持续性/轮动 (方案B: 涨幅×0.6+MA20覆盖×0.4)</span>
+            最强动量
+            <span style="font-size:12px; color:#666; font-weight:normal;">→ 涨停/新高 + 行业板块排行</span>
         </div>
-        <div id="mainlineContainer">
-            <div class="empty">暂无数据</div>
+        <div id="momentumArea">
+            <div class="empty">加载中...</div>
         </div>
+
     </div>
 
-    <!-- ===== ③ 行业板块TOP15 ===== -->
+    <!-- ===== ③ 最强逻辑 ===== -->
     <div class="section">
         <div class="section-title">
             <span class="step">STEP 3</span>
-            行业板块排行
-            <span style="font-size:12px; color:#666; font-weight:normal;">→ 同花顺实时 · 前15名</span>
-        </div>
-        <table id="mainLineTable">
-            <thead>
-                <tr>
-                    <th style="width:30px">#</th>
-                    <th>行业板块</th>
-                    <th>今日涨幅</th>
-                    <th>净流入(亿)</th>
-                    <th>上涨/下跌</th>
-                    <th>领涨股</th>
-                </tr>
-            </thead>
-            <tbody id="mainLineBody">
-                <tr><td colspan="6" class="empty">暂无数据</td></tr>
-            </tbody>
-        </table>
-        <div id="leaderChartArea" class="chart-container" style="display:none; margin-top:12px; background:rgba(255,255,255,0.02); border:1px solid #2a2a4e; border-radius:10px; padding:16px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span id="leaderChartTitle" style="color:#4ecdc4; font-size:14px; font-weight:600;"></span>
-                <span style="cursor:pointer; color:#e94560; font-size:12px;" onclick="document.getElementById('leaderChartArea').style.display='none'">✕ 关闭</span>
-            </div>
-            <object id="leaderChartObject" data="" type="image/svg+xml" style="width:100%; max-width:700px; display:block; margin:0 auto; border-radius:8px;"></object>
-        </div>
-    </div>
-
-    <!-- ===== ④ 最强逻辑 ===== -->
-    <div class="section">
-        <div class="section-title">
-            <span class="step">STEP 4</span>
             最强逻辑 · 个股归类
             <span style="font-size:12px; color:#666; font-weight:normal;">→ 持仓/候选归入主线/非主线</span>
         </div>
-        <div id="logicClassifyArea">
+        <div id="logicArea">
             <div class="empty">暂无数据</div>
         </div>
     </div>
 
-    <!-- ===== ⑤ 持仓个股复盘 ===== -->
+    <!-- ===== ④ 持仓个股复盘 ===== -->
     <div class="section">
         <div class="section-title">
-            <span class="step">STEP 5</span>
+            <span class="step">STEP 4</span>
             持仓个股复盘
             <span style="font-size:12px; color:#666; font-weight:normal;">→ 量价择时诊断</span>
         </div>
@@ -244,10 +211,10 @@
         </div>
     </div>
 
-    <!-- ===== ⑥ 自选股买点信号 ===== -->
+    <!-- ===== ⑤ 自选股买点信号 ===== -->
     <div class="section">
         <div class="section-title">
-            <span class="step">STEP 6</span>
+            <span class="step">STEP 5</span>
             自选股买点信号
             <span style="font-size:12px; color:#666; font-weight:normal;">→ 关注买入机会</span>
         </div>
@@ -256,12 +223,12 @@
         </div>
     </div>
 
-    <!-- ===== ⑦ 每日交易计划 ===== -->
+    <!-- ===== ⑥ 每日交易计划 ===== -->
     <div class="section">
         <div class="section-title">
             <span class="step">PLAN</span>
             每日交易计划
-            <span style="font-size:12px; color:#666; font-weight:normal;">→ 综合STEP 1~6 生成</span>
+            <span style="font-size:12px; color:#666; font-weight:normal;">→ 综合STEP 1~5 生成</span>
         </div>
         <div id="tradingPlanArea">
             <div class="empty">暂无数据</div>
@@ -280,15 +247,17 @@
     <div style="display:flex; gap:12px; justify-content:center; margin:20px 0; flex-wrap:wrap;">
         <a href="/" style="color:#4ecdc4; text-decoration:none; font-size:13px;">← 返回主看板</a>
         <span style="color:#333;">|</span>
-        <a href="/review.html" style="color:#e94560; text-decoration:none; font-size:13px;">📌 今日复盘</a>
+        <a href="/review.html" style="color:#e94560; text-decoration:none; font-size:13px;">📌 每日复盘</a>
         <span style="color:#333;">|</span>
         <span style="color:#666; font-size:13px;">📋 复盘数据</span>
     </div>
 </div>
 
+<div id="nav-bottom"></div>
 <div class="footer">
     3L 交易体系 · 每日复盘 · 7步完整复盘
 </div>
+<script src="/nav.js"></script>
 
 <script>
     const today = new Date();
@@ -308,27 +277,16 @@
                 reviewData = data;
                 // ① 大盘判定
                 if (data.market) updateMarketUI(data.market);
-                // ② 动量主线
-                if (data.mainline) updateMainlineUI(data.mainline);
-                else if (data.mainlines) {
-                    updateMainlineUI({lines: (data.mainlines.lines||[]).map(l => ({
-                        name: l.name, score: l.score || l.score_20d || 0,
-                        avg_gain_20d: l.ret20d || 0, above_ma20_pct: l.ma20_cov*100 || 0,
-                        is_main: l.is_main || false
-                    }))});
-                }
-                // ③ 行业板块
-                if (data.industry_boards && data.industry_boards.length > 0)
-                    updateMainLinesUI(data.industry_boards);
-                // ④ 最强逻辑
-                if (data.logic_classify) updateLogicClassifyUI(data.logic_classify);
-                // ⑤ 持仓复盘
+                // ② 动量主线已迁移至独立最强动量模块（STEP 3）+ 行业TOP15由独立的 refreshMainLines() 加载
+                // ③ 最强逻辑由独立的 loadLogicMap() 加载
+                // ④ 持仓复盘
                 if (data.holdings_review) updateStocksUI(data.holdings_review);
                 else if (data.holdings) updateStocksUI(data.holdings);
                 // ⑥ 买点信号
                 if (data.buy_signals) updateBuySignalsUI(data.buy_signals);
                 // ⑦ 交易计划
                 if (data.trading_plan) updateTradingPlanUI(data.trading_plan);
+                refreshMainLines();
             })
             .catch(() => {
                 refreshMarket();
@@ -402,35 +360,28 @@
             document.getElementById('cycleScore').textContent = `综合评分 ${data.score}`;
         }
         if (data.position) {
-            const labels = { 'peak':'波峰','mid':'波中','trough':'波谷','bias_peak':'偏波峰','bias_trough':'偏波谷' };
-            const posLabels = { 'peak':'轻仓(20-40%)','mid':'半仓以上(60-80%)','trough':'重仓(80-100%)','bias_peak':'轻仓(40-60%)','bias_trough':'重仓(80%)' };
-            const strats = {
-                'peak':'降低仓位·防守为主，卖出可不补','mid':'中等仓位·精选个股，不主跌维持重仓',
-                'trough':'积极布局·加大仓位，止损后立即补回',
-                'bias_peak':'控制仓位·逢高减仓，收紧止盈',
-                'bias_trough':'逐步加仓·逢低布局，卖出当日换股补回'
-            };
-            cycle.textContent = labels[data.position] || data.position;
-            pos.textContent = posLabels[data.position] || '--';
-            strat.textContent = strats[data.position] || '--';
+            // 后端返回中文位置名(波中偏上/偏波谷等)，直接用 data.strategy 和 data.position_pct
+            cycle.textContent = data.position;
+            pos.textContent = data.position_pct || '--';
+            strat.textContent = data.strategy || '--';
             if (data.build_per_stock_pct) rule.textContent = `建仓 ${data.build_per_stock_pct}%/只`;
             advice.textContent = data.strategy || '--';
         }
 
-        // 4维评分明细
-        if (data.detail) {
-            const tbody = document.getElementById('scoreDetailBody');
-            const dims = {
-                'trend': '趋势结构', 'volume': '量能位置',
-                'pattern': '量价形态', 'volatility': '波动率'
-            };
-            tbody.innerHTML = Object.keys(dims).map(k => {
-                const dim = data.detail[k] || {};
-                const score = dim.score !== undefined ? dim.score : '?';
-                const detail = JSON.stringify(dim).replace(/[{}"']/g,' ').replace(/,/g,' · ').substring(0,60);
-                return `<tr><td>${dims[k]}</td><td style="color:${score>0?'#ff4444':score<0?'#44aa44':'#888'}">${score>0?'+':''}${score}</td><td style="color:#888;font-size:11px;">${detail}</td></tr>`;
-            }).join('');
-        }
+        // 4维评分明细（后端存为平铺字段: ma_score/vol_score/trend_score/amp_score）
+        const dimMap = {
+            'ma_score': { label: '趋势结构', desc: `MA20=${data.ma20||'?'} MA60=${data.ma60||'?'}` },
+            'vol_score': { label: '量能位置', desc: `量比=${data.vol_ratio?data.vol_ratio.toFixed(2):'?'}` },
+            'trend_score': { label: '量价形态', desc: `10日涨跌=${data.chg_10d?data.chg_10d.toFixed(1):'?'}%` },
+            'amp_score': { label: '波动率', desc: '' }
+        };
+        const tbody = document.getElementById('scoreDetailBody');
+        tbody.innerHTML = Object.keys(dimMap).map(k => {
+            const score = data[k] !== undefined ? data[k] : '?';
+            const label = dimMap[k].label;
+            const desc = dimMap[k].desc;
+            return `<tr><td>${label}</td><td style="color:${score>0?'#ff4444':score<0?'#44aa44':'#888'}">${score>0?'+':''}${score}</td><td style="color:#888;font-size:11px;">${desc}</td></tr>`;
+        }).join('');
     }
 
     // ====== ② 动量主线 ======
@@ -512,19 +463,20 @@
 
     function updateMainLinesUI(boards) {
         const tbody = document.getElementById('mainLineBody');
+        if (!tbody) return; // tab还没渲染，数据已缓存，切到板块tab时会自动刷新
         if (!boards || boards.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无板块数据</td></tr>';
             return;
         }
         const sorted = [...boards].sort((a, b) => parseFloat(b['涨跌幅']||0) - parseFloat(a['涨跌幅']||0));
-        const top15 = sorted.slice(0, 15);
+        const top10 = sorted.slice(0, 10);
         const codeMap = { /* common chart code mappings */
             '上海电力':'600021','沪硅产业':'688126','彩讯股份':'300634','思特奇':'300608',
             '国瓷材料':'300285','新特电气':'301120','逸豪新材':'301176','凡拓数创':'301313',
             '天山电子':'301379','宝通科技':'300031','西子洁能':'002534','华丰科技':'688629',
             'ST豆神':'300010','星徽股份':'300464','*ST帅电':'605336'
         };
-        tbody.innerHTML = top15.map((b, i) => {
+        tbody.innerHTML = top10.map((b, i) => {
             const chg = parseFloat(b['涨跌幅']||0);
             const inflow = parseFloat(b['净流入']||0);
             const upCnt = parseInt(b['上涨家数']||0);
@@ -546,8 +498,8 @@
         }).join('');
     }
 
-    // 领涨股K线图（事件委托）
-    document.getElementById('mainLineBody').addEventListener('click', function(e) {
+    // 领涨股K线图（事件委托到momentumArea——动态生成的元素也能响应）
+    document.addEventListener('click', function(e) {
         const btn = e.target.closest('.leader-chart-btn');
         if (!btn) return;
         const code = btn.getAttribute('data-code');
@@ -565,7 +517,7 @@
 
     // ====== ④ 最强逻辑 ======
     function updateLogicClassifyUI(data) {
-        const container = document.getElementById('logicClassifyArea');
+        const container = document.getElementById('logicArea');
         if (!data || (!data.holdings && !data.signals)) {
             container.innerHTML = '<div class="empty">暂无数据</div>';
             return;
@@ -622,13 +574,36 @@
     }
 
     // ====== ⑤ 持仓个股复盘 ======
+    var pgStockPage = 1;
+    var pgStockData = [];
     function updateStocksUI(stocks) {
         const container = document.getElementById('stockReviewList');
         if (!stocks || stocks.length === 0) {
             container.innerHTML = '<div class="empty">暂无持仓数据</div>';
             return;
         }
-        container.innerHTML = stocks.map((s, idx) => signalStockCard(s, idx)).join('');
+        pgStockData = stocks;
+        pgStockPage = 1;
+        renderStockPage();
+    }
+    function renderStockPage() {
+        const container = document.getElementById('stockReviewList');
+        const perPage = 10;
+        const total = pgStockData.length;
+        const totalPages = Math.ceil(total / perPage) || 1;
+        const start = (pgStockPage - 1) * perPage;
+        const end = Math.min(start + perPage, total);
+        const pageData = pgStockData.slice(start, end);
+        let html = pageData.map((s, i) => signalStockCard(s, start + i + 1)).join('');
+        if (totalPages > 1) {
+            html += '<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:10px;font-size:12px;">';
+            html += '<span style="color:#888;">共' + total + '只</span>';
+            if (pgStockPage > 1) html += '<a href="javascript:;" onclick="pgStockPage=' + (pgStockPage-1) + ';renderStockPage();return false;" style="color:#4ecdc4;text-decoration:none;">‹ 上一页</a>';
+            html += '<span style="color:#e94560;font-weight:600;">' + pgStockPage + '/' + totalPages + '</span>';
+            if (pgStockPage < totalPages) html += '<a href="javascript:;" onclick="pgStockPage=' + (pgStockPage+1) + ';renderStockPage();return false;" style="color:#4ecdc4;text-decoration:none;">下一页 ›</a>';
+            html += '</div>';
+        }
+        container.innerHTML = html;
     }
 
     function signalStockCard(s, idx) {
@@ -663,35 +638,51 @@
     }
 
     // ====== ⑥ 买点信号 ======
+    var pgSignalPage = 1;
+    var pgSignalData = [];
     function updateBuySignalsUI(signals) {
         const container = document.getElementById('buySignalList');
         if (!signals || signals.length === 0) {
             container.innerHTML = '<div class="empty">暂无买点信号</div>';
             return;
         }
-        container.innerHTML = signals.map((s, idx) => {
+        pgSignalData = signals;
+        pgSignalPage = 1;
+        renderSignalPage();
+    }
+    function renderSignalPage() {
+        const container = document.getElementById('buySignalList');
+        const perPage = 10;
+        const total = pgSignalData.length;
+        const totalPages = Math.ceil(total / perPage) || 1;
+        const start = (pgSignalPage - 1) * perPage;
+        const end = Math.min(start + perPage, total);
+        const pageData = pgSignalData.slice(start, end);
+        let html = pageData.map((s, idx) => {
             const bpTag = s.buy_point === '突破买点' ? '<span class="tag blue">突破</span>' : '<span class="tag yellow">中继</span>';
-            const chartId = `chart_${idx}`;
-            return `
-                <div class="stock-item" style="border-left:3px solid ${s.buy_point === '突破买点' ? '#2196f3' : '#ffd700'};">
-                    <div>
-                        <span class="name">${s.name}</span>
-                        <span class="code">${s.code}</span>
-                        <span style="float:right; font-size:12px; color:#888;">${s.sector||''}</span>
-                    </div>
-                    <div class="row">
-                        <div class="field"><span class="l">信号:</span> <span class="v">${bpTag}</span></div>
-                        <div class="field"><span class="l">价格:</span> <span class="v">${s.price||'--'}</span></div>
-                        <div class="field"><span class="l">涨幅:</span> <span class="v" style="color:${(s.change||0) >= 0 ? '#ff4444' : '#44aa44'};">${(s.change||0) >= 0 ? '+' : ''}${s.change||0}%</span></div>
-                        <div class="field"><span class="l" style="cursor:pointer;color:#4ecdc4;" onclick="toggleChart('${chartId}')">📊</span></div>
-                    </div>
-                    ${s.stop_loss ? `<div class="field" style="margin-top:4px;"><span class="l">止损:</span> <span class="v" style="color:#e94560;">${s.stop_loss}</span></div>` : ''}
-                    <div id="${chartId}" class="chart-container" style="display:none; margin-top:8px;">
-                        <object data="/review_charts/${s.code}.svg" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;"></object>
-                    </div>
-                </div>
-            `;
+            const pmTag = s.profit_model1 ? '<span class="tag red" style="background:#e94560;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">🏆 盈利1</span>' : '';
+            const chartId = 'chart_' + start + '_' + idx;
+            return '<div class="stock-item" style="border-left:3px solid ' + (s.buy_point === '突破买点' ? '#2196f3' : '#ffd700') + ';">' +
+                '<div><span class="name">' + s.name + '</span><span class="code">' + s.code + '</span>' + pmTag +
+                '<span style="float:right;font-size:12px;color:#888;">' + (s.sector||'') + '</span></div>' +
+                '<div class="row">' +
+                '<div class="field"><span class="l">信号:</span> <span class="v">' + bpTag + '</span></div>' +
+                '<div class="field"><span class="l">价格:</span> <span class="v">' + (s.price||'--') + '</span></div>' +
+                '<div class="field"><span class="l">涨幅:</span> <span class="v" style="color:' + ((s.change||0)>=0?'#ff4444':'#44aa44') + ';">' + ((s.change||0)>=0?'+':'') + (s.change||0) + '%</span></div>' +
+                '<div class="field"><span class="l" style="cursor:pointer;color:#4ecdc4;" onclick="toggleChart(\'' + chartId + '\')">📊</span></div></div>' +
+                (s.stop_loss ? '<div class="field" style="margin-top:4px;"><span class="l">止损:</span> <span class="v" style="color:#e94560;">' + s.stop_loss + '</span></div>' : '') +
+                '<div id="' + chartId + '" class="chart-container" style="display:none;margin-top:8px;">' +
+                '<object data="/review_charts/' + s.code + '.svg" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;"></object></div></div>';
         }).join('');
+        if (totalPages > 1) {
+            html += '<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:10px;font-size:12px;">';
+            html += '<span style="color:#888;">共' + total + '只</span>';
+            if (pgSignalPage > 1) html += '<a href="javascript:;" onclick="pgSignalPage=' + (pgSignalPage-1) + ';renderSignalPage();return false;" style="color:#4ecdc4;text-decoration:none;">‹ 上一页</a>';
+            html += '<span style="color:#e94560;font-weight:600;">' + pgSignalPage + '/' + totalPages + '</span>';
+            if (pgSignalPage < totalPages) html += '<a href="javascript:;" onclick="pgSignalPage=' + (pgSignalPage+1) + ';renderSignalPage();return false;" style="color:#4ecdc4;text-decoration:none;">下一页 ›</a>';
+            html += '</div>';
+        }
+        container.innerHTML = html;
     }
 
     // ====== ⑦ 每日交易计划 ======
@@ -741,6 +732,228 @@
         container.innerHTML = html;
     }
 
+
+    // ====== ③ 最强动量 ======
+    // 通用分页工具
+    var pgData = {};
+    function renderPage(containerId, data, page, perPage, headerRow, bodyRowFn) {
+        const total = data.length;
+        const totalPages = Math.ceil(total / perPage) || 1;
+        const start = (page - 1) * perPage;
+        const end = Math.min(start + perPage, total);
+        const pageData = data.slice(start, end);
+        let html = '<table><thead>' + headerRow + '</thead><tbody>';
+        pageData.forEach((item, i) => {
+            html += bodyRowFn(item, start + i + 1);
+        });
+        html += '</tbody></table>';
+        if (totalPages > 1) {
+            html += '<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:8px;font-size:12px;">';
+            html += '<span style="color:#888;">共' + total + '条</span>';
+            if (page > 1) html += '<a href="javascript:;" onclick="return pgGo(\'' + containerId + '\',' + (page-1) + ')" style="color:#4ecdc4;text-decoration:none;">‹ 上一页</a>';
+            html += '<span style="color:#e94560;font-weight:600;">' + page + '/' + totalPages + '</span>';
+            if (page < totalPages) html += '<a href="javascript:;" onclick="return pgGo(\'' + containerId + '\',' + (page+1) + ')" style="color:#4ecdc4;text-decoration:none;">下一页 ›</a>';
+            html += '</div>';
+        }
+        return html;
+    }
+    function pgGo(cid, page) {
+        if (!pgData[cid]) return false;
+        const d = pgData[cid];
+        document.getElementById(cid).innerHTML = renderPage(cid, d.data, page, d.perPage, d.headerRow, d.bodyRowFn);
+        window.scrollTo({top: document.getElementById(cid).offsetTop - 80, behavior: 'smooth'});
+        return false;
+    }
+
+    function loadMomentum() {
+        const container = document.getElementById('momentumArea');
+        container.innerHTML = '<div class="empty">正在拉取数据...</div>';
+        const PER_PAGE = 10;
+        
+        fetch('/api/momentum')
+            .then(r => r.json())
+            .then(data => {
+                let html = '';
+                let limitUp = (data.limit_up || []).slice();
+                limitUp.sort((a, b) => (b['涨跌幅']||0) - (a['涨跌幅']||0));
+                let newHighs = (data.new_highs || []).slice();
+                newHighs.sort((a, b) => (b['涨跌幅']||0) - (a['涨跌幅']||0));
+                const totalNewHighs = data.new_highs_total || 0;
+                // Tab 切换卡
+                const allNh = (data.new_highs_all || []).slice();
+                html += '<div style="display:flex;gap:6px;margin-bottom:10px;">';
+                html += '<span id="tabBoard" class="tag red" style="cursor:pointer;font-size:12px;padding:4px 14px;" onclick="switchMomentumTab(\'board\')">🏢 板块排行</span>';
+                html += '<span id="tabNewHigh" class="tag gray" style="cursor:pointer;font-size:12px;padding:4px 14px;" onclick="switchMomentumTab(\'newhigh\')">📊 自选新高 ' + newHighs.length + '</span>';
+                html += '<span id="tabAllNew" class="tag gray" style="cursor:pointer;font-size:12px;padding:4px 14px;" onclick="switchMomentumTab(\'allnew\')">🔥 全市场新高 ' + totalNewHighs + '</span>';
+                html += '<span id="tabLimit" class="tag gray" style="cursor:pointer;font-size:12px;padding:4px 14px;" onclick="switchMomentumTab(\'limit\')">📈 涨停 ' + limitUp.length + '</span>';
+                html += '</div>';
+                html += '<div id="momeLimitContent" style="display:none;">';
+                if (limitUp.length > 0) {
+                    const hdr = '<tr><th style="width:30px">#</th><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>封板时间</th><th>连板</th><th>行业</th><th>自选</th></tr>';
+                    const bfn = (s, idx) => {
+                        const inW = s['在自选'] ? '<span class="tag red">✓</span>' : '<span class="tag gray">-</span>';
+                        const lb = s['连板数'] || 1;
+                        const lbTag = lb >= 3 ? 'tag red' : lb >= 2 ? 'tag orange' : 'tag gray';
+                        const fbt = s['首次封板时间'] || '';
+                        const fbtStr = fbt ? fbt.toString().padStart(6,'0').replace(/^(\d{2})(\d{2})(\d{2})$/, '$1:$2') : '--';
+                        return '<tr>' +
+                            '<td>' + idx + '</td><td>' + (s['股票代码']||s['代码']||'') + '</td><td>' + (s['股票简称']||s['名称']||'') + '</td><td>' + (s['最新价']||'') + '</td>' +
+                            '<td style="color:#ff4444;font-weight:600;">+' + (s['涨跌幅']||0).toFixed(2) + '%</td>' +
+                            '<td style="font-size:11px;color:#888;">' + fbtStr + '</td>' +
+                            '<td><span class="' + lbTag + '">' + lb + '板</span></td>' +
+                            '<td style="font-size:11px;">' + (s['行业']||'') + '</td><td>' + inW + '</td></tr>';
+                    };
+                    const cid = 'pgLimitUp';
+                    pgData[cid] = { data: limitUp, perPage: PER_PAGE, headerRow: hdr, bodyRowFn: bfn };
+                    html += '<div id="' + cid + '">' + renderPage(cid, limitUp, 1, PER_PAGE, hdr, bfn) + '</div>';
+                } else {
+                    html += '<div class="empty">今日无涨停</div>';
+                }
+                html += '</div>';
+                html += '<div id="momeNewHighContent" style="display:none;">';
+                if (newHighs.length > 0) {
+                    const hdr2 = '<tr><th style="width:30px">#</th><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>行业</th></tr>';
+                    const bfn2 = (s, idx) => {
+                        const chg = s['涨跌幅']||0;
+                        return '<tr>' +
+                            '<td>' + idx + '</td><td>' + s['股票代码'] + '</td><td>' + s['股票简称'] + '</td><td>' + s['最新价'] + '</td>' +
+                            '<td style="color:' + (chg>=0?'#ff4444':'#44aa44') + '">' + (chg>=0?'+':'') + chg.toFixed(2) + '%</td>' +
+                            '<td style="font-size:11px;">' + (s['行业']||'') + '</td></tr>';
+                    };
+                    const cid2 = 'pgNewHigh';
+                    pgData[cid2] = { data: newHighs, perPage: PER_PAGE, headerRow: hdr2, bodyRowFn: bfn2 };
+                    html += '<div id="' + cid2 + '">' + renderPage(cid2, newHighs, 1, PER_PAGE, hdr2, bfn2) + '</div>';
+                } else {
+                    html += '<div class="empty">自选股无创历史新高</div>';
+                }
+                html += '</div>';
+                html += '</div>';  // close newHigh content
+                // 全市场新高内容
+                html += '<div id="momeAllNewContent" style="display:none;">';
+                if (allNh.length > 0) {
+                    const hdrA = '<tr><th style="width:30px">#</th><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>行业</th></tr>';
+                    const bfnA = (s, idx) => {
+                        const chg = s['涨跌幅']||0;
+                        return '<tr><td>' + idx + '</td><td>' + s['股票代码'] + '</td><td>' + (s['股票简称']||'') + '</td><td>' + (s['最新价']||'') + '</td>' +
+                            '<td style="color:' + (chg>=0?'#ff4444':'#44aa44') + '">' + (chg>=0?'+':'') + chg.toFixed(2) + '%</td>' +
+                            '<td style="font-size:11px;">' + (s['行业']||'') + '</td></tr>';
+                    };
+                    const cidA = 'pgAllNew';
+                    pgData[cidA] = { data: allNh, perPage: PER_PAGE, headerRow: hdrA, bodyRowFn: bfnA };
+                    html += '<div id="' + cidA + '">' + renderPage(cidA, allNh, 1, PER_PAGE, hdrA, bfnA) + '</div>';
+                } else {
+                    html += '<div class="empty">暂无全市场新高数据</div>';
+                }
+                html += '</div>';  // close allNew content
+                // 板块排行tab内容
+                html += '<div id="momeBoardContent">';
+                html += '<table id="mainLineTable"><thead><tr><th style="width:30px">#</th><th>行业板块</th><th>今日涨幅</th><th>净流入(亿)</th><th>上涨/下跌</th><th>领涨股</th></tr></thead><tbody id="mainLineBody"><tr><td colspan="6" class="empty">暂无数据</td></tr></tbody></table>';
+                html += '<div id="leaderChartArea" class="chart-container" style="display:none; margin-top:12px; background:rgba(255,255,255,0.02); border:1px solid #2a2a4e; border-radius:10px; padding:16px;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><span id="leaderChartTitle" style="color:#4ecdc4; font-size:14px; font-weight:600;"></span><span style="cursor:pointer; color:#e94560; font-size:12px;" onclick="document.getElementById(\'leaderChartArea\').style.display=\'none\'">✕ 关闭</span></div><object id="leaderChartObject" data="" type="image/svg+xml" style="width:100%; max-width:700px; display:block; margin:0 auto; border-radius:8px;"></object></div>';
+                html += '</div>';  // close board content
+                html += '</div>';  // close momentum tab wrapper
+                
+                if (data.limit_error) html += '<div style="margin-top:8px;color:#e94560;font-size:11px;">涨停数据错误: ' + data.limit_error + '</div>';
+                if (data.new_highs_error) html += '<div style="margin-top:8px;color:#e94560;font-size:11px;">创新高数据错误: ' + data.new_highs_error + '</div>';
+                
+                container.innerHTML = html;
+                // 默认显示板块排行tab
+                window.momentumTab = 'board';
+            })
+            .catch(err => {
+                container.innerHTML = '<div class="empty">数据加载失败: ' + err.message + '</div>';
+            });
+    }
+    
+    // 动量Tab切换
+    function switchMomentumTab(tab) {
+        window.momentumTab = tab;
+        const ids = ['momeLimitContent','momeNewHighContent','momeAllNewContent','momeBoardContent'];
+        const tabs = ['tabLimit','tabNewHigh','tabAllNew','tabBoard'];
+        ids.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+        tabs.forEach(id => { const el = document.getElementById(id); if (el) el.className = 'tag gray'; });
+        const tabMap = { limit:0, newhigh:1, allnew:2, board:3 };
+        const idx = tabMap[tab];
+        if (idx !== undefined) {
+            const c = document.getElementById(ids[idx]);
+            const t = document.getElementById(tabs[idx]);
+            if (c) c.style.display = '';
+            if (t) t.className = 'tag red';
+            // Trigger board data load when first switched to
+            if (tab === 'board') refreshMainLines();
+        }
+    }
+    
+    // ====== ④ 最强逻辑 ======
+    function loadLogicMap() {
+        const container = document.getElementById('logicArea');
+        container.innerHTML = '<div class="empty">加载行业分类数据...</div>';
+        
+        fetch('/api/industry-map')
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    container.innerHTML = '<div class="empty">' + data.error + '</div>';
+                    return;
+                }
+                
+                const industryGroups = {};
+                let unknownCount = 0;
+                Object.values(data).forEach(item => {
+                    const ind = item['ths_industry'] || '未知';
+                    if (ind === '未知' || ind === '获取失败' || ind.startsWith('ERROR:')) { unknownCount++; return; }
+                    if (!industryGroups[ind]) industryGroups[ind] = [];
+                    industryGroups[ind].push(item);
+                });
+                
+                const sorted = Object.entries(industryGroups).sort((a, b) => b[1].length - a[1].length);
+                const TOTAL = sorted.length;
+                const PER_PAGE = 15;
+                let pg = 1;
+                
+                function renderLogicPage(page) {
+                    const start = (page - 1) * PER_PAGE;
+                    const end = Math.min(start + PER_PAGE, TOTAL);
+                    const pageData = sorted.slice(start, end);
+                    const totalPages = Math.ceil(TOTAL / PER_PAGE) || 1;
+                    
+                    let h = '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">';
+                    h += '<span style="font-size:12px;color:#888;">共' + TOTAL + '个行业</span>';
+                    h += '<span style="font-size:12px;color:#888;">|</span>';
+                    h += '<span style="font-size:12px;color:#4ecdc4;">' + Object.values(industryGroups).reduce((a,b) => a+b.length, 0) + '只已分类</span>';
+                    if (unknownCount > 0) h += '<span style="font-size:12px;color:#e94560;">| ' + unknownCount + '只待确认</span>';
+                    h += '</div>';
+                    
+                    h += '<table><thead><tr><th style="width:30px">#</th><th>同花顺行业</th><th>数量</th><th>自定义方向</th></tr></thead><tbody>';
+                    pageData.forEach(([ind, stocks], i) => {
+                        const dirs = [...new Set(stocks.map(s => s.direction))];
+                        h += '<tr>' +
+                            '<td>' + (start + i + 1) + '</td>' +
+                            '<td style="font-weight:600;">' + ind + '</td>' +
+                            '<td>' + stocks.length + '只</td>' +
+                            '<td style="color:#888;font-size:11px;">' + dirs.join(' · ') + '</td></tr>';
+                    });
+                    h += '</tbody></table>';
+                    
+                    if (totalPages > 1) {
+                        h += '<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:8px;font-size:12px;">';
+                        h += '<span style="color:#888;">共' + TOTAL + '个</span>';
+                        if (page > 1) h += '<a href="javascript:;" onclick="pgLogic=' + (page-1) + ';renderLogicPage(pgLogic);return false;" style="color:#4ecdc4;text-decoration:none;">‹ 上一页</a>';
+                        h += '<span style="color:#e94560;font-weight:600;">' + page + '/' + totalPages + '</span>';
+                        if (page < totalPages) h += '<a href="javascript:;" onclick="pgLogic=' + (page+1) + ';renderLogicPage(pgLogic);return false;" style="color:#4ecdc4;text-decoration:none;">下一页 ›</a>';
+                        h += '</div>';
+                    }
+                    
+                    container.innerHTML = h;
+                }
+                
+                window.pgLogic = 1;
+                renderLogicPage(1);
+            })
+            .catch(err => {
+                container.innerHTML = '<div class="empty">加载失败: ' + err.message + '</div>';
+            });
+    }
+    
     // ====== 工具函数 ======
     function toggleChart(id) {
         const el = document.getElementById(id);
@@ -755,6 +968,9 @@
     }
 
     // ====== 初始加载 ======
+    loadMomentum();
+    loadLogicMap();
+    refreshMainLines();
     if (!checkUrlParam()) {
         fetch(`/api/review/${y}-${m}-${d}`)
             .then(r => r.json())
@@ -776,7 +992,7 @@
                 const dates = (dd.dates || []).sort().reverse();
                 if (dates.length > 0) {
                     const latest = dates[0];
-                    document.querySelector('.header .date-badge').textContent = `${latest} 今日复盘`;
+                    document.querySelector('.header .date-badge').textContent = `${latest} 每日复盘`;
                     loadReviewData(latest);
                 } else {
                     refreshMarket();

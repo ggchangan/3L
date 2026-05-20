@@ -212,15 +212,7 @@
         <h1>📊 3L 交易体系 · 成果跟踪</h1>
         <div class="subtitle">动量主线 · 最强逻辑 · 量价择时</div>
         <div class="date-badge" id="todayDate">加载中...</div>
-        <div style="margin-top:10px; display:flex; gap:10px; justify-content:center;">
-            <a href="/review.html" style="color:#e94560; text-decoration:none; font-size:12px; font-weight:bold;">📋 每日复盘</a>
-            <span style="color:#333;">|</span>
-            <a href="/simulation.html" style="color:#e67e22; text-decoration:none; font-size:12px; font-weight:bold;">📊 模拟交易</a>
-            <span style="color:#333;">|</span>
-            <a href="/skills.html" style="color:#a855f7; text-decoration:none; font-size:12px; font-weight:bold;">📖 Skills追踪</a>
-            <span style="color:#333;">|</span>
-            <span style="color:#4ecdc4; font-size:12px;">🏠 成果跟踪</span>
-        </div>
+        <div style="margin-top:10px;" id="nav-top"></div>
     </div>
 
     <div class="container" id="app">
@@ -343,6 +335,44 @@
             </ul>
         </div>
 
+        <!-- 今天新增：盈利模式1+业绩检查 -->
+        <div class="card-today" style="padding:20px; border-color:#4ecdc4;">
+            <div style="display:flex; align-items:center; margin-bottom:12px;">
+                <span style="font-size:16px; color:#4ecdc4; font-weight:bold;">🔥 2026-05-19 新增</span>
+                <span style="margin-left:12px; font-size:11px; color:#888;">盈利模式1 · 业绩质量检查</span>
+            </div>
+            <ul class="file-list">
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📋 盈利模式1自动打标 — 条件④业绩好接入 <span class="tag new">NEW</span></span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            条件④从默认通过改为自动检查：扣非净利润增长率>30% + 营收增长率>30% + 扣非净利润>1亿<br>
+                            247只自选股扫描：48只通过业绩检查 ✅ | 复盘买点信号3只🏆（普冉股份/海光信息/鹏辉能源）
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">📦 profit-quality-check skill 新建 <span class="tag new">NEW</span></span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            trading/profit-quality-check — 业绩质量判断标准封装为skill，支持单只检查和批量扫描
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name">🛠 buy_point_detection.py 代码健壮性重构 <span class="tag new">NEW</span></span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            check_zhongji/check_tupo/check_profit_model1 统一兼容SH/SZ前缀+日期格式(横杠/无横杠)
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+            </ul>
+        </div>
+
         <div class="section-title">⏳ 待办任务</div>
         <div class="card-today" style="padding: 20px;">
             <ul class="file-list" id="pendingList">
@@ -423,9 +453,11 @@
         </ul>
     </div>
 
+    <div id="nav-bottom"></div>
     <div class="footer">
         3L 交易体系 · 每日成果看板 · Hermes Agent · 2026
     </div>
+    <script src="/nav.js"></script>
 
     <script>
         // Set today's date

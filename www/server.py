@@ -3,7 +3,9 @@
 3L Daily Achievements Web Server + Review API
 """
 import os, json, signal, sys, base64, mimetypes, urllib.parse
+from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer
 from urllib.parse import quote
 
 PORT = 8080
@@ -14,13 +16,24 @@ PROTECTED_PREFIX = '/private/'
 
 REVIEW_DATA = {}
 DATA_FILE = os.path.join(WWW_DIR, 'private', 'review_data.json')
+ARCHIVE_DIR = os.path.join(WWW_DIR, 'private', 'review_archive')
 
 def load_review_data():
     global REVIEW_DATA
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE) as f: REVIEW_DATA = json.load(f)
+            return
         except: pass
+    # fallback: 加载最新复盘存档
+    if os.path.isdir(ARCHIVE_DIR):
+        archives = sorted([f for f in os.listdir(ARCHIVE_DIR) if f.endswith('.json')])
+        if archives:
+            latest = archives[-1]
+            try:
+                with open(os.path.join(ARCHIVE_DIR, latest)) as f:
+                    REVIEW_DATA = json.load(f)
+            except: pass
 def save_review_data():
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     with open(DATA_FILE, 'w') as f: json.dump(REVIEW_DATA, f, ensure_ascii=False, indent=2)
@@ -60,6 +73,8 @@ class Handler(SimpleHTTPRequestHandler):
                 fn_ascii = 'download'
             disp = f'attachment; filename="{fn_ascii}"; filename*=UTF-8\'\'{quote(fn)}'
             self.send_header('Content-Disposition', disp)
+        if ct and ct.startswith('text/html'):
+            ct = ct + '; charset=utf-8'
         self.send_header('Content-Type', ct or 'application/octet-stream')
         self.send_header('Content-Length', str(len(data)))
         if no_cache:
@@ -129,9 +144,31 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(REVIEW_DATA.get('stocks', {}))
         if path == '/api/review':
             return self.send_json(REVIEW_DATA)
+        
+        # /api/review/YYYY-MM-DD → 返回对应存档
+        if path.startswith('/api/review/') and len(path) > 12:
+            date_str = path[12:]  # strip '/api/review/'
+            if date_str == 'dates':
+                # 返回可用日期列表
+                dates = []
+                if os.path.isdir(ARCHIVE_DIR):
+                    dates = sorted([f[:-5] for f in os.listdir(ARCHIVE_DIR) if f.endswith('.json')])
+                return self.send_json({'dates': dates})
+            fp = os.path.join(ARCHIVE_DIR, f'{date_str}.json')
+            if os.path.isfile(fp):
+                self._serve_file(fp, 'application/json; charset=utf-8')
+            else:
+                self.send_json({'error': 'not found', 'date': date_str})
+            return
 
-        # --- 行业板块数据（同花顺原始数据） ---
+        # --- 行业板块数据（同花顺原始数据，按天缓存） ---
         if path == '/api/industry-boards':
+            cache_dir = os.path.join(WWW_DIR, 'data', 'cache')
+            os.makedirs(cache_dir, exist_ok=True)
+            cache_file = os.path.join(cache_dir, f'industry_boards_{datetime.now().strftime("%Y-%m-%d")}.json')
+            if os.path.isfile(cache_file):
+                self._serve_file(cache_file, 'application/json; charset=utf-8')
+                return
             import threading, akshare as ak
             result = []
             err = None
@@ -147,7 +184,11 @@ class Handler(SimpleHTTPRequestHandler):
             t.join(timeout=30)
             if err:
                 return self.send_json({'error': err, 'data': []})
-            return self.send_json({'data': result, 'count': len(result)})
+            # 写入缓存
+            cache_data = {'data': result, 'count': len(result)}
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, ensure_ascii=False)
+            return self.send_json(cache_data)
 
         if path == '/api/concept-boards':
             import threading, akshare as ak
@@ -189,10 +230,7 @@ class Handler(SimpleHTTPRequestHandler):
             parts = path.split('/')
             if len(parts) == 4 and parts[3] == 'dates':
                 # GET /api/review/dates — 获取所有存档日期
-                # 优先用private目录，fallback到data目录
-                adir = os.path.join(WWW_DIR, 'data', 'review_archive')
-                if not os.path.isdir(adir):
-                    adir = os.path.join(WWW_DIR, 'private', 'review_archive')
+                adir = os.path.join(WWW_DIR, 'private', 'review_archive')
                 dates = []
                 if os.path.isdir(adir):
                     for f in sorted(os.listdir(adir)):
@@ -202,13 +240,50 @@ class Handler(SimpleHTTPRequestHandler):
             elif len(parts) == 4:
                 # GET /api/review/YYYY-MM-DD — 获取某日复盘数据
                 date_str = parts[3]
-                # 尝试新格式(data目录)，fallback旧格式(private目录)
-                for base in ['data', 'private']:
-                    fp = os.path.join(WWW_DIR, base, 'review_archive', f'{date_str}.json')
-                    if os.path.isfile(fp):
-                        with open(fp, 'r') as f:
-                            return self.send_json(json.load(f))
+                fp = os.path.join(WWW_DIR, 'private', 'review_archive', f'{date_str}.json')
+                if os.path.isfile(fp):
+                    with open(fp, 'r') as f:
+                        return self.send_json(json.load(f))
                 return self.send_json({'error': 'not found'})
+
+        # --- 行业分类映射API ---
+        if path == '/api/industry-map':
+            fp = '/home/ubuntu/data/3l/stock_industry_map.json'
+            if os.path.isfile(fp):
+                self._serve_file(fp, 'application/json; charset=utf-8', no_cache=True)
+            else:
+                return self.send_json({'error': 'no data'})
+            return
+
+        # --- 最强动量数据API（涨停+创新高，subprocess方式避免HTTP阻塞，拉一次缓存全天） ---
+        if path == '/api/momentum':
+            cache_dir = os.path.join(WWW_DIR, 'data', 'cache')
+            os.makedirs(cache_dir, exist_ok=True)
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            cache_file = os.path.join(cache_dir, f'momentum_{today_str}.json')
+            
+            # 检查今天的缓存
+            if os.path.isfile(cache_file):
+                self._serve_file(cache_file, 'application/json; charset=utf-8', no_cache=True)
+                return
+            
+            # 无缓存，拉取新数据
+            import subprocess
+            try:
+                r = subprocess.run(
+                    [sys.executable, os.path.join(WWW_DIR, 'fetch_momentum.py')],
+                    capture_output=True, text=True, timeout=90
+                )
+                if r.returncode == 0:
+                    data = json.loads(r.stdout)
+                    # 保存到缓存
+                    with open(cache_file, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, ensure_ascii=False)
+                    return self.send_json(data)
+                else:
+                    return self.send_json({'error': r.stderr[-300:]})
+            except Exception as e:
+                return self.send_json({'error': str(e)})
 
         if path in ('/review', '/review.html'):
             self.path = '/review.html'
@@ -268,6 +343,9 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -279,7 +357,7 @@ class Handler(SimpleHTTPRequestHandler):
 def main():
     load_review_data()
     os.chdir(WWW_DIR)
-    server = HTTPServer(('0.0.0.0', PORT), Handler)
+    server = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     print(f'\n  Server: http://localhost:{PORT}')
     print(f'  Private: /private/ (auth required)\n')
     signal.signal(signal.SIGTERM, lambda s,f: sys.exit(0))
