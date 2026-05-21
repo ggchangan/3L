@@ -2,14 +2,19 @@
 """通用周报生成器 — 按第1周格式，不使用f-string避免嵌套问题"""
 import json, os, pickle, sys, subprocess
 from datetime import datetime
-sys.path.insert(0, "/home/ubuntu/.hermes/profiles/3l/skills/research/main-line-judgment/scripts")
+
+# 数据层
+sys.path.insert(0, '/home/ubuntu/www')
+from scripts.data_layer import ALL_STOCKS_PATH, OUTPUT_DIR, SCRIPTS_DIR
+
+sys.path.insert(0, SCRIPTS_DIR)
 from judge_main_line import get_main_lines
 
 WEEK = sys.argv[1] if len(sys.argv) > 1 else "4"
 PKL = f"w{WEEK}_v33.pkl"; PREV = f"w{int(WEEK)-1}_v33.pkl" if int(WEEK)>1 else None
-OUT = "/home/ubuntu/data/3l/simulation/v3"
+OUT = OUTPUT_DIR
 CDIR = os.path.join(OUT, "charts"); os.makedirs(CDIR, exist_ok=True)
-DATA = "/home/ubuntu/data/3l/all_stocks_60d.json"
+DATA = ALL_STOCKS_PATH
 
 with open(os.path.join(OUT,PKL),"rb") as f: res = pickle.load(f)
 prev = None
@@ -287,7 +292,7 @@ if prev:
             trade_names[t["code"]]=t["name"]
 
 # ═══ 每日主线跟踪：逐日重建持仓+判定主线 ═══
-sys.path.insert(0, "/home/ubuntu/.hermes/profiles/3l/skills/research/main-line-judgment/scripts")
+sys.path.insert(0, "/home/ubuntu/www/scripts/")
 from buy_point_detection import format_buy_signals
 daily_ml_records = []
 # 从该周交易记录 + 指数数据 获取所有交易日

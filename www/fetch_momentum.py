@@ -2,13 +2,15 @@
 """Generate momentum data (limit up + new highs) for the review page."""
 import json, sys, os, datetime
 
-sys.path.insert(0, '/home/ubuntu/scripts')
+from scripts.data_layer import ALL_STOCKS_PATH, INDUSTRY_MAP_PATH, SCRIPTS_DIR
+
+sys.path.insert(0, SCRIPTS_DIR)
 
 result = {'limit_up': [], 'new_highs': [], 'new_highs_total': 0}
 
 # 加载自选股代码
 codes_set = set()
-data_file = '/home/ubuntu/data/3l/all_stocks_60d.json'
+data_file = ALL_STOCKS_PATH
 if os.path.exists(data_file):
     with open(data_file) as f:
         raw = json.load(f)
@@ -18,7 +20,7 @@ if os.path.exists(data_file):
 
 # 加载行业映射
 industry_map = {}
-ind_file = '/home/ubuntu/data/3l/stock_industry_map.json'
+ind_file = INDUSTRY_MAP_PATH
 if os.path.exists(ind_file):
     with open(ind_file) as f:
         raw_map = json.load(f)

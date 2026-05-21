@@ -7,6 +7,7 @@ from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from urllib.parse import quote
+from scripts.data_layer import INDUSTRY_MAP_PATH, INDUSTRY_LEADERS_PATH
 
 PORT = 8080
 WWW_DIR = '/home/ubuntu/www'
@@ -261,7 +262,7 @@ class Handler(SimpleHTTPRequestHandler):
 
         # --- 行业分类映射API ---
         if path == '/api/industry-map':
-            fp = '/home/ubuntu/data/3l/stock_industry_map.json'
+            fp = INDUSTRY_MAP_PATH
             if os.path.isfile(fp):
                 self._serve_file(fp, 'application/json; charset=utf-8', no_cache=True)
             else:
@@ -393,7 +394,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(_leaders_cache)
 
             try:
-                with open('/home/ubuntu/data/3l/industry_leaders.json', 'r') as f:
+                with open(INDUSTRY_LEADERS_PATH, 'r') as f:
                     leaders = json.load(f)
             except:
                 return self.send_json({'count': 0, 'by_industry': {}, 'error': '数据文件未找到'})

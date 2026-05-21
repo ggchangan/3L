@@ -5,14 +5,17 @@
   1. mootdx（通达信）— 首选
   2. 腾讯财经 — 备选（mootdx不可用时）
 """
-import os, json, time, requests
+import os, json, time, requests, sys
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
 from mootdx.quotes import Quotes
 
-CACHE_DIR = '/home/ubuntu/www/data/cache'
+sys.path.insert(0, '/home/ubuntu/www')
+from scripts.data_layer import CACHE_DIR as DL_CACHE_DIR, REVIEW_ARCHIVE_DIR, REVIEW_CHARTS_DIR, INDUSTRY_LEADERS_PATH, SCRIPTS_DIR
+
+CACHE_DIR = DL_CACHE_DIR
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # 中证全指代码
@@ -395,9 +398,9 @@ def _calc_trading_progress():
         return 1
 
 def get_existing_holdings():
-    holdings_file = '/home/ubuntu/www/private/review_archive/' + today_str() + '.json'
+    holdings_file = os.path.join(REVIEW_ARCHIVE_DIR, today_str() + '.json')
     if not os.path.isfile(holdings_file):
-        archive_dir = '/home/ubuntu/www/private/review_archive'
+        archive_dir = REVIEW_ARCHIVE_DIR
         files = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')], reverse=True)
         if not files:
             return []
@@ -502,7 +505,7 @@ def get_top_sectors_with_5d():
     流程：取今日涨幅TOP15 → 拉60日OHLCV → 统一计算结构/阶段/5日涨幅
     数据源：同花顺板块指数（akshare stock_board_industry_index_ths）
     """
-    REVIEW_CHARTS = '/home/ubuntu/www/review_charts'
+    REVIEW_CHARTS = REVIEW_CHARTS_DIR
     os.makedirs(REVIEW_CHARTS, exist_ok=True)
     
     # --- 今日数据（交易时间10分钟刷新，非交易时间不刷新） ---
@@ -708,7 +711,7 @@ def get_top_sectors_with_5d():
 
 # ========== 市场龙头动态扫描 ==========
 
-LEADERS_FILE = '/home/ubuntu/data/3l/industry_leaders.json'
+LEADERS_FILE = INDUSTRY_LEADERS_PATH
 DAILY_KLINE_CACHE = os.path.join(CACHE_DIR, 'market_leaders_daily')
 
 def _ensure_cache_dir():

@@ -8,17 +8,20 @@
   ④ 量价择时 — 买点验证/关键点/止损止盈
   ⑤ 每日交易计划 — 基于前4项生成
 
-输出：JSON → /home/ubuntu/www/private/review_archive/{date}.json
+输出：JSON → REVIEW_ARCHIVE_DIR/{date}.json
 """
 import json, os, sys, requests, math
+from scripts.data_layer import (
+    ALL_STOCKS_PATH, INDUSTRY_MAP_PATH, LATEST_SCAN_PATH, REVIEW_ARCHIVE_DIR,
+    WWW_DIR, DATA_DIR, get_all_stocks, get_latest_scan, save_review_archive,
+    get_review_archive, load_cache, save_cache, get_cache_path
+)
 os.environ['TQDM_DISABLE'] = '1'  # 关akshare进度条
 from datetime import datetime, timedelta
 
-# ====== 路径 ======
-WWW_DIR = '/home/ubuntu/www'
-ARCHIVE_DIR = os.path.join(WWW_DIR, 'private', 'review_archive')
+# ====== 路径（从 scripts.data_layer 导入） ======
+# WWW_DIR, DATA_DIR, REVIEW_ARCHIVE_DIR 已从 data_layer 导入
 SCRIPTS_DIR = '/home/ubuntu/scripts'
-DATA_DIR = '/home/ubuntu/data/3l'
 
 # ====== 辅助函数 ======
 
@@ -318,7 +321,7 @@ def get_buy_sell_signals(holdings, buy_signals):
         sys.path.insert(0, '/home/ubuntu/.hermes/profiles/3l/skills/trading/ema10-trend-judgment/scripts')
         from ema_utils import get_ema_arrangement, get_structure, get_stage
         import json as _json
-        with open('/home/ubuntu/data/3l/all_stocks_60d.json') as f:
+        with open(ALL_STOCKS_PATH) as f:
             _data = _json.load(f)
         _stocks = _data.get('stocks', {})
         for _sec, _ss in _stocks.items():
@@ -471,6 +474,7 @@ def generate_trading_plan(market_cycle, mainline_data, logic_classify, signals_d
         for s in buy_signals_review:
             is_main = s.get('sector', '') in [l.split('(')[0] for l in plan['main_lines']]
             pm1 = s.get('profit_model1', False)
+            trend = s.get('trend_stock', False)
             priority = 0
             if is_main and s['buy_point'] == '突破买点' and pm1: priority = 1
             elif is_main and s['buy_point'] == '突破买点': priority = 2
@@ -481,7 +485,7 @@ def generate_trading_plan(market_cycle, mainline_data, logic_classify, signals_d
             plan['buy_priority'].append({
                 'name': s['name'], 'code': s['code'], 'sector': s.get('sector', ''),
                 'buy_point': s['buy_point'], 'is_main': is_main,
-                'profit_model1': pm1, 'priority': priority,
+                'profit_model1': pm1, 'trend_stock': trend, 'priority': priority,
                 'change': s.get('change', 0),
             })
         plan['buy_priority'].sort(key=lambda x: x['priority'])
@@ -531,87 +535,11 @@ def generate_trading_plan(market_cycle, mainline_data, logic_classify, signals_d
 # ====== 盈利模式检查 ======
 
 def load_market_data_for_profit_check():
-    """加载market_data.json并转换为buy_point_detection所需格式"""
-    mdata_path = '/home/ubuntu/.hermes/profiles/3l/data/market_data.json'
-    if not os.path.exists(mdata_path):
-        print("[WARN] market_data.json 不存在，跳过盈利模式检查")
-        return None
-    
-    with open(mdata_path) as f:
-        raw = json.load(f)
-    
-    sectors = raw.get('sectors', {})
-    all_stocks = {}
-    for sec_name, stocks in sectors.items():
-        all_stocks[sec_name] = {}
-        for code, stock in stocks.items():
-            kls = stock.get('klines', [])
-            # 反转：market_data按最新到最旧，buy_point_detection需要最旧到最新
-            kls_reversed = list(reversed(kls))
-            converted = []
-            for k in kls_reversed:
-                converted.append({
-                    'date': k.get('d', ''),
-                    'open': k.get('o', 0),
-                    'close': k.get('c', 0),
-                    'high': k.get('h', 0),
-                    'low': k.get('l', 0),
-                    'volume': k.get('v', 0),
-                    'name': stock.get('name', code),
-                })
-            if converted:
-                all_stocks[sec_name][code] = converted
-    return all_stocks
+    return get_all_stocks()  # 与扫描同源，确保最新
 
 
-def find_latest_date_in_data(all_stocks, default_date):
-    """找到all_stocks中所有K线的最大日期"""
-    latest = ''
-    for sec_name, stocks in all_stocks.items():
-        for code, kls in stocks.items():
-            if kls:
-                d = kls[-1].get('date', '')
-                if d > latest:
-                    latest = d
-    return latest if latest else default_date
-
-
-def check_profit_model1_on_signals(buy_signals, all_stocks, check_date):
-    """对每个买点信号检查是否符合盈利模式1，添加标记"""
-    if not all_stocks:
-        return buy_signals
-    
-    # 找到数据中实际最新的日期
-    actual_date = find_latest_date_in_data(all_stocks, check_date)
-    if actual_date != check_date:
-        print(f"[盈利模式1] 使用数据中最新日期: {actual_date} (原请求: {check_date})")
-    
-    sys.path.insert(0, '/home/ubuntu/.hermes/profiles/3l/skills/research/main-line-judgment/scripts')
-    try:
-        from buy_point_detection import check_profit_model1
-    except ImportError:
-        print("[WARN] 无法导入 buy_point_detection.check_profit_model1")
-        return buy_signals
-    
-    updated = []
-    for sig in buy_signals:
-        code = sig.get('code', '')
-        if not code:
-            updated.append(sig)
-            continue
-        full_code = code
-        if not any(code.startswith(p) for p in ['SH', 'SZ', 'sh', 'sz']):
-            if code.startswith('6') or code.startswith('9'):
-                full_code = 'SH' + code
-            else:
-                full_code = 'SZ' + code
-        
-        res = check_profit_model1(full_code, actual_date, all_stocks)
-        sig['profit_model1'] = bool(res and res['match'])
-        updated.append(sig)
-    
-    return updated
-
+# 公共函数从 buy_point_detection 导入
+from scripts.buy_point_detection import check_profit_model1_on_signals, check_trend_stock_on_signals
 
 # ====== 主流程 ======
 
@@ -623,7 +551,7 @@ def generate_daily_review(date_str=None):
     print(f"[3L复盘] 生成 {date_str} 复盘数据...")
 
     # 已有存档
-    existing = load_cached_data(os.path.join(ARCHIVE_DIR, f'{date_str}.json'))
+    existing = load_cached_data(os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'))
     if not existing:
         existing = {
             'date': date_str,
@@ -685,7 +613,7 @@ def generate_daily_review(date_str=None):
     buy_signals = existing.get('buy_signals', [])
 
     # 优先从最新扫描结果读取（已应用中继买点缩量硬性条件等最新阈值）
-    latest_scan_path = '/home/ubuntu/data/3l/latest_scan_result.json'
+    latest_scan_path = LATEST_SCAN_PATH
     if os.path.isfile(latest_scan_path):
         try:
             with open(latest_scan_path) as _f:
@@ -706,6 +634,7 @@ def generate_daily_review(date_str=None):
                         'score': r['score'],
                         'flags': r['flags'],
                         'profit_model1': False,
+                        'trend_stock': False,
                     })
         except Exception as e:
             print(f"[3L复盘] ⚠️ 读取最新扫描结果失败: {e}")
@@ -714,6 +643,9 @@ def generate_daily_review(date_str=None):
     print("[3L复盘] 🔍 检查盈利模式1...")
     all_stocks = load_market_data_for_profit_check()
     buy_signals = check_profit_model1_on_signals(buy_signals, all_stocks, date_str)
+    # 趋势股检查（6条件）：沿EMA5上行的趋势票标记
+    print("[3L复盘] 🔍 检查趋势股...")
+    buy_signals = check_trend_stock_on_signals(buy_signals, all_stocks, date_str)
 
     logic_classify = classify_stocks_by_mainline(mainline_data, holdings, buy_signals)
 
@@ -723,10 +655,10 @@ def generate_daily_review(date_str=None):
     # 如果 buy_signals 为空，从全量自选股扫描买点信号
     if not buy_signals:
         try:
-            sys.path.insert(0, '/home/ubuntu/.hermes/profiles/3l/skills/research/main-line-judgment/scripts')
+            sys.path.insert(0, os.path.join(WWW_DIR, 'scripts'))
             from buy_point_detection import format_buy_signals
             # 加载 all_stocks_60d.json（buy_point_detection需要这个格式）
-            as60_path = '/home/ubuntu/data/3l/all_stocks_60d.json'
+            as60_path = ALL_STOCKS_PATH
             if os.path.isfile(as60_path):
                 with open(as60_path) as f:
                     as60_data = json.load(f)
@@ -829,7 +761,7 @@ def generate_daily_review(date_str=None):
         # 区间震荡：用关键点支撑位重算stage
         if structure == '区间震荡':
             try:
-                with open('/home/ubuntu/data/3l/all_stocks_60d.json') as _f:
+                with open(ALL_STOCKS_PATH) as _f:
                     _all = json.load(_f)
                 code = h.get('code', '')
                 for _sec, _ss in _all.get('stocks', {}).items():
@@ -868,6 +800,7 @@ def generate_daily_review(date_str=None):
         # 查找盈利模式1标记
         bs_lookup = bs_by_code.get(h.get('code', ''), {})
         pm1 = bs_lookup.get('profit_model1', False)
+        trend = bs_lookup.get('trend_stock', False)
         holdings_review.append({
             'name': h['name'], 'code': h['code'],
             'sector': d.get('direction', ''),
@@ -882,6 +815,7 @@ def generate_daily_review(date_str=None):
             'ema': h.get('ema', '--'),
             'vol_analysis': h.get('vol_analysis', '--'),
             'profit_model1': pm1,
+            'trend_stock': trend,
         })
     # 按结构优先排序：上涨趋势 > 区间震荡 > 下降趋势
     struct_priority = {'上涨趋势': 0, '区间震荡': 1, '下降趋势': 2}
@@ -897,7 +831,7 @@ def generate_daily_review(date_str=None):
         # 区间震荡：用关键点支撑位重算stage（同holdings逻辑）
         if structure == '区间震荡':
             try:
-                with open('/home/ubuntu/data/3l/all_stocks_60d.json') as _f:
+                with open(ALL_STOCKS_PATH) as _f:
                     _all = json.load(_f)
                 for _sec, _ss in _all.get('stocks', {}).items():
                     if code in _ss and _ss[code] and len(_ss[code]) >= 15:
@@ -943,6 +877,7 @@ def generate_daily_review(date_str=None):
             'buy_point': buy_point_display,
             'price': s.get('price', 0), 'change': s.get('change', 0),
             'profit_model1': s.get('profit_model1', False),
+            'trend_stock': s.get('trend_stock', False),
             'structure': structure,
             'stage': stage,
             'signal': code_sig,
@@ -993,7 +928,7 @@ def generate_daily_review(date_str=None):
 
     # 保存行业地图（供历史复盘展示最强逻辑）
     try:
-        im_path = '/home/ubuntu/data/3l/stock_industry_map.json'
+        im_path = INDUSTRY_MAP_PATH
         if os.path.isfile(im_path):
             with open(im_path) as _f:
                 raw_map = json.load(_f)
@@ -1026,7 +961,7 @@ def generate_daily_review(date_str=None):
         print(f"[3L复盘] 保存行业板块排行失败: {e}")
 
     # 保存
-    save_json(os.path.join(ARCHIVE_DIR, f'{date_str}.json'), review)
+    save_json(os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'), review)
     # 同步到 review_data.json（server读取源）
     save_json(os.path.join(WWW_DIR, 'private', 'review_data.json'), review)
     print(f"[3L复盘] ✅ 已保存 {date_str} 复盘数据")
@@ -1047,7 +982,7 @@ def generate_daily_review(date_str=None):
     # 生成资金流向图（传入复盘日期，确保图表日期正确）
     try:
         import subprocess
-        ff_script = '/home/ubuntu/www/gen_fund_flow_chart.py'
+        ff_script = os.path.join(WWW_DIR, 'gen_fund_flow_chart.py')
         if os.path.isfile(ff_script):
             subprocess.run([sys.executable, ff_script, date_str], timeout=120, capture_output=True)
             print("[3L复盘] 💰 资金流向图已生成")
@@ -1060,8 +995,8 @@ def generate_daily_review(date_str=None):
         chart_archive_dir = os.path.join(WWW_DIR, 'review_charts', 'archive', date_str)
         os.makedirs(chart_archive_dir, exist_ok=True)
         src_charts = [
-            ('/home/ubuntu/www/review_charts/zzqz_v2.svg', 'zzqz_v2.svg'),
-            ('/home/ubuntu/www/charts/fund_flow_chart.png', 'fund_flow_chart.png'),
+            (os.path.join(WWW_DIR, 'review_charts', 'zzqz_v2.svg'), 'zzqz_v2.svg'),
+            (os.path.join(WWW_DIR, 'charts', 'fund_flow_chart.png'), 'fund_flow_chart.png'),
         ]
         for src, basename in src_charts:
             if os.path.isfile(src):
@@ -1074,7 +1009,7 @@ def generate_daily_review(date_str=None):
             'fund_flow': f'/review_charts/archive/{date_str}/fund_flow_chart.png',
         }
         # 重新保存存档（更新chart路径）
-        save_json(os.path.join(ARCHIVE_DIR, f'{date_str}.json'), review)
+        save_json(os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'), review)
     except Exception as e:
         print(f"[3L复盘] 📊 图表归档失败: {e}")
 
@@ -1101,7 +1036,7 @@ def generate_daily_achievements_pdf(date_str):
     wd = weekdays[dt.weekday()]
     
     # 获取复盘数据中的摘要信息
-    review_file = os.path.join(ARCHIVE_DIR, f'{date_str}.json')
+    review_file = os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json')
     market_cycle = '未知'
     mainline_count = 0
     if os.path.isfile(review_file):
@@ -1171,13 +1106,13 @@ h1{{font-size:22px;color:#2563eb;border-bottom:2px solid #2563eb;padding-bottom:
 
 def update_historical_archives():
     """为所有历史存档补充新字段"""
-    if not os.path.isdir(ARCHIVE_DIR):
+    if not os.path.isdir(REVIEW_ARCHIVE_DIR):
         return
-    for fname in sorted(os.listdir(ARCHIVE_DIR)):
+    for fname in sorted(os.listdir(REVIEW_ARCHIVE_DIR)):
         if not fname.endswith('.json'):
             continue
         date_str = fname[:-5]
-        fp = os.path.join(ARCHIVE_DIR, fname)
+        fp = os.path.join(REVIEW_ARCHIVE_DIR, fname)
         try:
             with open(fp) as f:
                 data = json.load(f)

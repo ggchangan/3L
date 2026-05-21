@@ -8,6 +8,10 @@
 """
 
 import json
+import sys
+
+sys.path.insert(0, '/home/ubuntu/www/scripts')
+from data_layer import ALL_STOCKS_PATH
 
 def find_idx(date_str, klines):
     """返回日期在K线数据中的索引"""
@@ -80,7 +84,7 @@ def format_report(ranking):
 
 
 if __name__ == '__main__':
-    DATA_FILE = "/home/ubuntu/data/3l/all_stocks_60d.json"
+    DATA_FILE = ALL_STOCKS_PATH
     with open(DATA_FILE) as f:
         raw = json.load(f)
     ALL = raw['stocks']

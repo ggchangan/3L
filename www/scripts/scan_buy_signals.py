@@ -10,13 +10,14 @@ from datetime import datetime
 # 导入统一算法和数据获取函数
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from scripts.buy_point_detection import detect_buy_point, get_realtime_kline
+from scripts.data_layer import ALL_STOCKS_PATH, WATCHLIST_PATH, REVIEW_CHARTS_DIR, REVIEW_ARCHIVE_DIR
 
 # 自选股数据
-STOCKS_FILE = '/home/ubuntu/data/3l/all_stocks_60d.json'
+STOCKS_FILE = ALL_STOCKS_PATH
 # 方向过滤：扫描全部
 FOCUS_DIRECTIONS = []
 # SVG输出目录
-SVG_OUT_DIR = '/home/ubuntu/www/review_charts'
+SVG_OUT_DIR = REVIEW_CHARTS_DIR
 
 
 # ── EMA ──
@@ -147,11 +148,11 @@ def gen_svg(name, code, klines, kps, output_path):
         f.write('\n'.join(sv))
 
 # 自选股名单
-WATCHLIST_FILE = '/home/ubuntu/data/3l/watchlist.json'
+WATCHLIST_FILE = WATCHLIST_PATH
 # 方向过滤：扫描全部
 FOCUS_DIRECTIONS = []
 # SVG输出目录
-SVG_OUT_DIR = '/home/ubuntu/www/review_charts'
+SVG_OUT_DIR = REVIEW_CHARTS_DIR
 
 
 def load_stock_list():
@@ -169,7 +170,7 @@ def load_stock_list():
 
 def get_market_position():
     try:
-        archive_dir = '/home/ubuntu/www/private/review_archive'
+        archive_dir = REVIEW_ARCHIVE_DIR
         if os.path.isdir(archive_dir):
             archives = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')])
             if archives:
@@ -183,7 +184,7 @@ def get_market_position():
 
 def get_main_lines():
     try:
-        archive_dir = '/home/ubuntu/www/private/review_archive'
+        archive_dir = REVIEW_ARCHIVE_DIR
         if os.path.isdir(archive_dir):
             archives = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')])
             if archives:

@@ -130,9 +130,19 @@ cd /home/ubuntu/www && python3 generate_review_data.py {date}
 
 STEP 4 持仓个股复盘**只有11只左右，不需要分页**。前端已移除所有分页逻辑（`pgStockPage` / `renderStockPage` / `perPage`），直接 `stocks.map(signalStockCard)` 全部展开。底部只显示"共N只持仓"。
 
-### ⚠️ SVG图表自动生成（2026-05-21 整合）
+### ⚠️ SVG图表自动生成+扫描后自动同步复盘（2026-05-21 整合+扩展）
 
-`daily_update_and_scan.py` 的 `scan_buy_points()` 在保存扫描结果后自动调用 `batch_gen_charts.py`（`subprocess.run`）。`generate_review_data.py` 也在保存复盘数据后自动触发。**日常只需运行 Step 1 或 Step 4**，SVG图会自动更新。
+`daily_update_and_scan.py` 的 `scan_buy_points()` 在保存扫描结果后自动：
+1. 调用 `batch_gen_charts.py` 生成SVG图
+2. **调用 `generate_review_data.py` 同步复盘存档**（如果已有存档）
+
+```python
+# daily_update_and_scan.py scan_buy_points() 末尾
+if os.path.isfile(review_archive_path):
+    subprocess.run([sys.executable, gen_script, today_str])
+```
+
+这样改数据→扫描→复盘不再脱节，不用手动记着再跑一遍 generate_review_data.py。
 
 ### ⚠️ `/api/review/generate` 路由不可达（2026-05-21 发现）
 
@@ -273,7 +283,23 @@ if os.path.isfile(latest_scan_path):
 
 **坑：** 早期版本仅从 existing 存档加载 buy_signals，若存档有数据则跳过重新扫描。导致 `daily_update_and_scan.py` 的阈值或数据更新无法反映到复盘页。**读 `latest_scan_result.json` 修复了这个问题。**
 
-**每日复盘完整刷新流程（主线判定变更后必须执行）：**
+#### 每日复盘完整刷新流程（主线判定变更后必须执行）
+
+⚠️ 自动同步：从 2026-05-21 起，daily_update_and_scan.py 的 scan_buy_points() 在扫描完成后自动调用 generate_review_data.py 更新复盘存档。所以日常只需：
+
+```bash
+python3 .../daily-3l-review/scripts/daily_update_and_scan.py
+```
+
+复盘数据会自动更新，无需手动再跑 generate_review_data.py。
+
+**但是（重复犯错陷阱）：** 修改了以下数据后，扫描+复盘不会自动更新，必须手动重跑：
+- all_stocks_60d.json volume 手动修正
+- watchlist.json 自选股增减
+- 主线判定逻辑变更
+- buy_point_detection.py 算法改动
+
+**手动刷新（当自动同步没触发或数据不一致时）：**
 ```bash
 # 1. 重跑扫描（用最新主线判定）
 python3 /home/ubuntu/.hermes/profiles/3l/skills/research/daily-3l-review/scripts/daily_update_and_scan.py --scan-only
@@ -549,7 +575,7 @@ function loadHistoryList(currentDisplayDate) {
 
 **错误历史：** 原来写死 `filter(d => d !== today)`（排除"今天"）。当查看历史页面（如 05-19）时，05-19 自己还在历史列表里（因为它不是"今天"），而 05-20 反而不在列表里（被"今天"排除条件误伤）。
 
-### 日期加载逻辑（2026-05-21 重写 → 2026-05-21 补充18:00降级）
+#### 日加载逻辑（2026-05-21 重写 → 2026-05 18点降级）
 
 **铁律：复盘页面只展示已完成交易日（已收盘）的数据。** 如果在18:00之前访问页面，即使当天有了存档（比如有人盘中手误跑了生成脚本），也必须**自动降级到上一个交易日**。
 
@@ -573,9 +599,10 @@ const isToday = latest === today;
 
 **⛔ 重复犯错的教训（2026-05-21 已发生两次）：**
 - 第一次写好了降级逻辑，后来改 `loadLatestReview()` 时**把时间判断删掉了**，直接取 `dates[0]`
-- 用户发现后质问："这个逻辑上次不是说过了吗？怎么又改了"
-- **根因：** SKILL.md 只记录了"原则"（永远展示最新已有数据的日期），没有记录"18:00前降级"的具体实现
-- **✅ 防止再犯：修改 review.html 的 `loadLatestReview()` 时，必须保留18:00前的降级逻辑。** 这是用户明确要求的行为，不是可选的优化。
+- 用户发现后质问：这个逻辑上次不是说过了吗？怎么又改了
+- **根因：** SKILL.md 只记录了原则（永远展示最新已有数据的日期），没有记录18:00前降级的具体实现
+- **防止再犯：修改 review.html 的 loadLatestReview() 时，必须保留18:00前的降级逻辑。** 这是用户明确要求的行为，不是可选的优化。
+- **Skill文档不等于代码实现：** 2026-05-21 降级规则写入skill文档后，review.html实际代码一直没改——规则存在skill纯文字里但前端从不执行。改完skill必须立即确认实际代码已更新并git commit验证。
 
 服务端：`server.py` 的 `/api/review/dates` 加了 `re.match(r'^\d{4}-\d{2}-\d{2}\.json$')` 正则过滤，排除 `--date.json` 等非法文件名（2026-05-21 发现 `--date.json` 因 parse 错误写入的脏数据混入日期列表）。
 
@@ -885,16 +912,63 @@ html += pageData.map((s, i) => {
 - 机器人: #9C27B0 · 新能源: #FF9800 · 资源股: #8B4513
 - AI应用: #00BCD4 · 商业航天: #FF5722
 
-### profit_model1 盈利模式1标签（2026-05-21 新增）
+### profit_model1 + trend_stock 标签（2026-05-21 新增）
 
-**第④部分 持仓卡片：** `signalStockCard()` 中在名称后加 `🏆 盈利1` 标签
+...
+
+## 关联知识库
+
+3L交易体系训练营18期资料（简放）已提取为markdown，存放在：
+`/home/ubuntu/data/3l/knowledge_base/training_camp/`
+索引见：`/home/ubuntu/data/3l/knowledge_base/INDEX.md`
+
+可搜索各期内容辅助复盘分析和策略理解。
+
+**第④部分 持仓卡片：** `signalStockCard()` 中在名称后加两个标签（蓝底 `📈 趋势股` + 红底 `🏆 盈利1`）：
+
 ```javascript
-${s.profit_model1 ? '<span class="tag" style="background:#e94560;...">🏆 盈利1</span>' : ''}
+${s.profit_model1 ? '<span class="tag" style="background:#e94560;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">🏆 盈利1</span>' : ''}
+${s.trend_stock ? '<span class="tag" style="background:#2196f3;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">📈 趋势股</span>' : ''}
 ```
 
 **第⑤部分 买点信号卡：** 同样由 `signalStockCard()` 统一渲染。
 
-**数据来源：** `generate_review_data.py` 中 `check_profit_model1_on_signals()` 自动判定，标记于 `buy_signals[n].profit_model1`。后通过 `bs_by_code[code].profit_model1` 传到 `holdings_review` 和 `buy_signals_review`。
+**交易计划 买点优先级：** 使用缩写标签（仅emoji，节省空间）：
+
+```javascript
+const pm1 = s.profit_model1 ? '<span class="tag" style="background:#e94560;">🏆</span>' : '';
+const trend = s.trend_stock ? '<span class="tag" style="background:#2196f3;">📈</span>' : '';
+html += ` ${tag} ${pm1} ${trend}`;
+```
+
+两个标签独立展示，互不排斥。一票可以同时亮盈利模式1+趋势股。
+
+#### 数据链路
+
+profit_model1 和 trend_stock 走同一套数据管道：
+
+```
+buy_signals[] 
+  → check_profit_model1_on_signals()    ← 添加 profit_model1 字段
+  → check_trend_stock_on_signals()       ← 添加 trend_stock 字段
+  → bs_by_code[code]                     ← 通过 code 查找
+    → holdings_review[]                  ← 含 profit_model1 + trend_stock
+    → buy_signals_review[]               ← 含 profit_model1 + trend_stock
+    → trading_plan.buy_priority[]        ← 含 profit_model1 + trend_stock
+```
+
+两个 `on_signals` 函数位于 `buy_point_detection.py`（公共函数，不是 `generate_review_data.py` 的私有函数）。`generate_review_data.py` 通过 `from scripts.buy_point_detection import check_profit_model1_on_signals, check_trend_stock_on_signals` 导入。
+
+#### 数据字段
+
+- `buy_signals[n].profit_model1` — bool，盈利模式1是否满足
+- `buy_signals[n].trend_stock` — bool，趋势股6条件是否满足
+- `holdings_review[n].profit_model1` — 同上，从 bs_by_code 查找
+- `holdings_review[n].trend_stock` — 同上
+- `buy_signals_review[n].profit_model1` — 同上
+- `buy_signals_review[n].trend_stock` — 同上
+- `trading_plan.buy_priority[n].profit_model1` — 同上
+- `trading_plan.buy_priority[n].trend_stock` — 同上
 
 **数据链路：**
 ```
@@ -1023,7 +1097,7 @@ const signalText = s.signal_text || (s.signal === 'hold' ? '✅ 持有' : s.sign
 | `references/2026-05-21-session-chart-fixes.md` | 复盘页面修复会话记录：toggle、资金流向图颜色/日期/数据源、全量新高、TQDM_DISABLE |
 | `references/2026-05-21-systemb-detection-rewrite.md` | 05-21 买点检测系统A→系统B重构 + 动态阈值 |
 | `references/historical-data-preservation.md` | 历史复盘数据保存模式：哪些数据需存档、前后端实现方案、排查指南 |
-| `references/fund-flow-chart-generation.md` | 全市场资金流向图生成规范：数据源选择（禁行业板块）、图表结构、集成方式 |
+| `references/repeat-offender-patterns.md` | 重复犯错模式：改数据忘同步/文档≠代码/局部修复陷阱 |
 
 ### 关联 skill
 
@@ -1034,10 +1108,52 @@ const signalText = s.signal_text || (s.signal === 'hold' ? '✅ 持有' : s.sign
 - `trading/ema10-trend-judgment` — 结构/阶段判断（`scripts/ema_utils.py`）
 - `trading/a-stock-kline-keypoint-chart` — 关键点K线图规范（支撑/压力线定义源）
 
-## 关联知识库
+## 数据架构（2026-05-21 统一数据层）
 
-3L交易体系训练营18期资料（简放）已提取为markdown，存放在：
-`/home/ubuntu/data/3l/knowledge_base/training_camp/`
-索引见：`/home/ubuntu/data/3l/knowledge_base/INDEX.md`
+### 原则
 
-可搜索各期内容辅助复盘分析和策略理解。
+- 所有股票数据统一放在 `/home/ubuntu/data/3l/` 下
+- `~/.hermes/profiles/3l/data/` 不存放任何股票系统数据（仅hermes自身配置）
+- **所有文件路径只在一个地方定义**：`/home/ubuntu/www/scripts/data_layer.py`
+- 所有脚本通过 `from scripts.data_layer import ...` 访问数据，不支持直接写路径
+
+### 已接入 data_layer 的脚本
+
+| 脚本 | 替代的硬编码路径 |
+|------|----------------|
+| `scripts/buy_point_detection.py` | `ALL_STOCKS_PATH`, `get_industry_map()`, `PROFIT_QUALITY_PATH` |
+| `generate_review_data.py` | `ALL_STOCKS_PATH`, `LATEST_SCAN_PATH`, `INDUSTRY_MAP_PATH`, `REVIEW_ARCHIVE_DIR`, `WWW_DIR` |
+| `server.py` | `INDUSTRY_MAP_PATH`, `INDUSTRY_LEADERS_PATH` |
+| `scripts/scan_buy_signals.py` | `ALL_STOCKS_PATH`, `WATCHLIST_PATH`, `REVIEW_CHARTS_DIR`, `REVIEW_ARCHIVE_DIR` |
+| `scripts/monitor_data.py` | `CACHE_DIR`, `INDUSTRY_LEADERS_PATH`, `REVIEW_CHARTS_DIR`, `REVIEW_ARCHIVE_DIR` |
+| `fetch_momentum.py` | `ALL_STOCKS_PATH`, `INDUSTRY_MAP_PATH`, `SCRIPTS_DIR` |
+| `scripts/gen_weekly_report.py` | `ALL_STOCKS_PATH`, `OUTPUT_DIR`, `SCRIPTS_DIR` |
+| `scripts/judge_main_line.py` | `ALL_STOCKS_PATH` |
+
+### 公共函数归一化（2026-05-21）
+
+以下函数从 `generate_review_data.py` 迁移到 `buy_point_detection.py` 作为公共函数：
+
+- `find_latest_date_in_data()` — 找all_stocks中最新K线日期
+- `check_profit_model1_on_signals()` — 批量标记盈利模式1
+- `check_trend_stock_on_signals()` — 批量标记趋势股
+- `check_trend_stock()` — 单只趋势股判定
+
+**所有导入路径指向 `/home/ubuntu/www/scripts/buy_point_detection.py`，不再有旧skill路径的副本。**
+
+旧路径（已删除）：
+- `/home/ubuntu/.hermes/profiles/3l/skills/research/main-line-judgment/scripts/buy_point_detection.py`
+- `~/.hermes/profiles/3l/data/market_data.json`
+
+### load_market_data_for_profit_check() 简化
+
+从 `market_data.json` 的14行转换逻辑简化为2行：
+
+```python
+def load_market_data_for_profit_check():
+    return get_all_stocks()  # 与扫描同源，确保最新
+```
+
+原 `market_data.json` 格式（SH/SZ前缀、日期带横线、30天、最新→最旧）已废弃。现在统一使用 `all_stocks_60d.json` 格式（裸代码、日期无横线、60天、最旧→最新）。
+
+### profit_model1 + trend_stock 标签（2026-05-21 新增）

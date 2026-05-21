@@ -641,7 +641,7 @@
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div><span class="name">${structIcon} ${s.name}</span>
                     <span class="code">${s.code}</span>
-                    ${s.profit_model1 ? '<span class="tag" style="background:#e94560;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">🏆 盈利1</span>' : ''}</div>
+                    ${s.profit_model1 ? '<span class="tag" style="background:#e94560;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">🏆 盈利1</span>' : ''}${s.trend_stock ? '<span class="tag" style="background:#2196f3;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">📈 趋势股</span>' : ''}</div>
                     <span style="font-size:13px;color:${(s.change||0)>=0?'#ff4444':'#44aa44'};">
                         ${s.price||'--'} ${(s.change||0)>=0?'+':''}${s.change||0}%</span>
                 </div>
@@ -771,12 +771,13 @@
             plan.buy_priority.forEach((s, i) => {
                 const tag = s.is_main ? '<span class="tag red" style="font-size:10px;">主线</span>' : '';
                 const pm1 = s.profit_model1 ? '<span class="tag" style="background:#e94560;font-size:10px;padding:1px 6px;">🏆</span>' : '';
+                const trend = s.trend_stock ? '<span class="tag" style="background:#2196f3;font-size:10px;padding:1px 6px;">📈</span>' : '';
                 const chgColor = s.change >= 0 ? '#ff4444' : '#44aa44';
                 html += `<div class="plan-item" style="font-size:12px;">`;
                 html += `<span style="color:#e94560;font-weight:bold;">#${i+1}</span>`;
                 html += ` <span style="font-weight:600;">${s.name}</span>`;
                 html += ` <span style="color:#888;">${s.buy_point}</span>`;
-                html += ` ${tag} ${pm1}`;
+                html += ` ${tag} ${pm1} ${trend}`;
                 html += ` <span style="color:${chgColor};">${s.change >= 0 ? '+' : ''}${s.change}%</span>`;
                 html += `</div>`;
             });

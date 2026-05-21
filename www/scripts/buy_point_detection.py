@@ -8,12 +8,11 @@
 不使用独立于系统B的任何机械条件（已废弃check_zhongji/check_tupo）。
 """
 import json, sys, os
+from scripts.data_layer import get_industry_map, PROFIT_QUALITY_PATH, ALL_STOCKS_PATH
 
 # 导入系统B：EMA10趋势分析
-_EMA_UTILS_PATH = os.path.join(
-    os.path.dirname(__file__), '..', '..', '..',
-    'trading', 'ema10-trend-judgment', 'scripts')
-sys.path.insert(0, _EMA_UTILS_PATH)
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from ema_utils import get_ema_arrangement, get_structure, get_stage, ema_list
 
 def find_idx(date_str, klines):
@@ -254,6 +253,17 @@ def detect_huicai_buy_point(code, date_str, all_stocks):
     }
 
 
+def check_trend_stock(code, date_str, all_stocks):
+    """公开接口：检查个股是否为趋势股（满足6条件）"""
+    resolved_code, kls = _resolve_code(code, all_stocks)
+    if not kls:
+        return False
+    idx = find_idx(date_str, kls)
+    if idx < 30:
+        return False
+    return _is_trend_with_ema5(kls, idx)
+
+
 def scan_huicai_buy_points(date_str, all_stocks):
     """批量扫描盈利模式2 — 回踩买点"""
     results = []
@@ -316,11 +326,8 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
         if main_line_set and resolved_code:
             _imd = getattr(detect_buy_point, '_ind_map', None)
             if _imd is None:
-                _im_path = '/home/ubuntu/data/3l/stock_industry_map.json'
-                if os.path.isfile(_im_path):
-                    with open(_im_path) as _f:
-                        _imd = json.load(_f)
-                    detect_buy_point._ind_map = _imd
+                _imd = get_industry_map()  # 从数据层读取
+                detect_buy_point._ind_map = _imd
             if _imd and resolved_code in _imd:
                 stock_ind = _imd[resolved_code]
                 ths_ind = stock_ind.get('ths_industry', '') if isinstance(stock_ind, dict) else ''
@@ -526,7 +533,7 @@ def check_profit_model1(code, date_str, all_stocks):
         has_perf = perf_res['pass']
     except ImportError:
         try:
-            cache_path = '/home/ubuntu/data/3l/profit_quality_results.json'
+            cache_path = PROFIT_QUALITY_PATH
             if os.path.exists(cache_path):
                 cache = json.load(open(cache_path))
                 has_perf = resolved_code in cache.get('passed_codes', [])
@@ -573,7 +580,7 @@ def scan_profit_model1(date_str, all_stocks, only_watchlist=None):
 
 # ====== 数据获取（共享函数） ======
 
-STOCKS_FILE = '/home/ubuntu/data/3l/all_stocks_60d.json'
+STOCKS_FILE = ALL_STOCKS_PATH
 
 def get_realtime_kline(code, direction):
     """从all_stocks_60d.json缓存读已有K线，再追加今日腾讯实时行情
@@ -633,3 +640,52 @@ def get_realtime_kline(code, direction):
         pass
 
     return klines
+
+
+# ====== 公共批量检查函数 ======
+
+def find_latest_date_in_data(all_stocks, default_date):
+    """找到all_stocks中所有K线的最大日期"""
+    latest = ''
+    for sec_name, stocks in all_stocks.items():
+        for code, kls in stocks.items():
+            if kls:
+                d = kls[-1].get('date', '')
+                if d > latest:
+                    latest = d
+    return latest if latest else default_date
+
+def check_profit_model1_on_signals(buy_signals, all_stocks, check_date):
+    """对每个买点信号检查是否符合盈利模式1，添加标记"""
+    if not all_stocks:
+        return buy_signals
+    actual_date = find_latest_date_in_data(all_stocks, check_date)
+    if actual_date != check_date:
+        print(f"[盈利模式1] 使用数据中最新日期: {actual_date} (原请求: {check_date})")
+    updated = []
+    for sig in buy_signals:
+        code = sig.get('code', '')
+        if not code:
+            updated.append(sig)
+            continue
+        res = check_profit_model1(code, actual_date, all_stocks)
+        sig['profit_model1'] = bool(res and res['match'])
+        updated.append(sig)
+    return updated
+
+def check_trend_stock_on_signals(buy_signals, all_stocks, check_date):
+    """对每个买点信号检查是否为趋势股，添加标记"""
+    if not all_stocks:
+        return buy_signals
+    actual_date = find_latest_date_in_data(all_stocks, check_date)
+    if actual_date != check_date:
+        print(f"[趋势股] 使用数据中最新日期: {actual_date} (原请求: {check_date})")
+    updated = []
+    for sig in buy_signals:
+        code = sig.get('code', '')
+        if not code:
+            updated.append(sig)
+            continue
+        sig['trend_stock'] = bool(check_trend_stock(code, actual_date, all_stocks))
+        updated.append(sig)
+    return updated
