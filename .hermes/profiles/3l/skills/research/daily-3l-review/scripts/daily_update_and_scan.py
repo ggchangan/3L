@@ -21,7 +21,7 @@ from mootdx.quotes import Quotes
 DATA_PATH = "/home/ubuntu/data/3l/all_stocks_60d.json"
 CLUSTER_PATH = "/home/ubuntu/data/3l/sub_sector_clusters.json"
 OUTPUT_PATH = "/home/ubuntu/data/3l/latest_scan_result.json"
-BPD_PATH = "/home/ubuntu/.hermes/profiles/3l/skills/research/main-line-judgment/scripts"
+BPD_PATH = "/home/ubuntu/www/scripts"
 sys.path.insert(0, BPD_PATH)
 from buy_point_detection import detect_buy_point
 

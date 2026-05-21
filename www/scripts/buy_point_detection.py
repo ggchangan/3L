@@ -342,6 +342,36 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
     is_breakout = prev_10d_high and close > prev_10d_high  # 突破前10日最高
     
     # ====== 买点判定 ======
+    # 优先检查回踩买点（评分5，最高优先级）
+    if structure == '上涨趋势' and stage in ('上行', '缩量整理'):
+        huicai = detect_huicai_buy_point(code, date_str, all_stocks)
+        if huicai:
+            # 算偏离EMA5
+            ema5_val = 0
+            if len(closes_60) > 5:
+                _e5 = []; _m5 = 2/6; _e5.append(closes_60[0])
+                for c in closes_60[1:]: _e5.append(c*_m5 + _e5[-1]*(1-_m5))
+                ema5_val = _e5[-1]
+            dev = round((close - ema5_val) / max(ema5_val, 0.01) * 100, 2) if ema5_val else 0
+            return {
+                'code': resolved_code,
+                'buy_type': '回踩买点',
+                'score': 5,
+                'close': round(close, 2),
+                'gain': round(gain, 2),
+                'vol_ratio': round(vol_ratio, 2),
+                'structure': structure,
+                'stage': stage,
+                'ema_arrangement': ema_arr,
+                'detail': {
+                    'reason': '趋势票回踩EMA5',
+                    'structure': structure,
+                    'stage': stage,
+                    'deviation_pct': dev,
+                },
+                'flags': '回踩买点',
+            }
+    
     buy_type = None
     score = 0
     detail = {}
