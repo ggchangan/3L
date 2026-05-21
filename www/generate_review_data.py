@@ -14,7 +14,7 @@ import json, os, sys, requests, math
 from scripts.data_layer import (
     ALL_STOCKS_PATH, INDUSTRY_MAP_PATH, LATEST_SCAN_PATH, REVIEW_ARCHIVE_DIR,
     WWW_DIR, DATA_DIR, get_all_stocks, get_latest_scan, save_review_archive,
-    get_review_archive, load_cache, save_cache, get_cache_path
+    get_review_archive, load_cache, save_cache, get_cache_path, get_watchlist
 )
 os.environ['TQDM_DISABLE'] = '1'  # 关akshare进度条
 from datetime import datetime, timedelta
@@ -721,7 +721,10 @@ def generate_daily_review(date_str=None):
                 
                 scan_date = latest_date if latest_date else today_yyyymmdd
                 ml_names = [l['name'] for l in mainline_data.get('lines', [])]
-                scan_result = format_buy_signals(scan_date, all_stocks_60d, ml_names, top_n=20, market_position=market_cycle.get('position', ''))
+                # 加载自选股名单，只扫自选股
+                wl = get_watchlist()
+                wl_codes = set(s['code'] for s in wl)
+                scan_result = format_buy_signals(scan_date, all_stocks_60d, ml_names, top_n=20, market_position=market_cycle.get('position', ''), watchlist_codes=wl_codes)
             # 合并主线/非主线候选
             seen = set()
             for key in ['zhongji_main', 'zhongji_nonmain', 'tupo_main', 'tupo_nonmain']:

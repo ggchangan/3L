@@ -451,15 +451,18 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
     }
 
 
-def scan_all_stocks(date_str, all_stocks, market_position='', main_lines=None):
-    """扫描所有自选股，返回买点列表
+def scan_all_stocks(date_str, all_stocks, market_position='', main_lines=None, watchlist_codes=None):
+    """扫描所有股票，返回买点列表
     
     参数:
         main_lines: 主线板块名单（用于第2层阈值调整）
+        watchlist_codes: set of codes，非空时只扫描这些自选股
     """
     results = []
     for sec_name, stocks in all_stocks.items():
         for code in stocks:
+            if watchlist_codes and code not in watchlist_codes:
+                continue
             try:
                 bt = detect_buy_point(code, date_str, all_stocks, market_position=market_position, main_lines=main_lines)
                 if bt:
@@ -475,9 +478,9 @@ def scan_all_stocks(date_str, all_stocks, market_position='', main_lines=None):
     return results
 
 
-def format_buy_signals(date_str, all_stocks, main_lines, top_n=5, market_position=''):
+def format_buy_signals(date_str, all_stocks, main_lines, top_n=5, market_position='', watchlist_codes=None):
     """格式化输出买点信号（按主线板块优先，三层阈值感知）"""
-    scan_results = scan_all_stocks(date_str, all_stocks, market_position=market_position, main_lines=main_lines)
+    scan_results = scan_all_stocks(date_str, all_stocks, market_position=market_position, main_lines=main_lines, watchlist_codes=watchlist_codes)
     ml_set = set(main_lines) if main_lines else set()
     
     result = {"date": date_str}
