@@ -535,6 +535,32 @@ def generate_daily_review(date_str=None):
     holdings = live_holdings or existing.get('holdings', []) or existing.get('stocks', {}).get('stocks', [])
     buy_signals = existing.get('buy_signals', [])
 
+    # 优先从最新扫描结果读取（已应用中继买点缩量硬性条件等最新阈值）
+    latest_scan_path = '/home/ubuntu/data/3l/latest_scan_result.json'
+    if os.path.isfile(latest_scan_path):
+        try:
+            with open(latest_scan_path) as _f:
+                _scan = json.load(_f)
+            _scan_results = _scan.get('results', [])
+            if _scan_results:
+                _scan_date = _scan.get('scan_date', '')
+                print(f"[3L复盘] 📡 使用最新扫描结果: {_scan_date} ({len(_scan_results)}条)")
+                buy_signals = []
+                for r in _scan_results:
+                    buy_signals.append({
+                        'name': r.get('name', r['code']),
+                        'code': r['code'],
+                        'sector': r['sector'],
+                        'buy_point': r['buy_type'],
+                        'price': r.get('close', 0),
+                        'change': r.get('gain', 0),
+                        'score': r['score'],
+                        'flags': r['flags'],
+                        'profit_model1': False,
+                    })
+        except Exception as e:
+            print(f"[3L复盘] ⚠️ 读取最新扫描结果失败: {e}")
+
     # 盈利模式1检查：在归类前给买点信号打上标记
     print("[3L复盘] 🔍 检查盈利模式1...")
     all_stocks = load_market_data_for_profit_check()
