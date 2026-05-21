@@ -303,7 +303,7 @@ def get_volume_comparison():
         # 优先级：快照缓存（前一天页面记录的数据）
         cached_snaps = get_volume_snapshots(yesterday_date)
         if cached_snaps and len(cached_snaps) > 5:
-            yesterday_curve = [{'time': s['time'], 'amount': s['amount_yuan']} for s in cached_snaps]
+            yesterday_curve = [{'time': s['time'], 'amount': s.get('amount_yuan', s.get('amount', s.get('volume', 0)))} for s in cached_snaps]
             yesterday_curve.sort(key=lambda x: x['time'])
             is_estimated = False
             yesterday_total_amount = yesterday_curve[-1]['amount'] if yesterday_curve else 0
