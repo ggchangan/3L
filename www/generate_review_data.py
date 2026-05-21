@@ -1078,7 +1078,96 @@ def generate_daily_review(date_str=None):
     except Exception as e:
         print(f"[3L复盘] 📊 图表归档失败: {e}")
 
+    # ====== Step 5: 生成每日成果PDF ======
+    try:
+        generate_daily_achievements_pdf(date_str)
+    except Exception as e:
+        print(f"[3L复盘] 📄 生成每日成果PDF失败: {e}")
+
     return review
+
+def generate_daily_achievements_pdf(date_str):
+    """生成每日成果PDF（每日成果_YYYYMMDD.pdf），自动跳过已存在的"""
+    pdf_name = f'每日成果_{date_str.replace("-", "")}.pdf'
+    pdf_path = os.path.join(WWW_DIR, 'files', pdf_name)
+    # 如果已存在则跳过（防止每天重复生成覆盖内容）
+    if os.path.isfile(pdf_path):
+        print(f"[3L复盘] 📄 每日成果PDF已存在: {pdf_name}")
+        return
+    
+    # 解析日期
+    dt = datetime.strptime(date_str, '%Y-%m-%d')
+    weekdays = ['一','二','三','四','五','六','日']
+    wd = weekdays[dt.weekday()]
+    
+    # 获取复盘数据中的摘要信息
+    review_file = os.path.join(ARCHIVE_DIR, f'{date_str}.json')
+    market_cycle = '未知'
+    mainline_count = 0
+    if os.path.isfile(review_file):
+        try:
+            with open(review_file) as f:
+                rd = json.load(f)
+            mc = rd.get('market_cycle', {})
+            if isinstance(mc, dict):
+                market_cycle = mc.get('position', '未知')
+            ml = rd.get('mainlines', {})
+            if isinstance(ml, dict):
+                ml_list = ml.get('main_lines', ml.get('sectors', []))
+                if isinstance(ml_list, list):
+                    mainline_count = len(ml_list)
+        except: pass
+    
+    # 生成HTML
+    html_content = f'''<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>3L每日成果 · {date_str}</title>
+<style>
+body{{font-family:'Noto Sans CJK SC','WenQuanYi Zen Hei',sans-serif;color:#333;margin:40px;background:#fff}}
+h1{{font-size:22px;color:#2563eb;border-bottom:2px solid #2563eb;padding-bottom:10px;margin-bottom:20px}}
+.meta{{color:#888;font-size:13px;margin-bottom:24px}}
+.section{{margin-bottom:28px}}
+.section-title{{font-size:16px;color:#1e40af;background:#eff6ff;padding:10px 14px;border-left:4px solid #2563eb;margin-bottom:12px}}
+.section-title .num{{display:inline-flex;width:24px;height:24px;background:#2563eb;color:#fff;border-radius:50%;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;margin-right:8px}}
+.item{{padding:8px 14px;margin-bottom:6px;border-left:3px solid #e5e7eb}}
+.item .title{{font-weight:600;color:#333}}
+.item .desc{{color:#666;font-size:13px;margin-top:4px;line-height:1.6}}
+.tag{{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;margin-left:8px}}
+.tag-blue{{background:#dbeafe;color:#2563eb}}
+</style></head>
+<body>
+<h1>📊 3L 每日复盘 · {date_str} 星期{wd}</h1>
+<div class="meta">自动生成 · 复盘数据概要</div>
+<div class="section">
+<div class="section-title"><span class="num">1</span> 大盘周期</div>
+<div class="item"><div class="title">当前判定：{market_cycle}</div></div>
+</div>
+<div class="section">
+<div class="section-title"><span class="num">2</span> 动量主线</div>
+<div class="item"><div class="title">主线板块数量：{mainline_count} <span class="tag tag-blue">得分≥15</span></div></div>
+</div>
+<div class="section">
+<div class="section-title"><span class="num">3</span> 关键变更备注</div>
+<div class="item"><div class="title">本复盘由3L每日复盘系统自动生成</div><div class="desc">数据源：腾讯API(中证全指) + akshare(同花顺行业板块) + 全量创新高扫描。</div></div>
+</div>
+</body></html>'''
+    
+    html_path = os.path.join(WWW_DIR, 'files', f'每日成果_{date_str.replace("-", "")}.html')
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    
+    import subprocess
+    result = subprocess.run(
+        ['wkhtmltopdf', '--encoding', 'utf-8', '--page-size', 'A4', html_path, pdf_path],
+        capture_output=True, text=True, timeout=30
+    )
+    if result.returncode == 0:
+        print(f"[3L复盘] 📄 每日成果PDF已生成: {pdf_name}")
+    else:
+        print(f"[3L复盘] ⚠️ PDF生成失败: {result.stderr[-200:]}")
+    # 清理临时HTML（PDF已生成）
+    try: os.remove(html_path)
+    except: pass
 
 def update_historical_archives():
     """为所有历史存档补充新字段"""

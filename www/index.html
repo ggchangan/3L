@@ -248,6 +248,50 @@
             <ul class="file-list" id="doneList">
                 <li>
                     <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">🔄 复盘页面修复 · toggle/资金流向图/全量新高/TQDM乱码</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            ① toggleIndexChart() 收起修复（display判定逻辑）&nbsp;
+                            ② 资金流向图改用腾讯API（stock_market_fund_flow 主力净流入+中证全指涨跌幅）&nbsp;
+                            ③ fetch_momentum.py 去掉[:50]硬编码（全量新高返回）&nbsp;
+                            ④ TQDM_DISABLE=1 放在 import akshare 前（修复乱码）&nbsp;
+                            ⑤ review.html历史复盘加载归档图表（review_charts/archive/{date}/）
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已修复</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">📈 资金流向图生成器 + 集成</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            新建 gen_fund_flow_chart.py（日期参数化，暗色风格，红涨绿跌）&nbsp;
+                            集成到 generate_review_data.py Step 4 &nbsp;
+                            归档路径 review_charts/archive/{date}/fund_flow_chart.png
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已上线</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">🔧 EMA10算法修正 + 支撑线修复</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            ema_utils.py get_structure() 全量K线算EMA10再取末15根（原bug：只从15根独立算）&nbsp;
+                            区间震荡支撑位用 support_price（前10日最高价），过滤距收盘<1.5%的支撑
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已修复</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">📄 每日成果PDF（5/21）自动生成机制</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            生成每日成果_20260521.pdf &nbsp;
+                            修复根因：generate_review_data.py 新增每日成果PDF自动生成步骤！
+                        </div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
                         <span class="file-name" style="color:#4ecdc4;">📡 盘中盯盘页面(monitor.html) — 7卡片上线</span>
                         <div style="color:#888; font-size:12px; margin-top:4px;">
                             大盘观测(实时行情+成交额对比+关键点SVG) · 板块监测(今日/5日涨幅·结构阶段分析) · 
@@ -530,6 +574,7 @@
             'A股数据源验证报告_20260519.pdf': 'A股数据源验证报告 · 5数据源全测',
             '每日成果_20260519.pdf': '3L每日成果记录 · 持仓修复+下载修复+模拟引擎',
             '3层缩量阈值框架_20260521.pdf': '3层缩量/放量阈值动态调整框架 · 大盘+板块+个股递进模型',
+            '每日成果_20260521.pdf': '3L每日成果记录 · 复盘修复+资金流向图+EMA算法修正',
             '每日复盘上线_20260520.pdf': '📋 每日复盘页面 · 首版上线报告（大盘/行业/个股/信号全模块）',
         };
 
