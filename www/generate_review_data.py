@@ -640,7 +640,7 @@ def generate_daily_review(date_str=None):
                 
                 scan_date = latest_date if latest_date else today_yyyymmdd
                 ml_names = [l['name'] for l in mainline_data.get('lines', [])]
-                scan_result = format_buy_signals(scan_date, all_stocks_60d, ml_names, top_n=20)
+                scan_result = format_buy_signals(scan_date, all_stocks_60d, ml_names, top_n=20, market_position=market_cycle.get('position', ''))
             # 合并主线/非主线候选
             seen = set()
             for key in ['zhongji_main', 'zhongji_nonmain', 'tupo_main', 'tupo_nonmain']:

@@ -142,11 +142,47 @@ def scan_buy_points(data):
 
     from buy_point_detection import detect_buy_point
     
+    # 获取大盘位置（读取已有review数据或默认波中）
+    market_position = ''
+    for try_date in [last_date.replace('-', ''), last_date]:
+        p = f'/home/ubuntu/data/3l/review_output/{try_date}/review.json'
+        if os.path.isfile(p):
+            try:
+                with open(p) as _f:
+                    _rd = json.load(_f)
+                market_position = _rd.get('market', {}).get('position', '')
+            except:
+                pass
+            break
+    if not market_position:
+        # 没有review数据时从K线估算
+        try:
+            idx_code = '000985'
+            idx_closes = []
+            for sec, sec_stocks in stocks.items():
+                if idx_code in sec_stocks:
+                    for k in sec_stocks[idx_code]:
+                        idx_closes.append(k['close'])
+                    break
+            if len(idx_closes) >= 20:
+                cur = idx_closes[-1]
+                ma20 = sum(idx_closes[-20:]) / 20
+                d = (cur - ma20) / ma20 * 100
+                if d > 2: market_position = '波中偏上'
+                elif d > -2: market_position = '波中'
+                elif d > -5: market_position = '波中偏下'
+                else: market_position = '波谷'
+        except:
+            pass
+    if market_position:
+        from buy_point_detection import _shrink_threshold
+        print(f"  大盘位置: {market_position}  缩量阈值: <{_shrink_threshold(market_position):.0%}")
+    
     results = []
     for sec_name, sec_stocks in stocks.items():
         for code in sec_stocks:
             try:
-                bt = detect_buy_point(code, last_date, stocks)
+                bt = detect_buy_point(code, last_date, stocks, market_position=market_position)
                 if bt:
                     results.append({
                         "code": code,

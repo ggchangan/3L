@@ -294,14 +294,23 @@ holdings_review.sort(key=lambda x: struct_priority.get(x['structure'], 3))
 
 `updateBuySignalsUI()` 渲染 `buy_signals_review`，与第④部分**使用同一 `signalStockCard()` 函数**，判定逻辑完全一致。
 
-**判定逻辑（全量自选股, 非仅持仓）：**
+**判定逻辑（2026-05-21 重构：完全基于系统B—EMA10趋势分析）：**
 ```
-buy_signals[]  →  stock_cache[code] 获取 structure/stage/ema/vol_analysis
-                 ↓
-                 区间震荡 → 关键点支撑重算stage（同holdings逻辑）
-                 ↓
-                 judge_signal(structure, stage, buy_point) → signal
+buy_signals[] ← 来自 latest_scan_result.json（每日扫描结果）
+  → stock_cache[code] 获取 structure/stage/ema/vol_analysis（系统B分析结果）
+  → 区间震荡 → 关键点支撑重算stage
+  → judge_signal(structure, stage, buy_point) → signal (仅buy展示)
 ```
+
+**中继买点判定（基于3L教材定义，非机械条件）：**
+- 上涨趋势 + 缩量(vol<MA5×80%) → 供应衰竭，顺大势逆小势
+- 区间底部 + 缩量(vol<MA5×80%) → 区底缩量企稳
+
+**突破买点判定：**
+- 上涨趋势 + 放量(vol>MA5×130%)突破前10日高 → 需求强劲突破平台
+- 区间顶部 + 放量(vol>MA5×130%)突破前10日高 → 区顶放量突破
+
+**未通过条件不展示买点：** 中微公司(上涨趋势但量能正常104%)→ 无买点 ✅，沪硅产业(区间震荡不在底部)→ 无买点 ✅
 
 **UI结构：**
 - **方向Tab** — 按 sector（8大类方向）分组，Tab显示组名+数量
