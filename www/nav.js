@@ -12,13 +12,19 @@
         { label: '📊 模拟交易',  href: '/simulation.html', id: 'simulation' },
     ];
 
-    // 判断当前页面
+    // 判断当前页面 — archive页特殊处理（全部可点）
     const path = window.location.pathname;
-    let currentId = 'home';
-    for (const item of NAV_ITEMS) {
-        if (item.href !== '/' && path.startsWith(item.href)) {
-            currentId = item.id;
-            break;
+    let currentId = null;
+    if (path.startsWith('/archive/')) {
+        // archive页不是任何标准页面，所有导航项均为链接
+        currentId = null;
+    } else {
+        currentId = 'home';
+        for (const item of NAV_ITEMS) {
+            if (item.href !== '/' && path.startsWith(item.href)) {
+                currentId = item.id;
+                break;
+            }
         }
     }
 
