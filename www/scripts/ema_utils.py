@@ -96,21 +96,31 @@ def get_stage(closes, structure=None, highs=None, lows=None, support_level=None,
                                 ratio = s2 / s1_adj
                         break
             
-            # D方案：整理后突破检测（2026-05-22）
-            # 斜率变陡前如果量能显著萎缩过（连续≥3天量<峰值的50%），
-            # 说明经过缩量整理验证，不是真正的加速，判为上行
-            if volumes is not None and len(volumes) >= 15:
-                pre_surge = volumes[:-1]  # 排除突破当天
-                peak_v = max(pre_surge[-15:])
-                if peak_v > 0:
-                    cons = 0
-                    for v in reversed(pre_surge[-12:]):
-                        if v / peak_v < 0.5:
-                            cons += 1
-                        else:
-                            break
-                    if cons >= 3:
-                        ratio = 1.0  # 整理后突破 → 判为上行
+            # D方案：两步法判断整理后突破（2026-05-22 改进版）
+            # 第1步：加速前是否有过回调且守住了EMA20
+            # 第2步：突破时量比是否失控(>1.7)
+            if volumes is not None and len(closes) >= 25 and len(volumes) >= 25:
+                w = closes[-25:-5]  # 20个交易日，排除最近5天拉升段
+                if len(w) >= 10:
+                    peak_val = max(w)
+                    peak_i = w.index(peak_val)
+                    after_w = w[peak_i+1:]
+                    if after_w:
+                        trough_val = min(after_w)
+                        pull = (peak_val - trough_val) / peak_val * 100
+                        if pull > 5:
+                            # 第1步：回调低点守住EMA20？
+                            e20_full = ema_list(closes, 20)
+                            trough_abs_i = len(closes) - 25 + peak_i + 1 + after_w.index(trough_val)
+                            is_holding = (trough_abs_i < len(e20_full) and e20_full[trough_abs_i] is not None
+                                        and trough_val > e20_full[trough_abs_i] * 0.98)
+                            if is_holding:
+                                # 第2步：突破量控在1.7以下？
+                                v3 = sum(volumes[-3:]) / 3
+                                v12 = sum(volumes[-15:-3]) / 12 if len(volumes) >= 15 else 0
+                                vr = v3 / v12 if v12 > 0 else 99
+                                if vr < 1.7:
+                                    ratio = 1.0  # 整理后突破 → 判为上行
         if ratio > 1.8: return '加速'
         elif ratio < 0.4:
             # 区分滞涨(危险) vs 缩量整理(中继蓄力)
