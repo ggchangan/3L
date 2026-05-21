@@ -144,6 +144,7 @@ def scan_buy_points(data):
     
     # 获取大盘位置（读取已有review数据或默认波中）
     market_position = ''
+    main_lines_list = []
     for try_date in [last_date.replace('-', ''), last_date]:
         p = f'/home/ubuntu/data/3l/review_output/{try_date}/review.json'
         if os.path.isfile(p):
@@ -151,6 +152,7 @@ def scan_buy_points(data):
                 with open(p) as _f:
                     _rd = json.load(_f)
                 market_position = _rd.get('market', {}).get('position', '')
+                main_lines_list = [l['name'] for l in _rd.get('mainline', {}).get('lines', [])]
             except:
                 pass
             break
@@ -177,12 +179,14 @@ def scan_buy_points(data):
     if market_position:
         from buy_point_detection import _shrink_threshold
         print(f"  大盘位置: {market_position}  缩量阈值: <{_shrink_threshold(market_position):.0%}")
+        if main_lines_list:
+            print(f"  主线板块: {', '.join(main_lines_list[:3])}")
     
     results = []
     for sec_name, sec_stocks in stocks.items():
         for code in sec_stocks:
             try:
-                bt = detect_buy_point(code, last_date, stocks, market_position=market_position)
+                bt = detect_buy_point(code, last_date, stocks, market_position=market_position, main_lines=main_lines_list)
                 if bt:
                     results.append({
                         "code": code,
