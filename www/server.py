@@ -180,10 +180,11 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json({'error': '请输入股票代码或名称'})
                 return
 
-            from scripts.data_layer import get_all_stocks, get_watchlist
+            from scripts.data_layer import get_all_stocks, get_watchlist, get_review_archive
             from scripts.buy_point_detection import (
                 detect_buy_point, check_trend_stock, check_profit_model1,
-                detect_huicai_buy_point, find_idx, _ema_list, _resolve_code
+                detect_huicai_buy_point, find_idx, _ema_list, _resolve_code,
+                _find_support_levels,
             )
             from ema_utils import get_structure, get_stage
 
@@ -316,7 +317,75 @@ class Handler(SimpleHTTPRequestHandler):
                 'huicai_detail': hc.get('detail', {}) if hc else None,
                 'has_chart': os.path.exists(svg_abs),
                 'signal': 'buy' if bt else ('hold' if structure == '上涨趋势' else 'warn'),
+                # 止损位推荐
+                'stop_loss': None,
+                'stop_loss_pct': None,
+                # 盈亏比
+                'risk_reward_ratio': None,
+                # 综合成功率
+                'success_rate': None,
             }
+
+            # 计算止损位+盈亏比+成功率（用最后一天索引）
+            _last_idx = find_idx(today_fmt, kls)
+            _bt_results_path = '/home/ubuntu/www/files/buy_signal_backtest_results.json'
+            _bt_cache = None
+            if os.path.exists(_bt_results_path):
+                try:
+                    with open(_bt_results_path) as _f:
+                        _bt_cache = json.load(_f)
+                except Exception:
+                    pass
+
+            if _last_idx >= 10:
+                # 止损：支撑价下方2%
+                _support = _find_support_levels(kls, _last_idx)
+                if _support is not None:
+                    _sl = round(_support * 0.98, 2)
+                    result['stop_loss'] = _sl
+                    result['stop_loss_pct'] = round((cur_close - _sl) / cur_close * 100, 2)
+                    
+                    # 盈亏比：找最近压力位（前高）
+                    _highs = [k['high'] for k in kls[:_last_idx+1]]
+                    _resistance = None
+                    for _i in range(_last_idx, max(0, _last_idx-30), -1):
+                        if _highs[_i] > cur_close * 1.02:  # 比当前高2%以上
+                            _resistance = _highs[_i]
+                            break
+                    if _resistance and result['stop_loss']:
+                        _risk = cur_close - result['stop_loss']
+                        if _risk > 0:
+                            _reward = _resistance - cur_close
+                            result['risk_reward_ratio'] = round(_reward / _risk, 2)
+
+                # 综合成功率
+                _buy_type = bt.get('buy_type', '') if bt else ''
+                if _buy_type and _bt_cache:
+                    _bt_data = _bt_cache.get('by_type', {}).get(_buy_type, {})
+                    _base_wr = _bt_data.get('win_rate', 50) / 100.0
+                    
+                    # 市场环境系数
+                    _mkt_map = {'偏波峰': 0.85, '波中偏上': 0.92, '波中': 1.0,
+                                '波中偏下': 1.08, '偏波谷': 1.15}
+                    # 获取大盘位置（从review_data或默认）
+                    _mkt_factor = 1.0
+                    try:
+                        _rd = get_review_archive(today_fmt)
+                        if _rd and 'cycle' in _rd:
+                            _pos = _rd['cycle'].get('position', '波中')
+                            _mkt_factor = _mkt_map.get(_pos, 1.0)
+                    except Exception:
+                        pass
+                    
+                    # 结构系数
+                    _struct_map = {'上涨趋势': 1.2, '区间震荡': 1.0, '下降趋势': 0.6}
+                    _struct_factor = _struct_map.get(structure, 1.0)
+                    
+                    # 主线系数
+                    _ml_factor = 1.15 if is_watchlist else 0.85
+                    
+                    _final = _base_wr * _mkt_factor * _struct_factor * _ml_factor
+                    result['success_rate'] = round(min(_final * 100, 95), 1)
 
             self.send_json(result)
             return

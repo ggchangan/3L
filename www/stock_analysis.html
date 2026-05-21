@@ -278,6 +278,30 @@ function renderResult(d) {
                 </div>
             </div>
 
+            ${d.success_rate ? `
+            <div class="info-grid" style="margin-top:8px;">
+                <div class="info-item" style="grid-column:1/2;">
+                    <div class="l">综合成功率</div>
+                    <div class="v" style="color:${d.success_rate >= 40 ? '#4ecdc4' : d.success_rate >= 30 ? '#ffd700' : '#e94560'};font-size:20px;">
+                        ${d.success_rate}%
+                    </div>
+                </div>
+                ${d.stop_loss ? `
+                <div class="info-item">
+                    <div class="l">止损位</div>
+                    <div class="v" style="color:#e94560;font-size:18px;">${d.stop_loss}</div>
+                    <div style="color:#888;font-size:11px;margin-top:2px;">亏损 ${d.stop_loss_pct}%</div>
+                </div>
+                ` : ''}
+                ${d.risk_reward_ratio ? `
+                <div class="info-item">
+                    <div class="l">盈亏比</div>
+                    <div class="v" style="color:#4ecdc4;font-size:20px;">1:${d.risk_reward_ratio}</div>
+                </div>
+                ` : ''}
+            </div>
+            ` : ''}
+
             <div style="margin-top:8px;">
                 <div style="color:#888;font-size:11px;margin-bottom:4px;">EMA均线</div>
                 <div class="ema-arr">
