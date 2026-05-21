@@ -190,20 +190,92 @@
     </div>
 
     <div class="section-title">⏳ 当日待办</div>
-    <div class="card-today">
+    <div class="card-today" style="padding: 20px;">
         <ul class="file-list">
-            <li><span class="tag-pending">⏳</span> 交易纪律 · 规则确认 — 个人交易参数待确认</li>
-            <li><span class="tag-pending">🔧</span> 每日复盘 · 数据接入 — 行业板块TOP15+领涨股K线图已接入，大盘实时数据/持仓个股复盘/自选股买点信号仍需自动化填充</li>
-            <li><span class="tag-pending">🔄</span> 模拟交易v33 · 产业链聚类优化 — 走势聚类放开后买入过于集中</li>
-            <li><span class="tag-pending">🔴</span> 3L盯盘 · 主线板块实时评分 — 当前板块监测只展示今日/5日涨幅</li>
-            <li><span class="tag-pending">🔴</span> 3L盯盘 · 卖点预警（左侧+右侧）</li>
-            <li><span class="tag-pending">🟡</span> 3L盯盘 · 板块轮动检测</li>
-            <li><span class="tag-pending">🟡</span> 3L盯盘 · 主线板块个股分层扫描</li>
-            <li><span class="tag-pending">🟡</span> 3L盯盘 · 大盘仓位策略联动</li>
-            <li><span class="tag-pending">🔲</span> 3L盯盘 · 逻辑观测实现</li>
-            <li><span class="tag-pending">🔲</span> 3L盯盘 · 个股3L综合评分</li>
-            <li><span class="tag-pending">🔲</span> 3L盯盘 · 大盘异常事件检测</li>
-            <li><span class="tag-pending">🔍</span> iwencai 替代方案 — akshare已移除iwencai</li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name" style="color:#ffd700;">⏳ 交易纪律 · 规则确认</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">个人交易参数待确认</div>
+                </div>
+                <span style="color:#ffd700; font-size:12px; white-space:nowrap; margin-left:12px;">⏳ 待确认</span>
+            </li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name" style="color:#ffd700;">🔧 每日复盘 · 数据接入</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">行业板块TOP15+领涨股K线图已接入，大盘实时数据/持仓个股复盘/自选股买点信号仍需自动化填充</div>
+                </div>
+                <span style="color:#ffd700; font-size:12px; white-space:nowrap; margin-left:12px;">⏳ 部分完成</span>
+            </li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name" style="color:#eab308;">🔄 模拟交易v33 · 产业链聚类优化</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">走势聚类放开后买入过于集中</div>
+                </div>
+                <span style="color:#eab308; font-size:12px; white-space:nowrap; margin-left:12px;">🔄 待优化</span>
+            </li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name" style="color:#e94560;">🔴 3L盯盘 · 主线板块实时评分</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">当前板块监测只展示今日/5日涨幅</div>
+                </div>
+                <span style="color:#e94560; font-size:12px; white-space:nowrap; margin-left:12px;">🔴 待开发</span>
+            </li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name" style="color:#e94560;">🔴 3L盯盘 · 卖点预警（左侧+右侧）</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">当前只有买点扫描，缺完整3L卖点预警</div>
+                </div>
+                <span style="color:#e94560; font-size:12px; white-space:nowrap; margin-left:12px;">🔴 待开发</span>
+            </li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name" style="color:#eab308;">🟡 3L盯盘 · 板块轮动检测</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">监测20日动量从&lt;15突增至≥15（新主线冒头），或评分跌破15（主线衰退）</div>
+                </div>
+                <span style="color:#eab308; font-size:12px; white-space:nowrap; margin-left:12px;">🟡 待开发</span>
+            </li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name" style="color:#eab308;">🟡 3L盯盘 · 主线板块个股分层扫描</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">确定主线板块后，板块内领涨龙头/跟风/突破分层展示</div>
+                </div>
+                <span style="color:#eab308; font-size:12px; white-space:nowrap; margin-left:12px;">🟡 待开发</span>
+            </li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name" style="color:#eab308;">🟡 3L盯盘 · 大盘仓位策略联动</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">根据market-peak-trough结果，页面顶部显示建议总仓位</div>
+                </div>
+                <span style="color:#eab308; font-size:12px; white-space:nowrap; margin-left:12px;">🟡 待开发</span>
+            </li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name">🔲 3L盯盘 · 逻辑观测实现</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">当前占位\"功能开发中\"</div>
+                </div>
+                <span style="color:#888; font-size:12px; white-space:nowrap; margin-left:12px;">🔲 待开发</span>
+            </li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name">🔲 3L盯盘 · 个股3L综合评分</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">自选股/持仓股3L评分仪表盘</div>
+                </div>
+                <span style="color:#888; font-size:12px; white-space:nowrap; margin-left:12px;">🔲 待开发</span>
+            </li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name">🔲 3L盯盘 · 大盘异常事件检测</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">盘中异常波动/关键点位突破失败/量价背离</div>
+                </div>
+                <span style="color:#888; font-size:12px; white-space:nowrap; margin-left:12px;">🔲 待开发</span>
+            </li>
+            <li>
+                <div style="flex:1">
+                    <span class="file-name">🔍 iwencai 替代方案</span>
+                    <div style="color:#888; font-size:12px; margin-top:4px;">akshare已移除iwencai</div>
+                </div>
+                <span style="color:#e94560; font-size:12px; white-space:nowrap; margin-left:12px;">🔍 待调研</span>
+            </li>
         </ul>
     </div>
 
