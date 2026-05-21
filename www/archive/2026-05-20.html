@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3L 交易体系 · 每日成果 2026-05-20</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',monospace;background:#0f0f1a;color:#e0e0e0;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a1a2e,#16213e);border-bottom:2px solid #e94560;padding:24px 20px;text-align:center}
+.header h1{font-size:22px;color:#fff;letter-spacing:2px}
+.header .sub{color:#a0a0b0;font-size:13px;margin-top:4px}
+.container{max-width:800px;margin:0 auto;padding:24px 16px}
+.nav-bar{display:flex;gap:12px;justify-content:center;margin-bottom:20px;flex-wrap:wrap}
+.nav-bar a{color:#4ecdc4;text-decoration:none;font-size:13px;padding:6px 16px;border:1px solid #2a2a4e;border-radius:8px}
+.nav-bar a:hover{background:rgba(78,205,196,0.1)}
+.section-title{font-size:16px;color:#4ecdc4;margin:28px 0 14px;padding-bottom:6px;border-bottom:1px solid #2a2a4e}
+.card{background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid #2a2a4e;border-radius:14px;padding:20px;margin-bottom:16px}
+.card h3{font-size:14px;color:#e67e22;margin-bottom:10px}
+.card p,.card li{font-size:12px;color:#ccc;line-height:1.8}
+.card ul{padding-left:20px}
+.card li{margin-bottom:4px}
+.tag-done{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;background:#064e3b;color:#4ecdc4}
+.tag-pending{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;background:#451a03;color:#ffd700}
+.footer{text-align:center;padding:30px;color:#555;font-size:12px;border-top:1px solid #1a1a2e;margin-top:30px}
+a{color:#4ecdc4}
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>📊 3L 交易体系 · 每日成果</h1>
+    <div class="sub">2026-05-20 | 盘中盯盘 + 市场龙头扫描 + 3L待办体系</div>
+    <div style="margin-top:10px; display:flex; gap:10px; justify-content:center;">
+        <a href="/" style="color:#4ecdc4; text-decoration:none; font-size:12px;">🏠 返回看板</a>
+        <span style="color:#333;">|</span>
+        <a href="/review.html" style="color:#e94560; text-decoration:none; font-size:12px; font-weight:bold;">📋 每日复盘</a>
+        <span style="color:#333;">|</span>
+        <a href="/skills.html" style="color:#e67e22; text-decoration:none; font-size:12px; font-weight:bold;">📖 Skills</a>
+    </div>
+</div>
+<div class="container">
+    <div class="nav-bar">
+        <a href="/">🏠 返回看板</a>
+        <a href="/review.html">📋 每日复盘</a>
+        <a href="/simulation.html">📊 模拟交易</a>
+        <a href="/skills.html">📖 Skills</a>
+    </div>
+
+    <div class="section-title">📄 当日报告</div>
+    <div class="card">
+        <h3>📄 报告文件</h3>
+        <ul>
+            <li><a href="/files/每日成果_20260520.pdf" target="_blank">每日成果_20260520.pdf</a></li>
+            <li><a href="/files/每日复盘上线_20260520.pdf" target="_blank">每日复盘页面首版上线报告.pdf</a></li>
+            <li><a href="/files/盘中盯盘模块_成果追踪_20260520.pdf" target="_blank">盘中盯盘模块_成果追踪_20260520.pdf</a></li>
+            <li><a href="/files/待办_3L复盘功能完善_实现报告.pdf" target="_blank">待办_3L复盘功能完善_实现报告.pdf</a></li>
+        </ul>
+    </div>
+
+    <div class="section-title">✅ 当日完成</div>
+    <div class="card">
+        <h3>📡 盘中盯盘页面(monitor.html) — 7卡片上线</h3>
+        <p>大盘观测(实时行情+成交额对比+关键点SVG) · 板块监测(今日/5日涨幅·结构阶段分析) · 龙头观测(行业龙头155行业269只+市场龙头动态扫描) · 盘中机会(算力+半导体中继买点) · 止损预警</p>
+        <p style="margin-top:6px"><span class="tag-done">✅ git分支: feature/market-monitor → merged to master</span></p>
+    </div>
+    <div class="card">
+        <h3>🏆 市场龙头动态扫描上线</h3>
+        <p>4条件筛选：近5日行业涨幅第一+成交额第一+MA10向上+换手率>3%。269只龙头股扫描，首轮结果9只。腾讯批量接口拉取，日K线按天缓存，非交易时间持久化</p>
+        <p style="margin-top:6px"><span class="tag-done">✅ 已完成</span></p>
+    </div>
+    <div class="card">
+        <h3>🐛 Market Leaders负涨幅误杀修复</h3>
+        <p>rank_gain_1st > 0导致负涨幅股票全部跳过。修复后结果从6只→9只，补回锐科激光/兆驰股份/润贝航科</p>
+        <p style="margin-top:6px"><span class="tag-done">✅ 已修复</span></p>
+    </div>
+    <div class="card">
+        <h3>📖 Skills页面同步更新</h3>
+        <p>新建market-leaders-scan · 更新daily-3l-monitor(80条pitfall) · daily-3l-monitor首次录入Part 1 · 新建profit-quality-check · profit-model-check→profit-model1-check重命名 · 日期修正 · 每日更新记录补正(EMA10极值法描述)</p>
+        <p style="margin-top:6px"><span class="tag-done">✅ 已完成</span></p>
+    </div>
+    <div class="card">
+        <h3>📄 盘中盯盘成果追踪PDF + 3L待办梳理</h3>
+        <p>生成盘中盯盘模块成果追踪PDF（页面设计/功能/规则/问题/skill/待办），按3L体系梳理8项盯盘增强待办（主线评分/卖点预警/轮动检测/仓位联动等），同步更新到成果页面</p>
+        <p style="margin-top:6px"><span class="tag-done">✅ 已完成</span></p>
+    </div>
+    <div class="card">
+        <h3>🔗 连接GitHub仓库</h3>
+        <p>已连接 ggchangan/3L 仓库，master分支已推送。后续代码改动自动commit+push</p>
+        <p style="margin-top:6px"><span class="tag-done">✅ 已完成</span></p>
+    </div>
+
+    <div class="section-title">⏳ 当日待办</div>
+    <div class="card">
+        <ul>
+            <li><span class="tag-pending">⏳</span> 交易纪律 · 规则确认 — 个人交易参数待确认</li>
+            <li><span class="tag-pending">🔧</span> 每日复盘 · 数据接入 — 行业板块TOP15+领涨股K线图已接入，大盘实时数据/持仓个股复盘/自选股买点信号仍需自动化填充</li>
+            <li><span class="tag-pending">🔄</span> 模拟交易v33 · 产业链聚类优化 — 走势聚类放开后买入过于集中</li>
+            <li><span class="tag-pending">🔴</span> 3L盯盘 · 主线板块实时评分 — 当前板块监测只展示今日/5日涨幅</li>
+            <li><span class="tag-pending">🔴</span> 3L盯盘 · 卖点预警（左侧+右侧）</li>
+            <li><span class="tag-pending">🟡</span> 3L盯盘 · 板块轮动检测</li>
+            <li><span class="tag-pending">🟡</span> 3L盯盘 · 主线板块个股分层扫描</li>
+            <li><span class="tag-pending">🟡</span> 3L盯盘 · 大盘仓位策略联动</li>
+            <li><span class="tag-pending">🔲</span> 3L盯盘 · 逻辑观测实现</li>
+            <li><span class="tag-pending">🔲</span> 3L盯盘 · 个股3L综合评分</li>
+            <li><span class="tag-pending">🔲</span> 3L盯盘 · 大盘异常事件检测</li>
+            <li><span class="tag-pending">🔍</span> iwencai 替代方案 — akshare已移除iwencai</li>
+        </ul>
+    </div>
+</div>
+<div class="footer">3L 交易体系 · Hermes Agent · 2026</div>
+</body>
+</html>

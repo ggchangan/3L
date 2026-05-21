@@ -290,122 +290,6 @@
                     </div>
                     <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
                 </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name" style="color:#4ecdc4;">📡 盘中盯盘页面(monitor.html) — 7卡片上线</span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            大盘观测(实时行情+成交额对比+关键点SVG) · 板块监测(今日/5日涨幅·结构阶段分析) · 
-                            龙头观测(行业龙头155行业269只+市场龙头动态扫描) · 盘中机会(算力+半导体中继买点) · 止损预警
-                            <br><span style="color:#4ecdc4;">→ git分支: feature/market-monitor → merged to master</span>
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name" style="color:#4ecdc4;">🏆 市场龙头动态扫描上线</span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            4条件筛选：近5日行业涨幅第一+成交额第一+MA10向上+换手率>3%。269只龙头股扫描，首轮结果9只。
-                            腾讯批量接口拉取，日K线按天缓存，非交易时间持久化
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name" style="color:#4ecdc4;">🐛 Market Leaders负涨幅误杀修复</span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            rank_gain_1st > 0导致负涨幅股票全部跳过。修复后结果从6只→9只，补回锐科激光/兆驰股份/润贝航科
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已修复</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name" style="color:#4ecdc4;">📖 Skills页面同步更新</span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            新建market-leaders-scan · 更新daily-3l-monitor(80条pitfall) · daily-3l-monitor首次录入Part 1 ·
-                            新建profit-quality-check · profit-model-check→profit-model1-check重命名 · 日期修正 · 每日更新记录补正(EMA10极值法描述)
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name" style="color:#4ecdc4;">📄 盘中盯盘成果追踪PDF + 3L待办梳理</span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            生成盘中盯盘模块成果追踪PDF（页面设计/功能/规则/问题/skill/待办），
-                            按3L体系梳理8项盯盘增强待办（主线评分/卖点预警/轮动检测/仓位联动等），同步更新到成果页面
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name" style="color:#4ecdc4;">🔗 连接GitHub仓库 ✅</span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            已连接 ggchangan/3L 仓库，master分支已推送。后续代码改动自动commit+push
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name">📋 3L复盘功能完善 · 5项核心功能上线</span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            ① 大盘周期判定(4维评分法/5档定位+仓位建议)&nbsp;
-                            ② 动量主线评分+持续性跟踪(连续天数)+轮动检测&nbsp;
-                            ③ 最强逻辑·归类主线/非主线(持仓+候选信号)&nbsp;
-                            ④ 量价择时(买点类型+止损位+关键点)&nbsp;
-                            ⑤ 每日交易计划(操作项+关注项+风险提醒)
-                            <br><span style="color:#4ecdc4;">→ git分支: feature/review-function-enhancement</span>
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name">📋 每日复盘页面 · 0→1上线</span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            从零搭建完整复盘页面：大盘判定+同花顺行业板块TOP15实时排行+领涨股K线图（SVG+object展示）+持仓个股诊断+自选股买点信号+历史复盘列表+统一导航栏。同步修复图表布局/点击交互/图标统一问题
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name" style="color:#4ecdc4;">📚 3L交易体系知识库构建完成</span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            ① 3L交易体系构建（45页PDF全文OCR + 6张课程截图附录）&nbsp;
-                            ② 量价原理（53页PDF全文OCR）&nbsp;
-                            ③ 交易训练营18期原文提取
-                            <br>→ /home/ubuntu/data/3l/knowledge_base/
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name" style="color:#4ecdc4;">🐛 复盘系列bug修复 · feature/holding</span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            Volume单位修正·股票名称补全·ema_utils统一·结构/阶段/支撑线算法修正·持仓排序·SVG防缓存
-                            <br><span style="color:#4ecdc4;">→ committed & pushed</span>
-                        </div>
-                    </div>
-                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已提交</span>
-                </li>
-                <li>
-                    <div style="flex:1">
-                        <span class="file-name">📐 3层缩量阈值动态调整框架（PDF+代码）</span>
-                        <div style="color:#888; font-size:12px; margin-top:4px;">
-                            PDF含文字描述+SVG示意图：大盘定基准→板块调系数(±5%)→个股定类型。
-                            buy_point_detection新增_main_lines_参数，_shrink/_surge阈值感知板块主线。
-                            daily_update_and_scan从review.json读主线，传入全链条。
-                            全部10种组合（5大盘位置×2板块类别）测试通过
-                        </div>
-                    </div>
-                    <span style="color:#16a34a; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
-                </li>
             </ul>
         </div>
 
@@ -641,15 +525,18 @@
                 });
 
                 Object.keys(dateGroups).sort().reverse().forEach(date => {
-                    // Link to daily archive page, not the PDF directly
                     const pdf = dateGroups[date][0];
+                    const desc = fileDesc[pdf.name] || '3L每日成果';
                     const li = document.createElement('li');
                     li.innerHTML = `
                         <div>
                             <span class="h-date">${date}</span>
-                            <span class="h-title">3L每日成果 · 查看详情</span>
+                            <span class="h-title">${desc}</span>
                         </div>
-                        <div class="h-link"><a href="/archive/${date}.html" target="_blank">查看</a></div>
+                        <div class="h-link">
+                            <a href="/archive/${date}.html" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:13px;">查看</a>
+                            <a href="${pdf.url}" target="_blank" style="color:#e94560; text-decoration:none; font-size:13px; margin-left:10px;">📄</a>
+                        </div>
                     `;
                     historyList.appendChild(li);
                 });
