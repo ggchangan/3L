@@ -704,7 +704,7 @@
         container.innerHTML = html;
     }
 
-    // ====== ⑦ 每日交易计划 ======
+    // ====== ⑦ 每日交易计划（3L体系标准版） ======
     function updateTradingPlanUI(plan) {
         const container = document.getElementById('tradingPlanArea');
         if (!plan) {
@@ -724,27 +724,53 @@
         }
         html += `</div>`;
 
-        // 操作项
-        if (plan.action_items && plan.action_items.length > 0) {
-            html += `<div style="margin-bottom:8px;"><strong style="color:#4ecdc4;font-size:13px;">🔴 操作项</strong></div>`;
-            plan.action_items.forEach(item => {
-                html += `<div class="plan-item">${item}</div>`;
+        // 仓位规则说明
+        if (plan.position_detail) {
+            html += `<div style="margin-bottom:12px;padding:6px 10px;background:rgba(78,205,196,0.08);border-radius:6px;font-size:12px;color:#4ecdc4;">`;
+            html += `📋 ${plan.position_detail}`;
+            html += `</div>`;
+        }
+
+        // 个股操作建议
+        if (plan.holdings_action && plan.holdings_action.length > 0) {
+            html += `<div style="margin-bottom:8px;"><strong style="color:#4ecdc4;font-size:13px;">📦 个股操作</strong></div>`;
+            const priColors = {'高':'#e94560','中':'#ffd700','低':'#888'};
+            plan.holdings_action.forEach(item => {
+                const color = priColors[item.priority] || '#888';
+                html += `<div class="plan-item" style="border-left:3px solid ${color};padding-left:8px;margin-bottom:4px;">`;
+                html += `<span style="font-weight:600;">${item.stock}</span>`;
+                html += ` <span style="color:${color};">→ ${item.action}</span>`;
+                html += ` <span style="color:#888;font-size:11px;">${item.reason}</span>`;
+                html += `<span style="color:${color};font-size:10px;margin-left:6px;">${item.priority}</span>`;
+                html += `</div>`;
             });
         }
 
-        // 关注项
-        if (plan.watch_items && plan.watch_items.length > 0) {
-            html += `<div style="margin-bottom:8px;margin-top:10px;"><strong style="color:#ffd700;font-size:13px;">⚠️ 关注项</strong></div>`;
-            plan.watch_items.forEach(item => {
-                html += `<div class="plan-item">${item}</div>`;
+        // 买点关注优先级
+        if (plan.buy_priority && plan.buy_priority.length > 0) {
+            html += `<div style="margin-bottom:6px;margin-top:12px;"><strong style="color:#ffd700;font-size:13px;">🎯 关注买点（优先级排序）</strong></div>`;
+            plan.buy_priority.forEach((s, i) => {
+                const tag = s.is_main ? '<span class="tag red" style="font-size:10px;">主线</span>' : '';
+                const pm1 = s.profit_model1 ? '<span class="tag" style="background:#e94560;font-size:10px;padding:1px 6px;">🏆</span>' : '';
+                const chgColor = s.change >= 0 ? '#ff4444' : '#44aa44';
+                html += `<div class="plan-item" style="font-size:12px;">`;
+                html += `<span style="color:#e94560;font-weight:bold;">#${i+1}</span>`;
+                html += ` <span style="font-weight:600;">${s.name}</span>`;
+                html += ` <span style="color:#888;">${s.buy_point}</span>`;
+                html += ` ${tag} ${pm1}`;
+                html += ` <span style="color:${chgColor};">${s.change >= 0 ? '+' : ''}${s.change}%</span>`;
+                html += `</div>`;
             });
         }
 
-        // 风险提醒
-        if (plan.risk_reminder) {
-            html += `<div style="margin-top:10px;padding:8px 10px;background:rgba(233,69,96,0.08);border-radius:6px;font-size:12px;color:#e94560;">
-                ⚠️ ${plan.risk_reminder}
-            </div>`;
+        // 风险项
+        if (plan.risk_items && plan.risk_items.length > 0) {
+            html += `<div style="margin-top:12px;">`;
+            plan.risk_items.forEach(item => {
+                const isRed = item.includes('🔴');
+                html += `<div style="padding:5px 8px;margin:3px 0;border-radius:4px;font-size:12px;${isRed ? 'background:rgba(233,69,96,0.08);color:#e94560;' : 'background:rgba(255,255,255,0.02);color:#aaa;'}">${item}</div>`;
+            });
+            html += `</div>`;
         }
 
         html += `</div>`;

@@ -345,37 +345,146 @@ def get_buy_sell_signals(holdings, buy_signals):
 
 # ====== ⑤ 每日交易计划 ======
 
-def generate_trading_plan(market_cycle, mainline_data, logic_classify, signals_data, existing_holdings):
-    """综合前4项生成次日交易计划"""
+def generate_trading_plan(market_cycle, mainline_data, logic_classify, signals_data, existing_holdings,
+                          holdings_review=None, buy_signals_review=None):
+    """综合前4项生成次日交易计划（3L体系标准）
+    
+    3L交易计划规范（源自教材6.6-6.7）：
+    - 大盘定仓位 → market_cycle决定总仓位水位
+    - 主线定方向 → mainline_data决定选股方向
+    - 个股定操作 → holdings_review的signal/stage决定每只操作
+    - 买点定机会 → buy_signals_review的优先级决定关注顺序
+    """
     plan = {
         'overall_strategy': market_cycle.get('strategy', '正常交易'),
         'position_level': market_cycle.get('position_pct', '半仓'),
         'build_per_stock_pct': f"{market_cycle.get('build_per_stock_pct', 5)}%/只",
         'main_lines': [],
-        'action_items': [],
-        'watch_items': [],
-        'risk_reminder': ''
+        'position_detail': '',
+        'holdings_action': [],  # 个股操作建议
+        'buy_priority': [],     # 买点优先级
+        'risk_items': [],       # 风险项
     }
 
+    # 主线方向
     for line in (mainline_data.get('lines', [])[:3]):
         plan['main_lines'].append(f"{line['name']}(评分{line['score']})")
 
-    for h in (signals_data.get('holdings', []) or []):
-        if h.get('has_stop_loss') and h.get('stop_loss'):
-            plan['action_items'].append(f"🔴 {h['name']} 止损{h['stop_loss']} — 严格按止损执行")
-        elif not h.get('ema_status') or '多头' not in h.get('ema_status', ''):
-            plan['watch_items'].append(f"⚠️ {h['name']} EMA{h.get('ema_status','?')} — 关注趋势是否走坏")
+    # 3L仓位规则说明
+    pos = market_cycle.get('position', '波中')
+    plan['position_detail'] = {
+        '偏波峰': '偏波峰仓位五成，建仓5%/只。大盘偏高位，控制总仓位，收紧止盈线',
+        '波中偏上': '波中偏上仓位六至七成，建仓5%/只。正常交易，注意减仓信号',
+        '波中': '波中仓位七至八成，建仓5%/只。正常交易，积极选股',
+        '波中偏下': '波中偏下仓位五至七成，建仓5%/只。谨慎选股，收紧止损',
+        '偏波谷': '偏波谷仓位五至八成，建仓10%/只。积极寻找买点，止损后换股补回',
+    }.get(pos, '正常仓位管理')
 
-    signals = signals_data.get('signals', [])
-    if signals:
-        plan['action_items'].append(f"📌 发现{len(signals)}个买点信号，关注调整后入场机会")
+    # 个股操作建议（用 holdings_review 的 signal + stage）
+    if holdings_review:
+        for h in holdings_review:
+            name = f"{h['name']}({h['code']})"
+            sig = h.get('signal', 'hold')
+            stage = h.get('stage', '')
+            struct = h.get('structure', '')
+            
+            if sig == 'sell':
+                plan['holdings_action'].append({
+                    'stock': name, 'action': '卖出', 'reason': f'{struct}·{stage}', 'priority': '高'
+                })
+            elif sig == 'buy':
+                buy_pt = h.get('buy_point', '买点')
+                plan['holdings_action'].append({
+                    'stock': name, 'action': f'执行{buy_pt}', 'reason': f'{struct}·{stage}', 'priority': '高'
+                })
+            elif stage == '加速':
+                plan['holdings_action'].append({
+                    'stock': name, 'action': '持有·关注止盈', 'reason': f'{struct}·{stage}，关注放量滞涨/加速变缓', 'priority': '中'
+                })
+            elif stage == '缩量整理':
+                plan['holdings_action'].append({
+                    'stock': name, 'action': '持有·可加仓', 'reason': f'{struct}·{stage}，供应枯竭等待放量', 'priority': '中'
+                })
+            elif stage == '上行':
+                plan['holdings_action'].append({
+                    'stock': name, 'action': '持有不动', 'reason': f'{struct}·{stage}，趋势健康', 'priority': '低'
+                })
+            elif stage == '滞涨':
+                plan['holdings_action'].append({
+                    'stock': name, 'action': '警惕·考虑减仓', 'reason': f'{struct}·{stage}，EMA10走平', 'priority': '高'
+                })
+            elif stage == '转弱':
+                plan['holdings_action'].append({
+                    'stock': name, 'action': '关注·可换股', 'reason': f'{struct}·{stage}，EMA10拐头向下', 'priority': '高'
+                })
+            elif stage == '区间底部':
+                plan['holdings_action'].append({
+                    'stock': name, 'action': '支撑位·可加仓', 'reason': f'{struct}·{stage}，区底企稳', 'priority': '中'
+                })
+            elif stage == '区间顶部':
+                plan['holdings_action'].append({
+                    'stock': name, 'action': '压力位·注意减仓', 'reason': f'{struct}·{stage}，区顶受阻', 'priority': '高'
+                })
+            elif stage == '区间中段':
+                plan['holdings_action'].append({
+                    'stock': name, 'action': '等待方向', 'reason': f'{struct}·{stage}，无明确方向', 'priority': '低'
+                })
 
-    if market_cycle.get('score', 0) >= 1:
-        plan['risk_reminder'] = '大盘偏波峰，控制仓位，收紧止盈'
-    elif market_cycle.get('score', 0) < 0:
-        plan['risk_reminder'] = '大盘偏波谷，积极寻找买点，止损后换股补回'
-    else:
-        plan['risk_reminder'] = '大盘波中，按正常节奏交易，不主跌维持重仓'
+    # 买点优先级（主线突破 > 主线中继 > 非主线）
+    if buy_signals_review:
+        for s in buy_signals_review:
+            is_main = s.get('sector', '') in [l.split('(')[0] for l in plan['main_lines']]
+            pm1 = s.get('profit_model1', False)
+            priority = 0
+            if is_main and s['buy_point'] == '突破买点' and pm1: priority = 1
+            elif is_main and s['buy_point'] == '突破买点': priority = 2
+            elif is_main and s['buy_point'] == '中继买点' and pm1: priority = 3
+            elif is_main and s['buy_point'] == '中继买点': priority = 4
+            elif s['buy_point'] == '突破买点': priority = 5
+            else: priority = 6
+            plan['buy_priority'].append({
+                'name': s['name'], 'code': s['code'], 'sector': s.get('sector', ''),
+                'buy_point': s['buy_point'], 'is_main': is_main,
+                'profit_model1': pm1, 'priority': priority,
+                'change': s.get('change', 0),
+            })
+        plan['buy_priority'].sort(key=lambda x: x['priority'])
+        # 同级内部按change降序（涨幅优先）
+        plan['buy_priority'] = sorted(plan['buy_priority'], key=lambda x: (x['priority'], -x['change']))
+        plan['buy_priority'] = plan['buy_priority'][:10]  # TOP10
+
+    # 风险项
+    # ① 大盘风险
+    score = market_cycle.get('score', 0)
+    if score >= 0.8:
+        plan['risk_items'].append('🔴 大盘偏波峰，控制总仓位，收紧止盈')
+    elif score <= -0.5:
+        plan['risk_items'].append('🟢 大盘偏波谷，积极寻找买点机会')
+    
+    # ② 个股风险
+    if holdings_review:
+        sell_stocks = [h for h in holdings_review if h.get('signal') == 'sell']
+        weak_stocks = [h for h in holdings_review if h.get('stage') in ('转弱', '滞涨') and h.get('signal') != 'sell']
+        accel_stocks = [h for h in holdings_review if h.get('stage') == '加速']
+        
+        if sell_stocks:
+            names = '、'.join([h['name'] for h in sell_stocks])
+            plan['risk_items'].append(f'🔴 {names} 触发卖出信号，严格按计划执行')
+        if weak_stocks:
+            names = '、'.join([h['name'] for h in weak_stocks])
+            plan['risk_items'].append(f'⚠️ {names} 趋势转弱/滞涨，关注止损位')
+        if accel_stocks:
+            names = '、'.join([h['name'] for h in accel_stocks])
+            plan['risk_items'].append(f'📈 {names} 处于加速阶段，关注左侧止盈信号')
+
+    # ③ 仓位集中度风险
+    if holdings_review and len(holdings_review) <= 3:
+        plan['risk_items'].append(f'💡 持仓集中度较高（仅{len(holdings_review)}只），考虑分散风险')
+    elif holdings_review and len(holdings_review) >= 10:
+        plan['risk_items'].append(f'💡 持仓较为分散（{len(holdings_review)}只），可聚焦主线精简持仓')
+
+    if not plan['risk_items']:
+        plan['risk_items'].append('✅ 整体风险可控，按正常节奏交易')
 
     return plan
 
@@ -805,7 +914,8 @@ def generate_daily_review(date_str=None):
 
     # ⑤ 每日交易计划
     print("[3L复盘] ⑤ 生成交易计划...")
-    trading_plan = generate_trading_plan(market_cycle, mainline_data, logic_classify, timing_signals, holdings)
+    trading_plan = generate_trading_plan(market_cycle, mainline_data, logic_classify, timing_signals, holdings,
+                                         holdings_review=holdings_review, buy_signals_review=buy_signals_review)
 
     # 组装
     review = {

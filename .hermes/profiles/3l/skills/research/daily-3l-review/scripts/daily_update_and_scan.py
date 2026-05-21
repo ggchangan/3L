@@ -145,16 +145,22 @@ def scan_buy_points(data):
     # 获取大盘位置（读取已有review数据或默认波中）
     market_position = ''
     main_lines_list = []
-    for try_date in [last_date.replace('-', ''), last_date]:
-        p = f'/home/ubuntu/data/3l/review_output/{try_date}/review.json'
-        if os.path.isfile(p):
-            try:
-                with open(p) as _f:
-                    _rd = json.load(_f)
-                market_position = _rd.get('market', {}).get('position', '')
-                main_lines_list = [l['name'] for l in _rd.get('mainline', {}).get('lines', [])]
-            except:
-                pass
+    for try_raw in [last_date.replace('-', ''), last_date]:
+        try_hyphen = try_raw[:4] + '-' + try_raw[4:6] + '-' + try_raw[6:8] if len(try_raw) == 8 else try_raw
+        for p in [
+            f'/home/ubuntu/data/3l/review_output/{try_raw}/review.json',
+            f'/home/ubuntu/www/private/review_archive/{try_hyphen}.json',
+        ]:
+            if os.path.isfile(p):
+                try:
+                    with open(p) as _f:
+                        _rd = json.load(_f)
+                    market_position = _rd.get('market', {}).get('position', '')
+                    main_lines_list = [l['name'] for l in _rd.get('mainline', {}).get('lines', [])]
+                except:
+                    pass
+                break
+        if market_position:
             break
     if not market_position:
         # 没有review数据时从K线估算
