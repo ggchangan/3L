@@ -124,7 +124,11 @@ cd /home/ubuntu/www && python3 generate_review_data.py {date}
 
 **原则：cron job 处理全量端到端流程，手动操作只用于调试。** 手动跑 `generate_review_data.py` 时也会触发归档和每日成果PDF生成，因此手动测试时不需要额外步骤。
 
-## 关键坑（Pitfalls）
+## Pitfalls
+
+- ❌ **`generate_review_data.py` 直接传日期，不要 `--date` 前缀** — `sys.argv[1]` 直接取值，不是 argparse。调用方式：`python3 generate_review_data.py 2026-05-21`。
+- ❌ **`latest_scan_result.json` 必须含 `flags` 字段** — 否则 `generate_review_data.py` L635 报 KeyError 回退自扫，产生不一致结果。每条结果中 `flags` 值等于 `buy_type`。
+- ❌ **数据同步检查（2026-05-22 新增）** — `all_stocks_60d.json` 可能缺失自选股（曾缺失77只）。重新生成复盘前验证 watchlist 与 cache 一致性。
 
 ### ⚠️ 持仓不加分页（2026-05-21 用户明确）
 

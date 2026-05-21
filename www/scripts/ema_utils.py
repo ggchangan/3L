@@ -32,28 +32,61 @@ def get_ema_arrangement(closes):
     return '--'
 
 def get_structure(closes):
-    """基于收盘价极值位置判断结构（2026-05-22 改回收盘价）
+    """基于EMA10极值位置+三层对称校验判断结构（最终方案 2026-05-22）
     
-    历史：2026-05-20 第4轮定稿已确定结构用收盘价（非滞后），
-    但代码一直误用EMA10。2026-05-22 润泽科技案例暴露：EMA10滞后
-    导致高位回调股票误判为上涨趋势。正式改回收盘价极值位置法。
-    
-    收盘价反映真实价格位置，EMA10留做阶段判定（反映动能速度）。
+    ① EMA10极值位置法（基础，保留平滑性）
+    ② 对称末端校验（解决EMA10滞后问题）
+       - 上涨降级：末3根EMA10连续下降+close跌破 → 区间震荡
+       - 下降升级：末3根EMA10连续上升+close突破 → 区间震荡
+    ③ 区间→下降升级：
+       - 收盘持续新低(max前5,min后3) + EMA10连续下降
+       - +20日跌幅>3%（排除轻微回调）+60日涨幅<50%（排除暴涨回调）
     """
     if len(closes) < 15:
         return '--'
-    c15 = closes[-15:]
-    n = len(c15)
-    max_pos = max(range(n), key=lambda i: c15[i])
-    min_pos = min(range(n), key=lambda i: c15[i])
-    first_q = n // 4
-    last_q = n - 1 - n // 4
-    if max_pos >= last_q and min_pos <= first_q:
-        return '上涨趋势'
-    elif min_pos >= last_q and max_pos <= first_q:
-        return '下降趋势'
+    
+    # ① 基础：EMA10极值位置法
+    e10 = ema_list(closes, 10)[-15:]
+    n = len(e10)
+    fq = n // 4
+    lq = n - 1 - n // 4
+    max_pos = max(range(n), key=lambda i: e10[i] if e10[i] is not None else -1e9)
+    min_pos = min(range(n), key=lambda i: e10[i] if e10[i] is not None else 1e9)
+    
+    if max_pos >= lq and min_pos <= fq:
+        base = '上涨趋势'
+    elif min_pos >= lq and max_pos <= fq:
+        base = '下降趋势'
     else:
-        return '区间震荡'
+        base = '区间震荡'
+    
+    # ② 对称末端校验
+    c15 = closes[-15:]
+    l3 = [v for v in e10[-3:] if v is not None]
+    
+    # 上涨降级：EMA10末端连续下降+close跌破
+    if base == '上涨趋势':
+        if len(l3) == 3 and l3[0] > l3[1] > l3[2] and closes[-1] < l3[-1]:
+            return '区间震荡'
+    
+    # 下降升级：EMA10末端连续上升+close突破
+    if base == '下降趋势':
+        if len(l3) == 3 and l3[0] < l3[1] < l3[2] and closes[-1] > l3[-1]:
+            return '区间震荡'
+    
+    # ③ 区间→下降：收盘新低+方向确认
+    if base == '区间震荡':
+        cmx = max(range(15), key=lambda i: c15[i])
+        cmn = min(range(15), key=lambda i: c15[i])
+        if (cmn >= 12 and cmx <= 5
+            and len(l3) == 3 and l3[0] > l3[1] > l3[2]
+            and closes[-1] < l3[-1]):
+            chg_20d = (closes[-1] / closes[-21] - 1) * 100 if len(closes) >= 21 else 0
+            chg_60d = (closes[-1] / closes[0] - 1) * 100 if len(closes) >= 60 else 0
+            if chg_20d < -3 and chg_60d < 50:
+                return '下降趋势'
+    
+    return base
 
 def get_stage(closes, structure=None, highs=None, lows=None, support_level=None, resistance_level=None, volumes=None):
     """基于EMA10半段斜率判断阶段
