@@ -12,8 +12,8 @@ description: >-
 |:-:|------|--------|
 | STEP 1 | 大盘周期判定 | 存档 `market` 字段 |
 | STEP 2 | 最强动量（4 tab） | 实时API |
-| STEP 3 | 最强逻辑 | 实时 `/api/industry-map` |
-| STEP 4 | **持仓个股复盘** | 存档 `holdings_review` | 诊断卡（操作→结构→阶段→买点(仅buy)→📊），按结构排序 |
+| STEP 3 | **最强逻辑** | 实时 `/api/industry-map` | 行业分类地图，每页10个（PER_PAGE=10） |
+| STEP 4 | **持仓个股复盘** | 存档 `holdings_review` | 诊断卡（操作→结构→阶段→买点(仅buy)→📊），按结构排序，**全部展开不分页**（只11只无需分页） |
 | STEP 5 | **自选股买点信号** | 存档 `buy_signals_review` | 方向Tab分组+分页+与第④部分同判定逻辑 |
 | PLAN | 每日交易计划 | 综合前5项 |
 
@@ -60,6 +60,8 @@ cp /home/ubuntu/www/review_charts/sz000985.svg /home/ubuntu/www/review_charts/zz
 python3 /home/ubuntu/.hermes/profiles/3l/skills/research/daily-3l-review/scripts/batch_gen_charts.py
 ```
 
+**⚡ SVG自动生成已整合：** `daily_update_and_scan.py` 的 `scan_buy_points()` 在扫描完成后自动调用 `batch_gen_charts.py`。`generate_review_data.py` 在保存复盘后也自动调用。日常运行 Step 1 或 Step 4 即可连带生成SVG，无需手动 Step 3。
+
 ### Step 4: 生成复盘数据
 
 ```bash
@@ -73,6 +75,14 @@ cd /home/ubuntu/www && python3 generate_review_data.py {date}
 见 `/home/ubuntu/.hermes/profiles/3l/scripts/generate_daily_review.sh`
 
 ## 关键坑（Pitfalls）
+
+### ⚠️ 持仓不加分页（2026-05-21 用户明确）
+
+STEP 4 持仓个股复盘**只有11只左右，不需要分页**。前端已移除所有分页逻辑（`pgStockPage` / `renderStockPage` / `perPage`），直接 `stocks.map(signalStockCard)` 全部展开。底部只显示"共N只持仓"。
+
+### ⚠️ SVG图表自动生成（2026-05-21 整合）
+
+`daily_update_and_scan.py` 的 `scan_buy_points()` 在保存扫描结果后自动调用 `batch_gen_charts.py`（`subprocess.run`）。`generate_review_data.py` 也在保存复盘数据后自动触发。**日常只需运行 Step 1 或 Step 4**，SVG图会自动更新。
 
 ### ⚠️ `/api/review/generate` 路由不可达（2026-05-21 发现）
 
