@@ -169,17 +169,15 @@ def judge_peak_valley(klines):
 
     # --- pk_score / vl_score ---
     pk_score = 0
-    if peak_turn: pk_score += 1
-    if bias20 > 1.5: pk_score += 1
-    if peak_sig >= 1: pk_score += 1
-    if bias_chg_3d < 0: pk_score += 1
+    pk_conds = [peak_turn, bias20 > 1.5, peak_sig >= 1, bias_chg_3d < 0]
+    for c in pk_conds:
+        if c: pk_score += 1
     if bias20 > 8: pk_score = max(pk_score, 3)
 
     vl_score = 0
-    if valley_turn: vl_score += 1
-    if bias20 < -1.5: vl_score += 1
-    if valley_sig >= 1: vl_score += 1
-    if bias_chg_3d > 0: vl_score += 1
+    vl_conds = [valley_turn, bias20 < -1.5, valley_sig >= 1, bias_chg_3d > 0]
+    for c in vl_conds:
+        if c: vl_score += 1
     if bias20 < -8: vl_score = max(vl_score, 3)
 
     # --- 5档判定 + 仓位策略 ---

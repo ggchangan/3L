@@ -127,6 +127,28 @@ cd /home/ubuntu/www && python3 generate_review_data.py {date}
 ## Pitfalls
 
 - ❌ **`generate_review_data.py` 直接传日期，不要 `--date` 前缀** — `sys.argv[1]` 直接取值，不是 argparse。调用方式：`python3 generate_review_data.py 2026-05-21`。
+- ❌ **大盘判定函数已改名：`judge_market_cycle()` → `judge_peak_valley()`**（2026-05-22 改为V5置信度打分方案）。新函数需要≥70条K线，`fetch_index_klines`已改为120天。### ⚠️ V5波峰波谷条件展示方式（2026-05-22 用户反馈→修正）
+
+`updateMarketUI()` 中展示V5判断结果时，**不要显示抽象数字（pk_score/vl_score），要用条件打勾/打叉+实际数值展示。**
+
+**踩坑：** 初版展示为`波峰置信度: 1/4分 趋势转折+位置+信号+掉头`，用户反馈\"别人不知道置信度、乖离率这些很难理解\"。
+
+**修正后方案** — 4个条件独立打勾/打叉，每个条件显示具体数值+要求：
+
+```
+波中          ← 当前位置名
+波峰  ⚪ → — 无波峰信号     ← 波峰/波谷总览，⚪/🟡/🟢表示强度
+波谷  ⚪ → — 无波谷信号
+────────────────────────
+①涨不动了 ❌  前期bias上升0.3%+近5日走平-0.5%
+②涨了一段 ❌  MA20乖离率-1.1%(需>+1.5%)
+③出货痕迹 ❌  无量价异常信号(peak_sig=0/4)
+④开始跌了 ❌  乖离率3日变化-2.2%(需<0)
+```
+
+每个条件显示实际数值+条件要求（括号内）。用户确认长描述比短描述更容易理解。
+
+**重要：updateMarketUI() 函数顶部已有 `const pos = document.getElementById('positionLevel')`，后面展示条件时绝不能再 `const pos = data.position` 重复声明同一常量名。** 2026-05-22 因此导致整页JS崩溃（加载中卡死）。修复：用 `const posName` 代替。
 - ❌ **`latest_scan_result.json` 必须含 `flags` 字段** — 否则 `generate_review_data.py` L635 报 KeyError 回退自扫，产生不一致结果。每条结果中 `flags` 值等于 `buy_type`。
 - ❌ **数据同步检查（2026-05-22 新增）** — `all_stocks_60d.json` 可能缺失自选股（曾缺失77只）。重新生成复盘前验证 watchlist 与 cache 一致性。
 
@@ -1177,7 +1199,7 @@ const res = await fetch(`/api/stock-analysis?q=${q}`);
 ## 关联 skill
 
 - `main-line-judgment` — buy_point_detection 模块来源
-- `market-peak-trough` — 大盘周期判定
+- `market-peak-trough` — 大盘周期判定（V5: `judge_peak_valley()`, 基于乖离率趋势转折+置信度打分）
 - `trading/daily-3l-monitor` — 盘中实时盯盘
 - `a-stock-data-sources` — 数据源详情
 - `trading/ema10-trend-judgment` — 结构/阶段判断（`scripts/ema_utils.py`）

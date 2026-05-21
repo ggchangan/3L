@@ -174,6 +174,18 @@ s1<0, s2>0       → 📈 转强（整体向下但近期已拐头向上）
 | `references/structure-judgment-flow-description.md` | 流程图说明（SVG/PNG位于 `www/files/`） |
 | `references/2026-05-22-structure-hybrid-final.md` | 混合方案终稿参数来源与验证 |
 | `references/2026-05-22-structure-lag-fix-discussion.md` | 滞后问题讨论记录（润泽科技→收盘价法→混合方案） |
+| `references/2026-05-22-symmetrical-check-verification.md` | 对称校验全量验证数据+14个回归测试案例 |
+
+## 回归测试
+
+**文件位置：** `www/tests/test_structure_judgment.py`
+
+运行全部测试：
+```bash
+cd /home/ubuntu/www && python3 -m pytest tests/test_structure_judgment.py tests/test_buy_point_detection.py -v
+```
+
+14个测试覆盖全部讨论过的边界案例（详见 `references/2026-05-22-symmetrical-check-verification.md`）。修改 `get_structure()` 或 `get_stage()` 后必须先跑此测试。
 
 ## 代码位置
 

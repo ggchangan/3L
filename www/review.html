@@ -390,11 +390,11 @@
         // V5波峰波谷判定 — 条件明细
         const pk = data.pk_score || 0;
         const vl = data.vl_score || 0;
-        const pos = data.position || '波中';
+        const posName = data.position || '波中';
         const tbody = document.getElementById('scoreDetailBody');
         tbody.innerHTML = `
           <tr><td colspan="3" style="font-size:13px;color:#4ecdc4;font-weight:bold;padding-bottom:8px;">
-            ${pos}
+            ${posName}
           </td></tr>
           <tr>
             <td style="color:#888;width:50px;">波峰</td>
