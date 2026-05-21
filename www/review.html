@@ -573,36 +573,15 @@
         container.innerHTML = html;
     }
 
-    // ====== ⑤ 持仓个股复盘 ======
-    var pgStockPage = 1;
-    var pgStockData = [];
+    // ====== ⑤ 持仓个股复盘（不分页） ======
     function updateStocksUI(stocks) {
         const container = document.getElementById('stockReviewList');
         if (!stocks || stocks.length === 0) {
             container.innerHTML = '<div class="empty">暂无持仓数据</div>';
             return;
         }
-        pgStockData = stocks;
-        pgStockPage = 1;
-        renderStockPage();
-    }
-    function renderStockPage() {
-        const container = document.getElementById('stockReviewList');
-        const perPage = 10;
-        const total = pgStockData.length;
-        const totalPages = Math.ceil(total / perPage) || 1;
-        const start = (pgStockPage - 1) * perPage;
-        const end = Math.min(start + perPage, total);
-        const pageData = pgStockData.slice(start, end);
-        let html = pageData.map((s, i) => signalStockCard(s, start + i + 1)).join('');
-        if (totalPages > 1) {
-            html += '<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:10px;font-size:12px;">';
-            html += '<span style="color:#888;">共' + total + '只</span>';
-            if (pgStockPage > 1) html += '<a href="javascript:;" onclick="pgStockPage=' + (pgStockPage-1) + ';renderStockPage();return false;" style="color:#4ecdc4;text-decoration:none;">‹ 上一页</a>';
-            html += '<span style="color:#e94560;font-weight:600;">' + pgStockPage + '/' + totalPages + '</span>';
-            if (pgStockPage < totalPages) html += '<a href="javascript:;" onclick="pgStockPage=' + (pgStockPage+1) + ';renderStockPage();return false;" style="color:#4ecdc4;text-decoration:none;">下一页 ›</a>';
-            html += '</div>';
-        }
+        let html = stocks.map((s, i) => signalStockCard(s, i + 1)).join('');
+        html += '<div style="margin-top:6px;text-align:right;color:#555;font-size:11px;">共' + stocks.length + '只持仓</div>';
         container.innerHTML = html;
     }
 
@@ -947,7 +926,7 @@
                 
                 const sorted = Object.entries(industryGroups).sort((a, b) => b[1].length - a[1].length);
                 const TOTAL = sorted.length;
-                const PER_PAGE = 15;
+                const PER_PAGE = 10;
                 let pg = 1;
                 
                 function renderLogicPage(page) {

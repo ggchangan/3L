@@ -829,6 +829,20 @@ def generate_daily_review(date_str=None):
     # 同步到 review_data.json（server读取源）
     save_json(os.path.join(WWW_DIR, 'private', 'review_data.json'), review)
     print(f"[3L复盘] ✅ 已保存 {date_str} 复盘数据")
+
+    # 补充生成买点信号的关键点图（如果当天有新的扫描结果）
+    try:
+        bp_script = os.path.join(os.path.dirname(__file__), '..', '.hermes', 'profiles', '3l', 'skills',
+                                  'research', 'daily-3l-review', 'scripts', 'batch_gen_charts.py')
+        if not os.path.exists(bp_script):
+            bp_script = '/home/ubuntu/.hermes/profiles/3l/skills/research/daily-3l-review/scripts/batch_gen_charts.py'
+        if os.path.isfile(bp_script):
+            import subprocess
+            subprocess.run([sys.executable, bp_script], timeout=120, capture_output=True)
+            print("[3L复盘] 🎨 关键点图已更新")
+    except Exception as e:
+        print(f"[3L复盘] 🎨 生成关键点图跳过: {e}")
+
     return review
 
 def update_historical_archives():

@@ -74,6 +74,25 @@ cd /home/ubuntu/www && python3 generate_review_data.py {date}
 
 ## 关键坑（Pitfalls）
 
+### ⚠️ `/api/review/generate` 路由不可达（2026-05-21 发现）
+
+`server.py` 中 `/api/review/generate` 生成API 定义在 line 221，但被 line 155 的 `/api/review/` 通用匹配先拦截：
+
+```python
+# line 155 — 先匹配，拦截所有 /api/review/ 后的路径
+if path.startswith('/api/review/') and len(path) > 12:
+    date_str = path[12:]  # 'generate' → 查 generate.json → 404
+    ...
+
+# line 221 — 永远执行不到的代码
+if path == '/api/review/generate':
+    ...
+```
+
+**修复方法：** 将 `/api/review/generate` 的 `if` 判断移到 line 155 的 catch-all `if path.startswith('/api/review/')` **之前**。`generate` 端点必须优先匹配，因为 `generate` 不是合法的存档日期格式。
+
+**临时绕过：** 直接命令行运行 `cd /home/ubuntu/www && python3 generate_review_data.py {date}`。
+
 ### ⚠️ server.py 被SYN flood/连接风暴打死（无自动恢复）
 
 `server.py` 使用 `ThreadingHTTPServer`（每个请求一个线程）。2026-05-20 19:04 内核日志显示：
@@ -149,7 +168,36 @@ holdings_review.append({
 const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--';
 ```
 
-### buy_signals 数据源优先级（2026-05-21 修复）\\n\\n`generate_review_data.py` 加载 buy_signals 的优先级：\\n\\n1. **优先**从 `latest_scan_result.json` 读取（已应用最新阈值+市场位置）\\n2. 回退到 `existing` 存档的 `buy_signals` 字段\\n\\n```python\\n# generate_review_data.py — 每日扫描结果优先\\nlatest_scan_path = '/home/ubuntu/data/3l/latest_scan_result.json'\\nif os.path.isfile(latest_scan_path):\\n    with open(latest_scan_path) as _f:\\n        _scan = json.load(_f)\\n    _scan_results = _scan.get('results', [])\\n    if _scan_results:\\n        buy_signals = [...]  # 格式转换\\n```\\n\\n**市场位置传入链路（2026-05-21 新增）：**\\n当触发 fallback 扫描路径（`format_buy_signals()`）时，`market_cycle.get('position')` 作为 `market_position` 参数传入，使扫描阈值与当前大盘环境匹配。\\n\\n**坑：** 早期版本仅从 existing 存档加载 buy_signals，若存档有数据则跳过重新扫描。导致 `daily_update_and_scan.py` 的阈值或数据更新无法反映到复盘页。**读 `latest_scan_result.json` 修复了这个问题。**\\n\\n**daily_update_and_scan.py 独立扫描时的市场位置获取（2026-05-21）：**\\n- 优先读取已有 review 存档的 `market.position`\\n- 无存档时从 000985 中证全指K线估算（收盘价/MA20偏离）\\n- 估算失败时默认波中（88%阈值）\\n- 输出：控制台打印 `大盘位置: 波中偏上  缩量阈值: <85%`\\n
+### buy_signals 数据源优先级（2026-05-21 修复）
+
+`generate_review_data.py` 加载 buy_signals 的优先级：
+
+1. **优先**从 `latest_scan_result.json` 读取（已应用最新阈值+市场位置）
+2. 回退到 `existing` 存档的 `buy_signals` 字段
+
+```python
+# generate_review_data.py — 每日扫描结果优先
+latest_scan_path = '/home/ubuntu/data/3l/latest_scan_result.json'
+if os.path.isfile(latest_scan_path):
+    with open(latest_scan_path) as _f:
+        _scan = json.load(_f)
+    _scan_results = _scan.get('results', [])
+    if _scan_results:
+        buy_signals = [...]  # 格式转换
+```
+
+**市场位置传入链路（2026-05-21 新增）：**
+当触发 fallback 扫描路径（`format_buy_signals()`）时，`market_cycle.get('position')` 作为 `market_position` 参数传入，使扫描阈值与当前大盘环境匹配。
+
+**坑：** 早期版本仅从 existing 存档加载 buy_signals，若存档有数据则跳过重新扫描。导致 `daily_update_and_scan.py` 的阈值或数据更新无法反映到复盘页。**读 `latest_scan_result.json` 修复了这个问题。**
+
+**daily_update_and_scan.py 独立扫描时的市场位置获取（2026-05-21）：**
+- 优先读取已有 review 存档的 `market.position`
+- 无存档时从 000985 中证全指K线估算（收盘价/MA20偏离）
+- 估算失败时默认波中（88%阈值）
+- 输出：控制台打印 `大盘位置: 波中偏上  缩量阈值: <85%`
+
+### 股票名称缺失
 
 ### 股票名称缺失
 `all_stocks_60d.json` 首条必须含 `name` 字段，否则 `format_buy_signals` 回退为代码。
@@ -294,11 +342,26 @@ holdings_review.sort(key=lambda x: struct_priority.get(x['structure'], 3))
 
 `updateBuySignalsUI()` 渲染 `buy_signals_review`，与第④部分**使用同一 `signalStockCard()` 函数**，判定逻辑完全一致。
 
-**判定逻辑（2026-05-21 重构：完全基于系统B—EMA10趋势分析）：**\n```\nbuy_signals[] ← 来自 latest_scan_result.json（每日扫描结果，含market_position参数）\n  → stock_cache[code] 获取 structure/stage/ema/vol_analysis（系统B分析结果）\n  → 区间震荡 → 关键点支撑重算stage\n  → judge_signal(structure, stage, buy_point) → signal (仅buy展示)\n```\n\n**中继买点判定（基于3L教材定义，非机械条件，2026-05-21 全面重构）：**\n- 上涨趋势 + 缩量(vol<MA5×阈值) → 供应衰竭，顺大势逆小势\n- 区间底部 + 缩量(vol<MA5×阈值) → 区底缩量企稳\n- **缩量阈值动态调整：** 波峰/波上<85%, 波中<80%(默认), 波下<75%, 波谷<70%\n  - 输入：`market_position` 参数传入 `detect_buy_point()`\n  - 函数：`_shrink_threshold(market_position)` 查表返回\n  - 放量阈值同理：`_surge_threshold(market_position)`
+**判定逻辑（2026-05-21 重构：完全基于系统B—EMA10趋势分析 + 3层阈值）：**
+```
+buy_signals[] ← 来自 latest_scan_result.json（每日扫描结果，含market_position+main_lines参数）
+  → stock_cache[code] 获取 structure/stage/ema/vol_analysis（系统B分析结果）
+  → 区间震荡 → 关键点支撑重算stage
+  → judge_signal(structure, stage, buy_point) → signal (仅buy展示)
+```
+
+**中继买点判定（2026-05-21 3层阈值框架）：**
+- 第1层 大盘定基准：market_position → 缩量基准(85%/80%/75%/70%)
+- 第2层 板块调系数：main_lines → 主线×1.05 / 非主线×0.95
+- 第3层 个股定类型：上涨趋势+缩量 → 中继买点 / 区底+缩量 → 中继买点
+- 缩量阈值 = 基准(大盘) × 板块系数，放量阈值 = 基准 ÷ 板块系数
+- 函数：`_shrink_threshold(market_position, is_main_line)` / `_surge_threshold(...)`
+- 扫描链路：`daily_update_and_scan` → 从review.json读market_position+main_lines_list → `detect_buy_point(market_position=, main_lines=)`
 
 **突破买点判定：**
-- 上涨趋势 + 放量(vol>MA5×130%)突破前10日高 → 需求强劲突破平台
-- 区间顶部 + 放量(vol>MA5×130%)突破前10日高 → 区顶放量突破
+- 上涨趋势 + 放量突破前10日高 → 需求强劲突破平台
+- 区间顶部 + 放量突破前10日高 → 区顶放量突破
+- 放量阈值同样受大盘+板块动态调整
 
 **未通过条件不展示买点：** 中微公司(上涨趋势但量能正常104%)→ 无买点 ✅，沪硅产业(区间震荡不在底部)→ 无买点 ✅
 

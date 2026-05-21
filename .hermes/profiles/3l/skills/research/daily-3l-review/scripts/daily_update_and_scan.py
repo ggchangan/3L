@@ -227,6 +227,16 @@ def scan_buy_points(data):
     with open(OUTPUT_PATH, "w") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
     print(f"\n💾 结果已保存 → {OUTPUT_PATH}")
+
+    # 生成关键点SVG图
+    try:
+        print("\n🎨 生成关键点图表...")
+        import subprocess
+        bsc = os.path.join(os.path.dirname(__file__), 'batch_gen_charts.py')
+        subprocess.run([sys.executable, bsc], timeout=120)
+    except Exception as e:
+        print(f"  ⚠️ 图表生成失败: {e}")
+
     return results
 
 
