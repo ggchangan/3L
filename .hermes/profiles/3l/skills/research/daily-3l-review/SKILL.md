@@ -202,10 +202,7 @@ if os.path.isfile(latest_scan_path):
 **坑：** 早期版本仅从 existing 存档加载 buy_signals，若存档有数据则跳过重新扫描。导致 `daily_update_and_scan.py` 的阈值或数据更新无法反映到复盘页。**读 `latest_scan_result.json` 修复了这个问题。**
 
 **daily_update_and_scan.py 独立扫描时的市场位置获取（2026-05-21）：**
-- 优先读取已有 review 存档的 `market.position`
-- 无存档时从 000985 中证全指K线估算（收盘价/MA20偏离）
-- 估算失败时默认波中（88%阈值）
-- 输出：控制台打印 `大盘位置: 波中偏上  缩量阈值: <85%`
+- 优先读取已有 review 存档的 `market.position`。**注意路径：** 存档在 `private/review_archive/2026-05-21.json`（YYYY-MM-DD格式），不是 `review_output/{date}/review.json`。`daily_update_and_scan.py` 已修复为两路径都尝试，YYYYMMDD转YYYY-MM-DD。\n- 无存档时从 000985 中证全指K线估算（收盘价/MA20偏离）\n- 估算失败时默认波中（80%阈值，非主线0.80系数下=64%）\n- 输出：控制台打印 `大盘位置: 波中偏上 缩量阈值: <89%  主线板块: 半导体, ...`
 
 ### 股票名称缺失
 
@@ -389,7 +386,7 @@ buy_signals[] ← 来自 latest_scan_result.json（每日扫描结果，含marke
 
 **中继买点判定（2026-05-21 3层阈值框架）：**
 - 第1层 大盘定基准：market_position → 缩量基准(85%/80%/75%/70%)
-- 第2层 板块调系数：main_lines → 主线×1.05 / 非主线×0.95
+- 第2层 板块调系数：main_lines → 主线×1.05 / 非主线×0.80
 - 第3层 个股定类型：上涨趋势+缩量 → 中继买点 / 区底+缩量 → 中继买点
 - 缩量阈值 = 基准(大盘) × 板块系数，放量阈值 = 基准 ÷ 板块系数
 - 函数：`_shrink_threshold(market_position, is_main_line)` / `_surge_threshold(...)`
