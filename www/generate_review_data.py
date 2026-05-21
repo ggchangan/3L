@@ -89,116 +89,169 @@ def fetch_index_klines(days=60):
         print(f"[WARN] 获取K线失败: {e}")
         return []
 
-# ====== ① 大盘周期判定 ======
+# ====== ① 大盘周期判定（V5：基于供需本质的置信度打分） ======
 
-def judge_market_cycle(klines, quote=None):
-    """4维度评分判定大盘波峰/波谷/波中"""
-    if len(klines) < 30:
-        return {'score': 0, 'position': '数据不足', 'strategy': '正常交易',
-                'position_pct': '半仓', 'build_per_stock_pct': 5}
+def judge_peak_valley(klines):
+    """
+    三维度大盘波峰波谷判定
+    基于乖离率趋势转折 + 乖离率位置 + 量价信号
+    返回 5档：偏波峰/波中偏上/波中/波中偏下/偏波谷
+    """
+    if len(klines) < 70:
+        return _fallback_cycle(klines)
 
-    # 维度1: 均线位置 (40%)
-    ma20 = sum(k['close'] for k in klines[-20:]) / 20
-    ma60 = sum(k['close'] for k in klines[-60:]) / 60
-    cur = klines[-1]['close']
-    ma_score = 0
-    if cur > ma20 > ma60:
-        ma_score = 2  # 多头排列 → 偏波峰
-    elif cur > ma20 and ma20 < ma60:
-        ma_score = 0  # 短期突破但长期压制 → 波中
-    elif cur < ma20 and ma20 > ma60:
-        ma_score = -1  # 短期跌破 → 偏波谷
-    elif cur < ma20 < ma60:
-        ma_score = -2  # 空头排列
-    else:
-        ma_score = -1
+    # 构建DataFrame
+    import pandas as pd
+    import numpy as np
 
-    # 维度2: 成交量 (30%) — 取20日均量对比60日均量
-    v20 = sum(k['volume'] for k in klines[-20:]) / 20
-    v60 = sum(k['volume'] for k in klines[-60:]) / 60
-    vol_ratio = v20 / v60 if v60 > 0 else 1
-    if vol_ratio > 1.8:
-        vol_score = 2  # 放量高潮
-    elif vol_ratio > 1.2:
-        vol_score = 1  # 温和放量
-    elif vol_ratio > 0.8:
-        vol_score = 0  # 正常
-    else:
-        vol_score = -1  # 缩量低迷
+    df = pd.DataFrame(klines)
+    for ma in [5, 10, 20, 60]:
+        df[f'MA{ma}'] = df['close'].rolling(ma).mean()
+        df[f'bias_{ma}'] = (df['close'] - df[f'MA{ma}']) / df[f'MA{ma}'] * 100
+    df['bias20_chg_3d'] = df['bias_20'].diff(3)
+    df['bias20_chg_5d'] = df['bias_20'].diff(5)
+    df['vol_ma20'] = df['volume'].rolling(20).mean()
 
-    # 维度3: 近期涨跌幅 (20%)
-    if len(klines) >= 10:
-        chg_10d = (klines[-1]['close'] - klines[-11]['close']) / klines[-11]['close'] * 100
-    else:
-        chg_10d = 0
-    if chg_10d > 8:
-        trend_score = 2
-    elif chg_10d > 3:
-        trend_score = 1
-    elif chg_10d > -3:
-        trend_score = 0
-    elif chg_10d > -8:
-        trend_score = -1
-    else:
-        trend_score = -2
+    i = len(df) - 1
+    r = df.iloc[i]
+    if pd.isna(r['bias_20']) or pd.isna(r['bias20_chg_5d']):
+        return _fallback_cycle(klines)
 
-    # 维度4: 波动率 (10%) — 近期振幅
-    if len(klines) >= 10:
-        amp = max((k['high'] - k['low']) / k['low'] * 100 for k in klines[-10:])
-        if amp > 6:
-            amp_score = 1  # 高波动
-        elif amp > 3:
-            amp_score = 0  # 正常
-        else:
-            amp_score = -1  # 低波动
-    else:
-        amp_score = 0
+    bias20 = r['bias_20']
+    bias_chg_5d = r['bias20_chg_5d']
+    bias_chg_3d = r['bias20_chg_3d']
+    bias_early = r['bias_20'] - df.iloc[i - 10]['bias_20'] if i >= 10 else 0
 
-    score = ma_score * 0.4 + vol_score * 0.3 + trend_score * 0.2 + amp_score * 0.1
+    # --- 量价信号 ---
+    vol_ratio = r['volume'] / r['vol_ma20'] if r['vol_ma20'] > 0 else 1
+    body_pct = abs(r['close'] - r['open']) / r['open'] * 100
+    range_pct = (r['high'] - r['low']) / r['open'] * 100
+    ls_pct = (min(r['open'], r['close']) - r['low']) / r['open'] * 100
+    us_pct = (r['high'] - max(r['open'], r['close'])) / r['open'] * 100
+    gain = (r['close'] - r['open']) / r['open'] * 100
 
-    # 判定位置
-    if score >= 1:
+    last5 = df.iloc[max(0, i - 4):i + 1]
+
+    # 波峰信号
+    peak_sig = 0
+    if vol_ratio > 1.3 and body_pct < 0.8:
+        peak_sig += 1
+    if us_pct > 1.5 and gain < 0:
+        peak_sig += 1
+    if len(last5) >= 5:
+        gains = [(last5.iloc[j]['close'] - last5.iloc[j - 1]['close']) / last5.iloc[j - 1]['close'] * 100
+                 for j in range(1, len(last5))]
+        avg_g = np.mean([g for g in gains if not np.isnan(g)] or [0])
+        tg = (r['close'] - last5.iloc[-2]['close']) / last5.iloc[-2]['close'] * 100
+        if avg_g > 0.5 and tg < avg_g * 0.3:
+            peak_sig += 1
+        yang = sum(1 for j in range(1, len(last5)) if last5.iloc[j]['close'] > last5.iloc[j - 1]['close'])
+        if yang >= 3 and vol_ratio > 1.5 and body_pct < 0.6:
+            peak_sig += 1
+
+    # 波谷信号
+    valley_sig = 0
+    if gain < -1.5 and vol_ratio > 1.3 and ls_pct > body_pct * 1.5 and ls_pct > 0.5:
+        valley_sig += 1
+    if ls_pct > 1.0 and body_pct < ls_pct:
+        valley_sig += 1
+    if len(last5) >= 4:
+        down = sum(1 for j in range(1, len(last5)) if last5.iloc[j]['close'] < last5.iloc[j - 1]['close'])
+        if down >= 4 and vol_ratio < 0.8:
+            valley_sig += 1
+        p4 = all(last5.iloc[j]['close'] < last5.iloc[j - 1]['close'] for j in range(1, 4))
+        if p4 and body_pct < 0.8 and gain > 0:
+            valley_sig += 1
+
+    # --- 趋势转折 ---
+    peak_turn = bias_early > 0.5 and bias_chg_5d < 0.3
+    valley_turn = bias_early < -0.8 and bias_chg_5d > -0.3
+
+    # --- pk_score / vl_score ---
+    pk_score = 0
+    if peak_turn: pk_score += 1
+    if bias20 > 1.5: pk_score += 1
+    if peak_sig >= 1: pk_score += 1
+    if bias_chg_3d < 0: pk_score += 1
+    if bias20 > 8: pk_score = max(pk_score, 3)
+
+    vl_score = 0
+    if valley_turn: vl_score += 1
+    if bias20 < -1.5: vl_score += 1
+    if valley_sig >= 1: vl_score += 1
+    if bias_chg_3d > 0: vl_score += 1
+    if bias20 < -8: vl_score = max(vl_score, 3)
+
+    # --- 5档判定 + 仓位策略 ---
+    if pk_score >= 4:
         position = '偏波峰'
         pct = '五成'
         strategy = '控制仓位，收紧止盈'
         bps = 5
-    elif score >= 0.3:
+    elif pk_score >= 3:
         position = '波中偏上'
         pct = '六至七成'
         strategy = '正常交易，注意减仓信号'
         bps = 5
-    elif score >= -0.3:
-        position = '波中'
-        pct = '七至八成'
-        strategy = '正常交易，积极选股'
-        bps = 5
-    elif score >= -1:
+    elif vl_score >= 4:
+        position = '偏波谷'
+        pct = '五至八成'
+        strategy = '积极寻找买点，止损换股补回'
+        bps = 10
+    elif vl_score >= 3:
         position = '波中偏下'
         pct = '五至七成'
         strategy = '谨慎选股，收紧止损'
         bps = 5
     else:
-        position = '偏波谷'
-        pct = '五至八成'
-        strategy = '积极寻找买点，止损换股补回'
-        bps = 10
+        position = '波中'
+        pct = '七至八成'
+        strategy = '正常交易，积极选股'
+        bps = 5
+
+    score = pk_score - vl_score
+
+    chg_10d = (klines[-1]['close'] - klines[-11]['close']) / klines[-11]['close'] * 100 if len(klines) >= 11 else 0
+    ma20_val = float(df['MA20'].iloc[-1]) if not pd.isna(df['MA20'].iloc[-1]) else 0
+    ma60_val = float(df['MA60'].iloc[-1]) if not pd.isna(df['MA60'].iloc[-1]) else 0
 
     return {
-        'score': round(score, 2),
+        'score': round(score, 1),
         'position': position,
-        'ma_score': ma_score,
-        'vol_score': vol_score,
-        'trend_score': trend_score,
-        'amp_score': amp_score,
-        'ma20': round(ma20, 2),
-        'ma60': round(ma60, 2),
+        'pk_score': pk_score,
+        'vl_score': vl_score,
+        'bias20': round(bias20, 2),
+        'bias20_chg_3d': round(bias_chg_3d, 2),
+        'ma20': round(ma20_val, 2),
+        'ma60': round(ma60_val, 2),
         'vol_ratio': round(vol_ratio, 2),
         'chg_10d': round(chg_10d, 2),
+        'chg_10d_raw': round(chg_10d, 2),
         'strategy': strategy,
         'position_pct': pct,
         'build_per_stock_pct': bps,
-        'chg_10d_raw': round(chg_10d, 2),
+        'peak_sig': peak_sig,
+        'valley_sig': valley_sig,
+        # 保留旧字段兼容review.html显示
+        'ma_score': 0, 'vol_score': 0, 'trend_score': 0, 'amp_score': 0,
     }
+
+
+def _fallback_cycle(klines):
+    """数据不足时的兜底方案"""
+    if len(klines) < 10:
+        return {'score': 0, 'position': '波中', 'strategy': '正常交易',
+                'position_pct': '七至八成', 'build_per_stock_pct': 5}
+    chg = (klines[-1]['close'] - klines[-6]['close']) / klines[-6]['close'] * 100
+    if chg > 5:
+        return {'score': 0.5, 'position': '波中偏上', 'strategy': '正常交易，注意减仓信号',
+                'position_pct': '六至七成', 'build_per_stock_pct': 5}
+    elif chg < -5:
+        return {'score': -0.5, 'position': '波中偏下', 'strategy': '谨慎选股，收紧止损',
+                'position_pct': '五至七成', 'build_per_stock_pct': 5}
+    else:
+        return {'score': 0, 'position': '波中', 'strategy': '正常交易',
+                'position_pct': '七至八成', 'build_per_stock_pct': 5}
 
 # ====== ② 动量主线评判 ======
 
@@ -564,7 +617,7 @@ def generate_daily_review(date_str=None):
         print(f"[3L复盘] 载入已有存档")
 
     # 获取大盘K线数据并过滤到指定日期
-    index_klines = fetch_index_klines(60)
+    index_klines = fetch_index_klines(120)
     index_klines = [k for k in index_klines if k['date'] <= date_str]
     today_quote = fetch_market_quote()
 
@@ -572,12 +625,12 @@ def generate_daily_review(date_str=None):
     
     # 如果过滤后无数据，按指定日期向前取
     if not index_klines:
-        index_klines = fetch_index_klines(60)
+        index_klines = fetch_index_klines(120)
         index_klines = [k for k in index_klines if k['date'] <= date_str]
     
     # ① 大盘周期判定
-    print("[3L复盘] ① 判定大盘周期...")
-    market_cycle = judge_market_cycle(index_klines, today_quote)
+    print("[3L复盘] ① 判定大盘周期(V5)...")
+    market_cycle = judge_peak_valley(index_klines)
     # 使用K线收盘价（按指定日期）
     if index_klines:
         last = index_klines[-1]

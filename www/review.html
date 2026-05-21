@@ -387,12 +387,12 @@
             advice.textContent = data.strategy || '--';
         }
 
-        // 4维评分明细（后端存为平铺字段: ma_score/vol_score/trend_score/amp_score）
+        // V5置信度评分明细
         const dimMap = {
-            'ma_score': { label: '趋势结构', desc: `MA20=${data.ma20||'?'} MA60=${data.ma60||'?'}` },
-            'vol_score': { label: '量能位置', desc: `量比=${data.vol_ratio?data.vol_ratio.toFixed(2):'?'}` },
-            'trend_score': { label: '量价形态', desc: `10日涨跌=${data.chg_10d?data.chg_10d.toFixed(1):'?'}%` },
-            'amp_score': { label: '波动率', desc: '' }
+            'pk_score': { label: '波峰置信度', desc: `${data.pk_score||0}/4分 趋势转折+位置+信号+掉头` },
+            'vl_score': { label: '波谷置信度', desc: `${data.vl_score||0}/4分 趋势转折+位置+信号+掉头` },
+            'bias20': { label: 'MA20乖离率', desc: `${typeof data.bias20==='number'?data.bias20.toFixed(1):'?'}%` },
+            'bias20_chg_3d': { label: '乖离率3日变化', desc: `${typeof data.bias20_chg_3d==='number'?data.bias20_chg_3d.toFixed(1):'?'}%` },
         };
         const tbody = document.getElementById('scoreDetailBody');
         tbody.innerHTML = Object.keys(dimMap).map(k => {
