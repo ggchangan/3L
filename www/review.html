@@ -387,20 +387,64 @@
             advice.textContent = data.strategy || '--';
         }
 
-        // V5置信度评分明细
-        const dimMap = {
-            'pk_score': { label: '波峰置信度', desc: `${data.pk_score||0}/4分 趋势转折+位置+信号+掉头` },
-            'vl_score': { label: '波谷置信度', desc: `${data.vl_score||0}/4分 趋势转折+位置+信号+掉头` },
-            'bias20': { label: 'MA20乖离率', desc: `${typeof data.bias20==='number'?data.bias20.toFixed(1):'?'}%` },
-            'bias20_chg_3d': { label: '乖离率3日变化', desc: `${typeof data.bias20_chg_3d==='number'?data.bias20_chg_3d.toFixed(1):'?'}%` },
-        };
+        // V5波峰波谷判定 — 条件明细
+        const pk = data.pk_score || 0;
+        const vl = data.vl_score || 0;
+        const pos = data.position || '波中';
         const tbody = document.getElementById('scoreDetailBody');
-        tbody.innerHTML = Object.keys(dimMap).map(k => {
-            const score = data[k] !== undefined ? data[k] : '?';
-            const label = dimMap[k].label;
-            const desc = dimMap[k].desc;
-            return `<tr><td>${label}</td><td style="color:${score>0?'#ff4444':score<0?'#44aa44':'#888'}">${score>0?'+':''}${score}</td><td style="color:#888;font-size:11px;">${desc}</td></tr>`;
-        }).join('');
+        tbody.innerHTML = `
+          <tr><td colspan="3" style="font-size:13px;color:#4ecdc4;font-weight:bold;padding-bottom:8px;">
+            ${pos}
+          </td></tr>
+          <tr>
+            <td style="color:#888;width:50px;">波峰</td>
+            <td style="width:50px;text-align:center;font-size:16px;">
+              ${pk>=4?'🟢':pk>=3?'🟡':pk>=1?'⚪':'⚪'}
+            </td>
+            <td style="color:#888;font-size:11px;">
+              ${pk>=4?'✅ 趋势转跌+位置偏高+量价异常+方向确认 → 高度确信':
+                pk>=3?'⚠️ 满足3个条件，可能偏峰':
+                pk>=1?'🔸 满足1个条件，趋势有波动':
+                '— 无波峰信号'}
+            </td>
+          </tr>
+          <tr>
+            <td style="color:#888;">波谷</td>
+            <td style="text-align:center;font-size:16px;">
+              ${vl>=4?'🟢':vl>=3?'🟡':vl>=1?'⚪':'⚪'}
+            </td>
+            <td style="color:#888;font-size:11px;">
+              ${vl>=4?'✅ 趋势转涨+位置偏低+恐慌出清+方向确认 → 高度确信':
+                vl>=3?'⚠️ 满足3个条件，可能偏谷':
+                vl>=1?'🔸 满足1个条件':
+                '— 无波谷信号'}
+            </td>
+          </tr>
+          <tr><td colspan="3" style="border-top:1px solid #333;padding-top:6px;"></td></tr>
+          <tr>
+            <td style="color:#888;">①趋势</td>
+            <td style="text-align:center;">${pk>=1?'✅':'❌'}</td>
+            <td style="color:#888;font-size:11px;">前期bias上升+近期走平/掉头</td>
+          </tr>
+          <tr>
+            <td style="color:#888;">②位置</td>
+            <td style="text-align:center;">${pk>=2?'✅':'❌'}</td>
+            <td style="color:#888;font-size:11px;">MA20乖离率&gt;+1.5% (当前: ${typeof data.bias20==='number'?data.bias20.toFixed(1):'?'}%)</td>
+          </tr>
+          <tr>
+            <td style="color:#888;">③量价</td>
+            <td style="text-align:center;">${pk>=3?'✅':'❌'}</td>
+            <td style="color:#888;font-size:11px;">放量滞涨/长上影/加速衰竭</td>
+          </tr>
+          <tr>
+            <td style="color:#888;">④方向</td>
+            <td style="text-align:center;">${pk>=4?'✅':'❌'}</td>
+            <td style="color:#888;font-size:11px;">乖离率3日变化转负 (${typeof data.bias20_chg_3d==='number'?data.bias20_chg_3d.toFixed(1):'?'}%)</td>
+          </tr>
+          <tr><td colspan="3" style="text-align:center;color:#555;font-size:11px;padding-top:6px;">
+            pk≥4=峰 &nbsp; pk≥3=近峰 &nbsp; vl≥4=谷 &nbsp; vl≥3=近谷 &nbsp; 其余=波中
+          </td></tr>
+        `;
     }
 
     // ====== ② 动量主线 ======
