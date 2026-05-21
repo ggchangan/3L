@@ -486,6 +486,10 @@ def generate_trading_plan(market_cycle, mainline_data, logic_classify, signals_d
     if not plan['risk_items']:
         plan['risk_items'].append('✅ 整体风险可控，按正常节奏交易')
 
+    # 个股操作按优先级排序：高→中→低
+    pri_order = {'高': 0, '中': 1, '低': 2}
+    plan['holdings_action'].sort(key=lambda x: pri_order.get(x['priority'], 9))
+
     return plan
 
 # ====== 盈利模式检查 ======
