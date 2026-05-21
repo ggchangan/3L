@@ -163,14 +163,14 @@
                 <span style="color:#333;margin:0 6px;">|</span>
                 <span style="cursor:pointer;color:#ffd700;font-size:12px;" onclick="toggleChart('fundFlowChart')">💰 资金流向</span>
                 <span style="color:#333;margin:0 6px;">|</span>
-                <span style="cursor:pointer;color:#e94560;font-size:12px;" onclick="var c=document.getElementById('indexChart');var o=document.getElementById('indexChartObj');c.style.display=c.style.display==='none'?'':'none';o.data='/review_charts/zzqz_v2.svg?t='+Date.now();">📈 中证全指关键点图</span>
+                <span style="cursor:pointer;color:#e94560;font-size:12px;" onclick="toggleIndexChart()">📈 中证全指关键点图</span>
             </div>
         </div>
         <div id="indexChart" class="chart-container" style="display:none; margin-top:8px;">
             <object id="indexChartObj" data="/review_charts/zzqz_v2.svg" type="image/svg+xml" style="width:100%;max-width:750px;display:block;margin:0 auto;border-radius:8px;"></object>
         </div>
         <div id="fundFlowChart" class="chart-container" style="display:none; margin-top:8px;">
-            <img src="/charts/fund_flow_chart.png" style="width:100%;max-width:700px;border-radius:8px;">
+            <img id="fundFlowImg" src="/charts/fund_flow_chart.png" style="width:100%;max-width:700px;border-radius:8px;">
         </div>
     </div>
 
@@ -277,8 +277,17 @@
                 reviewData = data;
                 // ① 大盘判定
                 if (data.market) updateMarketUI(data.market);
-                // ② 动量主线已迁移至独立最强动量模块（STEP 3）+ 行业TOP15由独立的 refreshMainLines() 加载
-                // ③ 最强逻辑由独立的 loadLogicMap() 加载
+                // ②+③ 动量和逻辑：如果存档有历史数据就不调实时API
+                if (data.momentum) {
+                    updateMomentumFromArchive(data.momentum, data.industry_boards_archive);
+                } else {
+                    loadMomentum();  // 实时拉取
+                }
+                if (data.industry_map_archive) {
+                    updateLogicFromArchive(data.industry_map_archive);
+                } else {
+                    loadLogicMap();
+                }
                 // ④ 持仓复盘
                 if (data.holdings_review) updateStocksUI(data.holdings_review);
                 else if (data.holdings) updateStocksUI(data.holdings);
@@ -286,6 +295,14 @@
                 if (data.buy_signals_review || data.holdings_review) updateBuySignalsUI();
                 // ⑦ 交易计划
                 if (data.trading_plan) updateTradingPlanUI(data.trading_plan);
+                // ① 图表：有存档路径则更新
+                if (data.charts) {
+                    document.getElementById('indexChartObj').data = data.charts.index_chart;
+                    document.getElementById('fundFlowImg').src = data.charts.fund_flow;
+                } else {
+                    document.getElementById('indexChartObj').data = '/review_charts/zzqz_v2.svg';
+                    document.getElementById('fundFlowImg').src = '/charts/fund_flow_chart.png';
+                }
                 refreshMainLines();
             })
             .catch(() => {
@@ -295,12 +312,13 @@
     }
 
     // ====== 历史列表 ======
-    function loadHistoryList() {
+    function loadHistoryList(currentDisplayDate) {
         const list = document.getElementById('historyReviewList');
         fetch('/api/review/dates')
             .then(r => r.json())
             .then(data => {
-                const dates = (data.dates || []).filter(d => d !== `${y}-${m}-${d}`);
+                const curDate = currentDisplayDate || document.querySelector('.header .date-badge')?.textContent?.split(' ')[0] || '';
+                const dates = (data.dates || []).filter(d => d !== curDate);
                 if (dates.length === 0) {
                     list.innerHTML = '<div class="empty">暂无历史复盘数据</div>';
                     return;
@@ -324,6 +342,7 @@
         if (dateParam) {
             document.querySelector('.header .date-badge').textContent = `${dateParam} 历史复盘`;
             loadReviewData(dateParam);
+            loadHistoryList(dateParam);
             return true;
         }
         return false;
@@ -649,7 +668,7 @@
             container.innerHTML = '<div class="empty">暂无买点信号</div>';
             return;
         }
-        // 按方向分组
+        // 按方向分组（sector 已为用户方向）
         const groups = {};
         signals.forEach(s => {
             const sec = s.sector || '其他';
@@ -663,16 +682,16 @@
             '机器人': '#9C27B0', '新能源': '#FF9800', '资源股': '#8B4513',
             'AI应用': '#00BCD4', '商业航天': '#FF5722',
         };
-        // Tab 状态
+        // Tab 状态（保留用户已选的Tab，新方向出现时追加）
         if (!window._buyTab) window._buyTab = { activeSector: secNames[0], pages: {} };
         const tab = window._buyTab;
         if (!secNames.includes(tab.activeSector)) tab.activeSector = secNames[0];
-        // 构建Tabs
+        // 构建Tabs（用span替代a标签避免javascript:显示问题）
         let html = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;border-bottom:1px solid #333;padding-bottom:6px;">';
         secNames.forEach((sec, i) => {
             const active = sec === tab.activeSector;
             const color = secColors[sec] || '#888';
-            html += `<a href="javascript:;" onclick="window._buyTab.activeSector='${sec}';window._buyTab.pages['${sec}']=1;updateBuySignalsUI();return false;" style="padding:4px 12px;font-size:12px;border-radius:12px;text-decoration:none;${active?`background:${color};color:#fff;`:`color:${color};background:rgba(255,255,255,0.05);`}">${sec} (${groups[sec].length})</a>`;
+            html += `<span style="cursor:pointer;padding:4px 12px;font-size:12px;border-radius:12px;text-decoration:none;display:inline-block;${active?`background:${color};color:#fff;`:`color:${color};background:rgba(255,255,255,0.05);`}" onclick="window._buyTab.activeSector='${sec}';window._buyTab.pages['${sec}']=1;updateBuySignalsUI();">${sec} (${groups[sec].length})</span>`;
         });
         html += '</div>';
         // 当前Tab数据
@@ -909,6 +928,117 @@
             });
     }
     
+    // 从存档数据渲染最强动量（用于历史复盘）
+    function updateMomentumFromArchive(data, boardsData) {
+        const container = document.getElementById('momentumArea');
+        if (!data || (!data.limit_up && !data.new_highs)) {
+            container.innerHTML = '<div class="empty">暂无历史动量数据</div>';
+            return;
+        }
+        const PER_PAGE = 10;
+        let html = '';
+        let limitUp = (data.limit_up || []).slice();
+        limitUp.sort((a, b) => (b['涨跌幅']||0) - (a['涨跌幅']||0));
+        let newHighs = (data.new_highs || []).slice();
+        newHighs.sort((a, b) => (b['涨跌幅']||0) - (a['涨跌幅']||0));
+        const totalNewHighs = data.new_highs_total || 0;
+        const allNh = (data.new_highs_all || []).slice();
+        html += '<div style="display:flex;gap:6px;margin-bottom:10px;">';
+        html += '<span id="tabBoard" class="tag red" style="cursor:pointer;font-size:12px;padding:4px 14px;" onclick="switchMomentumTab(\'board\')">🏢 板块排行</span>';
+        html += '<span id="tabNewHigh" class="tag gray" style="cursor:pointer;font-size:12px;padding:4px 14px;" onclick="switchMomentumTab(\'newhigh\')">📊 自选新高 ' + newHighs.length + '</span>';
+        html += '<span id="tabAllNew" class="tag gray" style="cursor:pointer;font-size:12px;padding:4px 14px;" onclick="switchMomentumTab(\'allnew\')">🔥 全市场新高 ' + totalNewHighs + '</span>';
+        html += '<span id="tabLimit" class="tag gray" style="cursor:pointer;font-size:12px;padding:4px 14px;" onclick="switchMomentumTab(\'limit\')">📈 涨停 ' + limitUp.length + '</span>';
+        html += '</div>';
+        html += '<div id="momeLimitContent" style="display:none;">';
+        if (limitUp.length > 0) {
+            const hdr = '<tr><th style="width:30px">#</th><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>封板时间</th><th>连板</th><th>行业</th><th>自选</th></tr>';
+            const bfn = (s, idx) => {
+                const inW = s['在自选'] ? '<span class="tag red">✓</span>' : '<span class="tag gray">-</span>';
+                const lb = s['连板数'] || 1;
+                const lbTag = lb >= 3 ? 'tag red' : lb >= 2 ? 'tag orange' : 'tag gray';
+                const fbt = s['首次封板时间'] || '';
+                const fbtStr = fbt ? fbt.toString().padStart(6,'0').replace(/^(\d{2})(\d{2})(\d{2})$/, '$1:$2') : '--';
+                return '<tr>' +
+                    '<td>' + idx + '</td><td>' + (s['股票代码']||s['代码']||'') + '</td><td>' + (s['股票简称']||s['名称']||'') + '</td><td>' + (s['最新价']||'') + '</td>' +
+                    '<td style="color:#ff4444;font-weight:600;">+' + (s['涨跌幅']||0).toFixed(2) + '%</td>' +
+                    '<td style="font-size:11px;color:#888;">' + fbtStr + '</td>' +
+                    '<td><span class="' + lbTag + '">' + lb + '板</span></td>' +
+                    '<td style="font-size:11px;">' + (s['行业']||'') + '</td><td>' + inW + '</td></tr>';
+            };
+            const cid = 'pgLimitUp';
+            pgData[cid] = { data: limitUp, perPage: PER_PAGE, headerRow: hdr, bodyRowFn: bfn };
+            html += '<div id="' + cid + '">' + renderPage(cid, limitUp, 1, PER_PAGE, hdr, bfn) + '</div>';
+        } else {
+            html += '<div class="empty">当日无涨停</div>';
+        }
+        html += '</div>';
+        html += '<div id="momeNewHighContent" style="display:none;">';
+        if (newHighs.length > 0) {
+            const hdr2 = '<tr><th style="width:30px">#</th><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>行业</th></tr>';
+            const bfn2 = (s, idx) => {
+                const chg = s['涨跌幅']||0;
+                return '<tr>' +
+                    '<td>' + idx + '</td><td>' + s['股票代码'] + '</td><td>' + s['股票简称'] + '</td><td>' + s['最新价'] + '</td>' +
+                    '<td style="color:' + (chg>=0?'#ff4444':'#44aa44') + '">' + (chg>=0?'+':'') + chg.toFixed(2) + '%</td>' +
+                    '<td style="font-size:11px;">' + (s['行业']||'') + '</td></tr>';
+            };
+            const cid2 = 'pgNewHigh';
+            pgData[cid2] = { data: newHighs, perPage: PER_PAGE, headerRow: hdr2, bodyRowFn: bfn2 };
+            html += '<div id="' + cid2 + '">' + renderPage(cid2, newHighs, 1, PER_PAGE, hdr2, bfn2) + '</div>';
+        } else {
+            html += '<div class="empty">自选股无创历史新高</div>';
+        }
+        html += '</div>';
+        html += '<div id="momeAllNewContent" style="display:none;">';
+        if (allNh.length > 0) {
+            const hdr3 = '<tr><th style="width:30px">#</th><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th></tr>';
+            const bfn3 = (s, idx) => {
+                const chg = s['涨跌幅']||0;
+                return '<tr>' +
+                    '<td>' + idx + '</td><td>' + (s['股票代码']||'') + '</td><td>' + (s['股票简称']||'') + '</td><td>' + (s['最新价']||'') + '</td>' +
+                    '<td style="color:' + (chg>=0?'#ff4444':'#44aa44') + '">' + (chg>=0?'+':'') + chg.toFixed(2) + '%</td></tr>';
+            };
+            const cid3 = 'pgAllNew';
+            pgData[cid3] = { data: allNh, perPage: PER_PAGE, headerRow: hdr3, bodyRowFn: bfn3 };
+            html += '<div id="' + cid3 + '">' + renderPage(cid3, allNh, 1, PER_PAGE, hdr3, bfn3) + '</div>';
+        } else {
+            html += '<div class="empty">当日全市场无创历史新高</div>';
+        }
+        html += '</div>';
+        html += '<div id="momeBoardContent">';
+        if (boardsData && boardsData.length > 0) {
+            html += '<table class="signal-table"><thead><tr><th>#</th><th>板块</th><th>涨跌幅</th><th>净流入</th><th>涨/跌家数</th><th>领涨股</th></tr></thead><tbody id="mainLineBodyArchive"></tbody></table>';
+        } else {
+            html += '<div id="mainlinesArea"><div class="empty">暂无当日板块排行数据</div></div>';
+        }
+        html += '</div>';
+        container.innerHTML = html;
+        // 渲染存档板块排行
+        if (boardsData && boardsData.length > 0) {
+            const tbody = document.getElementById('mainLineBodyArchive');
+            if (tbody) {
+                const sorted = [...boardsData].sort((a, b) => parseFloat(b['涨跌幅']||0) - parseFloat(a['涨跌幅']||0));
+                const top10 = sorted.slice(0, 10);
+                tbody.innerHTML = top10.map((b, i) => {
+                    const chg = parseFloat(b['涨跌幅']||0);
+                    const inflow = parseFloat(b['净流入']||0);
+                    const upCnt = parseInt(b['上涨家数']||0);
+                    const downCnt = parseInt(b['下跌家数']||0);
+                    const leader = b['领涨股']||'--';
+                    return `<tr>
+                        <td>${i + 1}</td>
+                        <td style="font-weight:600;">${b['板块']||'--'}</td>
+                        <td style="color:${chg >= 0 ? '#ff4444' : '#44aa44'}; font-weight:600;">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</td>
+                        <td>${inflow > 0 ? '<span style="color:#ff4444">+' + inflow.toFixed(1) + '亿</span>' : '<span style="color:#44aa44">' + inflow.toFixed(1) + '亿</span>'}</td>
+                        <td>${upCnt}/${downCnt}</td>
+                        <td>${leader}</td>
+                    </tr>`;
+                }).join('');
+            }
+        }
+        window.momentumTab = 'board';
+    }
+    
     // 动量Tab切换
     function switchMomentumTab(tab) {
         window.momentumTab = tab;
@@ -929,6 +1059,7 @@
     }
     
     // ====== ④ 最强逻辑 ======
+    let pgLogic = 1;
     function loadLogicMap() {
         const container = document.getElementById('logicArea');
         container.innerHTML = '<div class="empty">加载行业分类数据...</div>';
@@ -951,52 +1082,67 @@
                 });
                 
                 const sorted = Object.entries(industryGroups).sort((a, b) => b[1].length - a[1].length);
-                const TOTAL = sorted.length;
-                const PER_PAGE = 10;
-                let pg = 1;
-                
-                function renderLogicPage(page) {
-                    const start = (page - 1) * PER_PAGE;
-                    const end = Math.min(start + PER_PAGE, TOTAL);
-                    const pageData = sorted.slice(start, end);
-                    const totalPages = Math.ceil(TOTAL / PER_PAGE) || 1;
-                    
-                    let h = '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">';
-                    h += '<span style="font-size:12px;color:#888;">共' + TOTAL + '个行业</span>';
-                    h += '<span style="font-size:12px;color:#888;">|</span>';
-                    h += '<span style="font-size:12px;color:#4ecdc4;">' + Object.values(industryGroups).reduce((a,b) => a+b.length, 0) + '只已分类</span>';
-                    if (unknownCount > 0) h += '<span style="font-size:12px;color:#e94560;">| ' + unknownCount + '只待确认</span>';
-                    h += '</div>';
-                    
-                    h += '<table><thead><tr><th style="width:30px">#</th><th>同花顺行业</th><th>数量</th><th>自定义方向</th></tr></thead><tbody>';
-                    pageData.forEach(([ind, stocks], i) => {
-                        const dirs = [...new Set(stocks.map(s => s.direction))];
-                        h += '<tr>' +
-                            '<td>' + (start + i + 1) + '</td>' +
-                            '<td style="font-weight:600;">' + ind + '</td>' +
-                            '<td>' + stocks.length + '只</td>' +
-                            '<td style="color:#888;font-size:11px;">' + dirs.join(' · ') + '</td></tr>';
-                    });
-                    h += '</tbody></table>';
-                    
-                    if (totalPages > 1) {
-                        h += '<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:8px;font-size:12px;">';
-                        h += '<span style="color:#888;">共' + TOTAL + '个</span>';
-                        if (page > 1) h += '<a href="javascript:;" onclick="pgLogic=' + (page-1) + ';renderLogicPage(pgLogic);return false;" style="color:#4ecdc4;text-decoration:none;">‹ 上一页</a>';
-                        h += '<span style="color:#e94560;font-weight:600;">' + page + '/' + totalPages + '</span>';
-                        if (page < totalPages) h += '<a href="javascript:;" onclick="pgLogic=' + (page+1) + ';renderLogicPage(pgLogic);return false;" style="color:#4ecdc4;text-decoration:none;">下一页 ›</a>';
-                        h += '</div>';
-                    }
-                    
-                    container.innerHTML = h;
-                }
-                
-                window.pgLogic = 1;
-                renderLogicPage(1);
+                renderLogicTable(sorted, container, unknownCount);
             })
             .catch(err => {
                 container.innerHTML = '<div class="empty">加载失败: ' + err.message + '</div>';
             });
+    }
+
+    // 从存档数据渲染最强逻辑（用于历史复盘）
+    function updateLogicFromArchive(archiveData) {
+        const container = document.getElementById('logicArea');
+        if (!archiveData || !archiveData.groups) {
+            container.innerHTML = '<div class="empty">暂无历史行业分类数据</div>';
+            return;
+        }
+        const sorted = Object.entries(archiveData.groups);
+        renderLogicTable(sorted, container, 0);
+    }
+
+    // 通用最强逻辑表格渲染
+    function renderLogicTable(sorted, container, unknownCount) {
+        const TOTAL = sorted.length;
+        const PER_PAGE = 10;
+        
+        function renderPage(page) {
+            const start = (page - 1) * PER_PAGE;
+            const end = Math.min(start + PER_PAGE, TOTAL);
+            const pageData = sorted.slice(start, end);
+            const totalPages = Math.ceil(TOTAL / PER_PAGE) || 1;
+            
+            let h = '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">';
+            h += '<span style="font-size:12px;color:#888;">共' + TOTAL + '个行业</span>';
+            h += '<span style="font-size:12px;color:#888;">|</span>';
+            h += '<span style="font-size:12px;color:#4ecdc4;">' + sorted.reduce((a, [,v]) => a + v.length, 0) + '只已分类</span>';
+            if (unknownCount > 0) h += '<span style="font-size:12px;color:#e94560;">| ' + unknownCount + '只待确认</span>';
+            h += '</div>';
+            
+            h += '<table><thead><tr><th style="width:30px">#</th><th>同花顺行业</th><th>数量</th><th>自定义方向</th></tr></thead><tbody>';
+            pageData.forEach(([ind, stocks], i) => {
+                const dirs = [...new Set(stocks.map(s => s.direction))];
+                h += '<tr>' +
+                    '<td>' + (start + i + 1) + '</td>' +
+                    '<td style="font-weight:600;">' + ind + '</td>' +
+                    '<td>' + stocks.length + '只</td>' +
+                    '<td style="color:#888;font-size:11px;">' + dirs.join(' · ') + '</td></tr>';
+            });
+            h += '</tbody></table>';
+            
+            if (totalPages > 1) {
+                h += '<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:8px;font-size:12px;">';
+                h += '<span style="color:#888;">共' + TOTAL + '个</span>';
+                if (page > 1) h += '<a href="javascript:;" onclick="pgLogic=' + (page-1) + ';renderPage(pgLogic);return false;" style="color:#4ecdc4;text-decoration:none;">‹ 上一页</a>';
+                h += '<span style="color:#e94560;font-weight:600;">' + page + '/' + totalPages + '</span>';
+                if (page < totalPages) h += '<a href="javascript:;" onclick="pgLogic=' + (page+1) + ';renderPage(pgLogic);return false;" style="color:#4ecdc4;text-decoration:none;">下一页 ›</a>';
+                h += '</div>';
+            }
+            
+            container.innerHTML = h;
+        }
+        
+        pgLogic = 1;
+        renderPage(1);
     }
     
     // ====== 工具函数 ======
@@ -1012,23 +1158,24 @@
         el.style.display = el.style.display === 'none' ? '' : 'none';
     }
 
+    function toggleIndexChart() {
+        const chart = document.getElementById('indexChart');
+        const obj = document.getElementById('indexChartObj');
+        if (!chart || !obj) return;
+        const isHidden = chart.style.display === 'none';
+        chart.style.display = isHidden ? '' : 'none';
+        if (isHidden) {
+            obj.data = obj.data.split('?')[0] + '?t=' + Date.now();
+        }
+    }
+
     // ====== 初始加载 ======
     loadMomentum();
     loadLogicMap();
     refreshMainLines();
     if (!checkUrlParam()) {
-        fetch(`/api/review/${y}-${m}-${d}`)
-            .then(r => r.json())
-            .then(data => {
-                if (data && !data.error) {
-                    loadReviewData(`${y}-${m}-${d}`);
-                } else {
-                    loadLatestReview();
-                }
-            })
-            .catch(() => loadLatestReview());
+        loadLatestReview();
     }
-    loadHistoryList();
 
     function loadLatestReview() {
         fetch('/api/review/dates')
@@ -1037,14 +1184,21 @@
                 const dates = (dd.dates || []).sort().reverse();
                 if (dates.length > 0) {
                     const latest = dates[0];
-                    document.querySelector('.header .date-badge').textContent = `${latest} 每日复盘`;
+                    const isToday = latest === `${y}-${m}-${d}`;
+                    document.querySelector('.header .date-badge').textContent =
+                        isToday ? `${latest} 今日复盘 ✓` : `${latest} 每日复盘（收盘后自动更新）`;
                     loadReviewData(latest);
+                    loadHistoryList(latest);
                 } else {
+                    document.querySelector('.header .date-badge').textContent = '暂无复盘数据';
                     refreshMarket();
                     refreshMainLines();
                 }
             })
-            .catch(() => { refreshMarket(); refreshMainLines(); });
+            .catch(() => {
+                refreshMarket();
+                refreshMainLines();
+            });
     }
 </script>
 

@@ -73,7 +73,7 @@ try:
             watchlist_new.append(r2)
         all_new.append(r2)
     result['new_highs'] = watchlist_new
-    result['new_highs_all'] = sorted(all_new, key=lambda x: x.get('涨跌幅', 0), reverse=True)[:50]
+    result['new_highs_all'] = sorted(all_new, key=lambda x: x.get('涨跌幅', 0), reverse=True)
     result['new_highs_total'] = len(cxg_records)
 except Exception as e:
     result['new_highs_error'] = str(e)

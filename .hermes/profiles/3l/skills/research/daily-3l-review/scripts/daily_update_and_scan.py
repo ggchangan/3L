@@ -156,7 +156,9 @@ def scan_buy_points(data):
                     with open(p) as _f:
                         _rd = json.load(_f)
                     market_position = _rd.get('market', {}).get('position', '')
-                    main_lines_list = [l['name'] for l in _rd.get('mainline', {}).get('lines', [])]
+                    main_lines_primary = [l['name'] for l in _rd.get('mainline', {}).get('lines', [])]
+                    main_lines_secondary = [l['name'] for l in _rd.get('mainline', {}).get('secondary', [])]
+                    main_lines_list = main_lines_primary + main_lines_secondary
                 except:
                     pass
                 break

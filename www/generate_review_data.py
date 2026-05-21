@@ -11,6 +11,7 @@
 输出：JSON → /home/ubuntu/www/private/review_archive/{date}.json
 """
 import json, os, sys, requests, math
+os.environ['TQDM_DISABLE'] = '1'  # 关akshare进度条
 from datetime import datetime, timedelta
 
 # ====== 路径 ======
@@ -199,7 +200,7 @@ def judge_market_cycle(klines, quote=None):
 # ====== ② 动量主线评判 ======
 
 def get_industry_rankings():
-    """获取同花顺行业板块排行（当日实时）"""
+    """获取同花顺行业板块排行（当日实时）—— 仅用于页面展示"""
     import akshare as ak
     try:
         df = ak.stock_board_industry_summary_ths()
@@ -220,20 +221,56 @@ def get_industry_rankings():
         print(f"[WARN] 获取行业排行失败: {e}")
         return []
 
+def _calc_board_20d(ind_name):
+    """计算单板块20日涨幅"""
+    import akshare as ak
+    try:
+        df = ak.stock_board_industry_index_ths(symbol=ind_name, start_date="20260415", end_date=datetime.now().strftime('%Y%m%d'))
+        if len(df) < 15:
+            return None
+        recent = df.tail(20) if len(df) >= 20 else df.tail(len(df))
+        if len(recent) < 10:
+            return None
+        chg_20d = (recent.iloc[-1]['收盘价'] / recent.iloc[0]['收盘价'] - 1) * 100
+        return {
+            'name': ind_name,
+            'chg_20d': round(chg_20d, 2),
+        }
+    except:
+        return None
+
 def get_mainline_data(date_str):
-    """获取主线板块数据（从行业排行中提取前N名）"""
-    industries = get_industry_rankings()
-    lines = []
-    for ind in industries[:10]:
-        score = round(ind['change'] * 10, 1)
-        if score >= 15:
-            lines.append({
-                'name': ind['name'],
-                'score': score,
-                'change': ind['change'],
-                'leader': ind['leader'],
-            })
-    return {'lines': lines[:5], 'industries': industries}
+    """三梯队：前5=主线，6~10=次级主线，其余=非主线"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import akshare as ak
+    
+    try:
+        name_df = ak.stock_board_industry_name_ths()
+        industries = name_df['name'].tolist()
+    except Exception as e:
+        print(f"[WARN] 获取板块名称失败: {e}")
+        return {'lines': [], 'secondary': [], 'industries': get_industry_rankings()}
+    
+    scores = []
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        fut_map = {pool.submit(_calc_board_20d, ind): ind for ind in industries}
+        for fut in as_completed(fut_map):
+            r = fut.result()
+            if r:
+                scores.append(r)
+    
+    scores.sort(key=lambda x: x['chg_20d'], reverse=True)
+    daily_rankings = get_industry_rankings()
+    
+    main_lines = scores[:5]
+    secondary_lines = scores[5:10]
+    
+    return {
+        'lines': main_lines,           # 主线（前5）
+        'secondary': secondary_lines,   # 次级主线（6~10）
+        'industries': daily_rankings,   # 今日行业排行（展示用）
+        'all_ranked': scores,           # 全排序（供参考）
+    }
 
 def track_mainline_persistence(date_str, current_lines):
     """主线持续性跟踪（占位）"""
@@ -242,30 +279,29 @@ def track_mainline_persistence(date_str, current_lines):
 # ====== ③ 最强逻辑归类 ======
 
 def classify_stocks_by_mainline(mainline_data, holdings, buy_signals):
-    """将持仓/候选归入主线/非主线"""
+    """将持仓/候选归入主线/次级主线/非主线（精确匹配同花顺行业）"""
     lines = [l['name'] for l in mainline_data.get('lines', [])]
-    result = {'mainline': [], 'non_mainline': []}
+    secondary = [l['name'] for l in mainline_data.get('secondary', [])]
+    result = {'mainline': [], 'secondary': [], 'non_mainline': []}
 
-    def find_sector(stock):
-        sec = stock.get('sector', '')
-        for line in lines:
-            if line in sec or sec in line:
-                return line
-        return sec
+    def get_tier(stock):
+        sec = stock.get('sector', stock.get('direction', ''))
+        if sec in lines:
+            return 'mainline', sec
+        if sec in secondary:
+            return 'secondary', sec
+        return 'non_mainline', sec
 
     for h in holdings:
-        line = find_sector(h)
-        entry = {'name': h.get('name', '?'), 'code': h.get('code', ''), 'sector': line}
-        if line in lines:
-            result['mainline'].append(entry)
-        else:
-            result['non_mainline'].append(entry)
+        tier, sec = get_tier(h)
+        entry = {'name': h.get('name', '?'), 'code': h.get('code', ''), 'sector': sec}
+        result[tier].append(entry)
 
     for s in buy_signals:
-        line = find_sector(s)
-        entry = {'name': s.get('name', '?'), 'code': s.get('code', ''), 'sector': line}
-        if line in lines:
-            result['mainline'].append(entry)
+        tier, sec = get_tier(s)
+        entry = {'name': s.get('name', '?'), 'code': s.get('code', ''), 'sector': sec}
+        if tier == 'mainline' or tier == 'secondary':
+            result[tier].append(entry)
 
     return result
 
@@ -368,7 +404,7 @@ def generate_trading_plan(market_cycle, mainline_data, logic_classify, signals_d
 
     # 主线方向
     for line in (mainline_data.get('lines', [])[:3]):
-        plan['main_lines'].append(f"{line['name']}(评分{line['score']})")
+        plan['main_lines'].append(f"{line['name']}({line['chg_20d']}%)")
 
     # 3L仓位规则说明
     pos = market_cycle.get('position', '波中')
@@ -921,7 +957,7 @@ def generate_daily_review(date_str=None):
     trading_plan = generate_trading_plan(market_cycle, mainline_data, logic_classify, timing_signals, holdings,
                                          holdings_review=holdings_review, buy_signals_review=buy_signals_review)
 
-    # 组装
+    # 组装（含动量和行业地图，用于历史复盘时展示）
     review = {
         'date': date_str,
         'market': {
@@ -938,13 +974,64 @@ def generate_daily_review(date_str=None):
         'buy_signals_review': buy_signals_review,
     }
 
+    # 保存动量数据（涨停/新高）到存档
+    try:
+        mom_cache = os.path.join(WWW_DIR, 'data', 'cache', f'momentum_{date_str}.json')
+        if os.path.isfile(mom_cache):
+            with open(mom_cache) as _f:
+                review['momentum'] = json.load(_f)
+        else:
+            # 尝试运行 fetch_momentum.py 现拉
+            mom_script = os.path.join(WWW_DIR, 'fetch_momentum.py')
+            if os.path.isfile(mom_script):
+                import subprocess
+                r = subprocess.run([sys.executable, mom_script], capture_output=True, text=True, timeout=90)
+                if r.returncode == 0:
+                    review['momentum'] = json.loads(r.stdout)
+    except Exception as e:
+        print(f"[3L复盘] 保存动量数据失败: {e}")
+
+    # 保存行业地图（供历史复盘展示最强逻辑）
+    try:
+        im_path = '/home/ubuntu/data/3l/stock_industry_map.json'
+        if os.path.isfile(im_path):
+            with open(im_path) as _f:
+                raw_map = json.load(_f)
+            # 按 ths_industry 分组（同前端 loadLogicMap 逻辑）
+            industry_groups = {}
+            for code, info in raw_map.items():
+                ind = info.get('ths_industry', '') or '未知'
+                if ind in ('未知', '获取失败') or ind.startswith('ERROR:'):
+                    continue
+                if ind not in industry_groups:
+                    industry_groups[ind] = []
+                industry_groups[ind].append({
+                    'code': code,
+                    'name': info.get('name', info.get('direction', '')),
+                    'direction': info.get('direction', ''),
+                })
+            review['industry_map_archive'] = {
+                'groups': dict(sorted(industry_groups.items(), key=lambda x: -len(x[1]))),
+                'total': sum(len(v) for v in industry_groups.values()),
+            }
+    except Exception as e:
+        print(f"[3L复盘] 保存行业地图失败: {e}")
+
+    # 保存行业板块排行（同花顺90个行业今日涨跌幅，供历史复盘板块排行展示）
+    try:
+        import akshare as ak
+        df = ak.stock_board_industry_summary_ths()
+        review['industry_boards_archive'] = df.fillna('').to_dict('records')
+    except Exception as e:
+        print(f"[3L复盘] 保存行业板块排行失败: {e}")
+
     # 保存
     save_json(os.path.join(ARCHIVE_DIR, f'{date_str}.json'), review)
     # 同步到 review_data.json（server读取源）
     save_json(os.path.join(WWW_DIR, 'private', 'review_data.json'), review)
     print(f"[3L复盘] ✅ 已保存 {date_str} 复盘数据")
 
-    # 补充生成买点信号的关键点图（如果当天有新的扫描结果）
+    # 补充生成买点信号的关键点图
     try:
         bp_script = os.path.join(os.path.dirname(__file__), '..', '.hermes', 'profiles', '3l', 'skills',
                                   'research', 'daily-3l-review', 'scripts', 'batch_gen_charts.py')
@@ -956,6 +1043,40 @@ def generate_daily_review(date_str=None):
             print("[3L复盘] 🎨 关键点图已更新")
     except Exception as e:
         print(f"[3L复盘] 🎨 生成关键点图跳过: {e}")
+
+    # 生成资金流向图（传入复盘日期，确保图表日期正确）
+    try:
+        import subprocess
+        ff_script = '/home/ubuntu/www/gen_fund_flow_chart.py'
+        if os.path.isfile(ff_script):
+            subprocess.run([sys.executable, ff_script, date_str], timeout=120, capture_output=True)
+            print("[3L复盘] 💰 资金流向图已生成")
+    except Exception as e:
+        print(f"[3L复盘] 💰 生成资金流向图跳过: {e}")
+
+    # 归档图表（按日期目录隔离，名称不变）
+    try:
+        import shutil
+        chart_archive_dir = os.path.join(WWW_DIR, 'review_charts', 'archive', date_str)
+        os.makedirs(chart_archive_dir, exist_ok=True)
+        src_charts = [
+            ('/home/ubuntu/www/review_charts/zzqz_v2.svg', 'zzqz_v2.svg'),
+            ('/home/ubuntu/www/charts/fund_flow_chart.png', 'fund_flow_chart.png'),
+        ]
+        for src, basename in src_charts:
+            if os.path.isfile(src):
+                dst = os.path.join(chart_archive_dir, basename)
+                shutil.copy2(src, dst)
+                print(f"[3L复盘] 📊 图表已归档: archive/{date_str}/{basename}")
+        # 在存档JSON中记录图表路径（供历史前端加载）
+        review['charts'] = {
+            'index_chart': f'/review_charts/archive/{date_str}/zzqz_v2.svg',
+            'fund_flow': f'/review_charts/archive/{date_str}/fund_flow_chart.png',
+        }
+        # 重新保存存档（更新chart路径）
+        save_json(os.path.join(ARCHIVE_DIR, f'{date_str}.json'), review)
+    except Exception as e:
+        print(f"[3L复盘] 📊 图表归档失败: {e}")
 
     return review
 

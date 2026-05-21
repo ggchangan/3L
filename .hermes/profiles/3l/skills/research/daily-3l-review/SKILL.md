@@ -6,16 +6,33 @@ description: >-
 
 # 3L 每日复盘页面
 
+## 核心原则
+
+### 复盘页面只展示已完成交易日
+
+**复盘是回顾已收盘的交易日，不是盘中实时工具。** 复盘数据由每日18:00的cron job生成，只有cron生成的数据才算数。
+
+**⛔ 不允许犯的错误（2026-05-21 踩坑）：**
+- 交易时段（09:30~15:00）手动运行 `generate_review_data.py` → 生成当天不完整的复盘数据
+- 手动生成的当天存档 → 页面显示"今日复盘 ✓" → 但数据是错的（大盘/量价不完整）
+- 最终需要删掉当天存档来恢复
+
+**✅ 正确做法：**
+- 页面永远从 `/api/review/dates` 取最新存档日期展示
+- 18:00 cron跑完后自然就有今天的数据
+- 手动跑 `generate_review_data.py` 只应在收盘后，且不加日期参数时自动用当天日期
+- **怀疑数据有问题时**：检查 `review_archive/{date}.json` 是否是cron生成的，不是就删掉
+
 ## 6区结构
 
-| # | 标题 | 数据源 |
-|:-:|------|--------|
-| STEP 1 | 大盘周期判定 | 存档 `market` 字段 |
-| STEP 2 | 最强动量（4 tab） | 实时API |
-| STEP 3 | **最强逻辑** | 实时 `/api/industry-map` | 行业分类地图，每页10个（PER_PAGE=10） |
-| STEP 4 | **持仓个股复盘** | 存档 `holdings_review` | 诊断卡（操作→结构→阶段→买点(仅buy)→📊），按结构排序，**全部展开不分页**（只11只无需分页） |
-| STEP 5 | **自选股买点信号** | 存档 `buy_signals_review` | 方向Tab分组+分页+与第④部分同判定逻辑 |
-| PLAN | 每日交易计划（3L体系版） | 个股操作+买点优先级+风险项，详见下文 |
+| # | 标题 | 数据源（今日页面） | 数据源（历史页面） |
+|:-:|------|---------|---------|
+| STEP 1 | 大盘周期判定 | 存档 `market` | 同左 |
+| STEP 2 | 最强动量（4 tab） | 实时API `/api/momentum` | 存档 `momentum` + `industry_boards_archive` |
+| STEP 3 | 最强逻辑 | 实时API `/api/industry-map` | 存档 `industry_map_archive` |
+| STEP 4 | 持仓个股复盘 | 存档 `holdings_review` | 同左 |
+| STEP 5 | 自选股买点信号 | 存档 `buy_signals_review` | 同左 |
+| PLAN | 每日交易计划 | `trading_plan` | 同左 |
 
 ## 完整执行流程（必须按顺序）
 
@@ -62,7 +79,22 @@ python3 /home/ubuntu/.hermes/profiles/3l/skills/research/daily-3l-review/scripts
 
 **⚡ SVG自动生成已整合：** `daily_update_and_scan.py` 的 `scan_buy_points()` 在扫描完成后自动调用 `batch_gen_charts.py`。`generate_review_data.py` 在保存复盘后也自动调用。日常运行 Step 1 或 Step 4 即可连带生成SVG，无需手动 Step 3。
 
-### Step 4: 生成复盘数据
+### ⚠️ 复盘日期应使用上一个完整交易日（2026-05-21 发现）
+
+`generate_review_data.py` 默认使用 `datetime.now().strftime('%Y-%m-%d')` 作为复盘日期。**如果在交易时段运行（09:30~15:00），这会生成当天的错误复盘——当天交易未结束，大盘/量价数据不完整。**
+
+```bash
+# ❌ 交易时段运行 → 生成今天的不完整数据
+cd /home/ubuntu/www && python3 generate_review_data.py
+
+# ✅ 交易时段运行 → 显式指定上个完整交易日
+cd /home/ubuntu/www && python3 generate_review_data.py 2026-05-20
+
+# ✅ 收盘后运行 → 用当天日期
+cd /home/ubuntu/www && python3 generate_review_data.py
+```
+
+**脚本参数：** `sys.argv[1]` 是日期字符串（如 `2026-05-20`），**不是** `--date` 标志。错误调用 `--date 2026-05-20` 会导致 `date_arg = "--date"`，生成日期错误的复盘。
 
 ```bash
 cd /home/ubuntu/www && python3 generate_review_data.py {date}
@@ -70,9 +102,13 @@ cd /home/ubuntu/www && python3 generate_review_data.py {date}
 
 **坑：** 上述顺序不可颠倒。get_buy_sell_signals 必须在 buy_signals 重扫之后执行（已修复为自动顺序）。
 
-### 一键脚本
+### 一键脚本（cron job）
 
 见 `/home/ubuntu/.hermes/profiles/3l/scripts/generate_daily_review.sh`
+
+**⚠️ 图表归档已内置在 Step 4 中：** 图表归档（`zzqz_v2.svg`→`archive/{date}/zzqz_v2.svg`、`fund_flow_chart.png`→`archive/{date}/fund_flow_chart.png`）实现在 `generate_review_data.py` 的最后阶段（见下方《图表归档》章节，**目录隔离方案，不用后缀**）。**不要单独写一个归档步骤到 cron 脚本里**——Step 3 画图 → Step 4 自动归档，全流程一体化。
+
+**原则：cron job 处理全量端到端流程，手动操作只用于调试。** 手动跑 `generate_review_data.py` 时也会触发归档，因此手动测试时不需要额外步骤。
 
 ## 关键坑（Pitfalls）
 
@@ -178,7 +214,27 @@ holdings_review.append({
 const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--';
 ```
 
-### buy_signals 数据源优先级（2026-05-21 修复）
+### ⚠️ latest_scan_result.json vs scan_buy_signals.py 两套扫描结果不同步（2026-05-21 发现）
+
+复盘页面的买点数据来自 `latest_scan_result.json`（`daily_update_and_scan.py` 通过 `buy_point_detection.py` 生成的），而小时级缓存（`data/cache/buy_signals_*.json`）来自 `scan_buy_signals.py`（简单机械条件扫描）。**两套系统阈值不同，结果可以完全不同。**
+
+```python
+# latest_scan_result.json — 3层阈值框架（review页面用的）
+daily_update_and_scan.py
+  → buy_point_detection.detect_buy_point(market_position=波中偏上, main_lines=['半导体',...])
+  → 缩量阈值 = 基准确(大盘) × 板块系数(主线×1.05/非主线×0.80)
+  → 永鼎(通信设备=非主线) → 基准84% × 0.80 = 67%
+  → 若量比68% > 67% → 不通过 ❌
+
+# data/cache/buy_signals_*.json — 简单机械条件（小时扫描用）
+scan_buy_signals.py
+  → check_zhongji_buy(): MA20回踩 + MA5>MA10 + 缩量<1.2倍 + 涨幅<5%
+  → 永鼎(缩量OK) → 中继买点 ✅
+```
+
+**排查思路：** 用户说"之前是买点现在没了"，先确认用户说的是复盘页面还是实时扫描结果，再看用的是哪套系统。复盘页面始终用 `latest_scan_result.json`，实时问询用 cache 中的 buy_signals。
+
+**修复方法：** 重新运行 `daily_update_and_scan.py`（会重算 `latest_scan_result.json`）。如果主线判别已修改（如本次会话），必须重跑才能让复盘页面反映新逻辑。
 
 `generate_review_data.py` 加载 buy_signals 的优先级：
 
@@ -200,6 +256,17 @@ if os.path.isfile(latest_scan_path):
 当触发 fallback 扫描路径（`format_buy_signals()`）时，`market_cycle.get('position')` 作为 `market_position` 参数传入，使扫描阈值与当前大盘环境匹配。
 
 **坑：** 早期版本仅从 existing 存档加载 buy_signals，若存档有数据则跳过重新扫描。导致 `daily_update_and_scan.py` 的阈值或数据更新无法反映到复盘页。**读 `latest_scan_result.json` 修复了这个问题。**
+
+**每日复盘完整刷新流程（主线判定变更后必须执行）：**
+```bash
+# 1. 重跑扫描（用最新主线判定）
+python3 /home/ubuntu/.hermes/profiles/3l/skills/research/daily-3l-review/scripts/daily_update_and_scan.py --scan-only
+# 2. 重新生成复盘
+cd /home/ubuntu/www && python3 generate_review_data.py {date}
+# 3. 重启服务
+kill $(cat /home/ubuntu/www/server.pid 2>/dev/null)
+cd /home/ubuntu/www && python3 server.py
+```
 
 **daily_update_and_scan.py 独立扫描时的市场位置获取（2026-05-21）：**
 - 优先读取已有 review 存档的 `market.position`。**注意路径：** 存档在 `private/review_archive/2026-05-21.json`（YYYY-MM-DD格式），不是 `review_output/{date}/review.json`。`daily_update_and_scan.py` 已修复为两路径都尝试，YYYYMMDD转YYYY-MM-DD。\n- 无存档时从 000985 中证全指K线估算（收盘价/MA20偏离）\n- 估算失败时默认波中（80%阈值，非主线0.80系数下=64%）\n- 输出：控制台打印 `大盘位置: 波中偏上 缩量阈值: <89%  主线板块: 半导体, ...`
@@ -245,7 +312,48 @@ vols_60 = [k.get('vol', 0) for k in _kls]  # ❌ 永远为0
 
 **修复：** `k.get('volume', k.get('vol', 0))` 双字段兼容。
 
-### ⚠️ signal_text 已废弃（2026-05-21 用户确认删除）
+### ⚠️ mainline_data 结构变更（2026-05-21）
+
+`get_mainline_data()` 返回的结构从：
+```python
+{'lines': [{'name': '半导体', 'score': 27.1, 'change': 2.71, 'leader': '...'}]}
+```
+改为三梯队：
+```python
+{
+  'lines': [{'name': '电子化学品', 'chg_20d': 37.57}, ...],      # 前5主线
+  'secondary': [{'name': '消费电子', 'chg_20d': 9.38}, ...],     # 6~10次级
+  'industries': [...],                                            # 今日排行（展示用）
+  'all_ranked': [...]                                              # 全排序
+}
+```
+
+**影响：** 
+- `line['score']` 不再存在 → 使用 `line['chg_20d']`
+- `classify_stocks_by_mainline()` 返回 `{'mainline':[], 'secondary':[], 'non_mainline':[]}`
+- 持仓/候选中的通信设备行业股票自动归入 `secondary`
+- 前端 logic_classify 区块需适配三分类渲染
+
+### ⚠️ daily_update_and_scan.py 必须同步读取 secondary 主线（2026-05-21 踩坑）
+
+`daily_update_and_scan.py` 从 review 存档读取 `main_lines_list` 时，**只读了 `lines`（前5），没读 `secondary`（6~10）**。导致通信设备等次级主线板块的股票（如永鼎股份）在扫描时被当作非主线，使用严阈值被过滤掉。
+
+**修复（对应代码第159行）：**
+```python
+# ❌ 错误 — 只读前5主线
+main_lines_list = [l['name'] for l in _rd.get('mainline', {}).get('lines', [])]
+
+# ✅ 正确 — 主线+次级主线全传
+main_lines_primary = [l['name'] for l in _rd.get('mainline', {}).get('lines', [])]
+main_lines_secondary = [l['name'] for l in _rd.get('mainline', {}).get('secondary', [])]
+main_lines_list = main_lines_primary + main_lines_secondary
+```
+
+**影响：** 主线判定逻辑变更后（如单日法→20日涨幅三梯队），必须：
+1. 重新生成复盘数据（`generate_review_data.py`）
+2. 重新运行扫描（`daily_update_and_scan.py`）
+3. 再生成复盘数据（刷新 `buy_signals`）
+否则旧的扫描结果不会自动反映新主线。`latest_scan_result.json` 在扫描时绑定了当时的 `main_lines` 和 `market_position`。
 
 `holdings_review` 中不再包含 `signal_text` 字段。前端 `signalStockCard()` 操作字段仅通过 `s.signal` 代码（buy/hold/sell）渲染简短符号：`✅持有` / `⚡买入` / `❌卖出`，无冗余描述文字。结论文字独立于操作信号，由前端按 stage 生成详细的量价分析结论。
 
@@ -320,14 +428,15 @@ git show HEAD:./generate_review_data.py > /tmp/gen_orig.py
 
 操作项带左色条（红=高优/黄=中/灰=低），买点区显示`主线`标签+`🏆`盈利1徽章。
 
-## 脚本路径
+### 脚本路径
 
 | 脚本 | 路径 |
 |------|------|
 | 更新缓存+扫买点 | `daily-3l-review/scripts/daily_update_and_scan.py` |
 | 补全股票名 | `daily-3l-review/scripts/fill_stock_names.py` |
 | 重启Web服务 | `daily-3l-review/scripts/restart_server.sh` |
-| 中证全指图 | `/home/ubuntu/www/gen_index_chart.py` |
+| 中证全指关键点图 | `/home/ubuntu/www/gen_index_chart.py` |
+| 全市场资金流向图 | `/home/ubuntu/www/gen_fund_flow_chart.py` |
 | 批量个股图 | `daily-3l-review/scripts/batch_gen_charts.py` |
 | 复盘生成器 | `/home/ubuntu/www/generate_review_data.py` |
 | cron脚本 | `~/.hermes/profiles/3l/scripts/generate_daily_review.sh` |
@@ -336,7 +445,154 @@ git show HEAD:./generate_review_data.py > /tmp/gen_orig.py
 
 - 目录：`/home/ubuntu/www/private/review_archive/`
 - API: `/api/review/{date}` GET, `/api/review/dates` GET
-- 默认显示最新已完成复盘
+
+### 历史复盘列表（2026-05-21 重写）
+
+**原则：历史列表排除当前展示日期，不排除"今天"。**
+
+```
+当前展示 2026-05-20 → 历史列表排除 05-20 → 显示 05-19（1条）
+查看历史 ?date=2026-05-19 → 历史列表排除 05-19 → 显示 05-20（1条）
+```
+
+**实现：** `loadHistoryList(currentDisplayDate)` 接收当前展示的日期参数，`checkUrlParam()` 传入 `dateParam`，`loadLatestReview()` 传入 `latest`。
+
+```javascript
+function loadHistoryList(currentDisplayDate) {
+    const curDate = currentDisplayDate || ...;
+    const dates = allDates.filter(d => d !== curDate);  // 排除当前，不是排除"今天"
+}
+```
+
+**错误历史：** 原来写死 `filter(d => d !== today)`（排除"今天"）。当查看历史页面（如 05-19）时，05-19 自己还在历史列表里（因为它不是"今天"），而 05-20 反而不在列表里（被"今天"排除条件误伤）。
+
+### 日期加载逻辑（2026-05-21 重写）
+
+**原则：永远展示最新已有数据的日期，不猜"今天"。**
+
+```
+页面加载 → loadLatestReview() → GET /api/review/dates
+  ├─ 最新日期 == 今天（18:00 cron 已运行）→ "2026-05-21 今日复盘 ✓"
+  └─ 最新日期 != 今天（收盘前）→ "2026-05-20 每日复盘（收盘后自动更新）"
+```
+
+**改动：** 废弃了先试`/api/review/今天`、404再fallback的老逻辑。直接取`/api/review/dates`的最新存档。避免了"今天没有数据→显示昨日→但日期标签写的是今天"的错位问题。
+
+服务端：`server.py` 的 `/api/review/dates` 加了 `re.match(r'^\d{4}-\d{2}-\d{2}\.json$')` 正则过滤，排除 `--date.json` 等非法文件名（2026-05-21 发现 `--date.json` 因 parse 错误写入的脏数据混入日期列表）。
+
+### 图表归档（2026-05-21 目录隔离版）
+
+**问题：** 历史页面的中证全指关键点图（`zzqz_v2.svg`）和资金流向图（`fund_flow_chart.png`）被每天覆盖。看历史复盘时，图表显示的是当天的内容，不是历史当天的。
+
+**方案：目录隔离，不改文件名。** 不使用后缀区分，而是把每天的图表拷贝到 `review_charts/archive/{date}/` 子目录：
+
+```
+review_charts/zzqz_v2.svg                        ← 最新（每天覆盖）
+review_charts/archive/2026-05-19/zzqz_v2.svg     ← 历史归档（名称不变）
+review_charts/archive/2026-05-19/fund_flow_chart.png
+review_charts/archive/2026-05-20/zzqz_v2.svg
+review_charts/archive/2026-05-20/fund_flow_chart.png
+```
+
+**⚠️ 不能用 `/private/` 目录：** 这个目录下的静态文件需要 Basic Auth，但 `<img>` 和 `<object>` 标签加载图片时**浏览器不会自动发送 auth header**，导致显示 401。归档图表必须放在**公共目录**（`review_charts/archive/` 或 `charts/archive/`）下。
+
+**后端（`generate_review_data.py`）：**
+```python
+chart_archive_dir = os.path.join(WWW_DIR, 'review_charts', 'archive', date_str)
+os.makedirs(chart_archive_dir, exist_ok=True)
+shutil.copy2('/home/ubuntu/www/review_charts/zzqz_v2.svg',
+              os.path.join(chart_archive_dir, 'zzqz_v2.svg'))
+shutil.copy2('/home/ubuntu/www/charts/fund_flow_chart.png',
+              os.path.join(chart_archive_dir, 'fund_flow_chart.png'))
+review['charts'] = {
+    'index_chart': f'/review_charts/archive/{date_str}/zzqz_v2.svg',
+    'fund_flow': f'/review_charts/archive/{date_str}/fund_flow_chart.png',
+}
+save_json(os.path.join(ARCHIVE_DIR, f'{date_str}.json'), review)
+```
+
+**前端：** `loadReviewData()` 检测 `data.charts`，有则替换图表src：
+```javascript
+if (data.charts) {
+    document.getElementById('indexChartObj').data = data.charts.index_chart;
+    document.getElementById('fundFlowImg').src = data.charts.fund_flow;
+} else {
+    // 今日页面回退到默认路径
+    document.getElementById('indexChartObj').data = '/review_charts/zzqz_v2.svg';
+    document.getElementById('fundFlowImg').src = '/charts/fund_flow_chart.png';
+}
+```
+
+**⚠️ 资金流向图 vs 成交额（2026-05-21 踩坑）：** 资金流向（主力净流入/净流出）≠ 成交额。初版错误地用了成交额/成交量替代，被用户纠正。终版使用 `stock_market_fund_flow()` 的 `主力净流入-净额`。
+- 上图：全市场主力净流入（亿元），数据源 `akshare.stock_market_fund_flow()` 主力净流入-净额
+- 下图：中证全指涨跌幅，数据源 `akshare.stock_zh_index_daily_tx(symbol='sh000985')`
+- 标题统一为"中证全指资金流向"
+- 颜色：红涨绿跌（正值红色`#e94560`，负值绿色`#4CAF50`）
+- 图表由 `gen_fund_flow_chart.py` 生成，`generate_review_data.py` 传入 `date_str` 参数确保数据截止到复盘日期。归档时复制到 `archive/{date}/` 目录。
+
+**同步坑：** `gen_fund_flow_chart.py` 的数据源必须稳定。曾用 `stock_zh_index_daily_em()`（东方财富）因连接不稳定切换回 `stock_zh_index_daily_tx()`（腾讯）。优先用腾讯接口。`TQDM_DISABLE=1` 必须写在 `import akshare` 之前才能关掉进度条。`get_zzqz_data()` 和 `get_fund_flow()` 函数名在 `gen_fund_flow_chart.py` 内已定义，不要在脚本外重复引用。
+
+**三次迭代教训：** 资金流向图曾先后用了行业板块数据（stock_board_industry_summary_ths）和全市场净流入数据（stock_market_fund_flow），都被用户纠正。终版统一使用中证全指自身数据源，与关键点图一致。
+
+**⚠️ A股图表颜色铁律（2026-05-21 踩坑）：** 红涨绿跌。资金流向图：红色=净流入(涨)，绿色=净流出(跌)。代码写法：
+```python
+# ✅ 正确
+colors = ['#4CAF50' if v < 0 else '#e94560' for v in values]
+# ❌ 错误（初版犯了此错）
+# colors = ['#e94560' if v < 0 else '#4CAF50' for v in values]
+```
+
+**资金流向图结构：** 双面板暗色背景。上图=中证全指每日成交额柱状图（红涨绿跌，涨日红色，跌日绿色），下图=中证全指涨跌幅折线。**数据源统一使用 `akshare.stock_zh_index_daily_em(symbol='sh000985')`**，与中证全指关键点图（gen_index_chart.py）数据源一致。不要用行业板块数据（`stock_board_industry_summary_ths`）或全市场汇总（`stock_market_fund_flow`）。
+
+**数据源切换历史（2026-05-21 四次迭代）：**\n1. ❌ 初版用了 `stock_board_industry_summary_ths()`（行业板块）→ 用户纠正"资金流向是中证全指"\n2. ❌ 二版改为 `stock_market_fund_flow()`（全市场主力净流入）→ 但面板2用了上证指数，数据源不统一\n3. ❌ 三版改为 `stock_zh_index_daily_tx('sh000985')` 成交额→ 用户纠正"成交额不是资金流向"\n4. ✅ 终版：上图 `stock_market_fund_flow()` 主力净流入, 下图 `stock_zh_index_daily_tx('sh000985')` 涨跌幅，统一标"中证全指"
+
+**✅ 铁律：** 同图同源。资金流向图和中证全指关键点图都用 sh000985 一个数据源。不混用上证/深证/行业数据。
+
+### toggleIndexChart() 的 `!display` 假阳性（2026-05-21 踩坑）
+
+```javascript
+// ❌ 错误 — 当 display=''（显示状态）时，!'' 为 true，视为隐藏
+const isHidden = chart.style.display === 'none' || !chart.style.display;
+
+// ✅ 正确 — 只判断是否为 'none'
+const isHidden = chart.style.display === 'none';
+```
+
+`chart.style.display` 初始为 `'none'`（HTML inline style），展开后被设为 `''`（空字符串）。`!''` 返回 `true`，导致**已展开的图表点第二次无法收起**。`toggleChart()` 和 `toggleEl()` 都只用 `=== 'none'` 判断。
+
+### fund_flow_chart.png 数据源：全市场主力净流入 + 中证全指涨跌幅\n\n`gen_fund_flow_chart.py` 使用两个数据源（逻辑统一于「中证全指」标签下）：\n\n**上图：** 全市场每日主力净流入/净流出柱状图（亿元）\n- `akshare.stock_market_fund_flow()` → `主力净流入-净额` / 1e8\n\n**下图：** 中证全指涨跌幅折线\n- `akshare.stock_zh_index_daily_tx(symbol='sh000985')` → `change_pct`\n\n**铁律：** 资金流向 ≠ 成交额。不要用成交量/成交额替代资金流向。`stock_zh_index_daily_tx()` 的 `amount` 字段是成交额，不是资金流向。\n\n**同步坑：** 优先用腾讯接口（`stock_zh_index_daily_tx`），东方财富接口（`stock_zh_index_daily_em`）连接不稳定。`TQDM_DISABLE=1` 必须写在 `import akshare` 之前才能生效。`get_zzqz_data()` 中最后调用 `stock_zh_index_daily_tx()` 内部会拉取最新15条数据，进度条已被 TQDM_DISABLE 关闭。
+
+### ✅ 新功能集成原则：复用现有模式，不重写（2026-05-21 用户明确）\n\n用户有明确偏好：**按已有的写法写，不要重新发明轮子。** 新功能应先查看代码库中类似功能的实现模式，再按相同风格扩展。\n\n**错误做法（本会话踩坑）：**\n- 资金流向图先后尝试了3种不同数据源（行业板块→全市场净流入→成交额→终版混合），每次都是全部重写\n- 应该一开始就参考 `gen_index_chart.py` 的写法（`stock_zh_index_daily_tx` 腾讯接口）\n\n**正确做法：**\n1. 先看现有脚本怎么写的（`gen_index_chart.py` 就是好模板）\n2. 数据源优先用代码库已验证的（腾讯接口 > 东方财富接口）\n3. 增量修改，不是全盘重写\n\n同时：**新功能集成到 `generate_review_data.py`，不加 cron 步骤。** 所有复盘相关的新生成逻辑（图表生成、数据归档等）都应整合到 `generate_review_data.py` 内部，不在 `generate_daily_review.sh` 里加新 Step。cron 脚本只编排 4 个固定 Step，新功能在 Step 4 内部完成。
+
+当前已集成到 Step 4 的功能：
+- 批量个股关键点图（`batch_gen_charts.py`）
+- 全市场资金流向图（`gen_fund_flow_chart.py`）
+- 图表归档（`zzqz_v2.svg` + `fund_flow_chart.png` → `review_charts/archive/{date}/`）
+
+**问题：** 查看历史复盘时，②最强动量和③最强逻辑加载的是**当天**的实时数据，不是历史当天的数据。
+
+**修复：** 后端 `generate_review_data.py` 在生成复盘时额外保存3个字段到存档JSON：
+- `momentum` — 涨停/新高数据（来自 `fetch_momentum.py` 或其缓存）
+- `industry_map_archive` — 行业分类地图（按 `ths_industry` 分组后的 `stock_industry_map.json`）
+- `industry_boards_archive` — 同花顺90个行业当日涨跌幅/净流入/领涨股（来自 `akshare.stock_board_industry_summary_ths()`），供历史页板块排行展示
+
+前端 `loadReviewData()` 检测存档中是否有这些字段：
+```javascript
+if (data.momentum) {
+    updateMomentumFromArchive(data.momentum, data.industry_boards_archive);
+} else {
+    loadMomentum();  // 实时拉取（今日页面）
+}
+if (data.industry_map_archive) {
+    updateLogicFromArchive(data.industry_map_archive);
+} else {
+    loadLogicMap();
+}
+```
+
+**历史板块排行：** 从 `industry_boards_archive` 取出数据，按涨跌幅降序取TOP10渲染到 `#mainLineBodyArchive` 表格中。无领涨股图表链接（只有名称文字）。
+
+**注意：** 历史动量和行业地图仅保存在 `review_archive/{date}.json` 中，不写入 `review_data.json`（仅今日数据）。
 
 ### 持仓按结构优先排序（2026-05-21）
 
@@ -376,6 +632,9 @@ holdings_review.sort(key=lambda x: struct_priority.get(x['structure'], 3))
 
 `updateBuySignalsUI()` 渲染 `buy_signals_review`，与第④部分**使用同一 `signalStockCard()` 函数**，判定逻辑完全一致。
 
+**分组字段 `sector` = 用户方向（非同花顺行业）：**
+`buy_signals_review` 中的 `sector` 字段存储的是**用户8大方向**（半导体/算力/创新药/机器人/新能源/资源股/AI应用/商业航天），而非同花顺行业分类。数据来源：`all_stocks_60d.json` 的顶层 key 即为用户方向名。Tab 按 `s.sector` 分组，算力Tab下显示华工科技/永鼎股份/中际旭创/东山精密/中国移动（同花顺行业为自动化设备/通信设备/元件/通信服务，分散在不同行业但都属于算力方向）。
+
 **判定逻辑（2026-05-21 重构：完全基于系统B—EMA10趋势分析 + 3层阈值）：**
 ```
 buy_signals[] ← 来自 latest_scan_result.json（每日扫描结果，含market_position+main_lines参数）
@@ -399,11 +658,7 @@ buy_signals[] ← 来自 latest_scan_result.json（每日扫描结果，含marke
 
 **未通过条件不展示买点：** 中微公司(上涨趋势但量能正常104%)→ 无买点 ✅，沪硅产业(区间震荡不在底部)→ 无买点 ✅
 
-**UI结构：**
-- **方向Tab** — 按 sector（8大类方向）分组，Tab显示组名+数量
-- **每Tab分页** — >10只自动分页，每页10只
-- **排序** — 按结构优先级（上涨趋势→区间震荡→下降趋势），后端已排好
-- **卡片格式** — 同第④部分 `signalStockCard()`：操作/结构/阶段/买点(仅buy)/📊/结论+盈利1标签
+**UI结构：**\n- **方向Tab** — 用 `<span onclick="">` 替代 `<a href="javascript:;">`，避免浏览器显示 `javascript;` 文本（2026-05-21 用户反馈后修复）\n  - 坑：`<a href="javascript:;" onclick="...">` 在某些浏览器/环境下点击后状态栏或页面文本中出现 `javascript;` 字样\n  - 修复：改为 `<span style="cursor:pointer;display:inline-block;" onclick="...">`\n- **Tab状态** — `if (!window._buyTab)` 初始化一次**而非**每次都 `window._buyTab = {...}` 重置。踩坑日志：误写成重置 → 用户切Tab后被拉回第一个 → 以为切Tab出错了\n- **每Tab分页** — >10只自动分页，每页10只\n- **排序** — 按结构优先级（上涨趋势→区间震荡→下降趋势），后端已排好\n- **卡片格式** — 同第④部分 `signalStockCard()`：操作/结构/阶段/买点(仅buy)/📊/结论+盈利1标签
 
 **技术实现：**
 1. `get_buy_sell_signals()` 返回三个值：`(signals, stock_cache, bs_by_code)`
@@ -438,6 +693,24 @@ buy_point_display = s.get('buy_point', '')
 
 **原则：** 第⑤部分标题是"自选股**买点**信号"，只应展示 `signal='buy'` 的股票。
 
+### ⚠️ signalStockCard() 跨区复用 — 变量作用域陷阱（2026-05-21 踩坑）
+
+`signalStockCard()` 被 `updateStocksUI()`（第④部分）和 `updateBuySignalsUI()`（第⑤部分）共同调用。`secColors` 定义在 `updateBuySignalsUI()` 函数作用域内，**不在 `signalStockCard()` 的作用域链中**。如果在 `signalStockCard()` 中引用 `secColors`：
+
+```javascript
+// ❌ 错误 — secColors 在 signalStockCard 的闭包中未定义
+function signalStockCard(s, idx) {
+    const color = secColors[s.sector];  // ReferenceError!
+}
+```
+
+后果：`updateStocksUI()` 调用 `signalStockCard()` 时，`secColors` 未定义 → ReferenceError → 抛出异常 → 被 `loadReviewData.fetch().catch()` 吞掉 → **三个section（持仓/买点/交易计划）全部静默为空**。用户看到的是"暂无数据"，完全无 JS 错误提示。
+
+**避免方法：**
+1. **不要**在 `signalStockCard()` 中引用外部函数作用域的变量
+2. 如果需要方向颜色：在 `updateBuySignalsUI()` 渲染Tab时已经展示，卡片内无需重复
+3. 如果必须跨区共享变量，提升到 `window` 全局或 IIFE 闭包
+
 ### ⚠️ signalStockCard() 跨区复用导致图表ID冲突（2026-05-21 用户反馈）
 
 第④部分和第⑤部分都使用同一 `signalStockCard()` 渲染卡片，其中图表toggle的DOM ID固定为 `hchart_{idx}`。当两部分在页面同时存在时，`getElementById('hchart_1')` 永远返回第④部分的元素，第⑤部分点击📊无效。
@@ -455,9 +728,7 @@ html += pageData.map((s, i) => {
 
 **原则：** 复用包含DOM ID的UI组件时，不同区域必须用ID前缀区分。Section 4 = `hchart_`，Section 5 = `bchart_`。
 
-### ⑤区 自选股买点信号 — 方向Tab+分页（2026-05-21 重写）
-
-**方向颜色映射（JS `secColors`）：**
+**方向颜色映射（JS `secColors`，仅在 `updateBuySignalsUI()` 函数作用域内定义，不可被 `signalStockCard()` 引用）：**
 - 半导体: #e94560 · 算力: #2196f3 · 创新药: #4CAF50
 - 机器人: #9C27B0 · 新能源: #FF9800 · 资源股: #8B4513
 - AI应用: #00BCD4 · 商业航天: #FF5722
@@ -597,8 +868,10 @@ const signalText = s.signal_text || (s.signal === 'hold' ? '✅ 持有' : s.sign
 | `references/2026-05-21-diagnosis-operation-redesign.md` | ④⑤区重构（诊断卡+操作决策）+ vol字段名修复记录 |
 | `references/2026-05-21-full-optimization-summary.md` | 操作建议全链路调优5轮记录 |
 | `references/2026-05-21-conclusion-text-mapping.md` | 结论文字映射表（signalStockCard 前端逻辑） |
-| `references/2026-05-21-buy-signals-tab-pagination.md` | 第⑤部分方向Tab分组+分页+共享判定逻辑架构 |
+| `references/2026-05-21-session-chart-fixes.md` | 复盘页面修复会话记录：toggle、资金流向图颜色/日期/数据源、全量新高、TQDM_DISABLE |
 | `references/2026-05-21-systemb-detection-rewrite.md` | 05-21 买点检测系统A→系统B重构 + 动态阈值 |
+| `references/historical-data-preservation.md` | 历史复盘数据保存模式：哪些数据需存档、前后端实现方案、排查指南 |
+| `references/fund-flow-chart-generation.md` | 全市场资金流向图生成规范：数据源选择（禁行业板块）、图表结构、集成方式 |
 
 ### 关联 skill
 

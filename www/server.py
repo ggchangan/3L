@@ -158,7 +158,11 @@ class Handler(SimpleHTTPRequestHandler):
                 # 返回可用日期列表
                 dates = []
                 if os.path.isdir(ARCHIVE_DIR):
-                    dates = sorted([f[:-5] for f in os.listdir(ARCHIVE_DIR) if f.endswith('.json')])
+                    import re
+                    dates = sorted([
+                        f[:-5] for f in os.listdir(ARCHIVE_DIR)
+                        if f.endswith('.json') and re.match(r'^\d{4}-\d{2}-\d{2}\.json$', f)
+                    ])
                 return self.send_json({'dates': dates})
             fp = os.path.join(ARCHIVE_DIR, f'{date_str}.json')
             if os.path.isfile(fp):
