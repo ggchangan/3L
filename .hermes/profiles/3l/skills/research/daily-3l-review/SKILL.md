@@ -1105,7 +1105,7 @@ const signalText = s.signal_text || (s.signal === 'hold' ? '✅ 持有' : s.sign
 
 **运行：** `cd /home/ubuntu/www && python -m pytest tests/ -v`
 
-**32个测试用例：** 路径完整性(17) + 数据结构(9) + 趋势股正反验证 + 回踩买点 + 自选股过滤 + 接口完整性。
+**32个测试用例：** 路径完整性(17) + 数据结构(9) + 趋势股正反验证 + 3L买点检测(突破/中继) + 自选股过滤 + 接口完整性。
 
 详见 `market-scan-workflow` skill 的 `references/unit-test-framework.md`。
 
@@ -1126,9 +1126,9 @@ const signalText = s.signal_text || (s.signal === 'hold' ? '✅ 持有' : s.sign
   "ema5": 25.10, "ema10": 24.50, "ema20": 23.80, "ema30": 23.20,
   "deviation_pct": 2.31, "vol_ratio": 0.85,
   "trend_stock": true, "profit_model1": false,
-  "buy_point": "回踩买点", "buy_score": 5,
-  "buy_detail": {"reason": "...", "ema5": 25.10, "deviation_pct": 0.85},
-  "huicai_detail": null,
+  "buy_point": "突破买点", "buy_score": 4,
+  "buy_detail": {"reason": "...", "structure": "区间震荡", "vol_ratio": 1.45},
+  "huicai_detail": null,  // 回踩买点数据保留但不被detect_buy_point调用
   "has_chart": true,
   "signal": "buy"
 }
