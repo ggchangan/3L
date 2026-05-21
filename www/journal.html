@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3L · 交易日志</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #0f0f1a; color: #e0e0e0; min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-bottom: 2px solid #f59e0b;
+            padding: 30px 20px; text-align: center;
+        }
+        .header h1 { font-size: 28px; color: #fff; letter-spacing: 4px; }
+        .header .subtitle { color: #a0a0b0; font-size: 14px; margin-top: 8px; }
+        .container { max-width: 960px; margin: 0 auto; padding: 30px 20px; }
+
+        .tabs { display: flex; gap: 10px; margin-bottom: 24px; }
+        .tab {
+            padding: 10px 24px; border-radius: 10px; cursor: pointer;
+            background: #1a1a2e; border: 1px solid #2a2a4e; color: #888;
+            font-size: 14px; transition: all .2s;
+        }
+        .tab.active { background: #f59e0b; color: #000; border-color: #f59e0b; font-weight: bold; }
+        .tab:hover:not(.active) { border-color: #f59e0b; color: #f59e0b; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .journal-form { background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 16px; padding: 30px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block; font-size: 13px; color: #a0a0b0; margin-bottom: 6px; font-weight: bold;
+        }
+        .form-group label .num { color: #f59e0b; margin-right: 4px; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 10px 14px; border-radius: 8px;
+            background: #0f0f1a; border: 1px solid #2a2a4e; color: #e0e0e0;
+            font-size: 14px; outline: none; transition: border .2s;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            border-color: #f59e0b;
+        }
+        .form-group textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+        .form-group .hint { font-size: 11px; color: #666; margin-top: 4px; }
+
+        .btn {
+            padding: 12px 32px; border: none; border-radius: 10px; cursor: pointer;
+            font-size: 15px; font-weight: bold; transition: all .2s;
+        }
+        .btn-primary { background: #f59e0b; color: #000; }
+        .btn-primary:hover { background: #d48806; transform: translateY(-1px); }
+        .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+        .btn-danger { background: #e94560; color: #fff; }
+        .btn-danger:hover { background: #d63851; }
+        .btn-sm { padding: 6px 14px; font-size: 12px; }
+
+        .toast {
+            position: fixed; top: 20px; right: 20px; padding: 14px 24px;
+            border-radius: 10px; font-size: 14px; z-index: 999;
+            animation: slideIn .3s ease; display: none;
+        }
+        .toast.success { background: #22c55e; color: #000; display: block; }
+        .toast.error { background: #e94560; color: #fff; display: block; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .history-list { display: flex; flex-direction: column; gap: 12px; }
+        .history-item {
+            background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 12px;
+            padding: 18px 20px; cursor: pointer; transition: all .2s;
+        }
+        .history-item:hover { border-color: #f59e0b; }
+        .history-item .h-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .history-item .h-date { color: #f59e0b; font-weight: bold; font-size: 14px; }
+        .history-item .h-stock { color: #4ecdc4; font-size: 13px; }
+        .history-item .h-score { font-size: 13px; font-weight: bold; }
+        .history-item .h-reason { color: #a0a0b0; font-size: 12px; margin-top: 4px; line-height: 1.5; }
+
+        .detail-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,.7); z-index: 100; display: none;
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        .detail-overlay.show { display: flex; }
+        .detail-modal {
+            background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 16px;
+            padding: 30px; max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto;
+        }
+        .detail-modal h2 { color: #fff; margin-bottom: 16px; }
+        .detail-modal .field { margin-bottom: 12px; }
+        .detail-modal .field .fl { color: #888; font-size: 12px; margin-bottom: 2px; }
+        .detail-modal .field .fv { color: #e0e0e0; font-size: 14px; }
+        .detail-modal .close-btn {
+            float: right; background: none; border: none; color: #888; font-size: 24px;
+            cursor: pointer; padding: 0 4px;
+        }
+        .detail-modal .close-btn:hover { color: #fff; }
+
+        .empty { text-align: center; padding: 60px; color: #666; }
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .spinner {
+            display: inline-block; width: 32px; height: 32px;
+            border: 3px solid #333; border-top-color: #f59e0b;
+            border-radius: 50%; animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .actions { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+        .stock-search-wrap { position: relative; }
+        .stock-dropdown {
+            position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+            background: #0f0f1a; border: 1px solid #2a2a4e; border-radius: 0 0 8px 8px;
+            max-height: 200px; overflow-y: auto; display: none;
+        }
+        .stock-dropdown.show { display: block; }
+        .stock-dropdown .opt {
+            padding: 8px 14px; cursor: pointer; font-size: 13px; color: #ccc;
+            border-bottom: 1px solid #1a1a2e;
+        }
+        .stock-dropdown .opt:hover { background: #1a1a2e; color: #f59e0b; }
+
+        .form-actions { display: flex; gap: 12px; margin-top: 20px; }
+
+        @media (max-width: 640px) {
+            .form-row { grid-template-columns: 1fr; }
+            .container { padding: 16px; }
+            .journal-form { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="nav-top"></div>
+    <div class="header">
+        <h1>✍️ 交易日志</h1>
+        <div class="subtitle">按照简放模板记录每一笔交易 · 坚持写日志是快速提升的捷径</div>
+    </div>
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('write')">✍️ 写日志</div>
+            <div class="tab" onclick="switchTab('history')">📋 历史记录</div>
+        </div>
+
+        <!-- Write Tab -->
+        <div id="tab-write" class="tab-content active">
+            <div class="journal-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><span class="num">①</span> 日期</label>
+                        <input type="date" id="j-date">
+                    </div>
+                    <div class="form-group">
+                        <label><span class="num">②</span> 标的</label>
+                        <div class="stock-search-wrap">
+                            <input type="text" id="j-stock" placeholder="输入股票代码或名称搜索..." autocomplete="off">
+                            <div class="stock-dropdown" id="stock-dropdown"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label><span class="num">③</span> 理由/逻辑</label>
+                    <textarea id="j-reason" placeholder="为什么要买？是否符合体系？"></textarea>
+                    <div class="hint">写下具体的买入逻辑：主线方向？趋势确认？量价配合？</div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><span class="num">④</span> 止损点</label>
+                        <input type="text" id="j-stop-loss" placeholder="如: 25.50元">
+                        <div class="hint">买入同时必须设好止损位</div>
+                    </div>
+                    <div class="form-group">
+                        <label><span class="num">⑤</span> 买卖点</label>
+                        <select id="j-point">
+                            <option value="">请选择</option>
+                            <option value="突破买点">突破买点</option>
+                            <option value="中继买点">中继买点</option>
+                            <option value="回踩买点">回踩买点</option>
+                            <option value="反转买点">反转买点</option>
+                            <option value="恐慌买点">恐慌买点</option>
+                            <option value="左侧止盈">左侧止盈</option>
+                            <option value="右侧止盈">右侧止盈</option>
+                            <option value="止损卖出">止损卖出</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><span class="num">⑥</span> 盈亏（%）</label>
+                        <input type="text" id="j-pnl" placeholder="如: +3.5 / -2.1">
+                    </div>
+                    <div class="form-group">
+                        <label><span class="num">⑧</span> 执行评分（1-10）</label>
+                        <input type="number" id="j-score" min="1" max="10" placeholder="1-10">
+                        <div class="hint">是否严格执行了计划？</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label><span class="num">⑨</span> 情绪记录</label>
+                    <select id="j-emotion">
+                        <option value="">请选择</option>
+                        <option value="平静">😐 平静</option>
+                        <option value="自信">😎 自信</option>
+                        <option value="贪婪">🤑 贪婪</option>
+                        <option value="恐惧">😰 恐惧</option>
+                        <option value="愤怒">😡 愤怒</option>
+                        <option value="焦虑">😖 焦虑</option>
+                        <option value="犹豫">🤔 犹豫</option>
+                        <option value="懊悔">😩 懊悔</option>
+                        <option value="兴奋">🤩 兴奋</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label><span class="num">⑩</span> 反思</label>
+                    <textarea id="j-reflection" placeholder="如果重来一次，哪里可以改进？"></textarea>
+                    <div class="hint">诚实面对自己的交易，这是进步的关键</div>
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="saveJournal()">💾 保存日志</button>
+                    <button class="btn btn-sm" style="background:#2a2a4e;color:#888;" onclick="clearForm()">清空</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="tab-history" class="tab-content">
+            <div id="history-list" class="loading"><div class="spinner"></div><br>加载中...</div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div class="detail-overlay" id="detail-overlay" onclick="event.target===this && closeDetail()">
+        <div class="detail-modal">
+            <button class="close-btn" onclick="closeDetail()">×</button>
+            <h2 id="detail-title">交易详情</h2>
+            <div id="detail-body"></div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // --- Stock Search ---
+        let allStocks = [];
+        async function loadStocks() {
+            try {
+                const res = await fetch('/api/tips');
+                // 也可以直接通过stock-analysis搜索
+            } catch(e) {}
+            // 尝试从数据层加载全部股票
+            try {
+                const res = await fetch('/api/tips/journal-entries'); 
+            } catch(e) {}
+            // 使用预置的常用自选股列表作为搜索源
+            allStocks = [];
+        }
+
+        const stockInput = document.getElementById('j-stock');
+        const stockDropdown = document.getElementById('stock-dropdown');
+        let searchTimer = null;
+
+        stockInput.addEventListener('input', function() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => searchStock(this.value), 200);
+        });
+        stockInput.addEventListener('focus', function() {
+            if (this.value) searchStock(this.value);
+        });
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.stock-search-wrap')) stockDropdown.classList.remove('show');
+        });
+
+        async function searchStock(q) {
+            if (!q || q.length < 1) { stockDropdown.classList.remove('show'); return; }
+            try {
+                const res = await fetch(`/api/stock-analysis?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                stockDropdown.innerHTML = '';
+                if (data.code) {
+                    const opt = document.createElement('div');
+                    opt.className = 'opt';
+                    opt.textContent = `${data.name} (${data.code}) — ${data.direction || ''}`;
+                    opt.onclick = () => selectStock(data.name, data.code);
+                    stockDropdown.appendChild(opt);
+                    stockDropdown.classList.add('show');
+                } else {
+                    stockDropdown.innerHTML = '<div class="opt" style="color:#666;">未找到</div>';
+                    stockDropdown.classList.add('show');
+                }
+            } catch(e) {
+                stockDropdown.classList.remove('show');
+            }
+        }
+
+        function selectStock(name, code) {
+            stockInput.value = `${name} (${code})`;
+            stockDropdown.classList.remove('show');
+        }
+
+        // --- Tabs ---
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab[onclick*="${tab}"]`).classList.add('active');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            if (tab === 'history') loadHistory();
+        }
+
+        // --- Save ---
+        async function saveJournal() {
+            const data = {
+                date: document.getElementById('j-date').value || new Date().toISOString().slice(0,10),
+                stock: stockInput.value,
+                reason: document.getElementById('j-reason').value,
+                stop_loss: document.getElementById('j-stop-loss').value,
+                point: document.getElementById('j-point').value,
+                pnl: document.getElementById('j-pnl').value,
+                score: document.getElementById('j-score').value,
+                emotion: document.getElementById('j-emotion').value,
+                reflection: document.getElementById('j-reflection').value,
+            };
+
+            if (!data.stock) { showToast('请输入标的', 'error'); return; }
+            if (!data.reason) { showToast('请输入买入理由/逻辑', 'error'); return; }
+
+            try {
+                const res = await fetch('/api/tips/save-journal', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.status === 'ok') {
+                    showToast('✅ 日志保存成功！', 'success');
+                    clearForm();
+                } else {
+                    showToast('❌ ' + (result.msg || '保存失败'), 'error');
+                }
+            } catch(e) {
+                showToast('❌ ' + e.message, 'error');
+            }
+        }
+
+        function clearForm() {
+            document.getElementById('j-stock').value = '';
+            document.getElementById('j-reason').value = '';
+            document.getElementById('j-stop-loss').value = '';
+            document.getElementById('j-point').value = '';
+            document.getElementById('j-pnl').value = '';
+            document.getElementById('j-score').value = '';
+            document.getElementById('j-emotion').value = '';
+            document.getElementById('j-reflection').value = '';
+        }
+
+        // --- Toast ---
+        function showToast(msg, type) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `toast ${type}`;
+            t.style.display = 'block';
+            setTimeout(() => { t.style.display = 'none'; }, 3000);
+        }
+
+        // --- History ---
+        async function loadHistory() {
+            const el = document.getElementById('history-list');
+            el.className = 'loading';
+            el.innerHTML = '<div class="spinner"></div><br>加载中...';
+            try {
+                const res = await fetch('/api/tips/journal-entries');
+                const data = await res.json();
+                const entries = data.entries || [];
+                if (entries.length === 0) {
+                    el.innerHTML = '<div class="empty">暂无交易日志记录<br><span style="font-size:12px;color:#555;">切换到「写日志」开始记录吧</span></div>';
+                    return;
+                }
+                el.className = 'history-list';
+                el.innerHTML = entries.map((e, i) => `
+                    <div class="history-item" onclick="showDetail(${i})">
+                        <div class="h-top">
+                            <span class="h-date">${e.date}</span>
+                            <span class="h-stock">${e.stock || '--'}</span>
+                            <span class="h-score" style="color:${getScoreColor(e.score)}">${e.score ? e.score + '/10' : '--'}</span>
+                        </div>
+                        <div class="h-reason">
+                            ${(e.reason || '').slice(0, 80)}${(e.reason || '').length > 80 ? '...' : ''}
+                            ${e.pnl ? ' · <span style="color:' + (parseFloat(e.pnl) >= 0 ? '#22c55e' : '#e94560') + '">' + e.pnl + '%</span>' : ''}
+                        </div>
+                    </div>
+                `).join('');
+                // Store data for detail view
+                window._journalEntries = entries;
+            } catch(e) {
+                el.innerHTML = `<div class="empty">❌ 加载失败: ${e.message}</div>`;
+            }
+        }
+
+        function getScoreColor(s) {
+            const n = parseInt(s);
+            if (n >= 8) return '#22c55e';
+            if (n >= 6) return '#f59e0b';
+            return '#e94560';
+        }
+
+        function showDetail(idx) {
+            const entries = window._journalEntries || [];
+            const e = entries[idx];
+            if (!e) return;
+            document.getElementById('detail-title').textContent = `${e.date} · ${e.stock || '--'}`;
+            document.getElementById('detail-body').innerHTML = `
+                <div class="field"><div class="fl">③ 理由/逻辑</div><div class="fv">${e.reason || '--'}</div></div>
+                <div class="field"><div class="fl">④ 止损点</div><div class="fv">${e.stop_loss || '--'}</div></div>
+                <div class="field"><div class="fl">⑤ 买卖点</div><div class="fv">${e.point || '--'}</div></div>
+                <div class="field"><div class="fl">⑥ 盈亏</div><div class="fv" style="color:${parseFloat(e.pnl) >= 0 ? '#22c55e' : '#e94560'}">${e.pnl || '--'}%</div></div>
+                <div class="field"><div class="fl">⑧ 执行评分</div><div class="fv" style="color:${getScoreColor(e.score)}">${e.score || '--'}/10</div></div>
+                <div class="field"><div class="fl">⑨ 情绪</div><div class="fv">${e.emotion || '--'}</div></div>
+                <div class="field"><div class="fl">⑩ 反思</div><div class="fv">${e.reflection || '--'}</div></div>
+                <div class="field"><div class="fl">创建时间</div><div class="fv" style="color:#888;font-size:12px;">${e.created_at || '--'}</div></div>
+            `;
+            document.getElementById('detail-overlay').classList.add('show');
+        }
+
+        function closeDetail() {
+            document.getElementById('detail-overlay').classList.remove('show');
+        }
+
+        // Set default date
+        document.getElementById('j-date').value = new Date().toISOString().slice(0,10);
+
+        // Load history if first tab
+        loadHistory();
+    </script>
+    <script src="/nav.js"></script>
+</body>
+</html>

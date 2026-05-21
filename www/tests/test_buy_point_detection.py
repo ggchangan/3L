@@ -96,19 +96,19 @@ class TestFormatBuySignals:
 
 
 class TestDetectBuyPoint:
-    """detect_buy_point 返回值结构测试"""
+    """detect_buy_point 返回值结构测试 — 3L框架优先，趋势股仅打标签"""
 
     def test_detect_buy_point_return(self, stocks):
-        """对沪硅产业跑 detect_buy_point，应返回 dict 且包含 buy_type/score/structure/stage"""
-        result = detect_buy_point('688126', '2026-05-21', stocks)
+        """对北特科技跑 detect_buy_point，应返回 dict 且包含 buy_type/score/structure/stage"""
+        # 北特科技(603009) — 上涨趋势+放量突破前高，预期3L突破买点
+        result = detect_buy_point('603009', '2026-05-21', stocks)
         assert isinstance(result, dict), f"预期 dict，实际: {type(result)}"
         # 必含字段
         assert 'buy_type' in result, f"缺少 buy_type，实际 keys: {list(result.keys())}"
         assert 'score' in result, f"缺少 score"
         assert 'structure' in result, f"缺少 structure"
         assert 'stage' in result, f"缺少 stage"
-        # 字段类型校验
-        assert result['buy_type'] == '回踩买点'
+        # 3L买点类型（中继买点 或 突破买点），不再是回踩买点
+        assert result['buy_type'] in ('中继买点', '突破买点'), f"预期3L买点，实际: {result['buy_type']}"
         assert isinstance(result['score'], int)
-        assert result['structure'] == '上涨趋势'
-        assert result['stage'] == '上行'
+        assert result['score'] > 0

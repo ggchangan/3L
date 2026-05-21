@@ -1109,6 +1109,67 @@ const signalText = s.signal_text || (s.signal === 'hold' ? '✅ 持有' : s.sign
 
 详见 `market-scan-workflow` skill 的 `references/unit-test-framework.md`。
 
+## 个股独立分析页面（2026-05-21 新增）
+
+**`/stock_analysis.html`** — 独立的个股买点检测页面，输入股票代码或名称即可查看完整3L量价分析。
+
+### 后端API
+
+`/api/stock-analysis?q=688126` 或 `?q=绿的谐波`
+
+返回JSON结构：
+```json
+{
+  "code": "688126", "name": "沪硅产业", "direction": "半导体",
+  "is_watchlist": true, "price": 25.68, "change": 1.23, "date": "2026-05-21",
+  "structure": "上涨趋势", "stage": "上行",
+  "ema5": 25.10, "ema10": 24.50, "ema20": 23.80, "ema30": 23.20,
+  "deviation_pct": 2.31, "vol_ratio": 0.85,
+  "trend_stock": true, "profit_model1": false,
+  "buy_point": "回踩买点", "buy_score": 5,
+  "buy_detail": {"reason": "...", "ema5": 25.10, "deviation_pct": 0.85},
+  "huicai_detail": null,
+  "has_chart": true,
+  "signal": "buy"
+}
+```
+
+### 搜索逻辑
+
+1. 精确匹配code → 2. 模糊匹配code → 3. 模糊匹配name
+- 支持纯数字代码、带前缀代码、中英文名称
+
+### 前端
+
+暗色风格，与复盘页面一致：
+- 信号标签（buy/hold/warn）→ 顶部高亮
+- 基本信息（名称/代码/方向/价格/涨跌幅）
+- 标签行（自选股/非自选、📈趋势股、🏆盈利1、结构）
+- 信息网格（阶段、量比、偏离EMA5、EMA排列）
+- EMA均线可视化（彩色小圆点+数值）
+- 买点详情（可展开）
+- K线SVG图表（可展开）
+
+### ⚠️ API URL约定：使用硬编码服务器IP，不用相对URL（2026-05-21 用户纠正）
+
+创建新独立HTML页面时，`fetch()` 调用后端API必须使用**完整URL + 服务器公网IP**：
+
+```javascript
+// ✅ 正确 — 用户明确要求
+const res = await fetch(`http://43.136.177.133:8080/api/stock-analysis?q=${q}`);
+
+// ❌ 错误 — 浏览器本地打开页面时失效
+const res = await fetch(`/api/stock-analysis?q=${q}`);
+```
+
+**原因：** 用户可能通过 `file:///` 直接打开HTML，或从不同机器/浏览器访问时本地相对URL不可达。硬编码IP确保无论从哪个设备、以何种方式打开页面都能正常工作。
+
+**注意：** IP变更时需同步更新所有HTML文件中的URL。
+
+### 测试验证
+
+覆盖三种响应：有买点（沪硅产业）、趋势股无买点（绿的谐波+5.10%）、搜索不到（错误提示）。
+
 ## 关联 skill
 
 - `main-line-judgment` — buy_point_detection 模块来源

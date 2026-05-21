@@ -156,7 +156,7 @@ async function search() {
     area.innerHTML = '<div class="loading"><div class="spinner"></div>正在分析...</div>';
     
     try {
-        const res = await fetch(`/api/stock-analysis?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`http://43.136.177.133:8080/api/stock-analysis?q=${encodeURIComponent(q)}`);
         const data = await res.json();
         
         if (data.error) {

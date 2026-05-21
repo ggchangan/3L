@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3L 交易体系 · 每日成果 2026-05-21</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#0f0f1a;color:#e0e0e0;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border-bottom:2px solid #e94560;padding:30px 20px;text-align:center}
+.header h1{font-size:28px;color:#fff;letter-spacing:4px}
+.header .subtitle{color:#a0a0b0;font-size:14px;margin-top:8px}
+.container{max-width:960px;margin:0 auto;padding:30px 20px}
+.section-title{font-size:18px;color:#4ecdc4;margin:32px 0 16px;padding-bottom:8px;border-bottom:1px solid #2a2a4e}
+.card-today{background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid #2a2a4e;border-radius:16px;padding:30px;margin-bottom:24px;position:relative;overflow:hidden}
+.card-today::before{content:'';position:absolute;top:0;right:0;width:200px;height:200px;background:radial-gradient(circle,rgba(233,69,96,0.08) 0%,transparent 70%);pointer-events:none}
+.card-today .card-title{font-size:20px;color:#e94560;margin-bottom:12px}
+.card-today .card-meta{color:#888;font-size:13px;margin-bottom:16px}
+.file-list{list-style:none}
+.file-list li{padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid #2a2a4e;border-radius:10px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.file-list li:hover{background:rgba(255,255,255,0.08)}
+.file-name{font-size:14px}
+.tag-done{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;background:#064e3b;color:#4ecdc4}
+.tag-pending{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;background:#451a03;color:#ffd700}
+.footer{text-align:center;padding:30px;color:#555;font-size:12px;border-top:1px solid #1a1a2e;margin-top:40px}
+a{color:#4ecdc4}
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>📊 3L 交易体系 · 每日成果</h1>
+    <div class="subtitle">2026-05-21 星期四 | 🔄 复盘页面修复 · toggle/资金流向图/全量新高/T...</div>
+    <div style="margin-top:10px;" id="nav-top"></div>
+</div>
+<div class="container">
+    <div class="section-title">📄 当日报告</div>
+    <div class="card-today">
+        <div class="card-title">📄 报告文件</div>
+        <ul class="file-list">
+            <li><a href="/files/每日成果_20260521.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none;">每日成果_20260521.pdf</a></li>
+        </ul>
+    </div>
+
+    <div class="section-title">✅ 当日完成</div>
+    <div class="card-today">
+        <div style="font-size:16px; color:#e94560; margin-bottom:8px; font-weight:600;">🔄 复盘页面修复 · toggle/资金流向图/全量新高/TQDM乱码</div>
+        <p style="font-size:13px; color:#ccc; line-height:1.8;">① toggleIndexChart() 收起修复（display判定逻辑） ② 资金流向图改用腾讯API（stock_market_fund_flow 主力净流入+中证全指涨跌幅） ③ fetch_momentum.py 去掉[:50]硬编码（全量新高返回） ④ TQDM_DISABLE=1 放在 import akshare 前（修复乱码） ⑤ review.html历史复盘加载归档图表（review_charts/archive/{date}/）</p>
+        <p style="margin-top:8px"><span class="tag-done" style="display:inline-block;padding:4px 12px;border-radius:6px;font-size:11px;background:#064e3b;color:#4ecdc4;">✅ 已修复</span></p>
+    </div>
+    <div class="card-today">
+        <div style="font-size:16px; color:#e94560; margin-bottom:8px; font-weight:600;">📈 资金流向图生成器 + 集成</div>
+        <p style="font-size:13px; color:#ccc; line-height:1.8;">新建 gen_fund_flow_chart.py（日期参数化，暗色风格，红涨绿跌） 集成到 generate_review_data.py Step 4 归档路径 review_charts/archive/{date}/fund_flow_chart.png</p>
+        <p style="margin-top:8px"><span class="tag-done" style="display:inline-block;padding:4px 12px;border-radius:6px;font-size:11px;background:#064e3b;color:#4ecdc4;">✅ 已上线</span></p>
+    </div>
+    <div class="card-today">
+        <div style="font-size:16px; color:#e94560; margin-bottom:8px; font-weight:600;">🔧 EMA10算法修正 + 支撑线修复</div>
+        <p style="font-size:13px; color:#ccc; line-height:1.8;">ema_utils.py get_structure() 全量K线算EMA10再取末15根（原bug：只从15根独立算） 区间震荡支撑位用 support_price（前10日最高价），过滤距收盘<1.5%的支撑</p>
+        <p style="margin-top:8px"><span class="tag-done" style="display:inline-block;padding:4px 12px;border-radius:6px;font-size:11px;background:#064e3b;color:#4ecdc4;">✅ 已修复</span></p>
+    </div>
+    <div class="card-today">
+        <div style="font-size:16px; color:#e94560; margin-bottom:8px; font-weight:600;">📄 每日成果PDF（5/21）自动生成机制</div>
+        <p style="font-size:13px; color:#ccc; line-height:1.8;">生成每日成果_20260521.pdf 修复根因：generate_review_data.py 新增每日成果PDF自动生成步骤！</p>
+        <p style="margin-top:8px"><span class="tag-done" style="display:inline-block;padding:4px 12px;border-radius:6px;font-size:11px;background:#064e3b;color:#4ecdc4;">✅ 已完成</span></p>
+    </div>
+
+    <div class="section-title">⏳ 当日待办</div>
+    <div class="card-today" style="padding:20px;">
+        <ul class="file-list">
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name">📋 交易纪律 · 规则确认</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">个人交易参数（持仓成本等）待确认</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#ffd700; font-size:12px; white-space:nowrap;">⏳ 待确认</span>
+                        <a href="/files/%E5%BE%85%E5%8A%9E_%E4%BA%A4%E6%98%93%E7%BA%AA%E5%BE%8B.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name">📋 每日复盘 · 数据接入</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">行业板块TOP15+领涨股K线图已接入，图表布局已修复。但大盘实时数据/持仓个股复盘/自选股买点信号仍需自动化填充</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#ffd700; font-size:12px; white-space:nowrap;">⏳ 部分完成</span>
+                        <a href="/files/%E5%BE%85%E5%8A%9E_%E6%AF%8F%E6%97%A5%E5%A4%8D%E7%9B%98.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name">🔧 模拟交易v33 · 产业链聚类优化</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">细分赛道聚类规则待用产业链重新定义，而非走势相关系数</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#e94560; font-size:12px; white-space:nowrap;">🔄 待优化</span>
+                        <a href="/files/%E5%BE%85%E5%8A%9E_%E4%BA%A7%E4%B8%9A%E9%93%BE%E8%81%9A%E7%B1%BB.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#e94560;">🔴 3L盯盘 · 主线板块实时评分</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            当前板块监测只展示今日/5日涨幅，缺3L主线判定。需展示 get_main_lines() 的20日涨幅×0.6+MA20覆盖率×0.4评分结果，标识评分≥15的真正主线板块及评分变化趋势
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#e94560; font-size:12px; white-space:nowrap;">🔴 待开发</span>
+                    </div>
+                </li>
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#e94560;">🔴 3L盯盘 · 卖点预警（左侧+右侧）</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            当前只有买点扫描，缺完整3L卖点预警。左侧止盈(加速/放量滞涨/动力减弱)+右侧止盈(反转/破关键点)。对持仓股+自选股同时监测
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#e94560; font-size:12px; white-space:nowrap;">🔴 待开发</span>
+                    </div>
+                </li>
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#eab308;">🟡 3L盯盘 · 板块轮动检测</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            监测20日动量从&lt;15突增至≥15（新主线冒头），或评分跌破15（主线衰退），在板块监测区给出轮动警示标签
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#eab308; font-size:12px; white-space:nowrap;">🟡 待开发</span>
+                    </div>
+                </li>
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#eab308;">🟡 3L盯盘 · 主线板块个股分层扫描</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            确定主线板块后，板块内领涨龙头/跟风/突破分层展示，结合市场龙头扫描结果
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#eab308; font-size:12px; white-space:nowrap;">🟡 待开发</span>
+                    </div>
+                </li>
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#eab308;">🟡 3L盯盘 · 大盘仓位策略联动</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            根据market-peak-trough结果，页面顶部显示建议总仓位（波谷≥80%/波中50%/波峰≤30%）及单只个股仓位限制
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#eab308; font-size:12px; white-space:nowrap;">🟡 待开发</span>
+                    </div>
+                </li>
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name">🔲 3L盯盘 · 逻辑观测实现</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            当前占位"功能开发中"。需展示主线板块驱动逻辑（政策/产业/业绩）+催化事件日历
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#888; font-size:12px; white-space:nowrap;">🔲 待开发</span>
+                    </div>
+                </li>
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name">🔲 3L盯盘 · 个股3L综合评分</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            自选股/持仓股3L评分仪表盘：动量分(所属板块主线评分)+逻辑分(板块驱动强度)+量价分(买点/卖点状态)
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#888; font-size:12px; white-space:nowrap;">🔲 待开发</span>
+                    </div>
+                </li>
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name">🔲 3L盯盘 · 大盘异常事件检测</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            盘中异常波动/关键点位突破失败/量价背离等自动检测并警示
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#888; font-size:12px; white-space:nowrap;">🔲 待开发</span>
+                    </div>
+                </li>
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name">🔍 iwencai 替代方案</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">akshare v1.18.62已移除iwencai，需找其他语义搜索方案</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#e94560; font-size:12px; white-space:nowrap;">🔍 待调研</span>
+                        <a href="/files/%E5%BE%85%E5%8A%9E_iwencai.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+        </ul>
+    </div>
+</div>
+<div id="nav-bottom"></div>
+<div class="footer">3L 交易体系 · Hermes Agent · 2026</div>
+<script src="/nav.js"></script>
+</body>
+</html>

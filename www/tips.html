@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3L · 交易技巧</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #0f0f1a; color: #e0e0e0; min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-bottom: 2px solid #f59e0b;
+            padding: 30px 20px; text-align: center;
+        }
+        .header h1 { font-size: 28px; color: #fff; letter-spacing: 4px; }
+        .header .subtitle { color: #a0a0b0; font-size: 14px; margin-top: 8px; }
+        .container { max-width: 960px; margin: 0 auto; padding: 30px 20px; }
+        .tips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+        .tip-card {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4e; border-radius: 16px; padding: 24px;
+            transition: all .2s; position: relative;
+        }
+        .tip-card:hover { border-color: #f59e0b; box-shadow: 0 8px 24px rgba(245,158,11,0.1); }
+        .tip-card h3 { font-size: 16px; color: #fff; margin-bottom: 8px; }
+        .tip-card .date { font-size: 11px; color: #555; margin-bottom: 8px; }
+        .tip-card p { font-size: 13px; color: #a0a0b0; line-height: 1.6; margin-bottom: 14px; }
+        .tip-card .badge {
+            display: inline-block; background: #f59e0b; color: #000;
+            padding: 3px 12px; border-radius: 10px; font-size: 11px; font-weight: bold; margin-bottom: 10px;
+        }
+        .tip-card .badge-tool { background: #22c55e; color: #000; }
+        .tip-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tip-actions .btn {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 7px 16px; border-radius: 8px; font-size: 12px; font-weight: bold;
+            text-decoration: none; transition: all .2s; cursor: pointer;
+        }
+        .btn-read { background: #2a2a4e; color: #f59e0b; border: 1px solid #3a3a5e; }
+        .btn-read:hover { background: #3a3a5e; border-color: #f59e0b; }
+        .btn-tool { background: #22c55e; color: #000; border: 1px solid #22c55e; }
+        .btn-tool:hover { background: #16a34a; }
+        .footer { text-align: center; color: #555; font-size: 12px; padding: 30px; }
+        .empty { text-align: center; padding: 60px; color: #666; }
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .spinner {
+            display: inline-block; width: 32px; height: 32px;
+            border: 3px solid #333; border-top-color: #f59e0b;
+            border-radius: 50%; animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="nav-top"></div>
+    <div class="header">
+        <h1>📝 交易技巧</h1>
+        <div class="subtitle">简放公众号文章 · 持续收录中</div>
+    </div>
+    <div class="container">
+        <div id="tips-list" class="loading"><div class="spinner"></div><br>加载中...</div>
+    </div>
+    <div class="footer">3L 交易体系 · 交易技巧知识库</div>
+    <script src="/nav.js"></script>
+    <script>
+        (async function() {
+            const el = document.getElementById('tips-list');
+            try {
+                const res = await fetch('/api/tips');
+                const data = await res.json();
+                if (!data.tips || data.tips.length === 0) {
+                    el.innerHTML = '<div class="empty">暂无交易技巧</div>';
+                    return;
+                }
+                el.className = 'tips-grid';
+                el.innerHTML = data.tips.map(t => {
+                    const readLink = `/kb-detail.html?type=tips&file=${encodeURIComponent(t.file)}`;
+                    if (t.is_journal) {
+                        return `<div class="tip-card">
+                            <div>
+                                <span class="badge">📖 技巧</span>
+                                <span class="badge badge-tool">✍️ 互动工具</span>
+                            </div>
+                            <h3>${t.title}</h3>
+                            ${t.date_added ? `<div class="date">📅 收录 ${t.date_added}</div>` : ''}
+                            <p>${t.desc || '暂无摘要'}</p>
+                            <div class="tip-actions">
+                                <a class="btn btn-read" href="${readLink}">📖 阅读文章</a>
+                                <a class="btn btn-tool" href="/journal.html">✍️ 写日志</a>
+                            </div>
+                        </div>`;
+                    }
+                    return `<div class="tip-card">
+                        <h3>${t.title}</h3>
+                        ${t.date_added ? `<div class="date">📅 收录 ${t.date_added}</div>` : ''}
+                        <p>${t.desc || '暂无摘要'}</p>
+                        <div class="tip-actions">
+                            <a class="btn btn-read" href="${readLink}">📖 阅读全文</a>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch(e) {
+                el.innerHTML = `<div class="empty">❌ 加载失败: ${e.message}</div>`;
+            }
+        })();
+    </script>
+</body>
+</html>

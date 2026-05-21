@@ -10,6 +10,8 @@
         { label: '📡 盘中盯盘',  href: '/monitor.html',   id: 'monitor' },
         { label: '📖 Skills',    href: '/skills.html',    id: 'skills' },
         { label: '📊 模拟交易',  href: '/simulation.html', id: 'simulation' },
+        { label: '📝 交易技巧',  href: '/tips.html',       id: 'tips' },
+        { label: '🔬 行业追踪',  href: '/industry.html',   id: 'industry' },
     ];
 
     // 判断当前页面 — archive页特殊处理（全部可点）
@@ -32,7 +34,7 @@
         return NAV_ITEMS.map(item => {
             const isCurrent = item.id === currentId;
             if (containerClass === 'nav-top') {
-                const color = isCurrent ? '#e94560' : (item.id === 'home' ? '#4ecdc4' : item.id === 'review' ? '#e94560' : item.id === 'skills' ? '#a855f7' : '#e67e22');
+                const color = isCurrent ? '#e94560' : (item.id === 'home' ? '#4ecdc4' : item.id === 'review' ? '#e94560' : item.id === 'skills' ? '#a855f7' : item.id === 'tips' ? '#f59e0b' : item.id === 'industry' ? '#22c55e' : '#e67e22');
                 const weight = isCurrent ? 'font-weight:bold;' : '';
                 return isCurrent
                     ? `<span style="color:${color};font-size:12px;${weight}">${item.label}</span>`

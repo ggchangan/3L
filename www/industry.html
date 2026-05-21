@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3L · 行业追踪</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #0f0f1a; color: #e0e0e0; min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-bottom: 2px solid #22c55e;
+            padding: 30px 20px; text-align: center;
+        }
+        .header h1 { font-size: 28px; color: #fff; letter-spacing: 4px; }
+        .header .subtitle { color: #a0a0b0; font-size: 14px; margin-top: 8px; }
+        .container { max-width: 960px; margin: 0 auto; padding: 30px 20px; }
+
+        /* Category Tabs */
+        .cat-tabs { display: flex; gap: 10px; margin-bottom: 24px; }
+        .cat-tab {
+            padding: 10px 24px; border-radius: 10px; cursor: pointer;
+            background: #1a1a2e; border: 1px solid #2a2a4e; color: #888;
+            font-size: 14px; transition: all .2s; user-select: none;
+        }
+        .cat-tab:hover:not(.active) { border-color: #22c55e; color: #22c55e; }
+        .cat-tab.active { background: #22c55e; color: #000; border-color: #22c55e; font-weight: bold; }
+        .cat-tab .count {
+            display: inline-block; background: rgba(255,255,255,0.15); border-radius: 8px;
+            padding: 0 7px; font-size: 11px; margin-left: 4px;
+        }
+        .cat-tab.active .count { background: rgba(0,0,0,0.15); }
+
+        .cat-section { display: none; }
+        .cat-section.active { display: block; }
+
+        .kb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+        .kb-card {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4e; border-radius: 14px; padding: 20px;
+            transition: all .2s; position: relative;
+        }
+        .kb-card:hover { border-color: #22c55e; box-shadow: 0 8px 24px rgba(34,197,94,0.1); }
+        .kb-card .company-tag { background: #22c55e; color: #000; }
+        .kb-card .industry-tag { background: #3b82f6; color: #fff; }
+        .kb-card .report-tag { background: #a855f7; color: #fff; }
+        .kb-card .tag {
+            display: inline-block; padding: 2px 10px; border-radius: 10px;
+            font-size: 11px; font-weight: bold; margin-bottom: 8px;
+        }
+        .kb-card h3 { font-size: 15px; color: #fff; margin-bottom: 6px; line-height: 1.4; }
+        .kb-card .date { font-size: 11px; color: #555; margin-bottom: 6px; }
+        .kb-card p { font-size: 13px; color: #a0a0b0; line-height: 1.5; margin-bottom: 12px; }
+        .btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; text-decoration: none; transition: all .2s; }
+        .btn-read { background: #2a2a4e; color: #22c55e; border: 1px solid #3a3a5e; }
+        .btn-read:hover { background: #3a3a5e; border-color: #22c55e; }
+
+        .empty-cat {
+            text-align: center; padding: 40px; color: #555; font-size: 14px;
+            background: #1a1a2e; border: 1px dashed #2a2a4e; border-radius: 12px;
+        }
+        .footer { text-align: center; color: #555; font-size: 12px; padding: 30px; }
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid #333; border-top-color: #22c55e; border-radius: 50%; animation: spin .8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 640px) {
+            .cat-tabs { flex-wrap: wrap; }
+            .cat-tab { flex: 1; text-align: center; padding: 10px 12px; font-size: 13px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="nav-top"></div>
+    <div class="header">
+        <h1>🔬 行业追踪</h1>
+        <div class="subtitle">公司分析 · 行业研究 · 机构研报</div>
+    </div>
+    <div class="container">
+        <div id="loading-area" class="loading"><div class="spinner"></div><br>加载中...</div>
+        <div id="main-content" style="display:none;">
+            <div class="cat-tabs" id="cat-tabs"></div>
+            <div id="cat-公司" class="cat-section"></div>
+            <div id="cat-行业" class="cat-section"></div>
+            <div id="cat-研报" class="cat-section"></div>
+        </div>
+    </div>
+    <div class="footer">3L 交易体系 · 行业追踪知识库</div>
+    <script src="/nav.js"></script>
+    <script>
+        const CAT_NAMES = ['公司', '行业', '研报'];
+        const CAT_ICONS = { '公司': '🏢', '行业': '📊', '研报': '📄' };
+        const CAT_COLORS = { '公司': '#22c55e', '行业': '#3b82f6', '研报': '#a855f7' };
+
+        (async function() {
+            try {
+                const res = await fetch('/api/kb/list?type=industry');
+                const data = await res.json();
+                document.getElementById('loading-area').style.display = 'none';
+                document.getElementById('main-content').style.display = 'block';
+
+                // Group by category
+                const grouped = {};
+                CAT_NAMES.forEach(c => grouped[c] = []);
+
+                (data.items || []).forEach(item => {
+                    const cat = item.category || '公司';
+                    if (!grouped[cat]) grouped[cat] = [];
+                    grouped[cat].push(item);
+                });
+
+                // Build tabs
+                const tabsEl = document.getElementById('cat-tabs');
+                let firstNonEmpty = null;
+                tabsEl.innerHTML = CAT_NAMES.map((cat, idx) => {
+                    const count = (grouped[cat] || []).length;
+                    if (count > 0 && !firstNonEmpty) firstNonEmpty = cat;
+                    return `<div class="cat-tab ${idx === 0 ? 'active' : ''}" onclick="switchCat('${cat}')" data-cat="${cat}">
+                        ${CAT_ICONS[cat] || ''} ${cat} <span class="count">${count}</span>
+                    </div>`;
+                }).join('');
+
+                // Build sections
+                CAT_NAMES.forEach(cat => {
+                    const items = grouped[cat] || [];
+                    const el = document.getElementById(`cat-${cat}`);
+                    if (items.length === 0) {
+                        el.innerHTML = `<div class="empty-cat">暂无${cat}分析</div>`;
+                        return;
+                    }
+                    el.className = 'cat-section' + (cat === firstNonEmpty ? ' active' : '');
+                    el.innerHTML = `<div class="kb-grid">${items.map(item => {
+                        const tagCls = cat === '公司' ? 'company-tag' : cat === '行业' ? 'industry-tag' : 'report-tag';
+                        return `<div class="kb-card">
+                            <span class="tag ${tagCls}">${CAT_ICONS[cat] || ''} ${cat}</span>
+                            <h3>${item.title}</h3>
+                            ${item.date_added ? `<div class="date">📅 收录 ${item.date_added}</div>` : ''}
+                            <p>${item.desc || '暂无摘要'}</p>
+                            <div>
+                                <a class="btn btn-read" href="/kb-detail.html?type=industry&file=${encodeURIComponent(item.file)}">📖 阅读全文</a>
+                            </div>
+                        </div>`;
+                    }).join('')}</div>`;
+                });
+
+                // Auto-switch to first non-empty tab
+                if (firstNonEmpty) switchCat(firstNonEmpty);
+
+            } catch(e) {
+                document.getElementById('loading-area').innerHTML = `<div style="color:#e94560;">❌ 加载失败: ${e.message}</div>`;
+            }
+        })();
+
+        function switchCat(cat) {
+            document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.cat-section').forEach(s => s.classList.remove('active'));
+            document.querySelector(`.cat-tab[data-cat="${cat}"]`).classList.add('active');
+            document.getElementById(`cat-${cat}`).classList.add('active');
+        }
+    </script>
+</body>
+</html>

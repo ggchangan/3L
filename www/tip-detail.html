@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3L · 技巧详情</title>
+    <script src="/nav.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #0f0f1a; color: #e0e0e0; min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-bottom: 2px solid #f59e0b;
+            padding: 30px 20px; text-align: center;
+        }
+        .header h1 { font-size: 22px; color: #fff; letter-spacing: 2px; }
+        .header .back {
+            display: inline-block; margin-top: 12px; color: #f59e0b; font-size: 13px;
+            text-decoration: none; padding: 6px 16px; border: 1px solid #3a3a5e;
+            border-radius: 8px; transition: all .2s;
+        }
+        .header .back:hover { background: #2a2a4e; }
+        .container { max-width: 800px; margin: 0 auto; padding: 30px 20px; }
+
+        .article {
+            background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 16px;
+            padding: 40px; line-height: 1.9; font-size: 15px;
+        }
+        .article h1 { color: #fff; font-size: 24px; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #2a2a4e; }
+        .article h2 { color: #f59e0b; font-size: 18px; margin: 28px 0 12px; }
+        .article h3 { color: #4ecdc4; font-size: 15px; margin: 20px 0 8px; }
+        .article p { margin-bottom: 12px; }
+        .article strong { color: #fff; }
+        .article blockquote {
+            border-left: 3px solid #f59e0b; padding: 8px 16px; margin: 12px 0;
+            background: rgba(245,158,11,0.05); border-radius: 0 8px 8px 0; color: #ccc;
+        }
+        .article ul, .article ol { margin: 8px 0 12px 20px; }
+        .article li { margin-bottom: 4px; }
+        .article table {
+            width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px;
+        }
+        .article th, .article td {
+            border: 1px solid #2a2a4e; padding: 8px 12px; text-align: left;
+        }
+        .article th { background: #0f0f1a; color: #f59e0b; font-weight: bold; }
+        .article td { color: #ccc; }
+        .article code {
+            background: #0f0f1a; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #f59e0b;
+        }
+        .article hr { border: none; border-top: 1px solid #2a2a4e; margin: 20px 0; }
+
+        .back-link {
+            display: inline-block; margin-top: 20px; color: #f59e0b;
+            text-decoration: none; font-size: 13px;
+        }
+        .back-link:hover { text-decoration: underline; }
+
+        .loading { text-align: center; padding: 40px; color: #888; }
+        .spinner {
+            display: inline-block; width: 32px; height: 32px;
+            border: 3px solid #333; border-top-color: #f59e0b;
+            border-radius: 50%; animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error-box { text-align: center; padding: 60px; color: #e94560; }
+
+        @media (max-width: 640px) {
+            .article { padding: 20px; font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="nav-top"></div>
+    <div class="header">
+        <h1 id="page-title">加载中...</h1>
+        <a class="back" href="/tips.html">← 返回技巧列表</a>
+    </div>
+    <div class="container">
+        <div id="article-content" class="loading"><div class="spinner"></div><br>加载中...</div>
+    </div>
+    <script>
+        (async function() {
+            const params = new URLSearchParams(window.location.search);
+            const file = params.get('file');
+            if (!file) {
+                document.getElementById('article-content').innerHTML = '<div class="error-box">❌ 缺少 file 参数</div>';
+                return;
+            }
+            try {
+                const res = await fetch(`/api/tips/content?file=${encodeURIComponent(file)}`);
+                const data = await res.json();
+                if (data.error) {
+                    document.getElementById('article-content').innerHTML = `<div class="error-box">❌ ${data.error}</div>`;
+                    return;
+                }
+                document.getElementById('page-title').textContent = data.title;
+                // Convert markdown to HTML (simple conversion)
+                const html = renderMarkdown(data.content);
+                document.getElementById('article-content').innerHTML = `<div class="article">${html}</div>`;
+            } catch(e) {
+                document.getElementById('article-content').innerHTML = `<div class="error-box">❌ 加载失败: ${e.message}</div>`;
+            }
+        })();
+
+        function renderMarkdown(text) {
+            // Escape HTML
+            let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            // Code blocks (``` ... ```)
+            html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+            
+            // Inline code
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+            
+            // Horizontal rules
+            html = html.replace(/^---+\s*$/gm, '<hr>');
+            
+            // Blockquote
+            html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+            
+            // Headers
+            html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+            
+            // Bold and italic
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            
+            // Tables
+            html = html.replace(/^\|(.+)\|$/gm, function(m) {
+                if (m.includes('---')) return m;
+                const cells = m.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+                return `<tr>${cells}</tr>`;
+            });
+            html = html.replace(/<tr>.*?<\/tr>/g, function(m) {
+                if (!html.includes('<table>')) {
+                    html = html.replace(m, '<table>' + m);
+                    return m + '</table>';
+                }
+                return m;
+            });
+            // Wrap consecutive tr in table
+            html = html.replace(/((?:<tr>.*?<\/tr>\n?)+)/g, function(m) {
+                if (!m.includes('<table>')) return '<table>' + m + '</table>';
+                return m;
+            });
+            
+            // Lists
+            html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+            html = html.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul>$1</ul>');
+            
+            // Numbered lists
+            html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+            
+            // Double line breaks = paragraph break (but not inside tables/lists)
+            html = html.replace(/\n\n+/g, '</p><p>');
+            
+            // Single line break = space (within paragraphs)
+            html = html.replace(/\n/g, ' ');
+            
+            // Wrap in paragraph if not already
+            if (!html.startsWith('<')) html = '<p>' + html + '</p>';
+            
+            // Clean up nested paragraphs from block elements
+            html = html.replace(/<\/p><p>/g, '\n');
+            html = html.replace(/<\/?p>/g, '\n');
+            
+            // Merge consecutive blockquotes
+            html = html.replace(/<blockquote>/g, '\n<blockquote>');
+            html = html.replace(/<\/blockquote>/g, '</blockquote>\n');
+            
+            // Clean empty paragraphs
+            html = html.replace(/\n{3,}/g, '\n\n');
+            
+            return html.trim();
+        }
+    </script>
+</body>
+</html>

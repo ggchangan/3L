@@ -882,6 +882,142 @@ class Handler(SimpleHTTPRequestHandler):
             self._serve_file(chart_file, 'image/svg+xml')
             return
 
+        # --- 交易技巧API ---
+        if path == '/api/tips':
+            tips_dir = '/home/ubuntu/data/3l/knowledge_base/trading_tips'
+            tips = []
+            if os.path.isdir(tips_dir):
+                for f in sorted(os.listdir(tips_dir)):
+                    if not f.endswith('.md'):
+                        continue
+                    fp = os.path.join(tips_dir, f)
+                    title = f.replace('.md', '')
+                    desc = ''
+                    try:
+                        with open(fp, 'r', encoding='utf-8') as fh:
+                            content = fh.read()
+                            title_m = __import__('re').search(r'^# (.+)$', content, __import__('re').MULTILINE)
+                            if title_m: title = title_m.group(1)
+                            desc_m = __import__('re').search(r'^> (.+)$', content, __import__('re').MULTILINE)
+                            if desc_m: desc = desc_m.group(1)
+                            if not desc:
+                                # 取前150字非空内容
+                                clean = __import__('re').sub(r'[#>\-\*\n\r]', '', content)[:150].strip()
+                                desc = clean[:120] + '...' if len(clean) > 120 else clean
+                            date_m = __import__('re').search(r'收录日期[：:]\s*(\d{4}-\d{2}-\d{2})', content)
+                            date_added = date_m.group(1) if date_m else ''
+                    except: pass
+                    tips.append({
+                        'id': f.replace('.md', ''),
+                        'title': title,
+                        'desc': desc,
+                        'file': f,
+                        'is_journal': f == '交易日志的重要性.md',
+                        'date_added': date_added
+                    })
+            return self.send_json({'tips': tips})
+
+        if path == '/api/tips/journal-entries':
+            jf = os.path.join(WWW_DIR, 'private', 'journal_entries.json')
+            if os.path.isfile(jf):
+                with open(jf, 'r', encoding='utf-8') as f:
+                    return self.send_json(json.load(f))
+            return self.send_json({'entries': []})
+
+        if path == '/api/tips/content':
+            parsed = urllib.parse.urlparse(self.path)
+            file_name = urllib.parse.parse_qs(parsed.query).get('file', [''])[0]
+            if not file_name:
+                return self.send_json({'error': 'missing file param'})
+            fp = '/home/ubuntu/data/3l/knowledge_base/trading_tips/' + file_name
+            if not os.path.isfile(fp):
+                return self.send_json({'error': 'file not found'})
+            with open(fp, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return self.send_json({'title': file_name.replace('.md',''), 'content': content})
+
+        # --- 通用知识库 API ---
+        if path == '/api/kb/list':
+            kb_type = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('type', [''])[0]
+            kb_map = {'tips': 'trading_tips', 'industry': 'industry_tracking'}
+            subdir = kb_map.get(kb_type, '')
+            if not subdir:
+                return self.send_json({'error': 'invalid type', 'items': []})
+            kb_dir = '/home/ubuntu/data/3l/knowledge_base/' + subdir
+            items = []
+            if os.path.isdir(kb_dir):
+                if kb_type == 'tips':
+                    # flat: read .md files directly
+                    for f in sorted(os.listdir(kb_dir)):
+                        if not f.endswith('.md'): continue
+                        fp = os.path.join(kb_dir, f)
+                        title = f.replace('.md', '')
+                        desc = ''
+                        try:
+                            with open(fp, 'r', encoding='utf-8') as fh:
+                                content = fh.read()
+                                title_m = __import__('re').search(r'^# (.+)$', content, __import__('re').MULTILINE)
+                                if title_m: title = title_m.group(1)
+                                desc_m = __import__('re').search(r'^> (.+)$', content, __import__('re').MULTILINE)
+                                if desc_m: desc = desc_m.group(1)
+                                if not desc:
+                                    clean = __import__('re').sub(r'[#>\\-\\*\\n\\r]', '', content)[:150].strip()
+                                    desc = clean[:120] + '...' if len(clean) > 120 else clean
+                                date_m = __import__('re').search(r'收录日期[：:]\s*(\d{4}-\d{2}-\d{2})', content)
+                                if date_m: date_added = date_m.group(1)
+                        except:
+                            pass
+                        # Extract date from content or use variable
+                        date_added = ''
+                        items.append({'id': f.replace('.md', ''), 'title': title, 'desc': desc, 'file': f, 'category': 'tips', 'date_added': date_added})
+                else:
+                    # industry: read subdirectories (公司/行业/研报)
+                    cat_order = ['公司', '行业', '研报']
+                    for cat in cat_order:
+                        cat_dir = os.path.join(kb_dir, cat)
+                        if not os.path.isdir(cat_dir): continue
+                        cat_label = cat  # '公司', '行业', '研报'
+                        for f in sorted(os.listdir(cat_dir)):
+                            if not f.endswith('.md'): continue
+                            fp = os.path.join(cat_dir, f)
+                            title = f.replace('.md', '')
+                            desc = ''
+                            try:
+                                with open(fp, 'r', encoding='utf-8') as fh:
+                                    content = fh.read()
+                                    title_m = __import__('re').search(r'^# (.+)$', content, __import__('re').MULTILINE)
+                                    if title_m: title = title_m.group(1)
+                                    desc_m = __import__('re').search(r'^> (.+)$', content, __import__('re').MULTILINE)
+                                    if desc_m: desc = desc_m.group(1)
+                                    if not desc:
+                                        clean = __import__('re').sub(r'[#>\-\*\n\r]', '', content)[:150].strip()
+                                        desc = clean[:120] + '...' if len(clean) > 120 else clean
+                                    date_m = __import__('re').search(r'收录日期[：:]\s*(\d{4}-\d{2}-\d{2})', content)
+                                    date_added = date_m.group(1) if date_m else ''
+                            except: pass
+                            items.append({
+                                'id': f.replace('.md', ''),
+                                'title': title, 'desc': desc,
+                                'file': f'{cat}/{f}',
+                                'category': cat_label,
+                                'date_added': date_added
+                            })
+            return self.send_json({'items': items})
+
+        if path == '/api/kb/content':
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            file_name = params.get('file', [''])[0]
+            kb_type = params.get('type', ['tips'])[0]
+            kb_map = {'tips': 'trading_tips', 'industry': 'industry_tracking'}
+            subdir = kb_map.get(kb_type, 'trading_tips')
+            if not file_name: return self.send_json({'error': 'missing file param'})
+            fp = '/home/ubuntu/data/3l/knowledge_base/' + subdir + '/' + file_name
+            if not os.path.isfile(fp): return self.send_json({'error': 'file not found'})
+            with open(fp, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return self.send_json({'title': file_name.replace('.md', ''), 'content': content})
+
         if path in ('/review', '/review.html'):
             self.path = '/review.html'
         elif path in ('/monitor', '/monitor.html'):
@@ -922,6 +1058,23 @@ class Handler(SimpleHTTPRequestHandler):
                     self.send_json({'status': 'ok'})
                 else:
                     self.send_json({'status': 'error', 'msg': 'missing date'})
+            except Exception as e:
+                self.send_json({'status': 'error', 'msg': str(e)})
+            return
+        if self.path == '/api/tips/save-journal':
+            try:
+                entry = json.loads(body)
+                jf = os.path.join(WWW_DIR, 'private', 'journal_entries.json')
+                entries = {'entries': []}
+                if os.path.isfile(jf):
+                    with open(jf, 'r', encoding='utf-8') as f:
+                        entries = json.load(f)
+                entry['id'] = entry.get('date', datetime.now().strftime('%Y%m%d')) + '_' + str(len(entries['entries']))
+                entry['created_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                entries['entries'].insert(0, entry)
+                with open(jf, 'w', encoding='utf-8') as f:
+                    json.dump(entries, f, ensure_ascii=False, indent=2)
+                self.send_json({'status': 'ok', 'id': entry['id']})
             except Exception as e:
                 self.send_json({'status': 'error', 'msg': str(e)})
             return
