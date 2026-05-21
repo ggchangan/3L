@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3L 个股分析 · 买点检测</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-bottom: 2px solid #e94560;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 { font-size: 22px; color: #fff; letter-spacing: 2px; }
+        .header .sub { color: #a0a0b0; font-size: 12px; margin-top: 4px; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .search-box {
+            display: flex; gap: 8px; margin-bottom: 20px;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4e; border-radius: 14px; padding: 16px;
+        }
+        .search-box input {
+            flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #2a2a4e;
+            background: rgba(255,255,255,0.05); color: #e0e0e0; font-size: 15px;
+            outline: none; transition: border 0.2s;
+        }
+        .search-box input:focus { border-color: #4ecdc4; }
+        .search-box input::placeholder { color: #555; }
+        .search-box button {
+            padding: 10px 24px; border-radius: 8px; border: none;
+            background: #e94560; color: #fff; font-size: 14px; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .search-box button:hover { background: #d63851; }
+        .search-box button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .loading {
+            text-align: center; padding: 40px; color: #888; font-size: 14px;
+        }
+        .loading .spinner {
+            display: inline-block; width: 24px; height: 24px; border: 3px solid #2a2a4e;
+            border-top-color: #4ecdc4; border-radius: 50%; animation: spin 0.8s linear infinite;
+            margin-bottom: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error-box {
+            background: rgba(233,69,96,0.1); border: 1px solid #e94560; border-radius: 10px;
+            padding: 20px; text-align: center; color: #e94560; font-size: 14px;
+        }
+        .result-card {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4e; border-radius: 14px; padding: 24px;
+        }
+        .result-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+        }
+        .stock-name {
+            font-size: 20px; font-weight: 700; color: #4ecdc4;
+        }
+        .stock-code { color: #888; font-size: 13px; margin-left: 8px; }
+        .stock-price { font-size: 22px; font-weight: 700; }
+        .stock-price.up { color: #ff4444; }
+        .stock-price.down { color: #44aa44; }
+        .stock-direction { color: #666; font-size: 12px; margin-top: 4px; }
+        .tags { margin: 8px 0; display: flex; gap: 4px; flex-wrap: wrap; }
+        .tag {
+            display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 11px;
+        }
+        .tag.red { background: #e94560; color: #fff; }
+        .tag.green { background: #4ecdc4; color: #000; }
+        .tag.yellow { background: #ffd700; color: #000; }
+        .tag.blue { background: #2196f3; color: #fff; }
+        .tag.orange { background: #ff9800; color: #000; }
+        .tag.gray { background: #444; color: #aaa; }
+        .tag.purple { background: #9C27B0; color: #fff; }
+        .info-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0;
+        }
+        .info-item {
+            background: rgba(255,255,255,0.03); border: 1px solid #2a2a4e;
+            border-radius: 8px; padding: 10px 12px;
+        }
+        .info-item .l { color: #888; font-size: 11px; margin-bottom: 2px; }
+        .info-item .v { font-size: 16px; font-weight: 600; }
+        .info-item .v.good { color: #4ecdc4; }
+        .info-item .v.bad { color: #e94560; }
+        .info-item .v.warn { color: #ffd700; }
+        .info-item .v.normal { color: #e0e0e0; }
+        .signal-bar {
+            padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
+            text-align: center; margin-bottom: 12px;
+        }
+        .signal-bar.buy { background: rgba(33,150,243,0.15); border: 1px solid #2196f3; color: #2196f3; }
+        .signal-bar.hold { background: rgba(78,205,196,0.12); border: 1px solid #4ecdc4; color: #4ecdc4; }
+        .signal-bar.warn { background: rgba(255,215,0,0.12); border: 1px solid #ffd700; color: #ffd700; }
+        .signal-bar.none { background: rgba(255,255,255,0.03); border: 1px solid #444; color: #888; }
+        .chart-section { margin-top: 16px; }
+        .chart-section summary {
+            cursor: pointer; color: #4ecdc4; font-size: 14px; padding: 6px 0;
+        }
+        .chart-section svg, .chart-section object {
+            width: 100%; border-radius: 8px; margin-top: 8px;
+        }
+        .detail-section { margin-top: 16px; }
+        .detail-section h3 { color: #4ecdc4; font-size: 14px; margin-bottom: 8px; }
+        .detail-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+        .detail-table td { padding: 6px 10px; border-bottom: 1px solid #1a1a2e; }
+        .detail-table td:first-child { color: #888; width: 120px; }
+        .detail-table td:last-child { color: #e0e0e0; }
+        .no-result { text-align: center; padding: 30px; color: #888; font-size: 13px; }
+        .hint { 
+            color: #555; font-size: 12px; text-align: center; 
+            padding: 10px; border-top: 1px solid #1a1a2e; margin-top: 20px;
+        }
+        @media (max-width: 600px) {
+            .info-grid { grid-template-columns: 1fr; }
+            .search-box { flex-direction: column; }
+            .search-box button { padding: 10px; }
+        }
+        .ema-arr { font-size: 12px; margin-top: 4px; }
+        .ema-line { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
+        .ema-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>📊 个股买点检测</h1>
+    <div class="sub">输入股票代码或名称，查看3L量价分析</div>
+</div>
+<div class="container">
+    <div class="search-box">
+        <input type="text" id="stockInput" placeholder="股票代码（如 688126）或名称（如 沪硅产业）" 
+               onkeydown="if(event.key==='Enter') search()">
+        <button id="searchBtn" onclick="search()">分析</button>
+    </div>
+    <div id="resultArea">
+        <div class="no-result">输入股票代码或名称开始分析</div>
+    </div>
+    <div class="hint">数据来源：all_stocks_60d.json · 3L量价择时系统</div>
+</div>
+
+<script>
+async function search() {
+    const q = document.getElementById('stockInput').value.trim();
+    if (!q) return;
+    
+    const area = document.getElementById('resultArea');
+    const btn = document.getElementById('searchBtn');
+    btn.disabled = true;
+    area.innerHTML = '<div class="loading"><div class="spinner"></div>正在分析...</div>';
+    
+    try {
+        const res = await fetch(`/api/stock-analysis?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        
+        if (data.error) {
+            area.innerHTML = `<div class="error-box">❌ ${data.error}</div>`;
+            return;
+        }
+        
+        area.innerHTML = renderResult(data);
+    } catch (e) {
+        area.innerHTML = `<div class="error-box">❌ 请求失败: ${e.message}</div>`;
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function renderResult(d) {
+    const isUp = (d.change || 0) >= 0;
+    const priceCls = isUp ? 'up' : 'down';
+    const priceSign = isUp ? '+' : '';
+    
+    // 信号
+    let signalBar = '';
+    if (d.signal === 'buy') {
+        signalBar = `<div class="signal-bar buy">⚡ ${d.buy_point} · 评分${d.buy_score}</div>`;
+    } else if (d.signal === 'hold') {
+        signalBar = `<div class="signal-bar hold">✅ 持有 · ${d.structure}</div>`;
+    } else {
+        signalBar = `<div class="signal-bar none">— 无明确信号</div>`;
+    }
+    
+    // 标签
+    let tags = '';
+    tags += `<span class="tag ${d.is_watchlist ? 'green' : 'gray'}">${d.is_watchlist ? '自选股' : '非自选'}</span>`;
+    if (d.trend_stock) tags += '<span class="tag blue">📈 趋势股</span>';
+    if (d.profit_model1) tags += '<span class="tag red">🏆 盈利1</span>';
+    tags += `<span class="tag ${d.structure === '上涨趋势' ? 'green' : d.structure === '区间震荡' ? 'yellow' : 'red'}">${d.structure || '--'}</span>`;
+    
+    // 阶段
+    const stageColors = {
+        '上行': '#4ecdc4', '加速': '#e94560', '缩量整理': '#ffd700', '滞涨': '#ff6b6b',
+        '转弱': '#ff6b6b', '下行': '#666', '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560'
+    };
+    const stageColor = stageColors[d.stage] || '#888';
+    
+    // EMA排列状态
+    let emaStatus = '';
+    if (d.ema5 && d.ema10 && d.ema20 && d.ema30) {
+        const bull = d.ema5 > d.ema10 && d.ema10 > d.ema20 && d.ema20 > d.ema30;
+        emaStatus = bull ? '<span style="color:#4ecdc4;">多头排列 ✓</span>' : '<span style="color:#ffd700;">非多头排列</span>';
+    }
+    
+    // 偏离度
+    let devCls = 'normal';
+    const dev = Math.abs(d.deviation_pct || 0);
+    if (dev <= 1.5) devCls = 'good';
+    else if (dev > 5) devCls = 'bad';
+    
+    // 详细数据（买点/回踩）
+    let detailHtml = '';
+    if (d.buy_detail && d.buy_point) {
+        detailHtml += `<div class="detail-section"><h3>📌 买点详情</h3><table class="detail-table">`;
+        for (const [k, v] of Object.entries(d.buy_detail)) {
+            if (k === 'reason' || k === 'ema5' || k === 'deviation_pct') {
+                const val = k === 'deviation_pct' ? v.toFixed(2) + '%' : v;
+                detailHtml += `<tr><td>${k}</td><td>${val}</td></tr>`;
+            }
+        }
+        detailHtml += `</table></div>`;
+    }
+    if (d.huicai_detail) {
+        detailHtml += `<div class="detail-section"><h3>📌 回踩买点详情</h3><table class="detail-table">`;
+        for (const [k, v] of Object.entries(d.huicai_detail)) {
+            const val = typeof v === 'number' ? (k === 'deviation_pct' ? v.toFixed(2) + '%' : v.toFixed(2)) : v;
+            detailHtml += `<tr><td>${k}</td><td>${val}</td></tr>`;
+        }
+        detailHtml += `</table></div>`;
+    }
+    
+    // 图表
+    const chartHtml = d.has_chart ? `
+        <details class="chart-section">
+            <summary>📊 查看K线图</summary>
+            <object data="/review_charts/${d.code}.svg?t=${Date.now()}" type="image/svg+xml"></object>
+        </details>
+    ` : '';
+    
+    return `
+        ${signalBar}
+        <div class="result-card">
+            <div class="result-header">
+                <div>
+                    <span class="stock-name">${d.name}</span>
+                    <span class="stock-code">${d.code}</span>
+                    <div class="stock-direction">${d.direction}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div class="stock-price ${priceCls}">${d.price} ${priceSign}${d.change}%</div>
+                    <div style="color:#888;font-size:11px;">${d.date}</div>
+                </div>
+            </div>
+            <div class="tags">${tags}</div>
+            
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="l">阶段</div>
+                    <div class="v" style="color:${stageColor};">${d.stage || '--'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="l">量比</div>
+                    <div class="v normal">${d.vol_ratio || '--'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="l">偏离EMA5</div>
+                    <div class="v ${devCls}">${d.deviation_pct >= 0 ? '+' : ''}${d.deviation_pct || 0}%</div>
+                </div>
+                <div class="info-item">
+                    <div class="l">EMA排列</div>
+                    <div class="v" style="font-size:13px;">${emaStatus}</div>
+                </div>
+            </div>
+
+            <div style="margin-top:8px;">
+                <div style="color:#888;font-size:11px;margin-bottom:4px;">EMA均线</div>
+                <div class="ema-arr">
+                    <span class="ema-line"><span class="ema-dot" style="background:#ff4444;"></span> E5=${d.ema5}</span>
+                    <span class="ema-line"><span class="ema-dot" style="background:#ffd700;"></span> E10=${d.ema10}</span>
+                    <span class="ema-line"><span class="ema-dot" style="background:#2196f3;"></span> E20=${d.ema20}</span>
+                    <span class="ema-line"><span class="ema-dot" style="background:#9C27B0;"></span> E30=${d.ema30}</span>
+                </div>
+            </div>
+
+            ${detailHtml}
+            ${chartHtml}
+        </div>
+    `;
+}
+</script>
+</body>
+</html>

@@ -1099,7 +1099,17 @@ const signalText = s.signal_text || (s.signal === 'hold' ? '✅ 持有' : s.sign
 | `references/historical-data-preservation.md` | 历史复盘数据保存模式：哪些数据需存档、前后端实现方案、排查指南 |
 | `references/repeat-offender-patterns.md` | 重复犯错模式：改数据忘同步/文档≠代码/局部修复陷阱 |
 
-### 关联 skill
+## 单元测试（2026-05-21）
+
+`www/tests/` 目录包含pytest测试框架，覆盖数据层完整性和买点检测正确性。
+
+**运行：** `cd /home/ubuntu/www && python -m pytest tests/ -v`
+
+**32个测试用例：** 路径完整性(17) + 数据结构(9) + 趋势股正反验证 + 回踩买点 + 自选股过滤 + 接口完整性。
+
+详见 `market-scan-workflow` skill 的 `references/unit-test-framework.md`。
+
+## 关联 skill
 
 - `main-line-judgment` — buy_point_detection 模块来源
 - `market-peak-trough` — 大盘周期判定

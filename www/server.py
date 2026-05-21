@@ -172,6 +172,155 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json({'error': 'not found', 'date': date_str})
             return
 
+        # --- 个股分析API ---
+        if path == '/api/stock-analysis':
+            parsed = urllib.parse.urlparse(self.path)
+            q = urllib.parse.parse_qs(parsed.query).get('q', [''])[0].strip()
+            if not q:
+                self.send_json({'error': '请输入股票代码或名称'})
+                return
+
+            from scripts.data_layer import get_all_stocks, get_watchlist
+            from scripts.buy_point_detection import (
+                detect_buy_point, check_trend_stock, check_profit_model1,
+                detect_huicai_buy_point, find_idx, _ema_list, _resolve_code
+            )
+            from ema_utils import get_structure, get_stage
+
+            stocks = get_all_stocks()
+            wl = get_watchlist()
+            wl_codes = set(s['code'] for s in wl)
+
+            # 搜索股票：先精确匹配code，再模糊匹配code，再模糊匹配name
+            matched_code = None
+            matched_direction = None
+            matched_name = None
+
+            # 精确code匹配
+            for sec, ss in stocks.items():
+                if q in ss:
+                    matched_code, matched_direction = q, sec
+                    matched_name = ss[q][0].get('name', q) if ss[q] else q
+                    break
+
+            if not matched_code:
+                # 模糊匹配code（部分输入）
+                for sec, ss in stocks.items():
+                    for code in ss:
+                        if q in code or code.endswith(q):
+                            matched_code, matched_direction = code, sec
+                            matched_name = ss[code][0].get('name', code) if ss[code] else code
+                            break
+                    if matched_code:
+                        break
+
+            if not matched_code:
+                # 模糊匹配name
+                for sec, ss in stocks.items():
+                    for code, kls in ss.items():
+                        name = kls[0].get('name', '') if kls else ''
+                        if q in name:
+                            matched_code, matched_direction = code, sec
+                            matched_name = name
+                            break
+                    if matched_code:
+                        break
+
+            if not matched_code:
+                self.send_json({'error': f'未找到股票: {q}'})
+                return
+
+            # 获取K线
+            kls = stocks[matched_direction][matched_code]
+            if not kls or len(kls) < 30:
+                self.send_json({'error': f'{matched_name} 数据不足30条'})
+                return
+
+            today_str = kls[-1]['date']
+            today_fmt = today_str[:4] + '-' + today_str[4:6] + '-' + today_str[6:8]
+
+            # 构建all_stocks子集（只含这只股票，detect_buy_point需要这个格式）
+            sub_stocks = {matched_direction: {matched_code: kls}}
+
+            # 分析
+            bt = detect_buy_point(matched_code, today_fmt, sub_stocks)
+            trend = bool(check_trend_stock(matched_code, today_fmt, sub_stocks))
+            hc = detect_huicai_buy_point(matched_code, today_fmt, sub_stocks)
+            pm1 = check_profit_model1(matched_code, today_fmt, sub_stocks)
+
+            # 结构/阶段
+            closes = [k['close'] for k in kls]
+            structure = get_structure(closes)
+            highs = [k['high'] for k in kls]
+            lows = [k['low'] for k in kls]
+            vols = [k.get('volume', k.get('vol', 0)) for k in kls]
+            stage = get_stage(closes, structure, highs, lows, volumes=vols)
+
+            # EMA
+            ema5 = _ema_list(closes, 5)
+            ema10 = _ema_list(closes, 10)
+            ema20 = _ema_list(closes, 20)
+            ema30 = _ema_list(closes, 30)
+
+            cur_close = kls[-1]['close']
+            cur_ema5 = ema5[-1] if ema5[-1] else 0
+            deviation = (cur_close - cur_ema5) / cur_ema5 * 100 if cur_ema5 > 0 else 0
+
+            is_watchlist = matched_code in wl_codes
+
+            # 生成SVG图表（查看 review_charts/{code}.svg 是否存在，不存在则生成）
+            svg_path = f'/review_charts/{matched_code}.svg'
+            svg_abs = f'/home/ubuntu/www/review_charts/{matched_code}.svg'
+            if not os.path.exists(svg_abs):
+                try:
+                    from a_stock_kline_keypoint_chart import gen_svg
+                    from scripts.buy_point_detection import _find_support_levels
+                    idx = find_idx(today_fmt, kls)
+                    kps = []
+                    if idx >= 10:
+                        supports = _find_support_levels(kls, idx)
+                        kps = [{'label': '突', 'y': s} for s in supports[-10:]]
+                    gen_svg(matched_name, matched_code, kls, kps, svg_abs)
+                except Exception:
+                    pass  # SVG生成失败不影响页面
+
+            # 量比分析
+            vol_ratio = 0
+            if len(kls) >= 5:
+                recent_vols = [k.get('volume', k.get('vol', 0)) for k in kls[-5:]]
+                vma5 = sum(recent_vols) / 5 if all(v > 0 for v in recent_vols) else 0
+                cur_vol = kls[-1].get('volume', kls[-1].get('vol', 0))
+                vol_ratio = round(cur_vol / vma5, 2) if vma5 > 0 else 0
+
+            result = {
+                'code': matched_code,
+                'name': matched_name,
+                'direction': matched_direction,
+                'is_watchlist': is_watchlist,
+                'price': round(cur_close, 2),
+                'change': round((cur_close - kls[-2]['close']) / kls[-2]['close'] * 100, 2) if len(kls) >= 2 else 0,
+                'date': today_fmt,
+                'structure': structure,
+                'stage': stage,
+                'ema5': round(cur_ema5, 2) if cur_ema5 else None,
+                'ema10': round(ema10[-1], 2) if ema10[-1] else None,
+                'ema20': round(ema20[-1], 2) if ema20[-1] else None,
+                'ema30': round(ema30[-1], 2) if ema30[-1] else None,
+                'deviation_pct': round(deviation, 2),
+                'vol_ratio': vol_ratio,
+                'trend_stock': trend,
+                'profit_model1': bool(pm1 and pm1['match']) if pm1 else False,
+                'buy_point': bt.get('buy_type', '') if bt else '',
+                'buy_score': bt.get('score', 0) if bt else 0,
+                'buy_detail': bt.get('detail', {}) if bt else None,
+                'huicai_detail': hc.get('detail', {}) if hc else None,
+                'has_chart': os.path.exists(svg_abs),
+                'signal': 'buy' if bt else ('hold' if structure == '上涨趋势' else 'warn'),
+            }
+
+            self.send_json(result)
+            return
+
         # --- 行业板块数据（同花顺原始数据，按天缓存） ---
         if path == '/api/industry-boards':
             cache_dir = os.path.join(WWW_DIR, 'data', 'cache')
