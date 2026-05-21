@@ -1183,8 +1183,14 @@
             .then(dd => {
                 const dates = (dd.dates || []).sort().reverse();
                 if (dates.length > 0) {
-                    const latest = dates[0];
-                    const isToday = latest === `${y}-${m}-${d}`;
+                    const today = `${y}-${m}-${d}`;
+                    const nowHour = new Date().getHours();
+                    // 如果最新日期是今天，但还没到18:00（cron未运行），自动降级到上一个交易日
+                    let latest = dates[0];
+                    if (latest === today && nowHour < 18 && dates.length > 1) {
+                        latest = dates[1];
+                    }
+                    const isToday = latest === today;
                     document.querySelector('.header .date-badge').textContent =
                         isToday ? `${latest} 今日复盘 ✓` : `${latest} 每日复盘（收盘后自动更新）`;
                     loadReviewData(latest);
