@@ -32,14 +32,20 @@ def get_ema_arrangement(closes):
     return '--'
 
 def get_structure(closes):
-    """基于EMA10极值位置判断结构（同ema10-trend-judgment skill）"""
+    """基于收盘价极值位置判断结构（2026-05-22 改回收盘价）
+    
+    历史：2026-05-20 第4轮定稿已确定结构用收盘价（非滞后），
+    但代码一直误用EMA10。2026-05-22 润泽科技案例暴露：EMA10滞后
+    导致高位回调股票误判为上涨趋势。正式改回收盘价极值位置法。
+    
+    收盘价反映真实价格位置，EMA10留做阶段判定（反映动能速度）。
+    """
     if len(closes) < 15:
         return '--'
-    e10_full = ema_list(closes, 10)
-    e10 = e10_full[-15:]
-    n = len(e10)
-    max_pos = max(range(n), key=lambda i: e10[i] if e10[i] is not None else -1e9)
-    min_pos = min(range(n), key=lambda i: e10[i] if e10[i] is not None else 1e9)
+    c15 = closes[-15:]
+    n = len(c15)
+    max_pos = max(range(n), key=lambda i: c15[i])
+    min_pos = min(range(n), key=lambda i: c15[i])
     first_q = n // 4
     last_q = n - 1 - n // 4
     if max_pos >= last_q and min_pos <= first_q:
