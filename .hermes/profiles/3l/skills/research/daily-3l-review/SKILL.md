@@ -1130,6 +1130,28 @@ const signalText = s.signal_text || (s.signal === 'hold' ? '✅ 持有' : s.sign
 | `scripts/gen_weekly_report.py` | `ALL_STOCKS_PATH`, `OUTPUT_DIR`, `SCRIPTS_DIR` |
 | `scripts/judge_main_line.py` | `ALL_STOCKS_PATH` |
 
+### 自选股过滤（2026-05-21 新增）
+
+**方案：** 扫描全量数据（`all_stocks_60d.json`），用 `watchlist.json` 过滤结果。
+
+**实现位置：** `buy_point_detection.py` 的 `scan_all_stocks()` 新增 `watchlist_codes` 参数。
+
+```python
+def scan_all_stocks(date_str, all_stocks, market_position='', main_lines=None, watchlist_codes=None):
+    for sec_name, stocks in all_stocks.items():
+        for code in stocks:
+            if watchlist_codes and code not in watchlist_codes:
+                continue
+            ...
+```
+
+**调用链路：**
+- `generate_review_data.py` fallback扫描 → `format_buy_signals(watchlist_codes=wl_codes)` → `scan_all_stocks(watchlist_codes=wl_codes)`
+- `scan_buy_signals.py` 已从 `load_stock_list()` 读取 `watchlist.json` → 按自选股列表逐一扫描（天然过滤）
+- `gen_weekly_report.py` 历史扫描→未传 watchlist_codes（保持全量，周报可能需要）
+
+**⚠️ 坑：** 如果不传 `watchlist_codes`，`scan_all_stocks()` 扫 `all_stocks_60d.json` 全部247+只。步科股份（688160）不在用户自选股但出现在扫描结果中 → 需要过滤。
+
 ### 公共函数归一化（2026-05-21）
 
 以下函数从 `generate_review_data.py` 迁移到 `buy_point_detection.py` 作为公共函数：
