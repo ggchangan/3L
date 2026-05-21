@@ -29,21 +29,9 @@ a{color:#4ecdc4}
 <div class="header">
     <h1>📊 3L 交易体系 · 每日成果</h1>
     <div class="sub">2026-05-19 | 持仓修复 + 模拟交易引擎优化</div>
-    <div style="margin-top:10px; display:flex; gap:10px; justify-content:center;">
-        <span style="color:#4ecdc4; font-size:12px;">🏠 返回看板</span>
-        <span style="color:#333;">|</span>
-        <a href="/review.html" style="color:#e94560; text-decoration:none; font-size:12px; font-weight:bold;">📋 每日复盘</a>
-        <span style="color:#333;">|</span>
-        <a href="/simulation.html" style="color:#e67e22; text-decoration:none; font-size:12px; font-weight:bold;">📊 模拟交易</a>
-    </div>
+    <div style="margin-top:10px;" id="nav-top"></div>
 </div>
 <div class="container">
-    <div class="nav-bar">
-        <a href="/">🏠 返回看板</a>
-        <a href="/simulation.html">📊 模拟交易 v33</a>
-        <a href="/review.html">📋 每日复盘</a>
-    </div>
-
     <div class="section-title">📄 当日报告</div>
     <div class="card">
         <h3>📄 报告文件</h3>
@@ -105,7 +93,7 @@ a{color:#4ecdc4}
         <p style="margin-top:6px"><span class="tag-done">✅ 已完成</span></p>
     </div>
 
-    <div class="section-title">⏳ 待办任务</div>
+    <div class="section-title">⏳ 当日待办</div>
     <div class="card">
         <ul>
             <li><span class="tag-pending">⏳</span> 交易纪律 · 规则确认 — 个人交易参数待确认</li>
@@ -116,6 +104,8 @@ a{color:#4ecdc4}
         </ul>
     </div>
 </div>
+<div id="nav-bottom"></div>
 <div class="footer">3L 交易体系 · Hermes Agent · 2026</div>
+<script src="/nav.js"></script>
 </body>
 </html>
