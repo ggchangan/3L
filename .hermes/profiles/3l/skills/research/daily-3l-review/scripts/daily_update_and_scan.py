@@ -23,7 +23,7 @@ CLUSTER_PATH = "/home/ubuntu/data/3l/sub_sector_clusters.json"
 OUTPUT_PATH = "/home/ubuntu/data/3l/latest_scan_result.json"
 BPD_PATH = "/home/ubuntu/.hermes/profiles/3l/skills/research/main-line-judgment/scripts"
 sys.path.insert(0, BPD_PATH)
-from buy_point_detection import check_zhongji, check_tupo
+from buy_point_detection import detect_buy_point
 
 
 def update_cache():
@@ -140,28 +140,27 @@ def scan_buy_points(data):
                         return k["close"]
         return None
 
+    from buy_point_detection import detect_buy_point
+    
     results = []
     for sec_name, sec_stocks in stocks.items():
         for code in sec_stocks:
-            zj = check_zhongji(code, last_date, stocks)
-            tp = check_tupo(code, last_date, stocks)
-            bs, bt, fl = 0, "", ""
-            if zj and zj["pass"] >= 4:
-                bs, bt, fl = zj["pass"], "中继买点", zj["flags"]
-            if tp and tp["pass"] >= 3:
-                if bs < tp["pass"] + 0.5:
-                    bs, bt, fl = tp["pass"] + 0.5, "突破买点", tp["flags"]
-            if bs > 0:
-                results.append({
-                    "code": code,
-                    "name": get_name(code),
-                    "sector": sec_name,
-                    "score": round(bs, 1),
-                    "buy_type": bt,
-                    "flags": fl,
-                    "close": get_close(code, last_date) or 0,
-                    "cluster": sub_sector_map.get(code, "unknown"),
-                })
+            try:
+                bt = detect_buy_point(code, last_date, stocks)
+                if bt:
+                    results.append({
+                        "code": code,
+                        "name": get_name(code),
+                        "sector": sec_name,
+                        "score": bt['score'],
+                        "buy_type": bt['buy_type'],
+                        "flags": bt['buy_type'],
+                        "close": bt['close'],
+                        "gain": bt.get('gain', 0),
+                        "cluster": sub_sector_map.get(code, "unknown"),
+                    })
+            except Exception:
+                continue
 
     results.sort(key=lambda x: -x["score"])
 

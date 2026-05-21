@@ -14,7 +14,7 @@ description: >-
 | STEP 2 | 最强动量（4 tab） | 实时API |
 | STEP 3 | 最强逻辑 | 实时 `/api/industry-map` |
 | STEP 4 | **持仓个股复盘** | 存档 `holdings_review` | 诊断卡（操作→结构→阶段→买点(仅buy)→📊），按结构排序 |
-| STEP 5 | **自选股买点信号** | 存档 `buy_signals_review` | 纯买点候选列表 |
+| STEP 5 | **自选股买点信号** | 存档 `buy_signals_review` | 方向Tab分组+分页+与第④部分同判定逻辑 |
 | PLAN | 每日交易计划 | 综合前5项 |
 
 ## 完整执行流程（必须按顺序）
@@ -149,8 +149,7 @@ holdings_review.append({
 const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--';
 ```
 
-### buy_signals 缓存污染
-`generate_review_data.py` 从 existing 存档加载 buy_signals，若存档有数据则跳过重新扫描。每次复盘必须删旧存档或修改条件。
+### buy_signals 数据源优先级（2026-05-21 修复）\n\n`generate_review_data.py` 加载 buy_signals 的优先级：\n\n1. **优先**从 `latest_scan_result.json` 读取（已应用最新阈值）\n2. 回退到 `existing` 存档的 `buy_signals` 字段\n\n```python\n# generate_review_data.py — 每日扫描结果优先\nlatest_scan_path = '/home/ubuntu/data/3l/latest_scan_result.json'\nif os.path.isfile(latest_scan_path):\n    with open(latest_scan_path) as _f:\n        _scan = json.load(_f)\n    _scan_results = _scan.get('results', [])\n    if _scan_results:\n        buy_signals = [...]  # 格式转换\n```\n\n**坑：** 早期版本仅从 existing 存档加载 buy_signals，若存档有数据则跳过重新扫描。导致 `daily_update_and_scan.py` 的阈值或数据更新无法反映到复盘页。**读 `latest_scan_result.json` 修复了这个问题。**
 
 ### 股票名称缺失
 `all_stocks_60d.json` 首条必须含 `name` 字段，否则 `format_buy_signals` 回退为代码。
@@ -291,7 +290,101 @@ holdings_review.sort(key=lambda x: struct_priority.get(x['structure'], 3))
 
 **原则（2026-05-21 用户修正）：** 新增字段是补充，不能替代已有字段。任何UI改版，先列出所有已有字段确保全部保留。
 
-**⑤区 `updateBuySignalsUI()`：** 仅渲染 `buy_signals_review`（买点候选列表），不包含持仓操作建议。
+### ⑤区 自选股买点信号 — 方向Tab+分页（2026-05-21 重写）
+
+`updateBuySignalsUI()` 渲染 `buy_signals_review`，与第④部分**使用同一 `signalStockCard()` 函数**，判定逻辑完全一致。
+
+**判定逻辑（全量自选股, 非仅持仓）：**
+```
+buy_signals[]  →  stock_cache[code] 获取 structure/stage/ema/vol_analysis
+                 ↓
+                 区间震荡 → 关键点支撑重算stage（同holdings逻辑）
+                 ↓
+                 judge_signal(structure, stage, buy_point) → signal
+```
+
+**UI结构：**
+- **方向Tab** — 按 sector（8大类方向）分组，Tab显示组名+数量
+- **每Tab分页** — >10只自动分页，每页10只
+- **排序** — 按结构优先级（上涨趋势→区间震荡→下降趋势），后端已排好
+- **卡片格式** — 同第④部分 `signalStockCard()`：操作/结构/阶段/买点(仅buy)/📊/结论+盈利1标签
+
+**技术实现：**
+1. `get_buy_sell_signals()` 返回三个值：`(signals, stock_cache, bs_by_code)`
+   - `stock_cache: {code: {close, change, date, ema, structure, stage, vol_analysis}}` — 全量自选股缓存
+2. `buy_signals_review` 构建时遍历 `buy_signals`，从 `stock_cache` 取结构/阶段/EMA/量能
+3. 区间震荡股票用同样二次支撑重算（代码复制自holdings流程，但可优化复用）
+4. 前端 `window._buyTab` 全局对象管理Tab状态（`activeSector` + 各Tab `pages`）
+
+**前端JS核心：**
+```javascript
+// review.html updateBuySignalsUI()
+const groups = {};
+signals.forEach(s => { const sec = s.sector||'其他'; ... groups[sec].push(s); });
+// Tab构建：筛选→分页→signalStockCard渲染
+const pageData = groups[tab.activeSector].slice(start, end);
+html += pageData.map((s, i) => signalStockCard(s, ...)).join('');
+```
+
+### ⚠️ 第⑤部分只展示买入信号（2026-05-21 用户纠正）
+
+`buy_signals_review` 从全量自选股扫描结果生成，但 `generate_review_data.py` 中初始版本**未按 signal 过滤**，将 `judge_signal()` 判为 sell/hold 的股票也加入了列表，用户看到卖出建议出现在"自选股买点信号"区。
+
+**修复：** 在遍历 `buy_signals` 时，对 `code_sig != 'buy'` 的股票执行 `continue`，不加入 `buy_signals_review`。
+
+```python
+# generate_review_data.py 遍历 buy_signals 时
+code_sig, _, _ = judge_signal(structure=structure, stage=stage, buy_point=s.get('buy_point', ''))
+if code_sig != 'buy':
+    continue   # ← 必须过滤，第⑤部分只展示买入信号
+buy_point_display = s.get('buy_point', '')
+```
+
+**原则：** 第⑤部分标题是"自选股**买点**信号"，只应展示 `signal='buy'` 的股票。
+
+### ⚠️ signalStockCard() 跨区复用导致图表ID冲突（2026-05-21 用户反馈）
+
+第④部分和第⑤部分都使用同一 `signalStockCard()` 渲染卡片，其中图表toggle的DOM ID固定为 `hchart_{idx}`。当两部分在页面同时存在时，`getElementById('hchart_1')` 永远返回第④部分的元素，第⑤部分点击📊无效。
+
+**修复：** 第⑤部分渲染后对HTML做字符串替换，将 `hchart_` → `bchart_`：
+
+```javascript
+// review.html updateBuySignalsUI()
+html += pageData.map((s, i) => {
+    const card = signalStockCard(s, start + i + 1);
+    return card.replace(/id="hchart_/g, 'id="bchart_')
+               .replace(/toggleChart\('hchart_/g, "toggleChart('bchart_");
+}).join('');
+```
+
+**原则：** 复用包含DOM ID的UI组件时，不同区域必须用ID前缀区分。Section 4 = `hchart_`，Section 5 = `bchart_`。
+
+### ⑤区 自选股买点信号 — 方向Tab+分页（2026-05-21 重写）
+
+**方向颜色映射（JS `secColors`）：**
+- 半导体: #e94560 · 算力: #2196f3 · 创新药: #4CAF50
+- 机器人: #9C27B0 · 新能源: #FF9800 · 资源股: #8B4513
+- AI应用: #00BCD4 · 商业航天: #FF5722
+
+### profit_model1 盈利模式1标签（2026-05-21 新增）
+
+**第④部分 持仓卡片：** `signalStockCard()` 中在名称后加 `🏆 盈利1` 标签
+```javascript
+${s.profit_model1 ? '<span class="tag" style="background:#e94560;...">🏆 盈利1</span>' : ''}
+```
+
+**第⑤部分 买点信号卡：** 同样由 `signalStockCard()` 统一渲染。
+
+**数据来源：** `generate_review_data.py` 中 `check_profit_model1_on_signals()` 自动判定，标记于 `buy_signals[n].profit_model1`。后通过 `bs_by_code[code].profit_model1` 传到 `holdings_review` 和 `buy_signals_review`。
+
+**数据链路：**
+```
+all_stocks_60d.json
+  → get_buy_sell_signals()  ← cache中算vol_analysis
+    → (signals['holdings'], stock_cache, bs_by_code)  ← 三返回值（2026-05-21 新增stock_cache+bs_by_code）
+      → holdings_review[]   ← 含profit_model1(从bs_by_code查)
+      → buy_signals_review[] ← 含structure/stage/signal(从stock_cache查)
+```
 
 **阶段颜色映射（前端JS `stageColors`）：**
 - 上行 / 区间底部 / 转强 → `#4ecdc4` 青色（积极）
@@ -311,7 +404,7 @@ holdings_review.sort(key=lambda x: struct_priority.get(x['structure'], 3))
 
 **设计原则：** 每句话引用具体数据（量能百分比、EMA10位置）、隐含操作方向、负面状态给出后续观察路径。详见 `references/2026-05-21-conclusion-text-mapping.md`。
 
-**操作决策区（⑤区 `updateBuySignalsUI()`）：**
+**操作决策区（⑤区 自选股买点信号 — 2026-05-21 重写）：** 方向Tab分组+分页，同 `signalStockCard()` 渲染，判定逻辑与第④部分一致。
 - 📋 持仓操作建议 — 根据stage映射操作图标和文字
   - 🔄 持有·可加仓（缩量整理）
   - ✅ 持有（上行/正常）
@@ -324,16 +417,19 @@ holdings_review.sort(key=lambda x: struct_priority.get(x['structure'], 3))
 - 🎯 买点信号 — 从 `data.buy_signals_review` 渲染
 
 **数据字段变动（2026-05-21）：**
-- `holdings_review` 新增: `ema`, `vol_analysis`
-- `buy_signals_review` 独立路径（从 `data.buy_signals` 映射）
+- `holdings_review` 新增: `ema`, `vol_analysis`, `profit_model1`
+- `buy_signals_review` 新增: `structure`, `stage`, `signal`, `ema`, `vol_analysis`, `profit_model1`（与holdings同判定逻辑）
+- `get_buy_sell_signals()` 返回三参数: `(signals, stock_cache, bs_by_code)`
 
-**数据链路：**
+**数据链路（2026-05-21 三路返回架构）：**
 ```
 all_stocks_60d.json
-  → get_buy_sell_signals()  ← cache中算vol_analysis
-    → signals['holdings']   ← 含ema + vol_analysis
-      → holdings_review[]   ← 诊断卡数据
-        → review.html #stockReviewList → signalStockCard()
+  → get_buy_sell_signals()  ← 内建 cache（structure/stage/ema/vol_analysis）
+    → (signals['holdings'], stock_cache, bs_by_code)
+      → holdings_review[]   ← 从 stock_cache 取structure/stage, 从 bs_by_code 取profit_model1
+      → buy_signals_review[] ← 从 stock_cache 取structure/stage/ema/vol_analysis, 从 bs_by_code 取profit_model1
+        → judge_signal(structure, stage, buy_point) → signal
+        → 前端 signalStockCard() 统一渲染第④+⑤部分
 ```
 
 ### 参数说明
@@ -405,6 +501,7 @@ const signalText = s.signal_text || (s.signal === 'hold' ? '✅ 持有' : s.sign
 | `references/2026-05-21-diagnosis-operation-redesign.md` | ④⑤区重构（诊断卡+操作决策）+ vol字段名修复记录 |
 | `references/2026-05-21-full-optimization-summary.md` | 操作建议全链路调优5轮记录 |
 | `references/2026-05-21-conclusion-text-mapping.md` | 结论文字映射表（signalStockCard 前端逻辑） |
+| `references/2026-05-21-buy-signals-tab-pagination.md` | 第⑤部分方向Tab分组+分页+共享判定逻辑架构 |
 
 ### 关联 skill
 
