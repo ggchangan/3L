@@ -88,13 +88,29 @@ def get_stage(closes, structure=None, highs=None, lows=None, support_level=None,
                 check = closes[-6:]
                 for ci in range(1, len(check)):
                     if (check[ci] - check[ci-1]) / check[ci-1] < -0.03:
-                        n_after = len(check) - ci  # 急跌后还有多少根
+                        n_after = len(check) - ci
                         start = max(1, len(e10_last) - n_after + 1)
                         if start < len(e10_last) - 2:
                             s1_adj = _reg_slope(e10_last[start:])
                             if s1_adj > 0:
                                 ratio = s2 / s1_adj
                         break
+            
+            # D方案：整理后突破检测（2026-05-22）
+            # 斜率变陡前如果量能显著萎缩过（连续≥3天量<峰值的50%），
+            # 说明经过缩量整理验证，不是真正的加速，判为上行
+            if volumes is not None and len(volumes) >= 15:
+                pre_surge = volumes[:-1]  # 排除突破当天
+                peak_v = max(pre_surge[-15:])
+                if peak_v > 0:
+                    cons = 0
+                    for v in reversed(pre_surge[-12:]):
+                        if v / peak_v < 0.5:
+                            cons += 1
+                        else:
+                            break
+                    if cons >= 3:
+                        ratio = 1.0  # 整理后突破 → 判为上行
         if ratio > 1.8: return '加速'
         elif ratio < 0.4:
             # 区分滞涨(危险) vs 缩量整理(中继蓄力)
