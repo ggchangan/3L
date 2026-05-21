@@ -2,7 +2,7 @@
 """
 3L Daily Achievements Web Server + Review API
 """
-import os, json, signal, sys, base64, mimetypes, urllib.parse
+import os, json, signal, sys, base64, mimetypes, urllib.parse, time
 from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from http.server import ThreadingHTTPServer
@@ -380,13 +380,48 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(sectors)
 
         if path == '/api/monitor/leaders':
-            """行业龙头数据"""
+            """行业龙头数据（实时行情更新chg和price）"""
+            import sys as _sys
+            _sys.path.insert(0, os.path.join(WWW_DIR, 'scripts'))
+            from monitor_data import _batch_tencent_quotes, _norm_code
+
+            # 短缓存：2分钟
+            _leaders_cache = getattr(self, '_leaders_cache_data', None)
+            _leaders_time = getattr(self, '_leaders_cache_time', 0)
+            now_ts = time.time()
+            if _leaders_cache and (now_ts - _leaders_time) < 120:
+                return self.send_json(_leaders_cache)
+
             try:
                 with open('/home/ubuntu/data/3l/industry_leaders.json', 'r') as f:
                     leaders = json.load(f)
-                return self.send_json(leaders)
             except:
                 return self.send_json({'count': 0, 'by_industry': {}, 'error': '数据文件未找到'})
+
+            # 收集所有股票代码（去重）
+            code_set = set()
+            for ind, stocks in leaders.get('by_industry', {}).items():
+                for s in stocks:
+                    qcode = _norm_code(s['code'])
+                    code_set.add(qcode)
+            codes_list = sorted(code_set)
+
+            # 批量获取实时行情
+            quotes = _batch_tencent_quotes(codes_list)
+
+            # 用实时数据更新每个股票的chg和price
+            for ind, stocks in leaders.get('by_industry', {}).items():
+                for s in stocks:
+                    qcode = _norm_code(s['code'])
+                    q = quotes.get(qcode)
+                    if q and q['price'] > 0:
+                        chg = q['change_pct']
+                        s['chg'] = f"{'+' if chg >= 0 else ''}{chg:.2f}%"
+                        s['price'] = str(q['price'])
+
+            self._leaders_cache_data = leaders
+            self._leaders_cache_time = now_ts
+            return self.send_json(leaders)
 
         if path == '/api/monitor/market-leaders':
             """市场龙头动态扫描"""

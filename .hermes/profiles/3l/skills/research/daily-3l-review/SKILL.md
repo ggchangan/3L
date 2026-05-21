@@ -228,9 +228,11 @@ holdings_review.append({
 const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--';
 ```
 
-### ⚠️ latest_scan_result.json vs scan_buy_signals.py 两套扫描结果不同步（2026-05-21 发现）
+### ⚠️ latest_scan_result.json vs scan_buy_signals.py 两套扫描结果不同步（2026-05-21 发现→修复）
 
-复盘页面的买点数据来自 `latest_scan_result.json`（`daily_update_and_scan.py` 通过 `buy_point_detection.py` 生成的），而小时级缓存（`data/cache/buy_signals_*.json`）来自 `scan_buy_signals.py`（简单机械条件扫描）。**两套系统阈值不同，结果可以完全不同。**
+复盘页面的买点数据来自 `latest_scan_result.json`（`daily_update_and_scan.py` 通过 `buy_point_detection.py` 生成的），而小时级缓存（`data/cache/buy_signals_*.json`）来自 `scan_buy_signals.py`。
+
+**2026-05-21 修复：** `scan_buy_signals.py` 已改为调用 `buy_point_detection.detect_buy_point()`（同复盘页面统一算法），不再使用自己的机械条件。`data/cache/buy_signals_*.json` 目前与 `latest_scan_result.json` 使用同一判定逻辑，仅数据源不同（实时腾讯API vs 缓存mootdx）。
 
 ```python
 # latest_scan_result.json — 3层阈值框架（review页面用的）

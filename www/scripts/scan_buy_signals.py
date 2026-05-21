@@ -1,158 +1,284 @@
 #!/usr/bin/env python3
 """
 盘中买点扫描 - 每1小时运行一次
-重点扫描 算力 + 半导体 方向的个股
+使用 buy_point_detection.py（统一算法），但用腾讯实时行情替代缓存数据
+扫描完成后自动更新买点股票的SVG图表（含当天数据）
 """
-import json, os, sys, requests
-from datetime import datetime, timedelta
+import json, os, sys
+from datetime import datetime
+
+# 导入统一算法和数据获取函数
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from scripts.buy_point_detection import detect_buy_point, get_realtime_kline
 
 # 自选股数据
 STOCKS_FILE = '/home/ubuntu/data/3l/all_stocks_60d.json'
-# 方向过滤：算力+半导体
-FOCUS_DIRECTIONS = ['算力', '半导体']
+# 方向过滤：扫描全部
+FOCUS_DIRECTIONS = []
+# SVG输出目录
+SVG_OUT_DIR = '/home/ubuntu/www/review_charts'
 
-def load_stocks():
-    """加载自选股"""
-    if not os.path.isfile(STOCKS_FILE):
+
+# ── EMA ──
+def _ema(data, period):
+    r = [None] * len(data)
+    m = 2 / (period + 1)
+    for i in range(len(data)):
+        if i == 0:
+            r[i] = data[i]
+        elif r[i-1] is not None:
+            r[i] = (data[i] - r[i-1]) * m + r[i-1]
+    return r
+
+
+# ── 关键点识别（与 batch_gen_charts.py 一致） ──
+def find_keypoints(data):
+    closes = [k['close'] for k in data]
+    highs = [k['high'] for k in data]
+    lows = [k['low'] for k in data]
+    opens = [k['open'] for k in data]
+    volumes = [k['volume'] for k in data]
+    n = len(data)
+    kps = []
+    ema20_vals = _ema(closes, 20)
+    for i in range(5, n):
+        if highs[i] == max(highs[max(0,i-10):i+1]):
+            kps.append({'idx': i, 'type': 1, 'label': '前高', 'y': highs[i]})
+        if lows[i] == min(lows[max(0,i-10):i+1]):
+            kps.append({'idx': i, 'type': 1, 'label': '前低', 'y': lows[i]})
+        if i >= 10:
+            vw = volumes[i-10:i]
+            if max(vw) > 0:
+                if volumes[i] >= max(vw) * 1.5:
+                    kps.append({'idx': i, 'type': 1, 'label': '量', 'y': highs[i] + (highs[i]-lows[i])*0.5})
+                elif volumes[i] <= min(vw) * 0.3:
+                    kps.append({'idx': i, 'type': 1, 'label': '量', 'y': highs[i] + (highs[i]-lows[i])*0.5})
+        if i >= 10:
+            ph = max(highs[i-10:i])
+            if closes[i] > ph and closes[i] > opens[i]:
+                kps.append({'idx': i, 'type': 2, 'label': '突', 'y': highs[i], 'support_price': ph})
+        if i >= 1 and closes[i] > opens[i] and closes[i-1] < opens[i-1] and closes[i] > opens[i-1] and opens[i] < closes[i-1]:
+            kps.append({'idx': i, 'type': 2, 'label': '反', 'y': lows[i]})
+        if ema20_vals[i] and closes[i] >= ema20_vals[i]*0.98 and closes[i] <= ema20_vals[i]*1.02:
+            va = sum(volumes[i-5:i]) / 5 if i >= 5 else 0
+            if va > 0 and volumes[i] < va * 0.8:
+                kps.append({'idx': i, 'type': 2, 'label': '中', 'y': lows[i]})
+    return kps
+
+
+# ── 生成SVG ──
+def gen_svg(name, code, klines, kps, output_path):
+    W, H = 750, 480
+    pl, pr, pt, pb = 60, 25, 32, 65
+    closes = [k['close'] for k in klines]
+    highs = [k['high'] for k in klines]
+    lows = [k['low'] for k in klines]
+    opens = [k['open'] for k in klines]
+    volumes = [k['volume'] for k in klines]
+    mx, mn = max(highs), min(lows)
+    rg = mx - mn if mx != mn else 1
+    n = len(klines)
+    cw = (W - pl - pr) / n
+    bv = H - pb
+    px = lambda i: pl + i * cw + cw / 2
+    py = lambda v: pt + (mx - v) / rg * (H - pt - pb)
+    ema5 = _ema(closes, 5)
+    ema10 = _ema(closes, 10)
+    ema20 = _ema(closes, 20)
+    vm = max(volumes) if max(volumes) > 0 else 1
+    sv = []
+    sv.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">')
+    sv.append(f'<rect width="{W}" height="{H}" fill="#1a1a2e"/>')
+    sv.append(f'<text x="{W/2}" y="22" text-anchor="middle" font-family="sans-serif" font-size="15" fill="#ffffff" font-weight="bold">{name}({code}) 关键点图</text>')
+    sv.append(f'<text x="{W/2}" y="31" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#888888">最新: {closes[-1]:.2f}</text>')
+    for i in range(5):
+        yv = mx - i * rg / 4
+        yp = py(yv)
+        sv.append(f'<line x1="{pl}" y1="{yp}" x2="{W-pr}" y2="{yp}" stroke="#2a2a4e" stroke-width="0.5"/>')
+        sv.append(f'<text x="{pl-4}" y="{yp+3}" text-anchor="end" font-family="sans-serif" font-size="8" fill="#666666">{yv:.1f}</text>')
+    sv.append(f'<line x1="{pl}" y1="{bv}" x2="{W-pr}" y2="{bv}" stroke="#2a2a4e" stroke-width="0.5"/>')
+    for i in range(n):
+        x = px(i) - cw * 0.35
+        w = max(cw * 0.55, 1)
+        vh = volumes[i] / vm * 40
+        is_up = closes[i] >= opens[i]
+        vc = '#ff4444' if is_up else '#44aa44'
+        sv.append(f'<rect x="{x}" y="{bv-vh}" width="{w}" height="{max(vh, 0.5)}" fill="{vc}" opacity="0.35"/>')
+    for ev, clr in [(ema5, '#ffd700'), (ema10, '#ff6b6b'), (ema20, '#4ecdc4')]:
+        pts = []
+        for i in range(n):
+            if ev[i] is not None:
+                pts.append(f'{px(i)},{py(ev[i])}')
+        if pts:
+            sv.append(f'<polyline points="{" ".join(pts)}" fill="none" stroke="{clr}" stroke-width="1" opacity="0.7"/>')
+    for i in range(n):
+        x = px(i)
+        w = max(cw * 0.45, 1)
+        hi, lo, op, cl = highs[i], lows[i], opens[i], closes[i]
+        yh, yl = py(hi), py(lo)
+        yo, yc = py(op), py(cl)
+        is_up = cl >= op
+        clr = '#ff4444' if is_up else '#44aa44'
+        sv.append(f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" stroke="{clr}" stroke-width="0.5" opacity="0.6"/>')
+        bt, bb = min(yo, yc), max(yo, yc)
+        sv.append(f'<rect x="{x-w/2}" y="{bt}" width="{w}" height="{max(bb-bt, 0.5)}" fill="{clr}" opacity="0.8"/>')
+    sz = 4
+    for kp in kps:
+        xp = px(kp['idx'])
+        yp = py(kp['y'])
+        clr = '#ff9800' if kp['type'] == 1 else '#2196f3'
+        sv.append(f'<rect x="{xp-sz}" y="{yp-sz}" width="{sz*2}" height="{sz*2}" fill="{clr}" opacity="0.85"/>')
+        sv.append(f'<text x="{xp}" y="{yp-sz-2}" text-anchor="middle" font-family="sans-serif" font-size="8" fill="{clr}">{kp["label"]}</text>')
+    for i in range(0, n, 5):
+        xd = px(i)
+        ds = str(klines[i]['date']).replace('-', '')
+        mm, dd = ds[4:6], ds[6:8]
+        sv.append(f'<text x="{xd}" y="{bv+14}" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#666666" transform="rotate(-45,{xd},{bv+14})">{mm}/{dd}</text>')
+    last_ds = str(klines[-1]['date']).replace('-', '')
+    sv.append(f'<text x="{px(n-1)}" y="{bv+14}" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#666666" transform="rotate(-45,{px(n-1)},{bv+14})">{last_ds[4:6]}/{last_ds[6:8]}</text>')
+    ly2 = bv + 9
+    for idx2, (clr2, lbl) in enumerate([('#ff9800','第1类'),('#2196f3','第2类'),('#ffd700','EMA5'),('#ff6b6b','EMA10'),('#4ecdc4','EMA20')]):
+        lx = 60 + idx2 * 130
+        sv.append(f'<rect x="{lx}" y="{ly2}" width="8" height="8" fill="{clr2}" opacity="0.8" rx="1"/>')
+        sv.append(f'<text x="{lx+11}" y="{ly2+7}" font-family="sans-serif" font-size="9" fill="#888888">{lbl}</text>')
+    sv.append('</svg>')
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, 'w') as f:
+        f.write('\n'.join(sv))
+
+# 自选股名单
+WATCHLIST_FILE = '/home/ubuntu/data/3l/watchlist.json'
+# 方向过滤：扫描全部
+FOCUS_DIRECTIONS = []
+# SVG输出目录
+SVG_OUT_DIR = '/home/ubuntu/www/review_charts'
+
+
+def load_stock_list():
+    """从 watchlist.json 读取自选股名单"""
+    if not os.path.isfile(WATCHLIST_FILE):
+        print(f"❌ watchlist.json 不存在", file=sys.stderr)
         return []
-    with open(STOCKS_FILE) as f:
+    with open(WATCHLIST_FILE) as f:
         data = json.load(f)
-    stocks = data.get('stocks', data) if isinstance(data, dict) else data
-    # 格式: {方向: {代码: {info}, ...}, ...}
-    focused = []
-    if isinstance(stocks, dict):
-        for direction, codes in stocks.items():
-            if direction not in FOCUS_DIRECTIONS:
-                continue
-            if isinstance(codes, dict):
-                for code, info in codes.items():
-                    if isinstance(info, dict):
-                        info['code'] = info.get('code', code)
-                        info['direction'] = direction
-                        focused.append(info)
-                    else:
-                        focused.append({'code': code, 'direction': direction, 'name': str(info)})
-    return focused
+    stocks = data.get('stocks', [])
+    if FOCUS_DIRECTIONS:
+        stocks = [s for s in stocks if s.get('direction') in FOCUS_DIRECTIONS]
+    return stocks
 
-def get_real_time_quote(code):
-    """获取个股实时行情"""
+
+def get_market_position():
     try:
-        # 统一加前缀
-        qcode = code
-        if not code.startswith(('sh', 'sz', 'SH', 'SZ')):
-            qcode = ('sh' if code.startswith(('6', '9')) else 'sz') + code
-        r = requests.get(f'https://qt.gtimg.cn/q={qcode}',
-                        headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-                        timeout=5)
-        line = r.text.strip()
-        fields = line.split('"')[1].split('~') if '"' in line else []
-        if len(fields) < 40:
-            return None
-        return {
-            'name': fields[1],
-            'code': fields[2],
-            'price': float(fields[3]),
-            'close': float(fields[4]),
-            'open': float(fields[5]),
-            'volume': int(fields[6]) if fields[6].isdigit() else 0,
-            'high': float(fields[33]) if fields[33] else 0,
-            'low': float(fields[34]) if fields[34] else 0,
-            'change_pct': float(fields[32]) if fields[32] else 0,
-            'change': float(fields[31]) if fields[31] else 0,
-        }
+        archive_dir = '/home/ubuntu/www/private/review_archive'
+        if os.path.isdir(archive_dir):
+            archives = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')])
+            if archives:
+                with open(os.path.join(archive_dir, archives[-1])) as f:
+                    rd = json.load(f)
+                return rd.get('market', {}).get('position', '波中')
     except:
-        return None
+        pass
+    return '波中'
 
-def check_zhongji_buy(quote, klines):
-    """简化的中继买点检查——盘中实时版
-    条件：回踩MA20 + 缩量 + MA5交叉MA10上方
-    """
-    if not quote or not klines or len(klines) < 20:
-        return False
-    
-    price = quote['price']
-    ma20 = sum(k['close'] for k in klines[-20:]) / 20
-    ma10 = sum(k['close'] for k in klines[-10:]) / 10
-    ma5 = sum(k['close'] for k in klines[-5:]) / 5
-    
-    # 条件1: 价格在MA20上方（回踩中）
-    if price < ma20 * 0.98:
-        return False
-    
-    # 条件2: MA5 > MA10（短期趋势向上）
-    if ma5 <= ma10:
-        return False
-    
-    # 条件3: 缩量（今日量 < MA5日均量×1.2）
-    vol_ma5 = sum(k['volume'] for k in klines[-5:]) / 5
-    today_vol = quote['volume']
-    if vol_ma5 > 0 and today_vol > vol_ma5 * 1.2:
-        return False
-    
-    # 条件4: 不追高（涨幅不过大）
-    if quote['change_pct'] > 5:
-        return False
-    
-    return True
 
-def get_60d_klines(code):
-    """获取60日K线"""
-    qcode = code
-    if not code.startswith(('sh', 'sz', 'SH', 'SZ')):
-        qcode = ('sh' if code.startswith(('6', '9')) else 'sz') + code
+def get_main_lines():
     try:
-        r = requests.get(f'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={qcode},day,,,60,qfq',
-                        headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-                        timeout=10)
-        data = r.json()
-        klines = data.get('data', {}).get(qcode, {})
-        day_data = klines.get('qfqday', klines.get('day', []))
-        return [{'date': k[0], 'close': float(k[2]), 'volume': float(k[5])} 
-                for k in day_data if len(k) >= 6]
+        archive_dir = '/home/ubuntu/www/private/review_archive'
+        if os.path.isdir(archive_dir):
+            archives = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')])
+            if archives:
+                with open(os.path.join(archive_dir, archives[-1])) as f:
+                    rd = json.load(f)
+                return [l['name'] for l in rd.get('mainline', {}).get('lines', [])]
     except:
-        return []
+        pass
+    return []
+
 
 def main():
-    stocks = load_stocks()
-    print(f"加载自选股: {len(stocks)}只 (方向={FOCUS_DIRECTIONS})", file=sys.stderr)
+    stocks = load_stock_list()
+    print(f"加载自选股: {len(stocks)}只", file=sys.stderr)
     
+    market_position = get_market_position()
+    main_lines = get_main_lines()
+    print(f"大盘位置: {market_position}, 主线: {main_lines}", file=sys.stderr)
+    
+    today_str = datetime.now().strftime('%Y-%m-%d')
     signals = []
+    svg_ok = 0
+    
     for s in stocks:
-        code = s.get('code', '')
-        name = s.get('name', code)
-        direction = s.get('direction', '')
+        code = s['code']
+        direction = s['direction']
+        name = s['name']
         
-        # 获取实时行情
-        quote = get_real_time_quote(code)
-        if not quote:
+        # 获取实时K线数据（缓存59天+今日实时）
+        klines = get_realtime_kline(code, direction)
+        if len(klines) < 30:
             continue
         
-        # 获取K线数据
-        klines = get_60d_klines(code)
+        all_stocks = {direction: {code: klines}}
+        bt = detect_buy_point(code, today_str, all_stocks,
+                              market_position=market_position,
+                              main_lines=main_lines)
         
-        # 检查中继买点
-        if check_zhongji_buy(quote, klines):
-            signals.append({
+        if bt:
+            # 盘中只扫突破买点
+            if bt.get('buy_type', '') not in ('突破买点',):
+                continue
+            # 量能文本
+            vr = bt.get('vol_ratio', 0)
+            if vr < 0.7:
+                vol_text = f'缩量{vr:.0%}'
+            elif vr > 1.5:
+                vol_text = f'放量{vr:.0%}'
+            else:
+                vol_text = f'量能正常{vr:.0%}'
+            
+            signal = {
                 'code': code,
-                'name': quote.get('name', name),
-                'price': quote['price'],
-                'change_pct': quote['change_pct'],
+                'name': name,
                 'direction': direction,
-                'type': '中继买点',
-            })
+                'price': bt.get('close', klines[-1]['close']),
+                'change_pct': round(bt.get('gain', 0), 2),
+                'buy_type': bt.get('buy_type', ''),
+                'buy_point': bt.get('buy_type', ''),
+                'structure': bt.get('structure', ''),
+                'stage': bt.get('stage', ''),
+                'vol_ratio': vr,
+                'vol_analysis': vol_text,
+                'score': bt.get('score', 0),
+                'detail': bt.get('detail', {}),
+                'ema_arrangement': bt.get('ema_arrangement', ''),
+            }
+            signals.append(signal)
+            
+            # ★ 当场生成SVG — klines数据已在手，无需二次拉取
+            try:
+                kps = find_keypoints(klines)
+                out_path = os.path.join(SVG_OUT_DIR, f'{code}.svg')
+                gen_svg(name, code, klines, kps, out_path)
+                svg_ok += 1
+            except Exception as e:
+                print(f"  SVG失败 {code}: {e}", file=sys.stderr)
     
-    # 按涨幅排序（回调越深优先级越高）
-    signals.sort(key=lambda x: abs(x['change_pct']))
+    signals.sort(key=lambda x: (0 if x.get('buy_type') == '突破买点' else 1, -(x.get('score', 0))))
+    
+    print(f"SVG: {svg_ok}只已生成", file=sys.stderr)
     
     result = {
         'signals': signals,
         'count': len(signals),
         'scan_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'focused_directions': FOCUS_DIRECTIONS,
+        'focused_directions': FOCUS_DIRECTIONS if FOCUS_DIRECTIONS else 'all',
         'stocks_scanned': len(stocks),
+        'market_position': market_position,
+        'main_lines': main_lines,
+        'svg_generated': svg_ok,
     }
     
     print(json.dumps(result, ensure_ascii=False))
+
 
 if __name__ == '__main__':
     main()
