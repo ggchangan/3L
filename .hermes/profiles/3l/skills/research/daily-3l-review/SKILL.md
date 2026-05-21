@@ -8,6 +8,20 @@ description: >-
 
 ## 核心原则
 
+### 🚨 复盘页面扩展第一原则：复用现有模式，不重写（2026-05-21 用户明确要求）
+
+**新功能先看代码库已有实现，按相同风格扩展，不重写。** 用户会对重新发明轮子感到明确不满（"总是喜欢重新写"）。
+
+**具体做法：**
+1. **找模板** — 写复盘相关图表脚本先看 `gen_index_chart.py` 的写法（腾讯接口 `stock_zh_index_daily_tx`）
+2. **数据源优先用已验证的** — 腾讯接口 > 东方财富接口。腾讯稳定，东方财富连接不稳定
+3. **增量修改，不全盘重写** — 用 `git show HEAD:file > /tmp/backup.py` 备份后做 patch
+4. **新功能集成到 Step 4** — 所有复盘新功能都放 `generate_review_data.py` 内部，不在 `generate_daily_review.sh` 里加新 Step
+
+**教训（资金流向图四次迭代）：** 曾先后用了行业板块数据、全市场净流入、中证全指成交额、最终才正确。根本原因是每次都在重写而不是参考已有脚本（`gen_index_chart.py` 一直正确使用 `stock_zh_index_daily_tx`）。
+
+## 核心原则
+
 ### 复盘页面只展示已完成交易日
 
 **复盘是回顾已收盘的交易日，不是盘中实时工具。** 复盘数据由每日18:00的cron job生成，只有cron生成的数据才算数。
@@ -108,7 +122,7 @@ cd /home/ubuntu/www && python3 generate_review_data.py {date}
 
 **⚠️ 图表归档已内置在 Step 4 中：** 图表归档（`zzqz_v2.svg`→`archive/{date}/zzqz_v2.svg`、`fund_flow_chart.png`→`archive/{date}/fund_flow_chart.png`）实现在 `generate_review_data.py` 的最后阶段（见下方《图表归档》章节，**目录隔离方案，不用后缀**）。**不要单独写一个归档步骤到 cron 脚本里**——Step 3 画图 → Step 4 自动归档，全流程一体化。
 
-**原则：cron job 处理全量端到端流程，手动操作只用于调试。** 手动跑 `generate_review_data.py` 时也会触发归档，因此手动测试时不需要额外步骤。
+**原则：cron job 处理全量端到端流程，手动操作只用于调试。** 手动跑 `generate_review_data.py` 时也会触发归档和每日成果PDF生成，因此手动测试时不需要额外步骤。
 
 ## 关键坑（Pitfalls）
 
@@ -438,7 +452,7 @@ git show HEAD:./generate_review_data.py > /tmp/gen_orig.py
 | 中证全指关键点图 | `/home/ubuntu/www/gen_index_chart.py` |
 | 全市场资金流向图 | `/home/ubuntu/www/gen_fund_flow_chart.py` |
 | 批量个股图 | `daily-3l-review/scripts/batch_gen_charts.py` |
-| 复盘生成器 | `/home/ubuntu/www/generate_review_data.py` |
+| 复盘生成器 | `/home/ubuntu/www/generate_review_data.py` | — 含Step 5自动生成每日成果PDF |
 | cron脚本 | `~/.hermes/profiles/3l/scripts/generate_daily_review.sh` |
 
 ## 存档系统
@@ -480,9 +494,54 @@ function loadHistoryList(currentDisplayDate) {
 
 服务端：`server.py` 的 `/api/review/dates` 加了 `re.match(r'^\d{4}-\d{2}-\d{2}\.json$')` 正则过滤，排除 `--date.json` 等非法文件名（2026-05-21 发现 `--date.json` 因 parse 错误写入的脏数据混入日期列表）。
 
-### 图表归档（2026-05-21 目录隔离版）
+### ⚠️ 资金流向图 vs 成交额（2026-05-21 踩坑）
+**资金流向（主力净流入/净流出）≠ 成交额。** 初版错误地用了成交额/成交量替代，被用户纠正。
+- 上图：全市场主力净流入（亿元），数据源 `akshare.stock_market_fund_flow()` 主力净流入-净额
+- 下图：中证全指涨跌幅，数据源 `akshare.stock_zh_index_daily_tx(symbol='sh000985')`
+- 标题统一为"中证全指资金流向"
+- 颜色：红涨绿跌（正值红色`#e94560`，负值绿色`#4CAF50`）
 
-**问题：** 历史页面的中证全指关键点图（`zzqz_v2.svg`）和资金流向图（`fund_flow_chart.png`）被每天覆盖。看历史复盘时，图表显示的是当天的内容，不是历史当天的。
+**三次迭代教训：** 资金流向图曾先后用了行业板块数据、成交额数据，都被用户纠正。终版统一使用中证全指数据源，与关键点图一致。**同图同源。**
+
+### ⚠️ 新功能集成原则：复用现有模式，不重写（2026-05-21 用户明确）
+
+用户要求：**按已有的写法写，不要重新发明轮子。** 新功能应先查看代码库中类似功能的实现模式，再按相同风格扩展。
+
+**错误做法（本会话踩坑）：**
+- 资金流向图先后尝试了3种不同数据源，每次都是全部重写
+- 应该一开始就参考 `gen_index_chart.py` 的写法（`stock_zh_index_daily_tx` 腾讯接口）
+
+**正确做法：**
+1. 先看现有脚本怎么写的（`gen_index_chart.py` 就是好模板）
+2. 数据源优先用代码库已验证的（腾讯接口 > 东方财富接口）
+3. 增量修改，不是全盘重写
+
+同时：**新功能集成到 `generate_review_data.py`，不加 cron 步骤。**
+当前已集成到 Step 4 的功能：`batch_gen_charts.py`、`gen_fund_flow_chart.py`、图表归档。
+
+### ⚠️ toggleIndexChart() 的 `!display` 假阳性（2026-05-21 踩坑）
+```javascript
+// ❌ 错误 — 当 display=''（显示状态）时，!'' 为 true，视为隐藏
+const isHidden = chart.style.display === 'none' || !chart.style.display;
+// ✅ 正确 — 只判断是否为 'none'
+const isHidden = chart.style.display === 'none';
+```
+`chart.style.display` 初始为 `'none'`（HTML inline style），展开后被设为 `''`（空字符串）。`!''` 返回 `true`，导致已展开的图表第二次点击无法收起。
+
+### ⚠️ TQDM_DISABLE 必须在 import akshare 之前（2026-05-21）
+`os.environ['TQDM_DISABLE'] = '1'` 如果在 `import akshare` 之后设置，不生效。进度条会污染日志输出。
+```python
+import os
+os.environ['TQDM_DISABLE'] = '1'  # ✅ 在这里
+import akshare as ak
+```
+
+### ⚠️ A股图表颜色铁律（2026-05-21 踩坑）
+红涨绿跌。资金流向图、K线图等所有图表统一。
+```python
+# ✅ 正确：负值绿色，正值红色
+colors = ['#4CAF50' if v < 0 else '#e94560' for v in values]
+```
 
 **方案：目录隔离，不改文件名。** 不使用后缀区分，而是把每天的图表拷贝到 `review_charts/archive/{date}/` 子目录：
 
@@ -568,6 +627,14 @@ const isHidden = chart.style.display === 'none';
 - 批量个股关键点图（`batch_gen_charts.py`）
 - 全市场资金流向图（`gen_fund_flow_chart.py`）
 - 图表归档（`zzqz_v2.svg` + `fund_flow_chart.png` → `review_charts/archive/{date}/`）
+
+**Step 5 新增（2026-05-21）：每日成果PDF自动生成**
+`generate_daily_achievements_pdf(date_str)` 在复盘生成最后阶段调用：
+- 生成 `每日成果_YYYYMMDD.pdf` 到 `/home/ubuntu/www/files/`
+- 从复盘JSON提取大盘周期+主线数量填入PDF概要
+- 已存在则跳过不覆盖（保护手写内容）
+- HTML→wkhtmltopdf→PDF，临时HTML自动清理
+- 下次cron运行时自动触发，无需额外脚本步骤
 
 **问题：** 查看历史复盘时，②最强动量和③最强逻辑加载的是**当天**的实时数据，不是历史当天的数据。
 
