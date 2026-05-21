@@ -96,31 +96,26 @@ def get_stage(closes, structure=None, highs=None, lows=None, support_level=None,
                                 ratio = s2 / s1_adj
                         break
             
-            # D方案：两步法判断整理后突破（2026-05-22 改进版）
-            # 第1步：加速前是否有过回调且守住了EMA20
-            # 第2步：突破时量比是否失控(>1.7)
-            if volumes is not None and len(closes) >= 25 and len(volumes) >= 25:
-                w = closes[-25:-5]  # 20个交易日，排除最近5天拉升段
+            # D方案：判断整理后突破（2026-05-22）
+            # 核心逻辑：最近是否有过回调且守住了EMA20
+            # 有确认过程的突破 → 上行；无确认过程 → 留加速
+            if len(closes) >= 23:
+                w = closes[-23:-3]  # 20个交易日，排除最近3天拉升段
                 if len(w) >= 10:
-                    peak_val = max(w)
-                    peak_i = w.index(peak_val)
-                    after_w = w[peak_i+1:]
-                    if after_w:
-                        trough_val = min(after_w)
-                        pull = (peak_val - trough_val) / peak_val * 100
-                        if pull > 5:
-                            # 第1步：回调低点守住EMA20？
-                            e20_full = ema_list(closes, 20)
-                            trough_abs_i = len(closes) - 25 + peak_i + 1 + after_w.index(trough_val)
-                            is_holding = (trough_abs_i < len(e20_full) and e20_full[trough_abs_i] is not None
-                                        and trough_val > e20_full[trough_abs_i] * 0.98)
-                            if is_holding:
-                                # 第2步：突破量控在1.7以下？
-                                v3 = sum(volumes[-3:]) / 3
-                                v12 = sum(volumes[-15:-3]) / 12 if len(volumes) >= 15 else 0
-                                vr = v3 / v12 if v12 > 0 else 99
-                                if vr < 1.7:
-                                    ratio = 1.0  # 整理后突破 → 判为上行
+                    # 从末尾往前找最近的局部低点（仅窗口最后7根找）
+                    for i in range(len(w)-1, len(w)-8, -1):
+                        if w[i] > w[i-1]:  # 股价变高 → 前一个是局部低点
+                            trough_val = w[i-1]
+                            peak_val = max(w[:i-1])
+                            pull = (peak_val - trough_val) / peak_val * 100
+                            if pull > 5:
+                                e20_full = ema_list(closes, 20)
+                                trough_abs_i = len(closes) - 23 + i - 1
+                                is_holding = (trough_abs_i < len(e20_full) and e20_full[trough_abs_i] is not None
+                                            and trough_val > e20_full[trough_abs_i] * 0.98)
+                                if is_holding:
+                                    ratio = 1.0
+                                break
         if ratio > 1.8: return '加速'
         elif ratio < 0.4:
             # 区分滞涨(危险) vs 缩量整理(中继蓄力)
