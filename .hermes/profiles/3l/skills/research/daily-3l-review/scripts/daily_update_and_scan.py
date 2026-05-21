@@ -76,7 +76,7 @@ def update_cache():
                             "close": round(float(row["close"]), 2),
                             "high": round(float(row["high"]), 2),
                             "low": round(float(row["low"]), 2),
-                            "volume": int(float(row["volume"]))
+                            "volume": int(float(row["volume"]) * 100)
                         })
                 if new_entries:
                     existing_dates_set = set(k["date"] for k in klines)
@@ -244,6 +244,19 @@ def scan_buy_points(data):
         subprocess.run([sys.executable, bsc], timeout=120)
     except Exception as e:
         print(f"  ⚠️ 图表生成失败: {e}")
+
+    # 自动同步复盘数据（如果已有存档则更新，避免扫描结果和复盘不同步）
+    try:
+        today_str = last_date[:4] + '-' + last_date[4:6] + '-' + last_date[6:8] if len(last_date) == 8 else last_date
+        review_archive_path = '/home/ubuntu/www/private/review_archive/' + today_str + '.json'
+        if os.path.isfile(review_archive_path):
+            print(f"\n🔄 同步复盘数据...")
+            gen_script = '/home/ubuntu/www/generate_review_data.py'
+            if os.path.isfile(gen_script):
+                subprocess.run([sys.executable, gen_script, today_str], timeout=180, capture_output=True)
+                print(f"  ✅ 复盘已同步 ({today_str})")
+    except Exception as e:
+        print(f"  ⚠️ 复盘同步失败: {e}")
 
     return results
 

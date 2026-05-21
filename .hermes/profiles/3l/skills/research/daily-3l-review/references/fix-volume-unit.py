@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-修复 all_stocks_60d.json 中最后若干日的volume单位问题。
+修复 all_stocks_60d.json 中volume单位不一致问题。
 
-根因：腾讯财经API返回volume单位为手（lot），mootdx返回股（shares）。
-generate_review_data.py 从腾讯财经补拉最新K线时若未×100，会导致最新几日volume
-仅为正常值的1%，进而影响买点检测中的"放量"条件判断。
+根因：mootdx和腾讯财经API都返回volume在**手(手)**单位，但缓存规范要求存**股(股)**，
+1手=100股。2026-05-21 发现存量数据中245/251只已经是股，但有6只（伟创电气/大族数控/
+多氟多等）是手。daily_update_and_scan.py 已固化 int(float(row["volume"]) * 100)。
 
-检测逻辑：最后N天中，若某日volume < 前10日均量的20%，判定为手，×100修复。
+修复后可通过下面方法验证：对比mootdx原始5/20 volume与缓存5/20 volume。
+比值≈100 → 存量已是股 ✅；比值≈1 → 存量是手 ❌（需×100统一到股）。
+
+其他可能触发此bug的场景：直接通过腾讯财经API补拉K线时未×100。
 """
 import json, os, sys
 
@@ -15,11 +18,12 @@ CHECK_DAYS = 3       # 检查最后几天
 WINDOW = 10          # 对比前N天的均量
 THRESHOLD = 0.20     # 低于均量20%视为单位错误
 
+
 def fix_volume(data_path=DATA_PATH, dry_run=False):
     with open(data_path) as f:
         data = json.load(f)
 
-    stocks_data = data.get("stocks", data)  # 兼容两种结构
+    stocks_data = data.get("stocks", data)
     fixed_count = 0
     fixed_codes = set()
 
@@ -61,4 +65,4 @@ if __name__ == "__main__":
     print(f"{'[DRY RUN] ' if dry else ''}修复 {n_records} 条记录, 涉及 {n_codes} 只股票")
 
     if n_records > 0:
-        print("提示: 修复后请重新运行 buy_point_detection 扫描。")
+        print("提示: 修复后请重新运行 daily_update_and_scan.py 更新扫描结果。")

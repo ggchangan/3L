@@ -411,7 +411,74 @@ git show HEAD:./generate_review_data.py > /tmp/gen_orig.py
 ```
 **永远不要删掉`* 100`。** 这个bug在2026-05-21又犯了一次，导致德业股份在突破日量比=0.03（正常应为1.3+），买点条件②放量永远不满足。
 
+### ⚠️ mootdx volume 单位：手→股（2026-05-21 两轮踩坑）
+
+`daily_update_and_scan.py` 从 mootdx 拉取 volume 时，原始数据为 **手（手）**，1手=100股。保存到 `all_stocks_60d.json` 时必须 ×100 转为 **股**。
+
+```python
+# ✅ 正确：mootdx返回手, 缓存存股
+"volume": int(float(row["volume"]) * 100)
+```
+
+**2026-05-21 两轮踩坑：**
+
+- **第1轮**：忘记 ×100，5/21新数据的 volume 全部为正常值的 1/100 → vol_analysis 中的量比错乱
+- **第2轮**：局部 ×100 只修复 5/21 日行，但部分持仓股（伟创电气/大族数控/多氟多等6只）的老数据之前也是未×100的原始值，造成量比爆炸（如 5603% 放量）
+
+**最终修复方案（2026-05-21）：**
+
+对比 mootdx 原始 volume 与缓存存量 volume，统一全部 ×100：
+
+```python
+# 对每只股票，判断存量数据单位：
+# 若 cache_5_20 / mootdx_5_20 ≈ 100 → 存量已是股 → 5/21也得×100
+# 若 cache_5_20 / mootdx_5_20 ≈ 1   → 存量是手 → 全部×100
+```
+
+结果：245/251 只存量已是股（×100），仅 6 只需要补 ×100。`daily_update_and_scan.py` 的 `"volume": int(float(row["volume"]) * 100)` 已固化。
+
 修复脚本：`references/fix-volume-unit.py` — 检测缓存中最后2天volume < 前10日均量20%的异常数据，自动×100修复。
+
+### ⚠️ cron脚本路径错误（2026-05-21 发现）
+
+`~/.hermes/profiles/3l/scripts/generate_daily_review.sh` 的 Step 1 路径曾误写为：
+```bash
+# ❌ 错误 — 路径不存在，cron静默跳过数据更新
+python3 .../a-stock-daily-scan/scripts/daily_update_and_scan.py
+# ✅ 正确路径
+python3 .../daily-3l-review/scripts/daily_update_and_scan.py
+```
+
+**排查：** 复盘页面数据不对、量价异常时，先跑 cron 脚本看 Step 1 是否有 `No such file` 错误。
+**修复：** `a-stock-daily-scan` → `daily-3l-review`
+
+### ⚠️ 动量数据缓存全天锁死（2026-05-21 发现+修复）
+
+`/api/momentum` 服务端（server.py）使用 **每日首次请求后全天缓存** 策略。如果首次请求在盘中（如09:30），全天的涨停/新高数据就被锁死在盘中状态。`generate_review_data.py` 归档时读取的是同一份缓存。
+
+**后果：** 收盘后生成的复盘 → 涨停/新高数目是盘中的旧数据。
+
+**⚠️ 碎片化修复陷阱（2026-05-21 教训）：**
+- ❌ 仅删除缓存不够 → 复盘内部 `fetch_momentum.py` 若失败直接丢失动量数据
+- ✅ 正确做法：**清缓存 → 先显式拉取新鲜数据存入缓存 → 再跑复盘**
+
+**已修复：** `generate_daily_review.sh` Step 4 改为先清缓存→显式拉取→验证成功→再跑复盘。`generate_review_data.py` 内部保留fallback但一般不会触发。
+
+**手动修复方法（收盘后复盘数据不对时）：**
+```bash
+rm -f /home/ubuntu/www/data/cache/momentum_$(date +%Y-%m-%d).json
+cd /home/ubuntu/www && python3 fetch_momentum.py > /home/ubuntu/www/data/cache/momentum_$(date +%Y-%m-%d).json
+rm -f /home/ubuntu/www/private/review_archive/$(date +%Y-%m-%d).json
+cd /home/ubuntu/www && python3 generate_review_data.py $(date +%Y-%m-%d)
+```
+
+### ⚠️ fill_stock_names.py 文件行号污染（2026-05-21 发现）
+
+`fill_stock_names.py` 文件内容带入了 `1|     1|#!/usr/bin/env python3` 行号前缀，导致 IndentationError 无法运行。
+
+**根因：** 使用 `read_file(offset=N)` 分页读取后，用 `write_file` 写入时未去掉行号。
+**检测：** 运行 Step 2 时报 `IndentationError: unexpected indent`。
+**修复：** 重写文件（去掉行号前缀）或 `head -1 | grep '^\s'` 检查首字符是否空白。
 
 ### 中证全指数据源
 - **正确：** `sh000985`（中证全指，~6500）
@@ -482,17 +549,33 @@ function loadHistoryList(currentDisplayDate) {
 
 **错误历史：** 原来写死 `filter(d => d !== today)`（排除"今天"）。当查看历史页面（如 05-19）时，05-19 自己还在历史列表里（因为它不是"今天"），而 05-20 反而不在列表里（被"今天"排除条件误伤）。
 
-### 日期加载逻辑（2026-05-21 重写）
+### 日期加载逻辑（2026-05-21 重写 → 2026-05-21 补充18:00降级）
 
-**原则：永远展示最新已有数据的日期，不猜"今天"。**
+**铁律：复盘页面只展示已完成交易日（已收盘）的数据。** 如果在18:00之前访问页面，即使当天有了存档（比如有人盘中手误跑了生成脚本），也必须**自动降级到上一个交易日**。
 
+**最终实现（review.html `loadLatestReview()`）：**
+```javascript
+const today = `${y}-${m}-${d}`;
+const nowHour = new Date().getHours();
+let latest = dates[0];
+// 如果最新日期是今天，但还没到18:00（cron未运行），自动降级到上一个交易日
+if (latest === today && nowHour < 18 && dates.length > 1) {
+    latest = dates[1];
+}
+const isToday = latest === today;
 ```
-页面加载 → loadLatestReview() → GET /api/review/dates
-  ├─ 最新日期 == 今天（18:00 cron 已运行）→ "2026-05-21 今日复盘 ✓"
-  └─ 最新日期 != 今天（收盘前）→ "2026-05-20 每日复盘（收盘后自动更新）"
+
+**行为：**
+```
+收盘前（<18:00）→ 即使dates[0]=今天 → 降级到dates[1]=昨天 → "每日复盘（收盘后自动更新）"
+收盘后（≥18:00）→ cron刚跑完 → dates[0]=今天 → 正常显示 → "今日复盘 ✓"
 ```
 
-**改动：** 废弃了先试`/api/review/今天`、404再fallback的老逻辑。直接取`/api/review/dates`的最新存档。避免了"今天没有数据→显示昨日→但日期标签写的是今天"的错位问题。
+**⛔ 重复犯错的教训（2026-05-21 已发生两次）：**
+- 第一次写好了降级逻辑，后来改 `loadLatestReview()` 时**把时间判断删掉了**，直接取 `dates[0]`
+- 用户发现后质问："这个逻辑上次不是说过了吗？怎么又改了"
+- **根因：** SKILL.md 只记录了"原则"（永远展示最新已有数据的日期），没有记录"18:00前降级"的具体实现
+- **✅ 防止再犯：修改 review.html 的 `loadLatestReview()` 时，必须保留18:00前的降级逻辑。** 这是用户明确要求的行为，不是可选的优化。
 
 服务端：`server.py` 的 `/api/review/dates` 加了 `re.match(r'^\d{4}-\d{2}-\d{2}\.json$')` 正则过滤，排除 `--date.json` 等非法文件名（2026-05-21 发现 `--date.json` 因 parse 错误写入的脏数据混入日期列表）。
 
@@ -931,7 +1014,7 @@ const signalText = s.signal_text || (s.signal === 'hold' ? '✅ 持有' : s.sign
 
 | 文件 | 说明 |
 |------|------|
-| `references/fix-volume-unit.py` | 修复缓存中手→股错误的批量脚本 |
+| `references/volume-unit-diagnosis.md` | Volume单位手↔股诊断步骤 + 已知不一致存量清单 |
 | `references/server-crash-diagnosis.md` | server.py SYN flood 崩溃的诊断+加固方案 |
 | `references/support-fallback-logic.md` | 区间震荡画stage时支撑过滤+下一档回退的详细说明 |
 | `references/2026-05-21-diagnosis-operation-redesign.md` | ④⑤区重构（诊断卡+操作决策）+ vol字段名修复记录 |
