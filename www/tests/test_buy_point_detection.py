@@ -173,3 +173,112 @@ class TestDetectBuyPoint:
         assert result['buy_type'] in ('中继买点', '突破买点'), f"预期3L买点，实际: {result['buy_type']}"
         assert isinstance(result['score'], int)
         assert result['score'] > 0
+
+
+# ====== 辅助函数：阴包阳止盈检测（来自 test_demingli_3l.py） ======
+def _check_reverse_yingbaoyang(klines, current_idx):
+    """右侧止盈：阴包阳(放量走/缩量观察)"""
+    if current_idx < 1:
+        return False, ''
+    k, kp = klines[current_idx], klines[current_idx - 1]
+    c, o = k['close'], k['open']
+    cp_, op_ = kp['close'], kp['open']
+
+    vol = k.get('volume', 0)
+    prev_vols = [klines[current_idx - j - 1].get('volume', 0) for j in range(1, 6)]
+    avg_vol = sum(prev_vols) / len(prev_vols) if prev_vols else 0
+    vol_ratio = vol / avg_vol if avg_vol > 0 else 0
+
+    # 条件：阴包阳（前阳+本阴+本收≤前开）
+    if cp_ >= op_ and c < o and c <= op_:
+        if vol_ratio < 0.8:
+            return False, f'缩量阴包阳(量{vol_ratio:.1f}x,观察)'
+        else:
+            return True, f'阴包阳(昨{op_:.0f}->{cp_:.0f},今{o:.0f}->{c:.0f},量{vol_ratio:.1f}x)'
+    return False, ''
+
+
+class TestNewRules20260524:
+    """2026-05-24 新规则验证测试"""
+
+    DATA_PATH = '/home/ubuntu/data/3l/all_stocks_60d.json'
+
+    @classmethod
+    def _load_data(cls):
+        import json
+        data = json.load(open(cls.DATA_PATH))
+        return data.get('stocks', data)
+
+    def test_zhangting_breakout_skips_volume_check(self):
+        """
+        规则1: 涨停突破豁免量比检查
+        德明利(001309) 2026-05-06: 涨停(+10%), vol_ratio=0.57(<=1.2)
+        应通过涨停豁免被判定为有效突破买点
+        """
+        raw = self._load_data()
+        bt = detect_buy_point('001309', '2026-05-06', raw,
+                              market_position='波中', main_lines={'半导体'})
+        assert bt is not None, '涨停突破应被识别为买点'
+        assert bt['buy_type'] == '突破买点', f'应为突破买点，实际: {bt["buy_type"]}'
+        detail = bt.get('detail', {})
+        bd = detail.get('breakout_detail', {})
+        assert bd.get('is_limit_up') is True, '应识别为涨停'
+        assert bd.get('limit_up_skip') is True, '应豁免量比检查'
+        assert bt['vol_ratio'] <= 1.2, f'量比{bt["vol_ratio"]}虽<=1.2，但涨停豁免应通过'
+        assert detail.get('breakout_score', 0) >= 5, f'突破评分应>=5，实际{detail.get("breakout_score")}'
+
+    def test_dili_midcycle_with_large_body(self):
+        """
+        规则2a: 地量(量比<0.6)中继买点不限实体大小
+        中信出版(300788) 2026-04-24: vol_ratio=0.51(地量), gain=-4.87%(大实体)
+        应通过地量豁免被判定为中继买点
+        """
+        raw = self._load_data()
+        bt = detect_buy_point('300788', '2026-04-24', raw,
+                              market_position='波中')
+        assert bt is not None, '地量中继买点应被识别'
+        assert bt['buy_type'] == '中继买点', f'应为中继买点，实际: {bt["buy_type"]}'
+        assert bt['vol_ratio'] < 0.6, f'量比{bt["vol_ratio"]}应<0.6(地量)'
+        detail = bt.get('detail', {})
+        gain_pct = detail.get('gain_pct', 0)
+        assert gain_pct < -3, f'实体涨跌幅{gain_pct}%应<-3%(大实体)，但地量豁免应通过'
+
+    def test_midcycle_without_pullback_fails(self):
+        """
+        规则2b: 中继买点缺少回踩到位检查应失败
+        天岳先进(688234) 2026-04-21: 上涨趋势+缩量(vr=0.73), gain=-1.3%(小实体OK)
+        但回踩到位三条件均不满足 -> 应返回None
+        """
+        raw = self._load_data()
+        bt = detect_buy_point('688234', '2026-04-21', raw,
+                              market_position='波中')
+        assert bt is None, f'未回踩到位应返回None，实际返回: {bt}'
+
+    def test_yinbaoyang_shrink_does_not_exit(self):
+        """
+        规则3: 缩量阴包阳(量比<0.8)观察一天，不触发止盈退出
+        沪硅产业(688126) 2026-03-09: 阴包阳形态+量比0.78(<0.8)
+        应返回False(不触发)
+        """
+        raw = self._load_data()
+        # 定位K线索引
+        kls = None
+        for sec, stocks in raw.items():
+            if '688126' in stocks:
+                kls = stocks['688126']
+                break
+        assert kls is not None, '未找到688126数据'
+
+        target_date = '20260309'
+        found_idx = -1
+        for i, k in enumerate(kls):
+            d = str(k['date']).replace('-', '')
+            if d == target_date:
+                found_idx = i
+                break
+        assert found_idx >= 2, f'未找到日期{target_date}或索引不足'
+
+        rev, reason = _check_reverse_yingbaoyang(kls, found_idx)
+        assert rev is False, f'缩量阴包阳不应触发止盈，实际: rev={rev}, reason={reason}'
+        assert '缩量' in reason, f'原因应包含"缩量"字样，实际: {reason}'
+        assert '观察' in reason, f'原因应包含"观察"字样，实际: {reason}'

@@ -118,7 +118,7 @@ def _breakout_score(close, prev_close, prev_10d_high, vol_ratio, body_ratio, hig
     """多维评分判定突破有效性 — 替代单一量比阈值
     
     硬条件（必须满足）：
-    - 放量：量比 > 1.0
+    - 放量：量比 > 1.2（涨停日豁免）
     - 收高位：收盘 > 当日振幅中点
     
     4维度评分，总分≥5分为有效突破：
@@ -126,33 +126,72 @@ def _breakout_score(close, prev_close, prev_10d_high, vol_ratio, body_ratio, hig
     - 涨幅分：当日涨多少
     - 量比分：量能放大程度
     - 实体分：K线实体占振幅比
+    
+    涨停日豁免：日涨幅≥+9.5%时，量比条件跳过（涨停=需求碾压）
     """
-    # 硬条件：必须放量
-    if vol_ratio <= 1.0:
-        return False, 0, {'reason': f'量比{vol_ratio:.2f}≤1.0，未放量'}
+    # 判断涨停
+    gain = (close - prev_close) / prev_close * 100 if prev_close else 0
+    is_limit_up = gain >= 9.5
+    
+    # 硬条件：必须放量（涨停日豁免）
+    if not is_limit_up and vol_ratio <= 1.2:
+        return False, 0, {'reason': f'量比{vol_ratio:.2f}≤1.2，未放量' if not is_limit_up else '涨停豁免'}
     
     # 硬条件：必须收在相对高位
     if high is not None and low is not None and high > low:
         mid_point = (high + low) / 2
-        if close <= mid_point:
+        if close <= mid_point and not is_limit_up:
             return False, 0, {'reason': f'收盘{close}≤中点{mid_point:.2f}，未收高位'}
     
     break_pct = (close - prev_10d_high) / prev_10d_high * 100 if prev_10d_high else 0
-    gain = (close - prev_close) / prev_close * 100 if prev_close else 0
     
     # 突破幅度分（越高越好）
     s1 = 3 if break_pct > 5 else (2 if break_pct > 3 else (1 if break_pct > 1 else 0))
     # 涨幅分（越大越好）
     s2 = 3 if gain > 7 else (2 if gain > 5 else (1 if gain > 3 else 0))
-    # 量比分（辅助确认，不再一票否决）
-    s3 = 3 if vol_ratio > 1.3 else (2 if vol_ratio > 1.15 else (1 if vol_ratio > 1.0 else (0.5 if vol_ratio > 0.9 else 0)))
+    # 量比分（涨停豁免给3分满分，非涨停按实际量比）
+    if is_limit_up:
+        s3 = 3
+    else:
+        s3 = 3 if vol_ratio > 1.6 else (2 if vol_ratio > 1.4 else (1 if vol_ratio > 1.2 else 0))
     # 实体分（实体饱满说明需求主动）
     s4 = 2 if body_ratio > 0.7 else (1 if body_ratio > 0.5 else 0)
     
     total = round(s1 + s2 + s3 + s4, 1)
-    return total >= 5, round(total, 1), {'break_pct': round(break_pct, 2), 's1': s1, 's2': s2, 's3': s3, 's4': s4}
+    return total >= 5, round(total, 1), {'break_pct': round(break_pct, 2), 's1': s1, 's2': s2, 's3': s3, 's4': s4,
+        'is_limit_up': is_limit_up, 'limit_up_skip': is_limit_up}
 
 
+def _check_pullback(klines, idx, close, ema5_val, ema10_val, ema20_val):
+    """回踩到位检查 — 三选一满足即可
+    
+    1. 距关键点支撑 < 2%
+    2. 乖离率(EMA5/10/20任一)在 -2%~+1%范围
+    3. 价格在EMA5和EMA20之间（均线束内）
+    """
+    # ① 关键点支撑检查
+    support = _find_support_levels(klines, idx)
+    if support:
+        dist = (close - support) / support * 100
+        if abs(dist) < 2:
+            return True, f'关键支撑(sup{support:.0f},距{dist:+.2f}%)'
+    
+    # ② 均线乖离率检查
+    for name, val in [('EMA5', ema5_val), ('EMA10', ema10_val), ('EMA20', ema20_val)]:
+        if val and val > 0:
+            bias = (close - val) / val * 100
+            if -2 <= bias <= 1:
+                return True, f'{name}回踩(bias{bias:+.2f}%)'
+    
+    # ③ 均线束检查（价格在EMA5和EMA20之间）
+    if ema5_val and ema20_val:
+        lo = min(ema5_val, ema20_val)
+        hi = max(ema5_val, ema20_val)
+        if lo < close < hi:
+            pct = (close - lo) / (hi - lo) * 100
+            return True, f'均线束内(pct{pct:.0f}%)'
+    
+    return False, '未回踩到位'
 def _ema_list(data, period):
     """计算EMA列表"""
     r = [None] * len(data)
@@ -441,17 +480,36 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
     detail = {}
     
     if structure == '上涨趋势':
-        if stage in ('上行', '缩量整理') and is_shrink:
-            # 上升趋势缩量回踩 → 中继买点
-            buy_type = '中继买点'
-            score = 3
-            detail = {
-                'reason': '上升趋势缩量回踩',
-                'structure': structure,
-                'stage': stage,
-                'vol_ratio': round(vol_ratio, 2),
-                'shrink': True,
-            }
+        # ====== 中继买点（新规则） ======
+        # 计算涨跌幅（从昨收）
+        gain_pct = (close - prev_close) / prev_close * 100 if prev_close else 0
+        # 计算EMA5/10/20（用于回踩到位检查）
+        closes_ema = [k['close'] for k in kls[:idx+1]]
+        ema5_val = _ema_list(closes_ema, 5)[-1] if len(closes_ema) >= 5 else None
+        ema10_val = _ema_list(closes_ema, 10)[-1] if len(closes_ema) >= 10 else None
+        ema20_val = _ema_list(closes_ema, 20)[-1] if len(closes_ema) >= 20 else None
+        
+        if is_shrink:
+            # 实体条件：地量不限，普通缩量需小实体
+            is_extreme_shrink = vol_ratio < 0.6
+            is_small_body = -3 <= gain_pct <= 2
+            body_ok = is_extreme_shrink or is_small_body
+            
+            if body_ok:
+                # 回踩到位检查
+                pullback_ok, pullback_reason = _check_pullback(kls, idx, close, ema5_val, ema10_val, ema20_val)
+                if pullback_ok:
+                    buy_type = '中继买点'
+                    score = 3
+                    detail = {
+                        'reason': f'缩量回踩({pullback_reason})',
+                        'structure': structure,
+                        'stage': stage,
+                        'vol_ratio': round(vol_ratio, 2),
+                        'shrink': True,
+                        'gain_pct': round(gain_pct, 2),
+                        'pullback_reason': pullback_reason,
+                    }
         
     if is_breakout:
         # 多维评分判定突破有效性

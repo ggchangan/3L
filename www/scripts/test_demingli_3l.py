@@ -95,15 +95,28 @@ def check_power_fading(kls, current_idx, entry_idx):
     return False, ''
 
 def check_reverse(kls, current_idx, key_point):
-    """右侧止盈：阴包阳 OR 大阴线反转"""
+    """右侧止盈：阴包阳(放量走/缩量观察) OR 大阴线反转"""
     if current_idx < 1:
         return False, ''
     k, kp = kls[current_idx], kls[current_idx-1]
     c, o, h, l = k['close'], k['open'], k['high'], k['low']
     cp_, op_ = kp['close'], kp['open']
+    
+    # 量比计算
+    vol = k.get('volume', 0)
+    prev_vols = [kls[current_idx-j-1].get('volume', 0) for j in range(1, 6)]
+    avg_vol = sum(prev_vols) / len(prev_vols) if prev_vols else 0
+    vol_ratio = vol / avg_vol if avg_vol > 0 else 0
+    
     # 条件1：阴包阳（前阳+本阴+本收≤前开）
     if cp_ >= op_ and c < o and c <= op_:
-        return True, f"阴包阳(昨{op_:.0f}→{cp_:.0f},今{o:.0f}→{c:.0f})"
+        if vol_ratio < 0.8:
+            # 缩量阴包阳 → 观察一天，不触发
+            return False, f"缩量阴包阳(量{vol_ratio:.1f}x,观察)"
+        else:
+            # 放量或均量阴包阳 → 走
+            return True, f"阴包阳(昨{op_:.0f}→{cp_:.0f},今{o:.0f}→{c:.0f},量{vol_ratio:.1f}x)"
+    
     # 条件2：大阴线反转（实体≥前5日均值×1.5 + 收盘在低位30%）
     if c < o:
         body = o - c
