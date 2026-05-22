@@ -304,6 +304,58 @@ body {
         </div>
     </div>
 
+    <!-- Day card: 2026-05-22 -->
+    <div class="day-card">
+        <div class="date-badge">2026-05-22</div>
+
+        <div class="change-item">
+            <div class="sname">index.html <span class="tag updated">修复</span></div>
+            <div class="sdesc">成果页面结构修复 — 待办任务/今日报告区空条目清除</div>
+            <ul class="spoints">
+                <li>删除了 replace_all 残留的空 &lt;li&gt; 条目（今日报告区+待办任务区各1个）</li>
+                <li>修复待办列表HTML结构损坏（缺失 &lt;/li&gt;/&lt;div&gt; 导致布局错乱）</li>
+                <li>光迅科技待办项从今日完成区移至待办任务区（原被 replace_all 误复制）</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Day card: 2026-05-21 -->
+    <div class="day-card">
+        <div class="date-badge">2026-05-21</div>
+
+        <div class="change-item">
+            <div class="sname">stock-simulation-v33 <span class="tag updated">更新</span></div>
+            <div class="sdesc">回测出口改用真实3L退出规则，替代5天硬出场假逻辑</div>
+            <ul class="spoints">
+                <li>simulate_trade() 使用真实3L规则：加速止盈/放量滞涨/动力减弱/阴包阳三维退出</li>
+                <li>4个出口检测函数从测试文件提取到 buy_point_detection.py 正式模块</li>
+                <li>server.py 回测端点改用真实模拟，import json/traceback 作用域bug修复</li>
+                <li>光迅科技60天回测验证：2笔信号累计+49.07%（此前假逻辑+53%，真实%有所修正）</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">buy_point_detection <span class="tag updated">更新</span></div>
+            <div class="sdesc">提取 gen_trade_chart_svg / compute_trade_stats 共享函数</div>
+            <ul class="spoints">
+                <li>gen_trade_chart_svg：回测结果K线图+买卖点标注（去图注文字，保持暗色风格）</li>
+                <li>compute_trade_stats：胜率/盈亏比/累计收益/最大回撤 统一计算</li>
+                <li>配套8个单元测试（TestGenTradeChartSvg + TestComputeTradeStats）全部通过</li>
+                <li>可由持仓/复盘/回测多种场景共用</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">a-stock-3l-simulation-v2 <span class="tag updated">更新</span></div>
+            <div class="sdesc">退出规则同步更新 + 光迅科技趋势股卖飞案例</div>
+            <ul class="spoints">
+                <li>回测止损/止盈策略更新为真实3L检测函数</li>
+                <li>新增 trend_trade_exit_problem.md 趋势股加速止盈卖飞案例记录</li>
+                <li>skill文档同步更新退出规则描述</li>
+            </ul>
+        </div>
+    </div>
+
     <!-- Day card: 2026-05-19 -->
     <div class="day-card">
         <div class="date-badge">2026-05-19</div>
