@@ -258,6 +258,41 @@
             <ul class="file-list" id="doneList">
                 <li>
                     <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">买点回测精度优化</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">延长跟踪周期+按大盘状态拆分胜率+加入精准主线/非主线区分</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">🔲 待办</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">恐慌/衰竭判断算法</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">基于3L量价语言的恐慌出清+供应衰竭+需求衰竭判断，大盘版(已有)基础上适配个股版</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">波峰波谷V5回归测试</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">test_peak_valley.py 16个测试：真实指数回归/边界/极端值/仓位策略</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">波峰波谷综合PDF重写</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">含V5回测对比图嵌入，HTML→wkhtmltopdf标准格式</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#4ecdc4;">个股买点成功率+止损+盈亏比</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">stock_analysis.html新增综合成功率/止损位/亏损%/盈亏比。成功率=历史胜率×大盘系数×结构系数×主线系数</div>
+                    </div>
+                    <span style="color:#4ecdc4; font-size:12px; white-space:nowrap; margin-left:12px;">✅ 已完成</span>
+                </li>
+                <li>
+                    <div style="flex:1">
                         <span class="file-name" style="color:#4ecdc4;">买点信号历史回测报告PDF</span>
                         <div style="color:#888; font-size:12px; margin-top:4px;">328只自选股60天历史→3026个买点信号，按中继/突破统计胜率+R倍数+盈亏比。HTML→wkhtmltopdf</div>
                     </div>
@@ -424,6 +459,28 @@
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span style="color:#e94560; font-size:12px; white-space:nowrap;">🔍 待调研</span>
                         <a href="/files/%E5%BE%85%E5%8A%9E_iwencai.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none; font-size:11px;">📄</a>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#9C27B0;">🧠 恐慌/衰竭判断算法</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            基于3L量价语言的恐慌出清+供应衰竭+需求衰竭判断，个股版（大盘版V5已有，适配个股波动参数）
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#9C27B0; font-size:12px; white-space:nowrap;">🧠 待开发</span>
+                    </div>
+                </li>
+                <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#9C27B0;">📈 买点回测精度优化</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            延长跟踪周期(5天→10天)+按大盘状态拆分胜率+主线/非主线区分精度提升
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="color:#9C27B0; font-size:12px; white-space:nowrap;">📈 待优化</span>
                     </div>
                 </li>
             </ul>
