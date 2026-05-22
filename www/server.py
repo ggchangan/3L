@@ -489,7 +489,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return
 
             from scripts.data_layer import get_all_stocks
-            from scripts.buy_point_detection import detect_buy_point, _resolve_code, find_idx, _volume_ratio, gen_trade_chart_svg, compute_trade_stats
+            from scripts.buy_point_detection import detect_buy_point, _resolve_code, find_idx, _volume_ratio, gen_trade_chart_svg, compute_trade_stats, simulate_trade
             from scripts.ema_utils import get_structure, get_stage
             import json, traceback
 
@@ -538,32 +538,45 @@ class Handler(SimpleHTTPRequestHandler):
             kls = stocks[matched_direction][matched_code]
             sub = {stock_direction: {resolved_code: kls}}
 
-            # 跑回测：每个K线节点检测买点
+            # 跑回测：每个K线节点检测买点，用真实3L退出规则
             signals = []
             start_idx = max(30, len(kls) - days)
             cum = 1.0
-            for i in range(start_idx, len(kls)):
+            i = start_idx
+            while i < len(kls):
                 d = str(kls[i]['date']).replace('-','')
                 df = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
                 bt = detect_buy_point(resolved_code, df, sub, market_position='波中', main_lines={'半导体'})
                 if bt:
                     entry = bt['close']
-                    # 找到退出日（简单的3天规则：取3个交易日后的收盘价）
-                    exit_idx = min(i + 5, len(kls) - 1)
-                    exit_price = kls[exit_idx]['close']
-                    gain = round((exit_price - entry) / entry * 100, 2)
-                    cum *= (1 + gain/100)
-                    signals.append({
-                        'n': len(signals)+1,
-                        'date': bt.get('date', df),
-                        'type': bt['buy_type'],
-                        'entry': entry,
-                        'exit': exit_price if exit_idx != i else None,
-                        'exit_date': str(kls[exit_idx]['date']).replace('-','')[:10] if exit_idx != i else None,
-                        'gain': gain,
-                        'cum_gain': round((cum-1)*100, 2),
-                        'days': exit_idx - i,
-                    })
+                    buy_type = bt['buy_type']
+                    # 用真实3L退出规则模拟交易
+                    trade = simulate_trade(kls, i, entry, buy_type, max_days=60)
+                    if trade and trade['exit_idx'] is not None:
+                        ei = trade['exit_idx']
+                        exit_price = trade['exit_price']
+                        gain = round((exit_price - entry) / entry * 100, 2)
+                        cum *= (1 + gain/100)
+                        signals.append({
+                            'n': len(signals)+1,
+                            'date': bt.get('date', df),
+                            'type': buy_type,
+                            'entry': entry,
+                            'exit': exit_price if ei != i else None,
+                            'exit_date': str(kls[ei]['date']).replace('-','')[:10] if ei != i else None,
+                            'gain': gain,
+                            'cum_gain': round((cum-1)*100, 2),
+                            'days': trade['hold_days'],
+                            'exit_reason': trade['exit_reason'],
+                            'stop_triggered': trade['stop_triggered'],
+                            'buy_back_price': trade.get('buy_back_price'),
+                            'max_gain': trade.get('max_gain'),
+                            'max_loss': trade.get('max_loss'),
+                        })
+                        # 跳到退出日之后，避免同区间重复信号
+                        i = max(i + 1, ei + 1)
+                        continue
+                i += 1
 
             # 生成SVG图（使用共享函数）
             chart_path = f'/review_charts/bt_{resolved_code}.svg'

@@ -870,7 +870,6 @@ def gen_trade_chart_svg(kls, signals, stock_name, code, chart_abs):
         bool: 是否生成成功
     """
     try:
-        from .buy_point_detection import _ema_list, find_idx
         cl = [k['close'] for k in kls]
         hi = [k['high'] for k in kls]
         lo = [k['low'] for k in kls]
@@ -982,4 +981,254 @@ def compute_trade_stats(signals):
         'avg_win': avg_win,
         'avg_loss': avg_loss,
         'cumulative_return': round(cum, 2),
+    }
+
+
+# ═══════════════════════════════════════════
+# 3L退出检测函数（提取自 test_demingli_3l.py）
+# ═══════════════════════════════════════════
+
+def check_acceleration(kls, start_idx, current_idx):
+    """左侧止盈：连续大阳加速"""
+    if current_idx - start_idx < 3 or current_idx >= len(kls):
+        return False, ''
+    bodies = []
+    for j in range(current_idx - 2, current_idx + 1):
+        if j < 0 or j >= len(kls):
+            return False, ''
+        o, c = kls[j]['open'], kls[j]['close']
+        if c <= o:
+            return False, ''
+        bodies.append((c - o) / o * 100)
+    if len(bodies) < 3:
+        return False, ''
+    if all(b > 0 for b in bodies) and sum(bodies) / 3 > 3.0 and bodies[-1] >= bodies[0] * 1.1:
+        return True, f"加速({round(bodies[0],1)}%→{round(bodies[-1],1)}%)"
+    return False, ''
+
+
+def check_volume_stagnation(kls, current_idx):
+    """左侧止盈：放量滞涨"""
+    if current_idx < 5 or current_idx >= len(kls):
+        return False, ''
+    vol = kls[current_idx].get('volume', kls[current_idx].get('vol', 0))
+    if vol <= 0:
+        return False, ''
+    vols = [kls[current_idx - 4 + i].get('volume', kls[current_idx - 4 + i].get('vol', 0)) for i in range(5)]
+    vma5 = sum(vols) / 5 if all(v > 0 for v in vols) else 1
+    vr = vol / vma5
+    if vr > 1.5:
+        o, c = kls[current_idx]['open'], kls[current_idx]['close']
+        body = abs(c - o)
+        rng = kls[current_idx]['high'] - kls[current_idx]['low']
+        if rng > 0 and body / rng < 0.3:
+            return True, f"放量滞涨(量比{round(vr,1)})"
+    return False, ''
+
+
+def check_power_fading(kls, current_idx, entry_idx):
+    """左侧止盈：动力减弱（价创新高量递减）"""
+    if current_idx - entry_idx < 3 or current_idx >= len(kls):
+        return False, ''
+    recent_vols = [kls[max(0, current_idx - 2) + j].get('volume', kls[max(0, current_idx - 2) + j].get('vol', 0)) for j in range(3)]
+    if not all(v > 0 for v in recent_vols) or recent_vols[0] <= 0:
+        return False, ''
+    if recent_vols[1] < recent_vols[0] * 0.95 and recent_vols[2] < recent_vols[1] * 0.95:
+        recent_highs = [kls[j]['high'] for j in range(max(0, current_idx - 5), current_idx + 1)]
+        if len(recent_highs) >= 3 and recent_highs[-1] == max(recent_highs):
+            return True, "动力减弱(价新高量递减)"
+    return False, ''
+
+
+def check_reverse_yingbaoyang(kls, current_idx, key_point):
+    """右侧止盈：阴包阳三维判定 + 大阴线反转
+
+    三维判定:
+    第1层 跌幅: < -5%直接走 / > -3%不走 / -5%~-3%继续
+    第2层 支撑: 破支撑走 / 没破观察
+    第3层 量能: 放量(>1.0)加强判断
+    """
+    if current_idx < 1 or current_idx >= len(kls):
+        return False, ''
+    k, kp = kls[current_idx], kls[current_idx - 1]
+    c, o, h, l = k['close'], k['open'], k['high'], k['low']
+
+    prev_close = kls[current_idx - 1]['close'] if current_idx >= 1 else 0
+    day_loss = (c - prev_close) / prev_close * 100 if prev_close else 0
+
+    vol = k.get('volume', k.get('vol', 0))
+    prev_vols = [kls[current_idx - j - 1].get('volume', kls[current_idx - j - 1].get('vol', 0)) for j in range(1, 6)]
+    avg_vol = sum(prev_vols) / len(prev_vols) if prev_vols else 0
+    vol_ratio = vol / avg_vol if avg_vol > 0 else 0
+
+    # 条件1：阴包阳（前阳+本阴+本收≤前开）
+    if kp['close'] >= kp['open'] and c < o and c <= kp['open']:
+        if day_loss < -5:
+            return True, f"阴包阳(跌{day_loss:.1f}%大阴,走)"
+        elif day_loss > -3:
+            return False, f"阴包阳(跌{day_loss:.1f}%小阴,观察)"
+        if key_point and c < key_point:
+            if vol_ratio > 1.0:
+                return True, f"阴包阳(破支撑+放量{vol_ratio:.1f}x,走)"
+            return True, f"阴包阳(破支撑{key_point:.0f},走)"
+        else:
+            return False, f"阴包阳(跌{day_loss:.1f}%未破支撑,观察)"
+
+    # 条件2：大阴线反转
+    if c < o:
+        body = o - c
+        bodies = [abs(kls[j]['close'] - kls[j]['open']) for j in range(max(0, current_idx - 5), current_idx)]
+        avg_b = sum(bodies) / len(bodies) if bodies else 0
+        rng_ = h - l if h > l else 1
+        if avg_b > 0 and body >= avg_b * 1.5 and (c - l) / rng_ < 0.3:
+            return True, f"大阴线反转(体{body:.0f}≥均{avg_b:.0f}×1.5)"
+    return False, ''
+
+
+def simulate_trade(kls, entry_idx, entry_price, buy_type, key_point=None, max_days=60):
+    """模拟一笔交易的完整生命周期（含止损→买回→最终退出）
+
+    Args:
+        kls: K线列表 [{date,open,high,low,close,volume}]
+        entry_idx: 入场K线索引
+        entry_price: 入场价
+        buy_type: '突破买点' 或 '中继买点'
+        key_point: 关键点（缺失时自动计算）
+        max_days: 最大持有天数
+
+    Returns:
+        dict with keys: exit_idx, exit_price, exit_date, exit_reason,
+                        gain, days, stop_loss_price, buy_back_price, max_gain, max_loss
+                        or None if trade simulation failed
+    """
+    if key_point is None:
+        if buy_type == '突破买点':
+            if entry_idx >= 10:
+                key_point = max(kls[j]['high'] for j in range(entry_idx - 10, entry_idx))
+            else:
+                key_point = max(kls[j]['high'] for j in range(entry_idx))
+        else:
+            key_point = _find_support_levels(kls, entry_idx)
+        if key_point is None:
+            return None
+
+    stop_price = round(key_point * 0.97, 2)
+    stop_triggered = False
+    stop_day = None
+    stop_loss_price = None
+    buy_back_price = None
+    buy_back_day = None
+    re_entry_idx = None
+    in_stop_observation = False
+    exit_reason = None
+    exit_day = None
+    exit_price = None
+    max_gain_pct = 0
+    max_loss_pct = 0
+    entry_gain_pct = 0
+
+    for day_idx in range(entry_idx + 1, min(entry_idx + max_days + 1, len(kls))):
+        k = kls[day_idx]
+        hp, lp, cp, op = k['high'], k['low'], k['close'], k['open']
+
+        base_price = buy_back_price if re_entry_idx is not None else entry_price
+        gain_pct = round((cp - base_price) / base_price * 100, 2)
+        max_gain_pct = max(max_gain_pct, gain_pct)
+        if not stop_triggered:
+            max_loss_pct = min(max_loss_pct, gain_pct)
+
+        # 止损检测
+        if not stop_triggered and not in_stop_observation:
+            if lp < stop_price:
+                stop_triggered = True
+                stop_day = day_idx
+                stop_loss_price = min(cp, stop_price)
+                stop_loss_pct = round((stop_loss_price - entry_price) / entry_price * 100, 2)
+                entry_gain_pct = stop_loss_pct
+                in_stop_observation = True
+                continue
+
+        # 买回检测
+        if in_stop_observation:
+            if cp > key_point and cp > op:
+                buy_back_price = cp
+                buy_back_day = day_idx
+                in_stop_observation = False
+                re_entry_idx = day_idx
+                continue
+
+            # 观察期也检查加速止盈
+            accel, ar = check_acceleration(kls, entry_idx if re_entry_idx is None else re_entry_idx, day_idx)
+            if accel:
+                exit_reason = f"左侧止盈-{ar}(止损后)"
+                exit_day = day_idx
+                exit_price = cp
+                break
+            continue
+
+        # 左侧止盈
+        accel, ar = check_acceleration(kls, entry_idx if re_entry_idx is None else re_entry_idx, day_idx)
+        if accel:
+            exit_reason = f"左侧止盈-{ar}"
+            exit_day = day_idx
+            exit_price = cp
+            break
+
+        stag, sr = check_volume_stagnation(kls, day_idx)
+        if stag:
+            exit_reason = f"左侧止盈-{sr}"
+            exit_day = day_idx
+            exit_price = cp
+            break
+
+        fade, fr = check_power_fading(kls, day_idx, entry_idx if re_entry_idx is None else re_entry_idx)
+        if fade:
+            exit_reason = f"左侧止盈-{fr}"
+            exit_day = day_idx
+            exit_price = cp
+            break
+
+        # 右侧止盈
+        rev, rr = check_reverse_yingbaoyang(kls, day_idx, key_point)
+        if rev:
+            exit_reason = f"右侧止盈-{rr}"
+            exit_day = day_idx
+            exit_price = cp
+            break
+
+    if exit_day is None and stop_triggered and buy_back_day is None:
+        # 止损后没买回也没退出
+        exit_day = stop_day
+        exit_price = stop_loss_price
+        exit_reason = "止损未买回"
+        final_gain = round((exit_price - entry_price) / entry_price * 100, 2)
+    elif exit_day is None and stop_triggered and buy_back_day is not None:
+        # 买回后到最后都没触发退出，按最后收盘价算
+        exit_day = len(kls) - 1
+        exit_price = kls[-1]['close']
+        exit_reason = "持有到期"
+        final_gain = round((exit_price - buy_back_price) / buy_back_price * 100, 2)
+    elif exit_day is None:
+        # 一直持有到最后
+        exit_day = len(kls) - 1
+        exit_price = kls[-1]['close']
+        exit_reason = "持有到期"
+        final_gain = round((exit_price - entry_price) / entry_price * 100, 2)
+    else:
+        # 正常退出
+        final_gain = round((exit_price - (buy_back_price if re_entry_idx is not None else entry_price)) / (buy_back_price if re_entry_idx is not None else entry_price) * 100, 2)
+
+    total_gain = round((exit_price - entry_price) / entry_price * 100, 2)
+
+    return {
+        'exit_idx': exit_day,
+        'exit_price': round(exit_price, 2),
+        'exit_gain': total_gain,  # 相对入场价的总收益
+        'exit_reason': exit_reason,
+        'hold_days': exit_day - entry_idx if exit_day else 0,
+        'stop_triggered': stop_triggered,
+        'stop_loss_price': round(stop_loss_price, 2) if stop_loss_price else None,
+        'buy_back_price': round(buy_back_price, 2) if buy_back_price else None,
+        'max_gain': round(max_gain_pct, 2),
+        'max_loss': round(max_loss_pct, 2),
     }
