@@ -440,6 +440,56 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({'error': err, 'data': []})
             return self.send_json({'data': result, 'count': len(result)})
 
+        # --- 每日复盘cron API（cron job通过curl调用，环境与页面一致） ---
+        if path == '/api/cron/daily-review':
+            import subprocess
+            DATE = datetime.now().strftime('%Y-%m-%d')
+            logs = []
+            def run_script(desc, cmd, cwd=None):
+                logs.append(f'[{datetime.now().strftime("%H:%M:%S")}] {desc}...')
+                try:
+                    env = os.environ.copy()
+                    env['PYTHONPATH'] = '/home/ubuntu/www:' + env.get('PYTHONPATH', '')
+                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, cwd=cwd, env=env)
+                    if r.returncode == 0:
+                        logs.append(f'  ✅成功 ({len(r.stdout)}B)')
+                    else:
+                        logs.append(f'  ⚠️失败(code={r.returncode}): {r.stderr[-200:]}')
+                except Exception as e:
+                    logs.append(f'  ❌异常: {str(e)}')
+            SCRIPTS = '/home/ubuntu/.hermes/profiles/3l/skills/research/daily-3l-review/scripts'
+            # Step 0: 清理旧存档
+            for f in ['review_data.json', f'review_archive/{DATE}.json']:
+                fp = os.path.join('/home/ubuntu/www/private', f)
+                if os.path.isfile(fp): os.remove(fp)
+            # Step 1: 更新数据缓存+扫买点
+            run_script('Step1 更新数据+扫买点',
+                [sys.executable, f'{SCRIPTS}/daily_update_and_scan.py'],
+                cwd='/home/ubuntu/www')
+            # Step 2: 补全名称
+            run_script('Step2 补全名称',
+                [sys.executable, f'{SCRIPTS}/fill_stock_names.py'],
+                cwd='/home/ubuntu/www')
+            # Step 3: 重绘关键点图
+            run_script('Step3a 中证全指图',
+                [sys.executable, '/home/ubuntu/www/gen_index_chart.py'])
+            import shutil
+            try:
+                shutil.copy2('/home/ubuntu/www/review_charts/sz000985.svg',
+                             '/home/ubuntu/www/review_charts/zzqz_v2.svg')
+                logs.append(f'  ✅SVG已复制')
+            except: pass
+            run_script('Step3b 批量个股图',
+                [sys.executable, f'{SCRIPTS}/batch_gen_charts.py'])
+            # Step 4: 动量数据+生成复盘
+            mom_cache = f'/home/ubuntu/www/data/cache/momentum_{DATE}.json'
+            if os.path.isfile(mom_cache): os.remove(mom_cache)
+            run_script('Step4a 拉取动量数据',
+                [sys.executable, '/home/ubuntu/www/fetch_momentum.py'])
+            run_script('Step4b 生成复盘',
+                [sys.executable, '/home/ubuntu/www/generate_review_data.py', DATE])
+            return self.send_json({'status': 'ok', 'date': DATE, 'logs': logs})
+
         # --- 综合复盘数据生成API（必须放在 /api/review/{date} 前面） ---
         if path == '/api/review/generate':
             params = urllib.parse.parse_qs(self.path.split('?')[1] if '?' in self.path else '')
