@@ -134,8 +134,8 @@ def _breakout_score(close, prev_close, prev_10d_high, vol_ratio, body_ratio, hig
     is_limit_up = gain >= 9.5
     
     # 硬条件：必须放量（涨停日豁免）
-    if not is_limit_up and vol_ratio <= 1.2:
-        return False, 0, {'reason': f'量比{vol_ratio:.2f}≤1.2，未放量' if not is_limit_up else '涨停豁免'}
+    if not is_limit_up and vol_ratio <= 1.1:
+        return False, 0, {'reason': f'量比{vol_ratio:.2f}≤1.1，未放量' if not is_limit_up else '涨停豁免'}
     
     # 硬条件：必须收在相对高位
     if high is not None and low is not None and high > low:
@@ -153,7 +153,7 @@ def _breakout_score(close, prev_close, prev_10d_high, vol_ratio, body_ratio, hig
     if is_limit_up:
         s3 = 3
     else:
-        s3 = 3 if vol_ratio > 1.6 else (2 if vol_ratio > 1.4 else (1 if vol_ratio > 1.2 else 0))
+        s3 = 3 if vol_ratio > 1.6 else (2 if vol_ratio > 1.4 else (1 if vol_ratio > 1.1 else 0))
     # 实体分（实体饱满说明需求主动）
     s4 = 2 if body_ratio > 0.7 else (1 if body_ratio > 0.5 else 0)
     
