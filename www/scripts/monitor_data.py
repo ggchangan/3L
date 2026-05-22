@@ -296,67 +296,35 @@ def get_volume_comparison():
     
     # --- 今日曲线 ---
     today_curve = get_today_minute_curve()
-    
-    # --- 昨日曲线 ---
-    yesterday_curve = []
+
+    # --- 昨日总成交额（仅数值，不要分钟曲线） ---
     yesterday_total_amount = 0
     is_estimated = True
-    
-    if yesterday_date:
-        # 优先级：快照缓存（前一天页面记录的数据）
-        cached_snaps = get_volume_snapshots(yesterday_date)
-        if cached_snaps and len(cached_snaps) > 5:
-            yesterday_curve = [{'time': s['time'], 'amount': s.get('amount_yuan', s.get('amount', s.get('volume', 0)))} for s in cached_snaps]
-            yesterday_curve.sort(key=lambda x: x['time'])
-            is_estimated = False
-            yesterday_total_amount = yesterday_curve[-1]['amount'] if yesterday_curve else 0
-        elif today_curve and yesterday_info and yesterday_info.get('volume', 0) > 0:
-            # 无快照 → 用今日分布 + 昨日总量估算
-            try:
-                data = _tencent_minute_data()
-                last_min = data['data']['sh000985']['data']['data'][-1]
-                last_parts = last_min.split()
-                today_last_volume = float(last_parts[2])
-                today_last_amount = float(last_parts[3])
-                
-                if today_last_volume > 0:
-                    amount_per_volume = today_last_amount / today_last_volume
-                    yest_vol = yesterday_info['volume']
-                    
-                    # 如果有amount(元)直接用，没有则用volume估算
-                    if 'amount' in yesterday_info and yesterday_info['amount'] > 0:
-                        yesterday_est_amount = yesterday_info['amount']
-                    else:
-                        yesterday_est_amount = yest_vol * amount_per_volume
-                    
-                    scale = yesterday_est_amount / today_last_amount
-                    yesterday_curve = [{'time': p['time'], 'amount': p['amount'] * scale} for p in today_curve]
-                    is_estimated = True
-                    yesterday_total_amount = yesterday_est_amount
-            except Exception as e:
-                print(f"[WARN] 估算昨日曲线失败: {e}")
-    
+    yesterday_snaps = get_volume_snapshots(yesterday_date)
+    if yesterday_snaps and len(yesterday_snaps) > 5:
+        # 从昨日快照末条取总成交额
+        last_snap = max(yesterday_snaps, key=lambda s: s.get('time', ''))
+        yesterday_total_amount = last_snap.get('amount_yuan', last_snap.get('amount', last_snap.get('volume', 0)))
+        is_estimated = False
+    elif yesterday_date and yesterday_info.get('volume', 0) > 0:
+        # 无快照 → 用腾讯volume估算（手×均价）
+        vol = yesterday_info['volume']
+        avg_price = current_price if current_price > 0 else 6500
+        yesterday_total_amount = vol * avg_price * 100  # 手→股 × 均价
+        is_estimated = True
+
     today_total_amount = today_curve[-1]['amount'] if today_curve else 0
-    
-    # 同一时间点比较
-    now = datetime.now()
-    yesterday_same_time_amount = 0
-    if yesterday_curve:
-        closest = min(yesterday_curve, key=lambda x: abs(
-            (int(x['time'][:2]) * 60 + int(x['time'][3:])) - (now.hour * 60 + now.minute)
-        ))
-        yesterday_same_time_amount = closest['amount']
-    
+
     amount_ratio = None
-    if yesterday_same_time_amount > 0:
-        amount_ratio = round(today_total_amount / yesterday_same_time_amount * 100, 1)
-    
+    if yesterday_total_amount > 0 and today_total_amount > 0:
+        amount_ratio = round(today_total_amount / yesterday_total_amount * 100, 1)
+
     result = {
         'today_amount_yuan': today_total_amount,
         'yesterday_amount_yuan': yesterday_total_amount,
         'yesterday_date': yesterday_date,
         'today_curve': today_curve,
-        'yesterday_curve': yesterday_curve,
+        'yesterday_curve': [],  # 不再返回昨日分钟曲线（数据不可靠）
         'yesterday_is_estimated': is_estimated,
         'current_price': current_price,
         'current_change': current_change,
@@ -366,13 +334,11 @@ def get_volume_comparison():
         'data_source': {
             'quote': quote_source,
             'yesterday': yesterday_source,
-            'yesterday_curve': 'cache' if not is_estimated else 'estimated',
-        }
+            'yesterday_curve': 'none',  # 不再提供昨日曲线
+        },
+        'amount_ratio': amount_ratio,
     }
-    
-    if amount_ratio is not None:
-        result['amount_ratio'] = amount_ratio
-    
+
     return result
 
 

@@ -135,7 +135,8 @@ body { background: #0f0f23; color: #e0e0e0; font-family: -apple-system, 'Microso
         </div>
         <div style="text-align:center;font-size:11px;color:#666;margin-top:4px;margin-bottom:12px;">
             今日累计 <span id="todayVolLabel">--</span>&nbsp;&nbsp;|&nbsp;&nbsp;
-            昨日全天 <span id="yesterdayVolLabel">--</span>&nbsp;&nbsp;<span id="yesterdayDateLabel" style="color:#555;"></span>
+            昨日全天 <span id="yesterdayVolLabel">--</span>&nbsp;&nbsp;<span id="yesterdayDateLabel" style="color:#555;"></span>&nbsp;&nbsp;|&nbsp;&nbsp;
+            <span id="volRatioLabel" style="font-weight:bold;"></span>
         </div>
         <!-- 功能入口 -->
         <div style="display:flex; gap:12px; flex-wrap:wrap;">
@@ -150,7 +151,7 @@ body { background: #0f0f23; color: #e0e0e0; font-family: -apple-system, 'Microso
         </div>
         <!-- 关键点图 -->
         <div id="indexChartPanel" style="display:none; margin-top:12px;">
-            <object id="indexChartObj" data="/review_charts/sz000985.svg?t=0" type="image/svg+xml" style="width:100%; height:550px; border-radius:8px;"></object>
+            <object id="indexChartObj" data="/review_charts/zzqz_v2.svg?t=0" type="image/svg+xml" style="width:100%; height:550px; border-radius:8px;"></object>
         </div>
         <!-- 异常事件占位符 -->
         <div id="eventPlaceholderPanel" style="display:none; margin-top:12px; padding:16px; background:#16213e; border-radius:8px;">
@@ -250,14 +251,12 @@ function updateQuote(data) {
 // ====== 成交额图表（两日叠加） ======
 function updateVolumeChart(data) {
     const todayCurve = data.today_curve || [];
-    const yesterdayCurve = data.yesterday_curve || [];
     const isEstimated = data.yesterday_is_estimated || false;
-    
+
     // 使用今日分钟数据的时间作为X轴标签
     const labels = todayCurve.map(p => p.time);
     const todayAmounts = todayCurve.map(p => p.amount || 0);
-    const yesterdayAmounts = yesterdayCurve.map(p => p.amount || 0);
-    
+
     // 底部统计
     document.getElementById('todayVolLabel').textContent = fmtAmountYuan(data.today_amount_yuan);
     const yAmt = data.yesterday_amount_yuan || 0;
@@ -268,11 +267,19 @@ function updateVolumeChart(data) {
         document.getElementById('yesterdayVolLabel').textContent = '待积累';
         document.getElementById('yesterdayDateLabel').textContent = '';
     }
+    // 同比百分比
+    const ratioEl = document.getElementById('volRatioLabel');
+    if (data.amount_ratio !== null && data.amount_ratio !== undefined) {
+        const pct = data.amount_ratio;
+        ratioEl.textContent = `较昨日 ${pct}%`;
+        ratioEl.style.color = pct > 100 ? '#e94560' : '#4ecdc4';
+    } else {
+        ratioEl.textContent = '';
+    }
 
     if (volumeChart) {
         volumeChart.data.labels = labels;
         volumeChart.data.datasets[0].data = todayAmounts;
-        volumeChart.data.datasets[1].data = yesterdayAmounts;
         volumeChart.update('none');
         return;
     }
@@ -291,17 +298,6 @@ function updateVolumeChart(data) {
                 tension: 0.3,
                 pointRadius: 0,
                 borderWidth: 2,
-                borderDash: [],
-            }, {
-                label: `昨日(${data.yesterday_date || ''})${isEstimated ? ' 估算' : ''}`,
-                data: yesterdayAmounts,
-                borderColor: '#4ecdc4',
-                backgroundColor: 'rgba(78, 205, 196, 0.03)',
-                fill: false,
-                tension: 0.3,
-                pointRadius: 0,
-                borderWidth: 1.5,
-                borderDash: [6, 3],
             }]
         },
         options: {
@@ -355,7 +351,7 @@ function toggleIndexChart() {
     if (panel.style.display === 'none') {
         panel.style.display = 'block';
         // 防缓存：每次展开加时间戳
-        obj.data = '/review_charts/sz000985.svg?t=' + Date.now();
+        obj.data = '/review_charts/zzqz_v2.svg?t=' + Date.now();
     } else {
         panel.style.display = 'none';
     }
