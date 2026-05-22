@@ -491,7 +491,6 @@ class Handler(SimpleHTTPRequestHandler):
             from scripts.data_layer import get_all_stocks
             from scripts.buy_point_detection import detect_buy_point, _resolve_code, find_idx, _volume_ratio, gen_trade_chart_svg, compute_trade_stats, simulate_trade
             from scripts.ema_utils import get_structure, get_stage
-            import json, traceback
 
             stocks = get_all_stocks()
 
