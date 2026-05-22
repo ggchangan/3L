@@ -126,6 +126,20 @@
         .ema-arr { font-size: 12px; margin-top: 4px; }
         .ema-line { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
         .ema-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .bt-summary {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4e; border-radius: 14px; padding: 20px; margin-top: 16px;
+        }
+        .bt-stats { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0; }
+        .bt-stat { text-align: center; padding: 8px 16px; background: rgba(255,255,255,0.03); border-radius: 8px; min-width: 80px; }
+        .bt-stat .l { color: #888; font-size: 11px; }
+        .bt-stat .v { font-size: 18px; font-weight: 700; }
+        .bt-table { width: 100%; font-size: 12px; border-collapse: collapse; margin: 12px 0; }
+        .bt-table th { background: rgba(255,255,255,0.05); padding: 6px 8px; text-align: left; border: 1px solid #2a2a4e; color: #aaa; font-weight: 400; }
+        .bt-table td { padding: 5px 8px; border: 1px solid #1a1a2e; }
+        .bt-table tr:hover { background: rgba(255,255,255,0.02); }
+        .bt-chart { margin-top: 12px; }
+        .bt-chart svg, .bt-chart img { width: 100%; border-radius: 8px; }
     </style>
 </head>
 <body>
@@ -138,10 +152,12 @@
         <input type="text" id="stockInput" placeholder="股票代码（如 688126）或名称（如 沪硅产业）" 
                onkeydown="if(event.key==='Enter') search()">
         <button id="searchBtn" onclick="search()">分析</button>
+        <button id="btBtn" onclick="runBacktest()" style="padding:10px 20px;border-radius:8px;border:none;background:#4ecdc4;color:#000;font-size:14px;cursor:pointer;white-space:nowrap;">📊 回测</button>
     </div>
     <div id="resultArea">
         <div class="no-result">输入股票代码或名称开始分析</div>
     </div>
+    <div id="btResultArea" style="margin-top:16px;"></div>
     <div class="hint">数据来源：all_stocks_60d.json · 3L量价择时系统</div>
 </div>
 
@@ -316,6 +332,55 @@ function renderResult(d) {
             ${chartHtml}
         </div>
     `;
+}
+
+async function runBacktest() {
+    const q = document.getElementById('stockInput').value.trim();
+    if (!q) return;
+    const area = document.getElementById('btResultArea');
+    area.innerHTML = '<div class="loading"><div class="spinner"></div>正在跑回测...</div>';
+    try {
+        const res = await fetch(`/api/stock-backtest?code=${encodeURIComponent(q)}&days=60`);
+        const d = await res.json();
+        if (d.error) { area.innerHTML = `<div class="error-box">❌ ${d.error}</div>`; return; }
+        let tableRows = '';
+        for (const s of d.signals) {
+            const clr = s.gain > 0 ? '#4ecdc4' : '#e94560';
+            tableRows += `<tr>
+                <td>${s.n}</td><td>${s.date ? s.date.substring(5,10) : '--'}</td>
+                <td><span class="tag ${s.type.includes('突破') ? 'red' : 'yellow'}">${s.type}</span></td>
+                <td>${s.entry?.toFixed(2) || '--'}</td>
+                <td>${s.exit_date ? s.exit_date.substring(5,10) : '--'}</td>
+                <td>${s.exit?.toFixed(2) || '--'}</td>
+                <td>${s.days || '--'}天</td>
+                <td style="color:${clr};font-weight:600">${s.gain > 0 ? '✅' : '❌'} ${s.gain >= 0 ? '+' : ''}${s.gain}%</td>
+            </tr>`;
+        }
+        area.innerHTML = `
+        <div class="bt-summary">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div><span style="font-size:18px;font-weight:700;color:#4ecdc4">${d.name}</span>
+                <span style="color:#888;font-size:13px;margin-left:8px">${d.code}</span></div>
+                <span style="color:#666;font-size:12px">60天回测</span>
+            </div>
+            <div class="bt-stats">
+                <div class="bt-stat"><div class="l">信号</div><div class="v">${d.total}笔</div></div>
+                <div class="bt-stat"><div class="l">盈利</div><div class="v" style="color:#4ecdc4">${d.wins}</div></div>
+                <div class="bt-stat"><div class="l">亏损</div><div class="v" style="color:#e94560">${d.losses}</div></div>
+                <div class="bt-stat"><div class="l">胜率</div><div class="v">${d.win_rate}%</div></div>
+                <div class="bt-stat"><div class="l">累计收益</div><div class="v" style="color:${d.cumulative_return > 0 ? '#4ecdc4' : '#e94560'}">${d.cumulative_return > 0 ? '+' : ''}${d.cumulative_return}%</div></div>
+                <div class="bt-stat"><div class="l">均盈/亏</div><div class="v" style="font-size:14px"><span style="color:#4ecdc4">+${d.avg_win}%</span> / <span style="color:#e94560">${d.avg_loss}%</span></div></div>
+            </div>
+            ${d.has_chart ? `<details class="bt-chart" open><summary style="cursor:pointer;color:#4ecdc4;font-size:14px;margin-bottom:8px">📊 K线图（含买卖标注）</summary>
+            <object data="${d.chart_svg}?t=${Date.now()}" type="image/svg+xml" style="width:100%;border-radius:8px"></object></details>` : ''}
+            <h3 style="color:#4ecdc4;font-size:14px;margin:16px 0 8px">📋 交易明细</h3>
+            <table class="bt-table"><tr><th>#</th><th>入场日</th><th>类型</th><th>入场价</th><th>出场日</th><th>出场价</th><th>持有</th><th>盈亏</th></tr>
+            ${tableRows}
+            </table>
+        </div>`;
+    } catch(e) {
+        area.innerHTML = `<div class="error-box">❌ 回测失败: ${e.message}</div>`;
+    }
 }
 </script>
 </body>
