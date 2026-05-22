@@ -228,6 +228,40 @@ body {
                 <li>203只自选股全量测试，四类修复案例(润泽科技/皓元医药/宁德时代/天华新能)全部通过</li>
             </ul>
         </div>
+
+        <div class="change-item">
+            <div class="sname">profit-model2-check <span class="tag created">创建</span></div>
+            <div class="sdesc">盈利模式2检查 — 趋势票回踩EMA5买点</div>
+            <ul class="spoints">
+                <li>6条件趋势票判定（上涨趋势/上行或缩量/≥60%在EMA5/不破EMA10/多头排列/涨幅≥30%）</li>
+                <li>回踩买点：趋势票6条件全部通过 + 收盘离EMA5 ±1.5%</li>
+                <li>trend_stock标签仅用于复盘展示，不再参与主买点判定（2026-05-22变更）</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">stock-action-judgment <span class="tag updated">更新</span></div>
+            <div class="sdesc">操作信号判定 — 退出规则/D方案加速同步+突破评分+买回机制</div>
+            <ul class="spoints">
+                <li>突破买点多维评分（突破幅度/涨幅/量比/实体，≥5分有效）</li>
+                <li>突破后3天向前确认机制 + 上涨趋势不产生重复突破买点</li>
+                <li>止损：关键点×0.97 + 买回机制（拉回关键点+阳线→买回）</li>
+                <li>右侧止盈：阴包阳（放量=供应确认/缩量=正常波动） + 大阴线反转</li>
+                <li>德明利90天回测终版：13笔，6盈7亏，盈亏比2.78，累计+2.46%</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">market-peak-trough <span class="tag updated">更新</span></div>
+            <div class="sdesc">波峰波谷V5置信度打分方案上线，取代旧4维加权方案</div>
+            <ul class="spoints">
+                <li>pk_score/vl_score各0~4分，4条件独立判定（趋势转折+乖离率位置+量价信号+方向确认）</li>
+                <li>5档映射（偏波峰/波中偏上/波中/波中偏下/偏波谷）</li>
+                <li>3指数回测：中证全指/沪深300/创业板指，NEAR阈值召回率67~91%，误报率3~6%</li>
+                <li>极值自动升级：bias20>8%自动pk≥3，<-8%自动vl≥3</li>
+                <li>PDF综合文档+16个回归测试</li>
+            </ul>
+        </div>
     </div>
 
     <!-- Day card: 2026-05-20 (newest first) -->
