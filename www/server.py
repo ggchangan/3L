@@ -449,7 +449,7 @@ class Handler(SimpleHTTPRequestHandler):
                 logs.append(f'[{datetime.now().strftime("%H:%M:%S")}] {desc}...')
                 try:
                     env = os.environ.copy()
-                    env['PYTHONPATH'] = '/home/ubuntu/www:' + env.get('PYTHONPATH', '')
+                    env['PYTHONPATH'] = '/home/ubuntu/www:/home/ubuntu/.hermes/profiles/3l/home/.local/lib/python3.12/site-packages:' + env.get('PYTHONPATH', '')
                     r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, cwd=cwd, env=env)
                     if r.returncode == 0:
                         logs.append(f'  ✅成功 ({len(r.stdout)}B)')

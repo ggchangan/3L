@@ -116,13 +116,34 @@ cd /home/ubuntu/www && python3 generate_review_data.py {date}
 
 **坑：** 上述顺序不可颠倒。get_buy_sell_signals 必须在 buy_signals 重扫之后执行（已修复为自动顺序）。
 
-### 一键脚本（cron job）
+### 一键脚本（cron job）→ 改为curl Web API模式（2026-05-22）
 
-见 `/home/ubuntu/.hermes/profiles/3l/scripts/generate_daily_review.sh`
+**背景：** cron的Python环境可能不包含mootdx等依赖（cron PATH解析到不同Python版本）。如果直接调用`python3 xxx.py`会报`ModuleNotFoundError`。
 
-**⚠️ 图表归档已内置在 Step 4 中：** 图表归档（`zzqz_v2.svg`→`archive/{date}/zzqz_v2.svg`、`fund_flow_chart.png`→`archive/{date}/fund_flow_chart.png`）实现在 `generate_review_data.py` 的最后阶段（见下方《图表归档》章节，**目录隔离方案，不用后缀**）。**不要单独写一个归档步骤到 cron 脚本里**——Step 3 画图 → Step 4 自动归档，全流程一体化。
+**当前方案：** cron脚本通过`curl http://localhost:8080/api/cron/daily-review`触发Web API端点，server.py内部用`sys.executable`（跟页面同Python）通过subprocess执行，自动设置`PYTHONPATH=/home/ubuntu/www`确保模块可见。
 
-**原则：cron job 处理全量端到端流程，手动操作只用于调试。** 手动跑 `generate_review_data.py` 时也会触发归档和每日成果PDF生成，因此手动测试时不需要额外步骤。
+**cron脚本路径：** `/home/ubuntu/.hermes/profiles/3l/scripts/generate_daily_review.sh`（仅包含curl命令）
+
+**API端点：** `GET /api/cron/daily-review`（server.py `do_GET()` 中，**不是** `do_POST()`）
+- Step 0: 清理旧存档
+- Step 1: 更新数据缓存+扫买点（subprocess + PYTHONPATH）
+- Step 2: 补全股票名称
+- Step 3: 生成中证全指关键点图 + 批量个股SVG
+- Step 4: 拉取动量数据 + 生成复盘数据
+- 返回JSON: `{status, date, logs[]}`
+
+**⚠️ Pitfall：** 通过subprocess调用脚本时，必须处理Python模块路径问题：
+1. 设置 `cwd='/home/ubuntu/www'` 确保 `scripts/` 模块在路径中
+2. 设置 `env['PYTHONPATH'] = '/home/ubuntu/www:/home/ubuntu/.hermes/profiles/3l/home/.local/lib/python3.12/site-packages:' + env.get('PYTHONPATH', '')`
+   - **必须包含 hermes user site-packages 路径**（2026-05-22 踩坑）。akshare 等包装在该路径下，server.py 本身通过 systemd 的 `Environment=PYTHONPATH=...` 能找到，但 subprocess 不会继承 service 的 Environment 变量，所以 run_script() 需要显式传。
+   - 原写法 `env['PYTHONPATH'] = '/home/ubuntu/www:' + env.get('PYTHONPATH', '')` 会导致 akshare 等包找不到，**`generate_review_data.py` 静默失败**——持仓/计划/买点信号数据缺失，只有 momentum（走独立 `/api/momentum`，有 live fallback）有数据。用户看到的就是"只更新了新高，持仓分析/计划没更新"。
+3. 使用 `sys.executable` 而非 `python3` 字面量（确保跟server同Python）
+4. **cwd 必须设为 `/home/ubuntu/www`** — 如果默认是 server.py 所在目录但 subprocess 继承了错误的 CWD，`from scripts.xxx import yyy` 会因模块路径解析失败而报错
+5. **调试 subprocess 环境** — 临时加一个 debug 端点测 `sys.executable` 和 `import akshare` 是否正常，而不是猜环境变量有没有生效。用 `curl -s http://localhost:8080/api/xxx` 看返回JSON。
+
+**cron 实现：** 通过 hermes cronjob 系统（非系统 crontab `/etc/cron.d/`）每日18:00触发：
+- 配置：`cronjob(action='create', name='每日复盘 - 调用Web API', schedule='0 18 * * 1-5', prompt='curl -s http://localhost:8080/api/cron/daily-review')`
+- 注意：hermes cronjob 在 systemd 环境中运行，`sys.executable` 正确找到 Python，但 subprocess 仍需显式设置 PYTHONPATH。
 
 ## Pitfalls
 
@@ -188,6 +209,46 @@ if path == '/api/review/generate':
 **修复方法：** 将 `/api/review/generate` 的 `if` 判断移到 line 155 的 catch-all `if path.startswith('/api/review/')` **之前**。`generate` 端点必须优先匹配，因为 `generate` 不是合法的存档日期格式。
 
 **临时绕过：** 直接命令行运行 `cd /home/ubuntu/www && python3 generate_review_data.py {date}`。
+
+### ✅ 已注册systemd服务（2026-05-22）
+
+Web服务已注册为systemd单元 `3l-server.service`：
+
+**启用：** `sudo systemctl enable 3l-server`（已设置自动开机启动）
+**管理命令：**
+- `sudo systemctl start 3l-server` — 启动
+- `sudo systemctl stop 3l-server` — 停止
+- `sudo systemctl restart 3l-server` — 重启
+- `sudo systemctl status 3l-server` — 查看状态
+
+**特性：** `Restart=always`，进程退出后5秒自动恢复。
+
+**环境变量：** `Environment=PYTHONPATH=/home/ubuntu/.hermes/profiles/3l/home/.local/lib/python3.12/site-packages`
+确保akshare等包对server.py可见。
+
+**服务文件：** `/etc/systemd/system/3l-server.service`
+
+**注意：** systemd的Environment变量只影响server.py主进程。当server.py通过subprocess调脚本时，需要在`run_script()`中显式设置`env['PYTHONPATH']`（2026-05-22踩坑：原写法漏了hermes site-packages路径，导致generate_review_data.py静默失败）。
+
+**诊断链（当用户说"页面访问不了"或"卡住了"时，按此顺序排查）：**
+```bash
+# Step 1: 用systemd查状态
+sudo systemctl status 3l-server --no-pager
+# → active (running) = 正常
+# → failed / inactive = 挂了，先看日志
+
+# Step 2: 查systemd日志
+sudo journalctl -u 3l-server --no-pager -n 20
+# → 找 OSError / ModuleNotFoundError / Address already in use
+
+# Step 3: 端口是否监听
+ss -tlnp | grep 8080
+
+# Step 4: 恢复
+sudo systemctl restart 3l-server
+```
+
+详见 `scripts/restart_server.sh`（一键重启脚本，已弃用systemd方式）。
 
 ### ⚠️ server.py 被SYN flood/连接风暴打死（无自动恢复）
 
