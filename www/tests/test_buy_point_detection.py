@@ -1,5 +1,6 @@
 """买点检测模块测试 — 基于真实案例数据"""
 
+import json
 import pytest
 from scripts.buy_point_detection import (
     check_trend_stock,
@@ -68,6 +69,66 @@ class TestScanAllStocks:
         # 具体验证：300503 (昊志机电)、603009 (北特科技) 为非自选股且在扫描结果中
         assert '300503' in codes_without, "全量扫描应包含 300503 (昊志机电)"
         assert '603009' in codes_without, "全量扫描应包含 603009 (北特科技)"
+
+
+class TestDemailiBacktest:
+    """德明利(001309) 3L优化回测验证（2026-05-24）"""
+
+    def test_demaili_buy_signals_count(self, stocks):
+        """验证优化后德明利90天共检测到13个买点"""
+        data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
+        raw = data.get('stocks', data)
+        for sec, ss in raw.items():
+            if '001309' in ss:
+                kls = ss['001309']
+                break
+        signals = []
+        for i in range(30, len(kls)):
+            ds = str(kls[i]['date']).replace('-','')
+            df = f"{ds[:4]}-{ds[4:6]}-{ds[6:8]}"
+            bt = detect_buy_point('001309', df, raw, market_position='波中', main_lines={'半导体'})
+            if bt:
+                signals.append({'date': df, 'type': bt['buy_type']})
+        assert len(signals) == 13, f"预期13个买点，实际{len(signals)}: {[s['date'] for s in signals]}"
+
+    def test_demaili_no_bad_breakouts(self, stocks):
+        """验证3/10、3/16、3/18这些错误突破点已被排除"""
+        data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
+        raw = data.get('stocks', data)
+        bad_dates = ['2026-03-10', '2026-03-16', '2026-03-18']
+        for bd in bad_dates:
+            bt = detect_buy_point('001309', bd, raw, market_position='波中', main_lines={'半导体'})
+            assert bt is None, f"{bd}不应是买点，返回{bt}"
+
+    def test_demaili_0313_is_breakout(self, stocks):
+        """验证3/13是有效突破买点（评分9）"""
+        data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
+        raw = data.get('stocks', data)
+        bt = detect_buy_point('001309', '2026-03-13', raw, market_position='波中', main_lines={'半导体'})
+        assert bt is not None, "3/13应为突破买点"
+        assert bt['buy_type'] == '突破买点', f"3/13应为突破买点，实际{bt['buy_type']}"
+        bs = bt.get('detail', {}).get('breakout_score', 0)
+        assert bs >= 5, f"3/13突破评分应≥5，实际{bs}"
+
+    def test_demaili_0320_is_zhongji(self, stocks):
+        """验证3/20是回踩中继买点"""
+        data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
+        raw = data.get('stocks', data)
+        bt = detect_buy_point('001309', '2026-03-20', raw, market_position='波中', main_lines={'半导体'})
+        assert bt is not None, "3/20应为买点"
+        assert bt['buy_type'] == '中继买点', f"3/20应为中继买点，实际{bt['buy_type']}"
+
+    def test_demaili_vol_condition_filters(self, stocks):
+        """验证量比≤1.0的突破不被接受"""
+        data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
+        raw = data.get('stocks', data)
+        # 3/10量比0.95 ≤ 1.0, 应被过滤
+        bt = detect_buy_point('001309', '2026-03-10', raw, market_position='波中', main_lines={'半导体'})
+        assert bt is None, "3/10量比0.95未放量，不应是买点"
+        # 5/06量比0.57 ≤ 1.0, 但作为中继买点应有效
+        bt2 = detect_buy_point('001309', '2026-05-06', raw, market_position='波中', main_lines={'半导体'})
+        assert bt2 is not None, "5/06缩量应为中继买点"
+        assert bt2['buy_type'] == '中继买点', f"5/06应为中继买点，实际{bt2['buy_type']}"
 
 
 class TestFormatBuySignals:

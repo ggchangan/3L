@@ -114,6 +114,45 @@ def _surge_threshold(market_position='', is_main_line=True):
     return round(base / factor, 2)
 
 
+def _breakout_score(close, prev_close, prev_10d_high, vol_ratio, body_ratio, high=None, low=None):
+    """多维评分判定突破有效性 — 替代单一量比阈值
+    
+    硬条件（必须满足）：
+    - 放量：量比 > 1.0
+    - 收高位：收盘 > 当日振幅中点
+    
+    4维度评分，总分≥5分为有效突破：
+    - 突破幅度分：收盘突破前高多远
+    - 涨幅分：当日涨多少
+    - 量比分：量能放大程度
+    - 实体分：K线实体占振幅比
+    """
+    # 硬条件：必须放量
+    if vol_ratio <= 1.0:
+        return False, 0, {'reason': f'量比{vol_ratio:.2f}≤1.0，未放量'}
+    
+    # 硬条件：必须收在相对高位
+    if high is not None and low is not None and high > low:
+        mid_point = (high + low) / 2
+        if close <= mid_point:
+            return False, 0, {'reason': f'收盘{close}≤中点{mid_point:.2f}，未收高位'}
+    
+    break_pct = (close - prev_10d_high) / prev_10d_high * 100 if prev_10d_high else 0
+    gain = (close - prev_close) / prev_close * 100 if prev_close else 0
+    
+    # 突破幅度分（越高越好）
+    s1 = 3 if break_pct > 5 else (2 if break_pct > 3 else (1 if break_pct > 1 else 0))
+    # 涨幅分（越大越好）
+    s2 = 3 if gain > 7 else (2 if gain > 5 else (1 if gain > 3 else 0))
+    # 量比分（辅助确认，不再一票否决）
+    s3 = 3 if vol_ratio > 1.3 else (2 if vol_ratio > 1.15 else (1 if vol_ratio > 1.0 else (0.5 if vol_ratio > 0.9 else 0)))
+    # 实体分（实体饱满说明需求主动）
+    s4 = 2 if body_ratio > 0.7 else (1 if body_ratio > 0.5 else 0)
+    
+    total = round(s1 + s2 + s3 + s4, 1)
+    return total >= 5, round(total, 1), {'break_pct': round(break_pct, 2), 's1': s1, 's2': s2, 's3': s3, 's4': s4}
+
+
 def _ema_list(data, period):
     """计算EMA列表"""
     r = [None] * len(data)
@@ -317,6 +356,48 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
     stage = get_stage(closes_60, structure, highs_60, lows_60, volumes=vols_60)
     ema_arr = get_ema_arrangement(closes_60)
     
+    # ====== 支撑/阻力（提前计算，供突破确认用） ======
+    prev_10d_high = max(kls[idx-j]['high'] for j in range(1, 11)) if idx >= 10 else None
+    is_breakout = prev_10d_high and close > prev_10d_high  # 突破前10日最高
+    
+    # ====== 突破后3天确认机制 ======
+    # 突破日买入，但结构改变需要3天确认
+    # 只有在结构从非上涨趋势变成上涨趋势的那次突破才允许
+    _original_structure = structure
+    _structure_changed_uptrend = False
+    if idx >= 13:
+        for back in range(idx-1, max(10, idx-5)-1, -1):
+            bk2 = kls[back]
+            bc2 = bk2['close']
+            bp2 = kls[back-1]['close']
+            b10h2 = max(kls[back-j]['high'] for j in range(1, 11))
+            if bc2 <= b10h2 or bc2 <= bk2['open']:
+                continue
+            bvr2 = _volume_ratio(kls, back)
+            bb2 = abs(bc2 - bk2['open'])
+            br2 = bk2['high'] - bk2['low']
+            bbr2 = bb2 / br2 if br2 > 0 else 0
+            is_valid, _, _ = _breakout_score(bc2, bp2, b10h2, bvr2, bbr2, high=bk2['high'], low=bk2['low'])
+            if not is_valid:
+                continue
+            
+            # 向前确认：突破后3天内价格是否保持在关键点之上
+            confirmed = True
+            for cf in range(1, 4):
+                if back + cf >= len(kls):
+                    confirmed = False
+                    break
+                if kls[back + cf]['close'] < b10h2:
+                    confirmed = False
+                    break
+            
+            if confirmed and structure != '上涨趋势':
+                structure = '上涨趋势'
+                stage = get_stage(closes_60, structure, highs_60, lows_60, volumes=vols_60)
+                # 记录结构变化发生在哪天
+                _structure_changed_uptrend = True
+            break  # 只检查最近的一次突破
+    
     # ====== 量能分析（三层递进：大盘→基准，板块→系数，个股→不调） ======
     vol_ratio = _volume_ratio(kls, idx)
     # 第2层：此股票所属板块是否是主线
@@ -340,13 +421,17 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
                 is_main_line = True
                 break
     shrink_th = _shrink_threshold(market_position, is_main_line)
-    surge_th = _surge_threshold(market_position, is_main_line)
     is_shrink = vol_ratio < shrink_th
-    is_surge = vol_ratio > surge_th
     
-    # ====== 支撑/阻力 ======
-    prev_10d_high = max(kls[idx-j]['high'] for j in range(1, 11)) if idx >= 10 else None
-    is_breakout = prev_10d_high and close > prev_10d_high  # 突破前10日最高
+    # ====== 突破多维评分（替代旧的 is_surge 单一量比阈值） ======
+    # K线实体占振幅比
+    body = abs(close - k['open'])
+    rng = high - low
+    body_ratio = body / rng if rng > 0 else 0
+    # 突破评分
+    is_breakout_valid = False
+    breakout_score = 0
+    breakout_detail = {}
     
     # ====== 买点判定 ======
     # 以3L框架为主（structure/stage/volume量价分析），趋势股仅用于打标签
@@ -368,16 +453,45 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
                 'shrink': True,
             }
         
-        if is_breakout and is_surge:
-            # 放量突破前高 → 突破买点（有更高的优先级，覆盖中继）
+    if is_breakout:
+        # 多维评分判定突破有效性
+        is_breakout_valid, breakout_score, breakout_detail = _breakout_score(
+            close, prev_close, prev_10d_high, vol_ratio, body_ratio, high=high, low=low
+        )
+    
+    # 上涨趋势中不产生突破买点：3天内已有评分≥6的有效突破就跳过
+    _has_recent_breakout = False
+    if idx >= 12:
+        for back in range(max(11, idx-3), idx):
+            bk = kls[back]
+            bc = bk['close']
+            bp = kls[back-1]['close']
+            b10h = max(kls[back-j]['high'] for j in range(1, 11))
+            if bc <= b10h or bc <= bk['open']:
+                continue
+            bvr = _volume_ratio(kls, back)
+            bb = abs(bc - bk['open'])
+            br = bk['high'] - bk['low']
+            bbr = bb / br if br > 0 else 0
+            _bs = _breakout_score(bc, bp, b10h, bvr, bbr, high=bk['high'], low=bk['low'])
+            if _bs[0] and _bs[1] >= 6:
+                _has_recent_breakout = True
+                break
+    
+    should_skip_breakout_buy = _has_recent_breakout
+    
+    if is_breakout and is_breakout_valid and not should_skip_breakout_buy:
+            # 突破前高 → 突破买点（有更高的优先级，覆盖中继）
             buy_type = '突破买点'
             score = 4
             detail = {
-                'reason': '放量突破前高',
+                'reason': f'突破前高(评分{breakout_score})',
                 'structure': structure,
                 'stage': stage,
                 'vol_ratio': round(vol_ratio, 2),
                 'breakout_pct': round((close - prev_10d_high) / prev_10d_high * 100, 2),
+                'breakout_score': breakout_score,
+                'breakout_detail': breakout_detail,
             }
     
     elif structure == '区间震荡':
@@ -393,16 +507,24 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
                 'shrink': True,
             }
         
-        if stage == '区间顶部' and is_breakout and is_surge:
+        if stage == '区间顶部' and is_breakout:
+            # 多维评分判定突破有效性
+            is_breakout_valid, breakout_score, breakout_detail = _breakout_score(
+                close, prev_close, prev_10d_high, vol_ratio, body_ratio, high=high, low=low
+            )
+        
+        if stage == '区间顶部' and is_breakout and is_breakout_valid:
             # 区顶放量突破 → 突破买点
             buy_type = '突破买点'
             score = 4
             detail = {
-                'reason': '区顶放量突破',
+                'reason': f'区顶突破(评分{breakout_score})',
                 'structure': structure,
                 'stage': stage,
                 'vol_ratio': round(vol_ratio, 2),
                 'breakout_pct': round((close - prev_10d_high) / prev_10d_high * 100, 2),
+                'breakout_score': breakout_score,
+                'breakout_detail': breakout_detail,
             }
     
     if not buy_type:
