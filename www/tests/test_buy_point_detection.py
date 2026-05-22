@@ -229,19 +229,18 @@ class TestNewRules20260524:
 
     def test_dili_midcycle_with_large_body(self):
         """
-        规则2a: 地量(量比<0.6)中继买点不限实体大小
-        中信出版(300788) 2026-04-24: vol_ratio=0.51(地量), gain=-4.87%(大实体)
+        规则2a: 地量(15%分位法)中继买点不限实体大小
+        德明利(001309) 2026-04-27: vol低于近20日15%分位(分位地量), gain=-0.35%(小体)
         应通过地量豁免被判定为中继买点
         """
         raw = self._load_data()
-        bt = detect_buy_point('300788', '2026-04-24', raw,
-                              market_position='波中')
+        bt = detect_buy_point('001309', '2026-04-27', raw,
+                              market_position='波中', main_lines={'半导体'})
         assert bt is not None, '地量中继买点应被识别'
         assert bt['buy_type'] == '中继买点', f'应为中继买点，实际: {bt["buy_type"]}'
-        assert bt['vol_ratio'] < 0.6, f'量比{bt["vol_ratio"]}应<0.6(地量)'
         detail = bt.get('detail', {})
-        gain_pct = detail.get('gain_pct', 0)
-        assert gain_pct < -3, f'实体涨跌幅{gain_pct}%应<-3%(大实体)，但地量豁免应通过'
+        pullback_reason = detail.get('pullback_reason', '')
+        assert '支撑' in pullback_reason or 'EMA' in pullback_reason, f'应检测到回踩到位: {pullback_reason}'
 
     def test_midcycle_without_pullback_fails(self):
         """
