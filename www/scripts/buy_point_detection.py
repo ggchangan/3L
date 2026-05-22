@@ -163,11 +163,10 @@ def _breakout_score(close, prev_close, prev_10d_high, vol_ratio, body_ratio, hig
 
 
 def _check_pullback(klines, idx, close, ema5_val, ema10_val, ema20_val):
-    """回踩到位检查 — 三选一满足即可
+    """回踩到位检查 — 二选一满足即可
     
     1. 距关键点支撑 < 2%
-    2. 乖离率(EMA5/10/20任一)在 -2%~+1%范围
-    3. 价格在EMA5和EMA20之间（均线束内）
+    2. 乖离率(EMA5/10/20最近)在±2%范围
     """
     # ① 关键点支撑检查
     support = _find_support_levels(klines, idx)
@@ -176,22 +175,33 @@ def _check_pullback(klines, idx, close, ema5_val, ema10_val, ema20_val):
         if abs(dist) < 2:
             return True, f'关键支撑(sup{support:.0f},距{dist:+.2f}%)'
     
-    # ② 均线乖离率检查
+    # ② 最近均线乖离率检查（哪条近算哪条）
+    min_bias = None
+    min_name = ''
     for name, val in [('EMA5', ema5_val), ('EMA10', ema10_val), ('EMA20', ema20_val)]:
         if val and val > 0:
-            bias = (close - val) / val * 100
-            if -2 <= bias <= 1:
-                return True, f'{name}回踩(bias{bias:+.2f}%)'
+            bias = abs((close - val) / val * 100)
+            if min_bias is None or bias < min_bias:
+                min_bias = bias
+                min_name = name
     
-    # ③ 均线束检查（价格在EMA5和EMA20之间）
-    if ema5_val and ema20_val:
-        lo = min(ema5_val, ema20_val)
-        hi = max(ema5_val, ema20_val)
-        if lo < close < hi:
-            pct = (close - lo) / (hi - lo) * 100
-            return True, f'均线束内(pct{pct:.0f}%)'
+    if min_bias is not None and min_bias <= 2:
+        return True, f'{min_name}支撑(乖离{min_bias:.2f}%)'
     
     return False, '未回踩到位'
+
+
+def _is_extreme_shrink(klines, idx):
+    """地量判断: 当日量是否低于近20日量能的15%分位"""
+    start = max(0, idx - 19)
+    vols = sorted([klines[j].get('volume', 0) for j in range(start, idx)])
+    if len(vols) < 5:
+        return False
+    # 15%分位 = 排序后第15%位置的量
+    pct_pos = max(0, int(len(vols) * 0.15) - 1)
+    threshold = vols[pct_pos]
+    current_vol = klines[idx].get('volume', 0)
+    return current_vol <= threshold, threshold, current_vol
 def _ema_list(data, period):
     """计算EMA列表"""
     r = [None] * len(data)
@@ -490,8 +500,9 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
         ema20_val = _ema_list(closes_ema, 20)[-1] if len(closes_ema) >= 20 else None
         
         if is_shrink:
-            # 实体条件：地量不限，普通缩量需小实体
-            is_extreme_shrink = vol_ratio < 0.6
+            # 实体条件：地量（分位法）不限，普通缩量需小实体
+            extreme_shrink_result = _is_extreme_shrink(kls, idx)
+            is_extreme_shrink = extreme_shrink_result if isinstance(extreme_shrink_result, bool) else extreme_shrink_result[0]
             is_small_body = -3 <= gain_pct <= 2
             body_ok = is_extreme_shrink or is_small_body
             

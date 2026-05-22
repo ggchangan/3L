@@ -95,12 +95,22 @@ def check_power_fading(kls, current_idx, entry_idx):
     return False, ''
 
 def check_reverse(kls, current_idx, key_point):
-    """右侧止盈：阴包阳(放量走/缩量观察) OR 大阴线反转"""
+    """右侧止盈：阴包阳三维判定 + 大阴线反转
+    
+    三维判定:
+    第1层 跌幅: < -5%直接走 / > -3%不走 / -5%~-3%继续
+    第2层 支撑: 破支撑走 / 没破观察
+    第3层 量能: 放量(>1.0)加强判断
+    """
     if current_idx < 1:
         return False, ''
     k, kp = kls[current_idx], kls[current_idx-1]
     c, o, h, l = k['close'], k['open'], k['high'], k['low']
     cp_, op_ = kp['close'], kp['open']
+    
+    # 计算日跌幅
+    prev_close = kls[current_idx-1]['close'] if current_idx >= 1 else 0
+    day_loss = (c - prev_close) / prev_close * 100 if prev_close else 0
     
     # 量比计算
     vol = k.get('volume', 0)
@@ -110,12 +120,22 @@ def check_reverse(kls, current_idx, key_point):
     
     # 条件1：阴包阳（前阳+本阴+本收≤前开）
     if cp_ >= op_ and c < o and c <= op_:
-        if vol_ratio < 0.8:
-            # 缩量阴包阳 → 观察一天，不触发
-            return False, f"缩量阴包阳(量{vol_ratio:.1f}x,观察)"
+        # 第1层：跌幅判定
+        if day_loss < -5:
+            return True, f"阴包阳(跌{day_loss:.1f}%大阴,走)"
+        elif day_loss > -3:
+            return False, f"阴包阳(跌{day_loss:.1f}%小阴,观察)"
+        # -5%~-3%：继续看支撑
+        
+        # 第2层：支撑判定
+        if key_point and c < key_point:
+            # 破了支撑
+            if vol_ratio > 1.0:
+                return True, f"阴包阳(破支撑+放量{vol_ratio:.1f}x,走)"
+            return True, f"阴包阳(破支撑{key_point:.0f},走)"
         else:
-            # 放量或均量阴包阳 → 走
-            return True, f"阴包阳(昨{op_:.0f}→{cp_:.0f},今{o:.0f}→{c:.0f},量{vol_ratio:.1f}x)"
+            # 没破支撑
+            return False, f"阴包阳(跌{day_loss:.1f}%未破支撑,观察)"
     
     # 条件2：大阴线反转（实体≥前5日均值×1.5 + 收盘在低位30%）
     if c < o:
@@ -323,7 +343,14 @@ if wins:
 if losses:
     print(f"平均亏损: {sum(t['gain'] for t in losses)/len(losses):+.2f}%")
 if all_trades:
-    print(f"总收益(等权): {sum(t['gain'] for t in all_trades)/len(all_trades):+.2f}%")
+    avg_gain = sum(t['gain'] for t in all_trades)/len(all_trades)
+    print(f"  平均收益(等权): {avg_gain:+.2f}%")
+    # 累计收益（复利）
+    cum = 1.0
+    for t in all_trades:
+        cum *= (1 + t['gain']/100)
+    cum_pct = (cum - 1) * 100
+    print(f"  累计收益(复利): {cum_pct:+.2f}%")
 
 buybacks = [t for t in all_trades if t['bought_back']]
 print(f"\n触发买回: {len(buybacks)}次")
