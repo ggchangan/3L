@@ -207,6 +207,27 @@ body {
                 <li>skill文档同步更新退出规则描述</li>
             </ul>
         </div>
+
+        <div class="change-item">
+            <div class="sname">acceleration-judgment <span class="tag updated">更新</span></div>
+            <div class="sdesc">加速判定升级为D方案两步法，取代EMA10斜率比法</div>
+            <ul class="spoints">
+                <li>核心改变：先找确认过程（局部低点+回调>5%+守住EMA20），有确认=上行趋势，无确认=加速</li>
+                <li>乖离率从硬阈值降为观测指标，不再用于分界</li>
+                <li>12只全量验证通过（6转上行+6留加速），含大族数控/伟创电气/奥比中光/阳光电源等</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">ema10-trend-judgment <span class="tag updated">更新</span></div>
+            <div class="sdesc">结构判断终版：EMA10极值+双侧末端校验；阶段判断改用乖离率变化</div>
+            <ul class="spoints">
+                <li>结构：EMA10极值位置初判 → 上涨降级(滞后修正) → 下降升级(末端反弹) → 区间→下降(对称校验)</li>
+                <li>阶段：乖离率变化三段论代替EMA10斜率比（扩大=上行/收窄=回踩/横盘=整理）</li>
+                <li>中继买点不再依赖 stage 返回值，改用乖离率变化+回踩到位三选一</li>
+                <li>203只自选股全量测试，四类修复案例(润泽科技/皓元医药/宁德时代/天华新能)全部通过</li>
+            </ul>
+        </div>
     </div>
 
     <!-- Day card: 2026-05-20 (newest first) -->
