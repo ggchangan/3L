@@ -66,16 +66,16 @@ class TestScanAllStocks:
         assert len(outside_all) > 0, (
             "不传 watchlist_codes 时应包含非自选股，实际全部是自选股"
         )
-        # 具体验证：300503 (昊志机电)、603009 (北特科技) 为非自选股且在扫描结果中
-        assert '300503' in codes_without, "全量扫描应包含 300503 (昊志机电)"
+        # 具体验证：603009 (北特科技) 为非自选股且在扫描结果中
         assert '603009' in codes_without, "全量扫描应包含 603009 (北特科技)"
+        assert '603127' in codes_without, "全量扫描应包含 603127 (昭衍新药)"
 
 
 class TestDemailiBacktest:
-    """德明利(001309) 3L优化回测验证（2026-05-24）"""
+    """德明利(001309) 3L优化回测验证（2026-05-24 新规则）"""
 
     def test_demaili_buy_signals_count(self, stocks):
-        """验证优化后德明利90天共检测到13个买点"""
+        """验证新规则下德明利90天共检测到7个买点（旧规则13个→精减为7个）"""
         data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
         raw = data.get('stocks', data)
         for sec, ss in raw.items():
@@ -89,46 +89,46 @@ class TestDemailiBacktest:
             bt = detect_buy_point('001309', df, raw, market_position='波中', main_lines={'半导体'})
             if bt:
                 signals.append({'date': df, 'type': bt['buy_type']})
-        assert len(signals) == 13, f"预期13个买点，实际{len(signals)}: {[s['date'] for s in signals]}"
+        expected = 7
+        assert len(signals) == expected, f"预期{expected}个买点，实际{len(signals)}: {[s['date'] for s in signals]}"
 
     def test_demaili_no_bad_breakouts(self, stocks):
-        """验证3/10、3/16、3/18这些错误突破点已被排除"""
+        """验证3/10、3/18这些错误突破点已被排除（3/16涨停突破有效，不在排除列表）"""
         data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
         raw = data.get('stocks', data)
-        bad_dates = ['2026-03-10', '2026-03-16', '2026-03-18']
+        bad_dates = ['2026-03-10', '2026-03-18']
         for bd in bad_dates:
             bt = detect_buy_point('001309', bd, raw, market_position='波中', main_lines={'半导体'})
             assert bt is None, f"{bd}不应是买点，返回{bt}"
 
-    def test_demaili_0313_is_breakout(self, stocks):
-        """验证3/13是有效突破买点（评分9）"""
+    def test_demaili_0316_is_breakout(self, stocks):
+        """验证3/16是有效涨停突破买点（涨停+量比1.32，评分11）"""
         data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
         raw = data.get('stocks', data)
-        bt = detect_buy_point('001309', '2026-03-13', raw, market_position='波中', main_lines={'半导体'})
-        assert bt is not None, "3/13应为突破买点"
-        assert bt['buy_type'] == '突破买点', f"3/13应为突破买点，实际{bt['buy_type']}"
+        bt = detect_buy_point('001309', '2026-03-16', raw, market_position='波中', main_lines={'半导体'})
+        assert bt is not None, "3/16涨停+量比1.32应为突破买点"
+        assert bt['buy_type'] == '突破买点', f"3/16应为突破买点，实际{bt['buy_type']}"
         bs = bt.get('detail', {}).get('breakout_score', 0)
-        assert bs >= 5, f"3/13突破评分应≥5，实际{bs}"
+        assert bs >= 5, f"3/16突破评分应≥5，实际{bs}"
 
-    def test_demaili_0320_is_zhongji(self, stocks):
-        """验证3/20是回踩中继买点"""
+    def test_demaili_0320_is_not_zhongji(self, stocks):
+        """验证3/20大阴线(实体87%)+距支撑远+非地量，不被识别为中继买点"""
         data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
         raw = data.get('stocks', data)
         bt = detect_buy_point('001309', '2026-03-20', raw, market_position='波中', main_lines={'半导体'})
-        assert bt is not None, "3/20应为买点"
-        assert bt['buy_type'] == '中继买点', f"3/20应为中继买点，实际{bt['buy_type']}"
+        assert bt is None, "3/20大实体+距支撑远不应是中继买点"
 
     def test_demaili_vol_condition_filters(self, stocks):
-        """验证量比≤1.0的突破不被接受"""
+        """验证量比≤1.2的突破过滤+涨停豁免"""
         data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
         raw = data.get('stocks', data)
-        # 3/10量比0.95 ≤ 1.0, 应被过滤
+        # 3/10量比0.95 ≤ 1.2, 非涨停, 应被过滤
         bt = detect_buy_point('001309', '2026-03-10', raw, market_position='波中', main_lines={'半导体'})
         assert bt is None, "3/10量比0.95未放量，不应是买点"
-        # 5/06量比0.57 ≤ 1.0, 但作为中继买点应有效
+        # 5/06量比0.57 ≤ 1.2, 但涨停豁免应判定为突破买点
         bt2 = detect_buy_point('001309', '2026-05-06', raw, market_position='波中', main_lines={'半导体'})
-        assert bt2 is not None, "5/06缩量应为中继买点"
-        assert bt2['buy_type'] == '中继买点', f"5/06应为中继买点，实际{bt2['buy_type']}"
+        assert bt2 is not None, "5/06涨停突破应有效"
+        assert bt2['buy_type'] == '突破买点', f"5/06应为突破买点(涨停豁免)，实际{bt2['buy_type']}"
 
 
 class TestFormatBuySignals:
@@ -175,15 +175,25 @@ class TestDetectBuyPoint:
         assert result['score'] > 0
 
 
-# ====== 辅助函数：阴包阳止盈检测（来自 test_demingli_3l.py） ======
-def _check_reverse_yingbaoyang(klines, current_idx):
-    """右侧止盈：阴包阳(放量走/缩量观察)"""
+# ====== 辅助函数：阴包阳止盈检测（三维判定版，与test_demingli_3l.py保持一致） ======
+def _check_reverse_yingbaoyang(klines, current_idx, key_point=None):
+    """右侧止盈：阴包阳三维判定
+
+    第1层 跌幅: < -5%直接走 / > -3%不走 / -5%~-3%继续看支撑
+    第2层 支撑: 破支撑走 / 没破观察
+    第3层 量能: 放量(>1.0)加强判断
+    """
     if current_idx < 1:
         return False, ''
     k, kp = klines[current_idx], klines[current_idx - 1]
     c, o = k['close'], k['open']
     cp_, op_ = kp['close'], kp['open']
 
+    # 日跌幅
+    prev_close = klines[current_idx - 1]['close'] if current_idx >= 1 else 0
+    day_loss = (c - prev_close) / prev_close * 100 if prev_close else 0
+
+    # 量比
     vol = k.get('volume', 0)
     prev_vols = [klines[current_idx - j - 1].get('volume', 0) for j in range(1, 6)]
     avg_vol = sum(prev_vols) / len(prev_vols) if prev_vols else 0
@@ -191,10 +201,19 @@ def _check_reverse_yingbaoyang(klines, current_idx):
 
     # 条件：阴包阳（前阳+本阴+本收≤前开）
     if cp_ >= op_ and c < o and c <= op_:
-        if vol_ratio < 0.8:
-            return False, f'缩量阴包阳(量{vol_ratio:.1f}x,观察)'
+        # 第1层：跌幅判定
+        if day_loss < -5:
+            return True, f"阴包阳(跌{day_loss:.1f}%大阴,走)"
+        elif day_loss > -3:
+            return False, f"阴包阳(跌{day_loss:.1f}%小阴,观察)"
+        # -5%~-3%：继续看支撑
+        # 第2层：支撑判定
+        if key_point and c < key_point:
+            if vol_ratio > 1.0:
+                return True, f"阴包阳(破支撑+放量{vol_ratio:.1f}x,走)"
+            return True, f"阴包阳(破支撑{key_point:.0f},走)"
         else:
-            return True, f'阴包阳(昨{op_:.0f}->{cp_:.0f},今{o:.0f}->{c:.0f},量{vol_ratio:.1f}x)'
+            return False, f"阴包阳(跌{day_loss:.1f}%未破支撑,观察)"
     return False, ''
 
 
@@ -253,11 +272,108 @@ class TestNewRules20260524:
                               market_position='波中')
         assert bt is None, f'未回踩到位应返回None，实际返回: {bt}'
 
+    def test_yinbaoyang_big_drop_exits(self):
+        """
+        规则3a: 阴包阳跌幅<-5%直接触发止盈退出
+        德明利(001309) 2026-03-19: 阴包阳+跌幅-7.75%+量比0.91
+        应返回True(直接止盈)
+        """
+        raw = self._load_data()
+        kls = None
+        for sec, stocks in raw.items():
+            if '001309' in stocks:
+                kls = stocks['001309']
+                break
+        assert kls is not None, '未找到001309数据'
+
+        target_date = '20260319'
+        found_idx = -1
+        for i, k in enumerate(kls):
+            d = str(k['date']).replace('-', '')
+            if d == target_date:
+                found_idx = i
+                break
+        assert found_idx >= 2, f'未找到日期{target_date}或索引不足'
+
+        rev, reason = _check_reverse_yingbaoyang(kls, found_idx, key_point=345)
+        assert rev is True, f'跌幅-7.75%阴包阳应触发止盈，实际: rev={rev}'
+        assert '大阴' in reason or '走' in reason, f'原因应包含止盈说明: {reason}'
+
+    def test_yinbaoyang_mid_drop_checks_support(self):
+        """
+        规则3b: 阴包阳跌幅-3%~-5%看支撑，支撑远则持有
+        德明利(001309) 2026-05-08: 阴包阳+跌幅-3.05%+量比0.88+支撑远
+        应返回False(持有观察)
+        """
+        raw = self._load_data()
+        kls = None
+        for sec, stocks in raw.items():
+            if '001309' in stocks:
+                kls = stocks['001309']
+                break
+        assert kls is not None, '未找到001309数据'
+
+        target_date = '20260508'
+        found_idx = -1
+        for i, k in enumerate(kls):
+            d = str(k['date']).replace('-', '')
+            if d == target_date:
+                found_idx = i
+                break
+        assert found_idx >= 2, f'未找到日期{target_date}或索引不足'
+
+        rev, reason = _check_reverse_yingbaoyang(kls, found_idx, key_point=577)
+        assert rev is False, f'05-08阴包阳(跌-3.05%,支撑远)不应触发止盈，实际: rev={rev}'
+        assert '支撑' in reason or '观察' in reason, f'原因应包含观察/支撑说明: {reason}'
+
+    def test_breakout_vol_ratio_1dot2_filter(self):
+        """
+        规则4: 非涨停突破量比<=1.2被过滤
+        德明利(001309) 2026-03-10: vol_ratio=0.95(<=1.2), 非涨停
+        2026-03-25: vol_ratio=1.10(<=1.2), 非涨停
+        均不应是突破买点
+        """
+        raw = self._load_data()
+        # 3/10 vol_ratio=0.95 非涨停
+        bt1 = detect_buy_point('001309', '2026-03-10', raw,
+                               market_position='波中', main_lines={'半导体'})
+        assert bt1 is None, f'3/10量比0.95非涨停不应是突破买点，实际: {bt1}'
+        # 3/25 vol_ratio=1.10 非涨停
+        bt2 = detect_buy_point('001309', '2026-03-25', raw,
+                               market_position='波中', main_lines={'半导体'})
+        assert bt2 is None, f'3/25量比1.10非涨停不应是突破买点，实际: {bt2}'
+
+    def test_midcycle_big_body_no_pullback_fails(self):
+        """
+        规则5: 中继买点大实体+距支撑远应被过滤
+        德明利(001309) 2026-03-20: 阴线实体87%+距支撑+2.68%, vol_ratio=0.60
+        不是真回踩 -> 应返回None
+        """
+        raw = self._load_data()
+        bt = detect_buy_point('001309', '2026-03-20', raw,
+                              market_position='波中', main_lines={'半导体'})
+        assert bt is None, f'3/20大实体+距支撑远不应是中继买点，实际: {bt}'
+
+    def test_dili_pullback_captured(self):
+        """
+        规则6: 地量+乖离率双重验证，回踩到位被正确识别为中继买点
+        德明利(001309) 2026-04-21: 地量(近20日15%分位以下)+乖离率EMA5在±2%内
+        新规则通过地量分位法+乖离率双路径识别
+        """
+        raw = self._load_data()
+        bt = detect_buy_point('001309', '2026-04-21', raw,
+                              market_position='波中', main_lines={'半导体'})
+        assert bt is not None, f'4/21地量+乖离率应被识别为中继买点'
+        assert bt['buy_type'] == '中继买点', f'应为中继买点，实际: {bt["buy_type"]}'
+        detail = bt.get('detail', {})
+        reason = str(detail.get('pullback_reason', ''))
+        assert '乖离' in reason or '支撑' in reason, f'应检测到回踩到位: {reason}'
+
     def test_yinbaoyang_shrink_does_not_exit(self):
         """
-        规则3: 缩量阴包阳(量比<0.8)观察一天，不触发止盈退出
-        沪硅产业(688126) 2026-03-09: 阴包阳形态+量比0.78(<0.8)
-        应返回False(不触发)
+        规则7: 缩量阴包阳(量比<0.8)观察一天，不触发止盈退出
+        沪硅产业(688126) 2026-03-09: 阴包阳+日跌幅-1.69%(>-3%)
+        应返回False(小阴观察)
         """
         raw = self._load_data()
         # 定位K线索引
@@ -278,6 +394,5 @@ class TestNewRules20260524:
         assert found_idx >= 2, f'未找到日期{target_date}或索引不足'
 
         rev, reason = _check_reverse_yingbaoyang(kls, found_idx)
-        assert rev is False, f'缩量阴包阳不应触发止盈，实际: rev={rev}, reason={reason}'
-        assert '缩量' in reason, f'原因应包含"缩量"字样，实际: {reason}'
-        assert '观察' in reason, f'原因应包含"观察"字样，实际: {reason}'
+        assert rev is False, f'阴包阳(跌-1.69%)不应触发止盈，实际: rev={rev}, reason={reason}'
+        assert '小阴' in reason or '观察' in reason, f'原因应包含"小阴"/"观察"字样，实际: {reason}'
