@@ -8,6 +8,8 @@ from scripts.buy_point_detection import (
     detect_buy_point,
     scan_all_stocks,
     format_buy_signals,
+    gen_trade_chart_svg,
+    compute_trade_stats,
 )
 
 
@@ -396,3 +398,131 @@ class TestNewRules20260524:
         rev, reason = _check_reverse_yingbaoyang(kls, found_idx)
         assert rev is False, f'阴包阳(跌-1.69%)不应触发止盈，实际: rev={rev}, reason={reason}'
         assert '小阴' in reason or '观察' in reason, f'原因应包含"小阴"/"观察"字样，实际: {reason}'
+
+
+class TestGenTradeChartSvg:
+    """gen_trade_chart_svg 测试"""
+
+    def test_chart_creates_file(self, tmp_path):
+        """生成有效SVG文件"""
+        kls = [
+            {'date': '2026-05-01', 'open': 100, 'high': 105, 'low': 99, 'close': 103, 'volume': 1000},
+            {'date': '2026-05-02', 'open': 103, 'high': 108, 'low': 102, 'close': 107, 'volume': 1200},
+            {'date': '2026-05-03', 'open': 107, 'high': 110, 'low': 106, 'close': 109, 'volume': 900},
+        ] * 8  # 24根K线（足够绘制）
+        # 修正日期为连续交易日
+        kls = []
+        for i in range(24):
+            kls.append({
+                'date': f'2026-05-{i+1:02d}',
+                'open': 100 + i * 0.5,
+                'high': 102 + i * 0.8,
+                'low': 99 + i * 0.3,
+                'close': 101 + i * 0.6,
+                'volume': 1000 + i * 50,
+            })
+        signals = [
+            {'n': 1, 'date': '2026-05-03', 'type': '突破买点', 'entry': 102.0,
+             'exit': 108.0, 'exit_date': '2026-05-06', 'gain': 5.88, 'cum_gain': 5.88, 'days': 3},
+            {'n': 2, 'date': '2026-05-10', 'type': '中继买点', 'entry': 108.0,
+             'exit': 106.0, 'exit_date': '2026-05-13', 'gain': -1.85, 'cum_gain': 3.92, 'days': 3},
+        ]
+        out = tmp_path / 'test_chart.svg'
+        result = gen_trade_chart_svg(kls, signals, '测试股票', '000000', str(out))
+        assert result is True, 'SVG生成应返回True'
+        assert out.exists(), 'SVG文件应在指定路径生成'
+        content = out.read_text()
+        assert '<svg' in content, '内容应包含SVG标签'
+        assert '测试股票(000000)' in content, '标题应含股票名'
+        assert 'B1' in content, '应含买入标注B1'
+        assert 'S2' in content or '+5.88%' in content, '应含卖出标注'
+        assert 'B2' in content, '应含第二笔买入标注'
+
+    def test_chart_empty_signals(self, tmp_path):
+        """空信号列表仍生成有效SVG"""
+        kls = [{'date': f'2026-05-{i+1:02d}', 'open': 100, 'high': 101, 'low': 99,
+                'close': 100, 'volume': 1000} for i in range(20)]
+        out = tmp_path / 'empty.svg'
+        result = gen_trade_chart_svg(kls, [], '空信号', '000001', str(out))
+        assert result is True
+        assert out.exists()
+        content = out.read_text()
+        assert '空信号(000001)' in content
+        assert '0笔信号' in content
+
+    def test_chart_returns_false_on_bad_klines(self, tmp_path):
+        """K线数据不完整返回False"""
+        kls = [{'date': '2026-05-01', 'open': 100}]  # 缺少high/low/close
+        out = tmp_path / 'bad.svg'
+        result = gen_trade_chart_svg(kls, [], '坏数据', '000001', str(out))
+        assert result is False
+
+
+class TestComputeTradeStats:
+    """compute_trade_stats 测试"""
+
+    def test_all_profitable(self):
+        """全盈利信号"""
+        signals = [
+            {'gain': 5.0, 'cum_gain': 5.0},
+            {'gain': 3.0, 'cum_gain': 8.15},
+            {'gain': 10.0, 'cum_gain': 18.97},
+        ]
+        stats = compute_trade_stats(signals)
+        assert stats['total'] == 3
+        assert stats['wins'] == 3
+        assert stats['losses'] == 0
+        assert stats['win_rate'] == 100.0
+        assert stats['avg_win'] == 6.0  # (5+3+10)/3
+        assert stats['avg_loss'] == 0
+        assert stats['cumulative_return'] == 18.97
+
+    def test_all_losses(self):
+        """全亏损信号"""
+        signals = [
+            {'gain': -2.0, 'cum_gain': -2.0},
+            {'gain': -5.0, 'cum_gain': -6.9},
+        ]
+        stats = compute_trade_stats(signals)
+        assert stats['total'] == 2
+        assert stats['wins'] == 0
+        assert stats['losses'] == 2
+        assert stats['win_rate'] == 0.0
+        assert stats['avg_win'] == 0
+        assert stats['avg_loss'] == -3.5  # (-2 + -5)/2
+        assert stats['cumulative_return'] == -6.9
+
+    def test_mixed_results(self):
+        """盈亏混合"""
+        signals = [
+            {'gain': 8.0, 'cum_gain': 8.0},
+            {'gain': -3.0, 'cum_gain': 4.76},
+            {'gain': 12.0, 'cum_gain': 17.33},
+            {'gain': -1.5, 'cum_gain': 15.57},
+        ]
+        stats = compute_trade_stats(signals)
+        assert stats['total'] == 4
+        assert stats['wins'] == 2
+        assert stats['losses'] == 2
+        assert stats['win_rate'] == 50.0
+        assert stats['avg_win'] == 10.0  # (8+12)/2
+        assert stats['avg_loss'] == -2.25  # (-3 + -1.5)/2
+        assert stats['cumulative_return'] == 15.57
+
+    def test_empty_signals(self):
+        """空列表"""
+        stats = compute_trade_stats([])
+        assert stats['total'] == 0
+        assert stats['wins'] == 0
+        assert stats['losses'] == 0
+        assert stats['win_rate'] == 0
+        assert stats['cumulative_return'] == 0
+
+    def test_single_signal(self):
+        """单笔信号"""
+        stats = compute_trade_stats([{'gain': 5.5, 'cum_gain': 5.5}])
+        assert stats['total'] == 1
+        assert stats['wins'] == 1
+        assert stats['win_rate'] == 100.0
+        assert stats['avg_win'] == 5.5
+        assert stats['cumulative_return'] == 5.5

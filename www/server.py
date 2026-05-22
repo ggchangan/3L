@@ -479,49 +479,64 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({'error': 'not found'})
 
 
-        # --- 个股回测API ---
+        # --- 个股回测API（支持代码/名称搜索） ---
         if path == '/api/stock-backtest':
             parsed = urllib.parse.urlparse(self.path)
             code_q = urllib.parse.parse_qs(parsed.query).get('code', [''])[0].strip()
             days = int(urllib.parse.parse_qs(parsed.query).get('days', ['60'])[0])
             if not code_q:
-                self.send_json({'error': '请输入股票代码'})
+                self.send_json({'error': '请输入股票代码或名称'})
                 return
 
             from scripts.data_layer import get_all_stocks
-            from scripts.buy_point_detection import detect_buy_point, _resolve_code, find_idx, _volume_ratio
+            from scripts.buy_point_detection import detect_buy_point, _resolve_code, find_idx, _volume_ratio, gen_trade_chart_svg, compute_trade_stats
             from scripts.ema_utils import get_structure, get_stage
             import json, traceback
 
             stocks = get_all_stocks()
-            resolved_code, kls = _resolve_code(code_q, stocks)
-            if not kls or len(kls) < 30:
-                self.send_json({'error': f'未找到股票 {code_q} 或数据不足'})
-                return
 
-            # 确定股票名称
-            stock_name = code_q
-            for sec, ss in stocks.items():
-                if code_q in ss and ss[code_q]:
-                    stock_name = ss[code_q][0].get('name', code_q)
-                    break
-                for c, kk in ss.items():
-                    if c == code_q and kk:
-                        stock_name = kk[0].get('name', code_q)
-                        break
+            # ----- 搜索股票（与 stock-analysis 相同逻辑，支持名称） -----
+            matched_code = None
+            matched_direction = None
+            matched_name = None
 
-            # 获取方向
-            stock_direction = ''
+            # 1. 精确code匹配
             for sec, ss in stocks.items():
                 if code_q in ss:
-                    stock_direction = sec
+                    matched_code, matched_direction = code_q, sec
+                    matched_name = ss[code_q][0].get('name', code_q) if ss[code_q] else code_q
                     break
-                for c in ss:
-                    if c == code_q:
-                        stock_direction = sec
+            if not matched_code:
+                # 2. 模糊code匹配
+                for sec, ss in stocks.items():
+                    for code in ss:
+                        if code_q in code or code.endswith(code_q):
+                            matched_code, matched_direction = code, sec
+                            matched_name = ss[code][0].get('name', code) if ss[code] else code
+                            break
+                    if matched_code:
+                        break
+            if not matched_code:
+                # 3. 模糊名称匹配
+                for sec, ss in stocks.items():
+                    for code, kls in ss.items():
+                        name = kls[0].get('name', '') if kls else ''
+                        if code_q in name:
+                            matched_code, matched_direction = code, sec
+                            matched_name = name
+                            break
+                    if matched_code:
                         break
 
-            sub = {stock_direction: {resolved_code: kls}} if stock_direction else {resolved_code: kls}
+            if not matched_code:
+                self.send_json({'error': f'未找到股票: {code_q}'})
+                return
+
+            resolved_code = matched_code
+            stock_name = matched_name
+            stock_direction = matched_direction
+            kls = stocks[matched_direction][matched_code]
+            sub = {stock_direction: {resolved_code: kls}}
 
             # 跑回测：每个K线节点检测买点
             signals = []
@@ -550,94 +565,21 @@ class Handler(SimpleHTTPRequestHandler):
                         'days': exit_idx - i,
                     })
 
-            # 生成SVG图
+            # 生成SVG图（使用共享函数）
             chart_path = f'/review_charts/bt_{resolved_code}.svg'
             chart_abs = f'/home/ubuntu/www/review_charts/bt_{resolved_code}.svg'
+            has_chart = gen_trade_chart_svg(kls, signals, stock_name, resolved_code, chart_abs)
 
-            try:
-                from scripts.buy_point_detection import _ema_list
-                cl = [k['close'] for k in kls]; hi = [k['high'] for k in kls]
-                lo = [k['low'] for k in kls]; op = [k['open'] for k in kls]
-                vo = [k.get('volume',0) for k in kls]; n = len(kls)
-                mx, mn = max(hi), min(lo); rg = mx-mn if mx!=mn else 1
-                e5=_ema_list(cl,5); e10=_ema_list(cl,10); e20=_ema_list(cl,20)
-                vm = max(vo) if max(vo)>0 else 1
-                
-                sv = []
-                sv.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780">')
-                sv.append('<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1a2e"/><stop offset="100%" stop-color="#16213e"/></linearGradient><filter id="sh"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.3"/></filter></defs>')
-                sv.append(f'<rect width="1200" height="780" fill="url(#bg)"/>')
-                sv.append(f'<text x="600" y="26" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#fff" font-weight="bold">{stock_name}({resolved_code}) 回测 — {len(signals)}笔信号</text>')
-                sv.append(f'<text x="600" y="40" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#888">量比>1.1·涨停豁免·地量分位·阴包阳三维·乖离率2% | 🔴买入↑ 🔵卖出↓</text>')
-                pl,pr,pt,pb=70,40,50,120; cw=(1200-pl-pr)/n; bv=780-pb-50
-                px=lambda i: pl+i*cw+cw/2; py=lambda v: pt+(mx-v)/rg*(780-pt-pb-50)
-                for i in range(5):
-                    yv=mx-i*rg/4; yp=py(yv)
-                    sv.append(f'<line x1="{pl}" y1="{yp}" x2="{1160}" y2="{yp}" stroke="#2a2a4e" stroke-width="0.5"/>')
-                    sv.append(f'<text x="{pl-4}" y="{yp+3}" text-anchor="end" font-family="sans-serif" font-size="9" fill="#666">{yv:.0f}</text>')
-                sv.append(f'<line x1="{pl}" y1="{bv}" x2="{1160}" y2="{bv}" stroke="#2a2a4e" stroke-width="0.5"/>')
-                for ii in range(n):
-                    x=px(ii)-cw*0.35; w=max(cw*0.55,1); vh=vo[ii]/vm*45
-                    sv.append(f'<rect x="{x:.1f}" y="{bv-vh:.1f}" width="{w:.1f}" height="{max(vh,0.5):.1f}" fill="{"#ff4444" if cl[ii]>=op[ii] else "#44aa44"}" opacity="0.25"/>')
-                for ev,clr in [(e5,"#ffd700"),(e10,"#ff6b6b"),(e20,"#4ecdc4")]:
-                    pts=[f"{px(i):.1f},{py(ev[i]):.1f}" for i in range(n) if ev[i] is not None]
-                    if pts: sv.append(f'<polyline points="{" ".join(pts)}" fill="none" stroke="{clr}" stroke-width="1.2" opacity="0.7"/>')
-                for ii in range(15,n):
-                    x=px(ii)-cw*0.3; w=cw*0.4; o,c,h,l=op[ii],cl[ii],hi[ii],lo[ii]
-                    kc="#ff4444" if c>=o else "#44aa44"; bt,bb=py(max(o,c)),py(min(o,c))
-                    sv.append(f'<rect x="{x:.1f}" y="{bt:.1f}" width="{w:.1f}" height="{max(bb-bt,1):.1f}" fill="{kc}" opacity="0.85" rx="1"/>')
-                    sv.append(f'<line x1="{px(ii):.1f}" y1="{py(h):.1f}" x2="{px(ii):.1f}" y2="{py(l):.1f}" stroke="{kc}" stroke-width="1" opacity="0.85"/>')
-                # 买入标注
-                for s in signals:
-                    si = find_idx(s['date'], kls)
-                    if si < 0: continue
-                    xb=px(si); yb=py(s['entry'])
-                    sv.append(f'<line x1="{xb:.1f}" y1="{yb:.1f}" x2="{xb:.1f}" y2="{pt+18:.1f}" stroke="#ff4444" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"/>')
-                    txt=f'B{s["n"]} {s["date"][5:10]} {s["entry"]:.0f}'; tw=len(txt)*7+16
-                    sv.append(f'<rect x="{xb-tw/2:.1f}" y="{pt-2:.1f}" width="{tw:.1f}" height="18" rx="4" fill="#ff4444" opacity="0.85" filter="url(#sh)"/>')
-                    sv.append(f'<text x="{xb:.1f}" y="{pt+11:.1f}" text-anchor="middle" font-family="sans-serif" font-size="10" fill="white" font-weight="bold">{txt}</text>')
-                    # 卖出标注
-                    if s['exit_date']:
-                        ei = find_idx(s['exit_date'], kls)
-                        if ei > 0:
-                            xx=px(ei); yb2=py(s['exit'])
-                            sv.append(f'<line x1="{xx:.1f}" y1="{yb2:.1f}" x2="{xx:.1f}" y2="{bv+38:.1f}" stroke="#2196f3" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>')
-                            txt2=f'S{s["n"]} {s["gain"]:+.1f}%'; tw2=len(txt2)*7+12
-                            sv.append(f'<rect x="{xx-tw2/2:.1f}" y="{bv+30:.1f}" width="{tw2:.1f}" height="16" rx="4" fill="#2196f3" opacity="0.85" filter="url(#sh)"/>')
-                            sv.append(f'<text x="{xx:.1f}" y="{bv+42:.1f}" text-anchor="middle" font-family="sans-serif" font-size="9" fill="white" font-weight="bold">{txt2}</text>')
-                # 日期
-                for ii in range(0, n, 5):
-                    ds=str(kls[ii]['date']).replace('-',''); lab=f'{ds[4:6]}/{ds[6:8]}'
-                    sv.append(f'<text x="{px(ii):.1f}" y="{bv+20}" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#555" transform="rotate(-40,{px(ii)},{bv+20})">{lab}</text>')
-                # 图例
-                for i,(clr,lbl) in enumerate([("#ff4444","买入↑"),("#2196f3","卖出↓"),("#ffd700","EMA5"),("#ff6b6b","EMA10"),("#4ecdc4","EMA20")]):
-                    xl=pl+i*160
-                    sv.append(f'<rect x="{xl}" y="{bv+8}" width="10" height="10" fill="{clr}" opacity="0.85" rx="1"/>')
-                    sv.append(f'<text x="{xl+14}" y="{bv+17}" font-family="sans-serif" font-size="10" fill="#888">{lbl}</text>')
-                sv.append('</svg>')
-                with open(chart_abs, 'w') as f: f.write('\n'.join(sv))
-            except Exception as e:
-                print(f"Chart gen error: {e}")
-
-            wins = sum(1 for s in signals if s['gain'] > 0)
-            avg_win = round(sum(s['gain'] for s in signals if s['gain'] > 0) / wins, 2) if wins > 0 else 0
-            avg_loss = round(sum(s['gain'] for s in signals if s['gain'] <= 0) / (len(signals)-wins), 2) if len(signals)-wins > 0 else 0
-            total_cum = round((cum-1)*100, 2)
+            stats = compute_trade_stats(signals)
 
             self.send_json({
                 'code': resolved_code,
                 'name': stock_name,
                 'direction': stock_direction,
                 'signals': signals,
-                'total': len(signals),
-                'wins': wins,
-                'losses': len(signals) - wins,
-                'win_rate': round(wins/len(signals)*100, 1) if signals else 0,
-                'avg_win': avg_win,
-                'avg_loss': avg_loss,
-                'cumulative_return': total_cum,
                 'chart_svg': f'/review_charts/bt_{resolved_code}.svg',
-                'has_chart': os.path.exists(chart_abs),
+                'has_chart': has_chart,
+                **stats,
             })
             return
 

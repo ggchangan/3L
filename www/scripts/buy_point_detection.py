@@ -855,3 +855,131 @@ def check_trend_stock_on_signals(buy_signals, all_stocks, check_date):
         sig['trend_stock'] = bool(check_trend_stock(code, actual_date, all_stocks))
         updated.append(sig)
     return updated
+
+
+def gen_trade_chart_svg(kls, signals, stock_name, code, chart_abs):
+    """生成带买卖标注的交易K线SVG图（独立于server.py，可供多个端调用）
+
+    Args:
+        kls: K线列表 [{date,open,high,low,close,volume}]
+        signals: 信号列表 [{n,date,type,entry,exit,exit_date,gain,cum_gain,days}]
+        stock_name: 股票名称
+        code: 股票代码
+        chart_abs: SVG输出路径
+    Returns:
+        bool: 是否生成成功
+    """
+    try:
+        from .buy_point_detection import _ema_list, find_idx
+        cl = [k['close'] for k in kls]
+        hi = [k['high'] for k in kls]
+        lo = [k['low'] for k in kls]
+        op = [k['open'] for k in kls]
+        vo = [k.get('volume', 0) for k in kls]
+        n = len(kls)
+        mx, mn = max(hi), min(lo)
+        rg = mx - mn if mx != mn else 1
+        e5 = _ema_list(cl, 5)
+        e10 = _ema_list(cl, 10)
+        e20 = _ema_list(cl, 20)
+        vm = max(vo) if max(vo) > 0 else 1
+
+        sv = []
+        sv.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780">')
+        sv.append('<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1a2e"/><stop offset="100%" stop-color="#16213e"/></linearGradient><filter id="sh"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.3"/></filter></defs>')
+        sv.append(f'<rect width="1200" height="780" fill="url(#bg)"/>')
+        sv.append(f'<text x="600" y="26" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#fff" font-weight="bold">{stock_name}({code}) 交易 — {len(signals)}笔信号</text>')
+        pl, pr, pt, pb = 70, 40, 50, 120
+        cw = (1200 - pl - pr) / n
+        bv = 780 - pb - 50
+        px = lambda i: pl + i * cw + cw / 2
+        py = lambda v: pt + (mx - v) / rg * (780 - pt - pb - 50)
+        for i in range(5):
+            yv = mx - i * rg / 4
+            yp = py(yv)
+            sv.append(f'<line x1="{pl}" y1="{yp}" x2="{1160}" y2="{yp}" stroke="#2a2a4e" stroke-width="0.5"/>')
+            sv.append(f'<text x="{pl - 4}" y="{yp + 3}" text-anchor="end" font-family="sans-serif" font-size="9" fill="#666">{yv:.0f}</text>')
+        sv.append(f'<line x1="{pl}" y1="{bv}" x2="{1160}" y2="{bv}" stroke="#2a2a4e" stroke-width="0.5"/>')
+        # 量能柱
+        for ii in range(n):
+            x = px(ii) - cw * 0.35
+            w = max(cw * 0.55, 1)
+            vh = vo[ii] / vm * 45
+            sv.append(f'<rect x="{x:.1f}" y="{bv - vh:.1f}" width="{w:.1f}" height="{max(vh, 0.5):.1f}" fill="{"#ff4444" if cl[ii] >= op[ii] else "#44aa44"}" opacity="0.25"/>')
+        # EMA
+        for ev, clr in [(e5, "#ffd700"), (e10, "#ff6b6b"), (e20, "#4ecdc4")]:
+            pts = [f"{px(i):.1f},{py(ev[i]):.1f}" for i in range(n) if ev[i] is not None]
+            if pts:
+                sv.append(f'<polyline points="{" ".join(pts)}" fill="none" stroke="{clr}" stroke-width="1.2" opacity="0.7"/>')
+        # K线
+        for ii in range(15, n):
+            x = px(ii) - cw * 0.3
+            w = cw * 0.4
+            o, c, h, l = op[ii], cl[ii], hi[ii], lo[ii]
+            kc = "#ff4444" if c >= o else "#44aa44"
+            bt, bb = py(max(o, c)), py(min(o, c))
+            sv.append(f'<rect x="{x:.1f}" y="{bt:.1f}" width="{w:.1f}" height="{max(bb - bt, 1):.1f}" fill="{kc}" opacity="0.85" rx="1"/>')
+            sv.append(f'<line x1="{px(ii):.1f}" y1="{py(h):.1f}" x2="{px(ii):.1f}" y2="{py(l):.1f}" stroke="{kc}" stroke-width="1" opacity="0.85"/>')
+        # 买卖标注
+        for s in signals:
+            si = find_idx(s['date'], kls)
+            if si < 0:
+                continue
+            xb = px(si)
+            yb = py(s['entry'])
+            sv.append(f'<line x1="{xb:.1f}" y1="{yb:.1f}" x2="{xb:.1f}" y2="{pt + 18:.1f}" stroke="#ff4444" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"/>')
+            txt = f'B{s["n"]} {s["date"][5:10]} {s["entry"]:.0f}'
+            tw = len(txt) * 7 + 16
+            sv.append(f'<rect x="{xb - tw / 2:.1f}" y="{pt - 2:.1f}" width="{tw:.1f}" height="18" rx="4" fill="#ff4444" opacity="0.85" filter="url(#sh)"/>')
+            sv.append(f'<text x="{xb:.1f}" y="{pt + 11:.1f}" text-anchor="middle" font-family="sans-serif" font-size="10" fill="white" font-weight="bold">{txt}</text>')
+            if s.get('exit_date'):
+                ei = find_idx(s['exit_date'], kls)
+                if ei > 0:
+                    xx = px(ei)
+                    yb2 = py(s['exit'])
+                    sv.append(f'<line x1="{xx:.1f}" y1="{yb2:.1f}" x2="{xx:.1f}" y2="{bv + 38:.1f}" stroke="#2196f3" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>')
+                    txt2 = f'S{s["n"]} {s["gain"]:+.1f}%'
+                    tw2 = len(txt2) * 7 + 12
+                    sv.append(f'<rect x="{xx - tw2 / 2:.1f}" y="{bv + 30:.1f}" width="{tw2:.1f}" height="16" rx="4" fill="#2196f3" opacity="0.85" filter="url(#sh)"/>')
+                    sv.append(f'<text x="{xx:.1f}" y="{bv + 42:.1f}" text-anchor="middle" font-family="sans-serif" font-size="9" fill="white" font-weight="bold">{txt2}</text>')
+        # 日期标签
+        for ii in range(0, n, 5):
+            ds = str(kls[ii]['date']).replace('-', '')
+            lab = f'{ds[4:6]}/{ds[6:8]}'
+            sv.append(f'<text x="{px(ii):.1f}" y="{bv + 20}" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#555" transform="rotate(-40,{px(ii)},{bv + 20})">{lab}</text>')
+        # 图例
+        for i, (clr, lbl) in enumerate([("#ff4444", "买入↑"), ("#2196f3", "卖出↓"), ("#ffd700", "EMA5"), ("#ff6b6b", "EMA10"), ("#4ecdc4", "EMA20")]):
+            xl = pl + i * 160
+            sv.append(f'<rect x="{xl}" y="{bv + 8}" width="10" height="10" fill="{clr}" opacity="0.85" rx="1"/>')
+            sv.append(f'<text x="{xl + 14}" y="{bv + 17}" font-family="sans-serif" font-size="10" fill="#888">{lbl}</text>')
+        sv.append('</svg>')
+        with open(chart_abs, 'w') as f:
+            f.write('\n'.join(sv))
+        return True
+    except Exception as e:
+        print(f"gen_trade_chart_svg error: {e}")
+        return False
+
+
+def compute_trade_stats(signals):
+    """从信号列表计算回测统计数据
+
+    Returns: {total, wins, losses, win_rate, avg_win, avg_loss, cumulative_return}
+    """
+    if not signals:
+        return {'total': 0, 'wins': 0, 'losses': 0, 'win_rate': 0,
+                'avg_win': 0, 'avg_loss': 0, 'cumulative_return': 0}
+    wins = sum(1 for s in signals if s['gain'] > 0)
+    losses = len(signals) - wins
+    cum = signals[-1]['cum_gain'] if signals else 0
+    avg_win = round(sum(s['gain'] for s in signals if s['gain'] > 0) / wins, 2) if wins > 0 else 0
+    avg_loss = round(sum(s['gain'] for s in signals if s['gain'] <= 0) / losses, 2) if losses > 0 else 0
+    return {
+        'total': len(signals),
+        'wins': wins,
+        'losses': losses,
+        'win_rate': round(wins / len(signals) * 100, 1),
+        'avg_win': avg_win,
+        'avg_loss': avg_loss,
+        'cumulative_return': round(cum, 2),
+    }
