@@ -67,6 +67,16 @@ def _batch_realtime(codes):
     return results
 
 
+def _load_board_constituents():
+    """加载板块成分股缓存"""
+    path = '/home/ubuntu/data/3l/board_constituents.json'
+    if os.path.isfile(path):
+        with open(path) as f:
+            data = json.load(f)
+        return data.get('boards', {})
+    return {}
+
+
 def _handle_search_stocks(h, path):
     """搜索股票 — GET /api/directions/stocks?q=关键词"""
     from urllib.parse import urlparse, parse_qs
@@ -78,29 +88,63 @@ def _handle_search_stocks(h, path):
 
     imap = _load_industry_map()
     names = _get_stock_names()
+    boards = _load_board_constituents()
 
     matched = []
     seen = set()
+
+    # 1. 现有搜索：匹配 code / direction / industry / name
     for code, info in imap.items():
         if code in seen:
             continue
         direction = info.get('direction', '')
         industry = info.get('ths_industry', '')
         name = names.get(code, '')
-        # 匹配 code / direction / industry / name
         if q in code.lower() or q in direction.lower() or q in industry.lower() or q in name.lower():
             seen.add(code)
-            matched.append({
-                'code': code,
-                'name': name,
-                'direction': direction,
-                'industry': industry,
-            })
-            if len(matched) >= 100:
-                break
+            matched.append({'code': code, 'name': name, 'direction': direction, 'industry': industry})
+
+    # 2. 搜索同花顺板块成分股映射
+    for board_name, stocks in boards.items():
+        if q in board_name.lower():
+            for s in stocks:
+                if s['code'] not in seen:
+                    seen.add(s['code'])
+                    code = s['code']
+                    info = imap.get(code, {})
+                    direction = info.get('direction', '')
+                    industry = info.get('ths_industry', '')
+                    matched.append({'code': code, 'name': names.get(code, ''), 'direction': direction, 'industry': industry})
 
     if not matched:
-        h.send_json({'stocks': []})
+        # 3. 兜底：检查是否是同花顺板块名
+        try:
+            import akshare as ak
+            df = ak.stock_board_industry_summary_ths()
+            for _, row in df.iterrows():
+                if q in str(row.get('板块', '')).lower():
+                    board_name = row.get('板块', '')
+                    up = row.get('上涨家数', 0)
+                    down = row.get('下跌家数', 0)
+                    h.send_json({
+                        'stocks': [],
+                        'total': 0,
+                        'board_info': {
+                            'name': board_name,
+                            'up': up,
+                            'down': down,
+                            'total': int(up) + int(down),
+                            'lead': row.get('领涨股', ''),
+                            'lead_chg': row.get('领涨股-涨跌幅', 0),
+                            'note': '该板块成分股不在当前数据库，建议按个股名称/代码搜索添加'
+                        }
+                    })
+                    return
+        except:
+            pass
+
+    if not matched:
+        h.send_json({'stocks': [], 'total': 0})
         return
 
     codes = [m['code'] for m in matched]
