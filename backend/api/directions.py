@@ -77,6 +77,15 @@ def _load_board_constituents():
     return {}
 
 
+def _load_all_a_stocks():
+    """加载全量A股股票列表 {code: name}"""
+    path = os.path.join(os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'all_a_stocks.json')
+    if os.path.isfile(path):
+        with open(path) as f:
+            return json.load(f)
+    return {}
+
+
 def _handle_search_stocks(h, path):
     """搜索股票 — GET /api/directions/stocks?q=关键词"""
     from urllib.parse import urlparse, parse_qs
@@ -87,22 +96,22 @@ def _handle_search_stocks(h, path):
         return
 
     imap = _load_industry_map()
-    names = _get_stock_names()
+    names = _load_all_a_stocks()  # 5317只全量A股
     boards = _load_board_constituents()
 
     matched = []
     seen = set()
 
-    # 1. 现有搜索：匹配 code / direction / industry / name
-    for code, info in imap.items():
+    # 1. 搜索全量A股：匹配 code / name
+    for code, name in names.items():
         if code in seen:
             continue
-        direction = info.get('direction', '')
-        industry = info.get('ths_industry', '')
-        name = names.get(code, '')
-        if q in code.lower() or q in direction.lower() or q in industry.lower() or q in name.lower():
+        if q in code.lower() or q in name.lower():
             seen.add(code)
-            matched.append({'code': code, 'name': name, 'direction': direction, 'industry': industry})
+            info = imap.get(code, {})
+            matched.append({'code': code, 'name': name,
+                'direction': info.get('direction', ''),
+                'industry': info.get('ths_industry', '')})
 
     # 2. 搜索同花顺板块成分股映射
     for board_name, stocks in boards.items():
