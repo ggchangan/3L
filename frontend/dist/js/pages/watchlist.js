@@ -124,9 +124,16 @@ function renderCards() {
         return;
     }
 
+    // 阶段颜色映射（与 stock_card.js 保持一致）
+    const stageColors = {
+        '上行': '#4ecdc4', '加速': '#e94560', '缩量整理': '#ffd700', '滞涨': '#ff6b6b',
+        '转弱': '#ff6b6b', '下行': '#666', '加速跌': '#e94560', '转强': '#4ecdc4',
+        '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560'
+    };
     let html = '';
     filtered.forEach((s, i) => {
         const tracked = active.includes(s.direction || '其他');
+        const leftColor = stageColors[s.stage] || '#888';
         const cardData = {
             name: s.name || s.code, code: s.code, price: s.price, change: s.change,
             signal: s.signal || 'hold', structure: s.structure || '--', stage: s.stage || '--',
@@ -135,9 +142,10 @@ function renderCards() {
             buy_point: s.buy_point || '', profit_model1: s.profit_model1 || false,
             trend_stock: s.trend_stock || false, vol_analysis: s.vol_analysis || '',
         };
+        html += `<div class="watchlist-card-wrapper" style="border-left:3px solid ${leftColor};">`;
         html += signalStockCard(cardData, 'wl_' + i);
 
-        // 底部操作栏
+        // 底部操作栏 — 在统一容器内
         let tag = '';
         if (!tracked) tag = '<span class="tag-untracked">未跟踪</span>';
         const dirOpts = active.map(d =>
@@ -151,6 +159,7 @@ function renderCards() {
             </div>
             <button class="btn btn-red btn-sm" onclick="removeStock('${s.code}')" style="cursor:pointer;">✕ 删除</button>
         </div>`;
+        html += '</div>';
     });
 
     document.getElementById('cardsArea').innerHTML = html;
