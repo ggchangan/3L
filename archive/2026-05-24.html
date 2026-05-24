@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3L 交易体系 · 每日成果 2026-05-24</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#0f0f1a;color:#e0e0e0;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border-bottom:2px solid #e94560;padding:30px 20px;text-align:center}
+.header h1{font-size:28px;color:#fff;letter-spacing:4px}
+.header .subtitle{color:#a0a0b0;font-size:14px;margin-top:8px}
+.container{max-width:960px;margin:0 auto;padding:30px 20px}
+.section-title{font-size:18px;color:#4ecdc4;margin:32px 0 16px;padding-bottom:8px;border-bottom:1px solid #2a2a4e}
+.card-today{background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid #2a2a4e;border-radius:16px;padding:30px;margin-bottom:24px;position:relative;overflow:hidden}
+.card-today::before{content:'';position:absolute;top:0;right:0;width:200px;height:200px;background:radial-gradient(circle,rgba(233,69,96,0.08) 0%,transparent 70%);pointer-events:none}
+.card-today .card-title{font-size:20px;color:#e94560;margin-bottom:12px}
+.card-today .card-meta{color:#888;font-size:13px;margin-bottom:16px}
+.file-list{list-style:none}
+.file-list li{padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid #2a2a4e;border-radius:10px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.file-list li:hover{background:rgba(255,255,255,0.08)}
+.file-name{font-size:14px}
+.tag-done{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;background:#064e3b;color:#4ecdc4}
+.tag-pending{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;background:#451a03;color:#ffd700}
+.footer{text-align:center;padding:30px;color:#555;font-size:12px;border-top:1px solid #1a1a2e;margin-top:40px}
+a{color:#4ecdc4}
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>📊 3L 交易体系 · 每日成果</h1>
+    <div class="subtitle">2026-05-24 星期日 | 测试归档管线</div>
+    <div style="margin-top:10px;" id="nav-top"></div>
+</div>
+<div class="container">
+    <div class="section-title">📄 当日报告</div>
+    <div class="card-today">
+        <div class="card-title">📄 报告文件</div>
+        <ul class="file-list">
+            <li><a href="/files/每日成果_20260524.pdf" target="_blank" style="color:#4ecdc4; text-decoration:none;">每日成果_20260524.pdf</a></li>
+        </ul>
+    </div>
+
+    <div class="section-title">✅ 当日完成</div>
+    <div class="card-today">
+        <div style="font-size:16px; color:#e94560; margin-bottom:8px; font-weight:600;">测试归档管线</div>
+        <p style="font-size:13px; color:#ccc; line-height:1.8;">验证 doneList→frontend/index.html→构建→归档</p>
+        <p style="margin-top:8px"><span class="tag-done" style="display:inline-block;padding:4px 12px;border-radius:6px;font-size:11px;background:#064e3b;color:#4ecdc4;">✅ 已完成</span></p>
+    </div>
+
+    <div class="section-title">⏳ 当日待办</div>
+    <div class="card-today" style="padding:20px;">
+        <ul class="file-list">
+            <li>
+                    <div style="flex:1">
+                        <span class="file-name" style="color:#9C27B0;">🧠 盘中预测量回测</span>
+                        <div style="color:#888; font-size:12px; margin-top:4px;">
+                            用当前成交量×时间占比推算预估全天量，替代真实量跑买点判定，验证与收盘后的一致率。明日盘中交易时间讨论具体方案。
+                        </div>
+                    </div>
+                    <span style="color:#9C27B0; font-size:12px; white-space:nowrap; margin-left:12px;">🧠 待开发</span>
+                </li>
+        </ul>
+    </div>
+</div>
+<div id="nav-bottom"></div>
+<div class="footer">3L 交易体系 · Hermes Agent · 2026</div>
+<script src="/nav.js"></script>
+</body>
+</html>
