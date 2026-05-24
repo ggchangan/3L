@@ -245,9 +245,10 @@ function fillDirName(name) {
 
 function updateBoardDirLabel() {
     const dir = document.getElementById('boardDir').value;
-    const allLabel = document.querySelector('.dir-sr-row:first-child span');
-    if (allLabel) {
-        allLabel.textContent = `全选（全部添加到方向「${dir || '待选'}」）`;
+    const allCheck = document.getElementById('boardAllCheck');
+    if (allCheck) {
+        const span = allCheck.nextElementSibling;
+        if (span) span.textContent = `全选（全部添加到方向「${dir || '待选'}」）`;
     }
 }
 
@@ -267,7 +268,7 @@ async function onBoardSearch(val) {
             const targetDir = document.getElementById('boardDir').value;
             let html = `<div class="dir-sr-info">共 ${data.total} 只匹配，显示前 ${data.stocks.length} 只</div>
                 <label class="dir-sr-row" style="font-weight:bold;border-bottom:1px solid #2a2a4e;">
-                    <input type="checkbox" onchange="toggleAllDirResults(this.checked)" checked>
+                    <input type="checkbox" id="boardAllCheck" onchange="toggleAllDirResults(this.checked)" checked>
                     <span>全选（全部添加到方向「${targetDir || '待选'}」）</span>
                 </label>`;
             data.stocks.forEach(s => {
@@ -275,7 +276,7 @@ async function onBoardSearch(val) {
                 const color = pct >= 0 ? '#ff4444' : '#22c55e';
                 const sign = pct >= 0 ? '+' : '';
                 html += `<label class="dir-sr-row">
-                    <input type="checkbox" class="dir-sr-cb" data-code="${s.code}" data-name="${s.name}" data-direction="${s.direction}" checked>
+                    <input type="checkbox" class="dir-sr-cb" onchange="updateAllCheckState()" data-code="${s.code}" data-name="${s.name}" data-direction="${s.direction}" checked>
                     <span class="dir-sr-code">${s.code}</span>
                     <span class="dir-sr-name">${s.name}</span>
                     <span class="dir-sr-ind">${s.industry||''}</span>
@@ -294,6 +295,15 @@ async function onBoardSearch(val) {
 
 function toggleAllDirResults(checked) {
     document.querySelectorAll('.dir-sr-cb').forEach(cb => cb.checked = checked);
+}
+
+/** 个股复选框变化时同步全选状态 */
+function updateAllCheckState() {
+    const allCb = document.getElementById('boardAllCheck');
+    if (!allCb) return;
+    const total = document.querySelectorAll('.dir-sr-cb').length;
+    const checked = document.querySelectorAll('.dir-sr-cb:checked').length;
+    allCb.checked = checked > 0 && checked === total;
 }
 
 async function batchAddDirStocks() {
