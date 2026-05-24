@@ -4,41 +4,59 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3L · 自选股管理</title>
-  <link rel="stylesheet" crossorigin href="/assets/watchlist-Xof4UTPB.css">
-  <link rel="stylesheet" crossorigin href="/assets/stock_card-Bt821oyZ.css">
-  <link rel="stylesheet" crossorigin href="/assets/base-FqS57vpu.css">
+    <link rel="stylesheet" href="/css/stock_card.css">
+<link rel="stylesheet" href="/css/base.css?v=1">
+<link rel="stylesheet" href="/css/pages/watchlist.css?v=5">
 </head>
 <body>
     <div id="nav-top"></div>
     <div class="header">
         <h1>📋 自选股管理</h1>
-        <div class="subtitle">增删自选股 · 更换方向 · 实时保存</div>
+        <div class="subtitle">增删自选股 · 方向管理 · 启用追踪</div>
         <div class="stats" id="stats">加载中...</div>
     </div>
     <div class="container">
+        <!-- 方向管理图标（小入口） -->
+        <div class="dir-icon-bar" onclick="toggleDirPanel()">
+            <span id="dirIconToggle">🎯 方向管理 ▸</span>
+        </div>
+        <div id="dirPanel" class="dir-panel" style="display:none;">
+            <div style="display:flex;gap:8px;align-items:center;margin:6px 0;">
+                <input class="search-input" id="newDirName" placeholder="新建方向名称..." maxlength="12" oninput="showDirSuggestions(this.value)" style="flex:1;">
+                <button class="btn btn-blue btn-sm" onclick="addDirection()">新建</button>
+            </div>
+            <div id="dirSuggestions" class="dir-suggestions" style="display:none;"></div>
+            <div id="dirList" class="dir-list"></div>
+        </div>
+
         <!-- 添加区 -->
         <div class="add-section">
-            <h3>➕ 添加自选股</h3>
-            <div class="add-row">
-                <input class="search-input" id="addSearch" placeholder="输入代码或名称搜索..." oninput="searchStock(this.value)">
-                <select class="dir-select" id="addDir">
-                    <option value="半导体">半导体</option>
-                    <option value="算力">算力</option>
-                    <option value="机器人">机器人</option>
-                    <option value="新能源">新能源</option>
-                    <option value="创新药">创新药</option>
-                    <option value="AI应用">AI应用</option>
-                    <option value="商业航天">商业航天</option>
-                    <option value="资源股">资源股</option>
-                </select>
-                <button class="btn btn-green" onclick="addStock()">添加</button>
+            <div class="add-tabs">
+                <div class="add-tab active" onclick="switchAddTab('single')" id="tabSingle">🔍 搜个股</div>
+                <div class="add-tab" onclick="switchAddTab('board')" id="tabBoard">🏢 搜板块</div>
             </div>
-            <div id="searchResults" class="search-results" style="display:none;"></div>
+            <!-- 单只搜索 -->
+            <div id="addSingle" class="add-tab-content">
+                <div class="add-row">
+                    <input class="search-input" id="addSearch" placeholder="输入代码/名称/首字母搜索..." oninput="searchStock(this.value)">
+                    <select class="dir-select" id="addDir"></select>
+                    <button class="btn btn-green" onclick="addStock()">添加</button>
+                </div>
+                <div id="searchResults" class="search-results" style="display:none;"></div>
+            </div>
+            <!-- 板块搜索 -->
+            <div id="addBoard" class="add-tab-content" style="display:none;">
+                <div class="add-row">
+                    <input class="search-input" id="boardSearch" placeholder="输入行业/板块/方向名..." oninput="onBoardSearch(this.value)">
+                    <select class="dir-select" id="boardDir" onchange="updateBoardDirLabel()"></select>
+                </div>
+                <div id="boardResults" class="dir-stock-results" style="display:none;"></div>
+            </div>
         </div>
 
         <!-- 工具条 -->
         <div class="toolbar">
-            <input class="search-input" id="filterInput" placeholder="🔍 筛选股票..." oninput="renderCards()" style="max-width:250px;">
+            <input class="search-input" id="filterInput" placeholder="🔍 筛选..." oninput="renderCards()" style="max-width:200px;">
             <div class="dir-tabs" id="dirTabs" style="flex:1;"></div>
         </div>
 
@@ -51,6 +69,6 @@
     <script src="/js/config.js"></script>
     <script src="/js/nav.js?v=5"></script>
     <script src="/js/stock_card.js?v=5"></script>
-<script src="/js/pages/watchlist.js?v=1"></script>
+<script src="/js/pages/watchlist.js?v=5"></script>
 </body>
 </html>

@@ -19,6 +19,7 @@ from scripts.data_layer import (
 os.environ['TQDM_DISABLE'] = '1'  # 关akshare进度条
 from datetime import datetime, timedelta
 import config
+from services.direction_service import get_active as get_active_dirs
 
 # ====== 路径（从 config 导入） ======
 
@@ -717,6 +718,9 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
         scan_date = latest_date if latest_date else today_yyyymmdd
         ml_names = [l['name'] for l in mainline_data.get('lines', [])]
         wl = wl_func() if callable(wl_func) else []
+        # 只保留启用方向的自选股
+        active_dirs = get_active_dirs()
+        wl = [s for s in wl if s.get('direction', '其他') in active_dirs]
         wl_codes = set(s['code'] for s in wl)
         scan_result = format_buy_signals(scan_date, all_stocks_60d, ml_names,
                                           top_n=20,

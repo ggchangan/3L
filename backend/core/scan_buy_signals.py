@@ -170,15 +170,18 @@ SVG_OUT_DIR = REVIEW_CHARTS_DIR
 
 
 def load_stock_list():
-    """从 watchlist.json 读取自选股名单"""
+    "从 watchlist.json 读取自选股名单（只读已启用方向）"
     if not os.path.isfile(WATCHLIST_FILE):
         print(f"❌ watchlist.json 不存在", file=sys.stderr)
         return []
     with open(WATCHLIST_FILE) as f:
         data = json.load(f)
     stocks = data.get('stocks', [])
-    if FOCUS_DIRECTIONS:
-        stocks = [s for s in stocks if s.get('direction') in FOCUS_DIRECTIONS]
+    # 方向过滤：只返回已启用方向的自选股
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+    from services.direction_service import get_active
+    active = get_active()
+    stocks = [s for s in stocks if s.get('direction', '其他') in active]
     return stocks
 
 

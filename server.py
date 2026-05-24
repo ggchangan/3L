@@ -82,6 +82,7 @@ def register_api_routes(routes):
         'backend.api.trend', 'backend.api.tips',
         'backend.api.holdings', 'backend.api.system',
         'backend.api.top_gainers', 'backend.api.macro',
+        'backend.api.directions',
     ]
     for mod_name in api_modules:
         mod = importlib.import_module(mod_name)
@@ -283,6 +284,10 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/watchlist/save': ('backend.api.watchlist', '_handle_watchlist_save'),
             '/api/tips/save-journal': ('backend.api.tips', '_handle_save_journal'),
             '/api/update': ('backend.api.system', '_handle_update'),
+            # 方向管理（独立模块）
+            '/api/directions/add': ('backend.api.directions', '_handle_add'),
+            '/api/directions/remove': ('backend.api.directions', '_handle_remove'),
+            '/api/directions/toggle': ('backend.api.directions', '_handle_set_active'),
         }
         if self.path in post_routes:
             mod_name, func_name = post_routes[self.path]
