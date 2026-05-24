@@ -515,6 +515,7 @@ async function removeStock(code) {
     enrichedData.stocks = enrichedData.stocks.filter(x => x.code !== code);
     await saveWatchlist();
     showToast(`❌ 已删除 ${s.name||code}`);
+    render();
 }
 
 async function saveWatchlist() {
