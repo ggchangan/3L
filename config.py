@@ -44,6 +44,7 @@ INDEX_DATA_PATH = os.path.join(DATA_DIR, 'index_sh_data.json')
 INDUSTRY_LEADERS_PATH = os.path.join(DATA_DIR, 'industry_leaders.json')
 LATEST_SCAN_PATH = os.path.join(DATA_DIR, 'latest_scan_result.json')
 ALL_CODES_PATH = os.path.join(DATA_DIR, 'all_stock_codes.json')
+PINYIN_PATH = os.path.join(DATA_DIR, 'pinyin_initials.json')
 SCRIPTS_DIR = os.path.join(WWW_DIR, 'scripts')
 
 # =====================================================
