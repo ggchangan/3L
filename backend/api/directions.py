@@ -126,31 +126,32 @@ def _handle_search_stocks(h, path):
                     matched.append({'code': code, 'name': names.get(code, ''), 'direction': direction, 'industry': industry})
 
     if not matched:
-        # 3. 兜底：检查是否是同花顺板块名
-        try:
-            import akshare as ak
-            df = ak.stock_board_industry_summary_ths()
-            for _, row in df.iterrows():
-                if q in str(row.get('板块', '')).lower():
-                    board_name = row.get('板块', '')
-                    up = row.get('上涨家数', 0)
-                    down = row.get('下跌家数', 0)
-                    h.send_json({
-                        'stocks': [],
-                        'total': 0,
-                        'board_info': {
-                            'name': board_name,
-                            'up': up,
-                            'down': down,
-                            'total': int(up) + int(down),
-                            'lead': row.get('领涨股', ''),
-                            'lead_chg': row.get('领涨股-涨跌幅', 0),
-                            'note': '该板块成分股不在当前数据库，建议按个股名称/代码搜索添加'
-                        }
-                    })
-                    return
-        except:
-            pass
+        # 3. 兜底：检查缓存中的同花顺行业/概念板块名
+        board_cache_path = '/home/ubuntu/data/3l/board_names_cache.json'
+        if os.path.isfile(board_cache_path):
+            try:
+                with open(board_cache_path) as f:
+                    bc = json.load(f)
+                # 行业板块
+                for name in bc.get('industry', []):
+                    if q in name.lower():
+                        h.send_json({
+                            'stocks': [], 'total': 0,
+                            'board_info': {'name': name, 'type': 'industry',
+                                'note': '该板块无成分股数据，建议按个股名称/代码搜索'}
+                        })
+                        return
+                # 概念板块
+                for name in bc.get('concept', []):
+                    if q in name.lower():
+                        h.send_json({
+                            'stocks': [], 'total': 0,
+                            'board_info': {'name': name, 'type': 'concept',
+                                'note': '该板块无成分股数据，建议按个股名称/代码搜索'}
+                        })
+                        return
+            except:
+                pass
 
     if not matched:
         h.send_json({'stocks': [], 'total': 0})
