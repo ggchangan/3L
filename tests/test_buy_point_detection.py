@@ -78,8 +78,7 @@ class TestDemailiBacktest:
 
     def test_demaili_buy_signals_count(self, stocks):
         """验证新规则下德明利90天共检测到6个买点（旧规则13个→精减为6个）"""
-        data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
-        raw = data.get('stocks', data)
+        raw = stocks.get('stocks', stocks)
         for sec, ss in raw.items():
             if '001309' in ss:
                 kls = ss['001309']
@@ -96,8 +95,7 @@ class TestDemailiBacktest:
 
     def test_demaili_no_bad_breakouts(self, stocks):
         """验证3/10、3/18这些错误突破点已被排除（3/16涨停突破有效，不在排除列表）"""
-        data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
-        raw = data.get('stocks', data)
+        raw = stocks.get('stocks', stocks)
         bad_dates = ['2026-03-10', '2026-03-18']
         for bd in bad_dates:
             bt = detect_buy_point('001309', bd, raw, market_position='波中', main_lines={'半导体'})
@@ -105,22 +103,19 @@ class TestDemailiBacktest:
 
     def test_demaili_0410_is_breakout(self, stocks):
         """验证4/10是有效突破买点"""
-        data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
-        raw = data.get('stocks', data)
+        raw = stocks.get('stocks', stocks)
         bt = detect_buy_point('001309', '2026-04-10', raw, market_position='波中', main_lines={'半导体'})
         assert bt is not None, "4/10应为突破买点"
 
     def test_demaili_0320_is_not_zhongji(self, stocks):
         """验证3/20大阴线(实体87%)+距支撑远+非地量，不被识别为中继买点"""
-        data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
-        raw = data.get('stocks', data)
+        raw = stocks.get('stocks', stocks)
         bt = detect_buy_point('001309', '2026-03-20', raw, market_position='波中', main_lines={'半导体'})
         assert bt is None, "3/20大实体+距支撑远不应是中继买点"
 
     def test_demaili_vol_condition_filters(self, stocks):
         """验证量比≤1.2的突破过滤+涨停豁免"""
-        data = json.load(open('/home/ubuntu/data/3l/all_stocks_60d.json'))
-        raw = data.get('stocks', data)
+        raw = stocks.get('stocks', stocks)
         # 3/10量比0.95 ≤ 1.2, 非涨停, 应被过滤
         bt = detect_buy_point('001309', '2026-03-10', raw, market_position='波中', main_lines={'半导体'})
         assert bt is None, "3/10量比0.95未放量，不应是买点"
@@ -219,21 +214,13 @@ def _check_reverse_yingbaoyang(klines, current_idx, key_point=None):
 class TestNewRules20260524:
     """2026-05-24 新规则验证测试"""
 
-    DATA_PATH = '/home/ubuntu/data/3l/all_stocks_60d.json'
-
-    @classmethod
-    def _load_data(cls):
-        import json
-        data = json.load(open(cls.DATA_PATH))
-        return data.get('stocks', data)
-
-    def test_zhangting_breakout_skips_volume_check(self):
+    def test_zhangting_breakout_skips_volume_check(self, stocks):
         """
         规则1: 涨停突破豁免量比检查
         德明利(001309) 2026-05-06: 涨停(+10%), vol_ratio=0.57(<=1.2)
         应通过涨停豁免被判定为有效突破买点
         """
-        raw = self._load_data()
+        raw = stocks.get('stocks', stocks)
         bt = detect_buy_point('001309', '2026-05-06', raw,
                               market_position='波中', main_lines={'半导体'})
         assert bt is not None, '涨停突破应被识别为买点'
@@ -245,13 +232,13 @@ class TestNewRules20260524:
         assert bt['vol_ratio'] <= 1.2, f'量比{bt["vol_ratio"]}虽<=1.2，但涨停豁免应通过'
         assert detail.get('breakout_score', 0) >= 5, f'突破评分应>=5，实际{detail.get("breakout_score")}'
 
-    def test_dili_midcycle_with_large_body(self):
+    def test_dili_midcycle_with_large_body(self, stocks):
         """
         规则2a: 地量(15%分位法)中继买点不限实体大小
         德明利(001309) 2026-04-27: vol低于近20日15%分位(分位地量), gain=-0.35%(小体)
         应通过地量豁免被判定为中继买点
         """
-        raw = self._load_data()
+        raw = stocks.get('stocks', stocks)
         bt = detect_buy_point('001309', '2026-04-27', raw,
                               market_position='波中', main_lines={'半导体'})
         assert bt is not None, '地量中继买点应被识别'
@@ -260,24 +247,24 @@ class TestNewRules20260524:
         pullback_reason = detail.get('pullback_reason', '')
         assert '支撑' in pullback_reason or 'EMA' in pullback_reason, f'应检测到回踩到位: {pullback_reason}'
 
-    def test_midcycle_without_pullback_fails(self):
+    def test_midcycle_without_pullback_fails(self, stocks):
         """
         规则2b: 中继买点缺少回踩到位检查应失败
         天岳先进(688234) 2026-04-21: 上涨趋势+缩量(vr=0.73), gain=-1.3%(小实体OK)
         但回踩到位三条件均不满足 -> 应返回None
         """
-        raw = self._load_data()
+        raw = stocks.get('stocks', stocks)
         bt = detect_buy_point('688234', '2026-04-21', raw,
                               market_position='波中')
         assert bt is None, f'未回踩到位应返回None，实际返回: {bt}'
 
-    def test_yinbaoyang_big_drop_exits(self):
+    def test_yinbaoyang_big_drop_exits(self, stocks):
         """
         规则3a: 阴包阳跌幅<-5%直接触发止盈退出
         德明利(001309) 2026-03-19: 阴包阳+跌幅-7.75%+量比0.91
         应返回True(直接止盈)
         """
-        raw = self._load_data()
+        raw = stocks.get('stocks', stocks)
         kls = None
         for sec, stocks in raw.items():
             if '001309' in stocks:
@@ -298,13 +285,13 @@ class TestNewRules20260524:
         assert rev is True, f'跌幅-7.75%阴包阳应触发止盈，实际: rev={rev}'
         assert '大阴' in reason or '走' in reason, f'原因应包含止盈说明: {reason}'
 
-    def test_yinbaoyang_mid_drop_checks_support(self):
+    def test_yinbaoyang_mid_drop_checks_support(self, stocks):
         """
         规则3b: 阴包阳跌幅-3%~-5%看支撑，支撑远则持有
         德明利(001309) 2026-05-08: 阴包阳+跌幅-3.05%+量比0.88+支撑远
         应返回False(持有观察)
         """
-        raw = self._load_data()
+        raw = stocks.get('stocks', stocks)
         kls = None
         for sec, stocks in raw.items():
             if '001309' in stocks:
@@ -325,14 +312,14 @@ class TestNewRules20260524:
         assert rev is False, f'05-08阴包阳(跌-3.05%,支撑远)不应触发止盈，实际: rev={rev}'
         assert '支撑' in reason or '观察' in reason, f'原因应包含观察/支撑说明: {reason}'
 
-    def test_breakout_vol_ratio_1dot2_filter(self):
+    def test_breakout_vol_ratio_1dot2_filter(self, stocks):
         """
         规则4: 非涨停突破量比<=1.2被过滤
         德明利(001309) 2026-03-10: vol_ratio=0.95(<=1.2), 非涨停
         2026-03-25: vol_ratio=1.10(<=1.2), 非涨停
         均不应是突破买点
         """
-        raw = self._load_data()
+        raw = stocks.get('stocks', stocks)
         # 3/10 vol_ratio=0.95 非涨停
         bt1 = detect_buy_point('001309', '2026-03-10', raw,
                                market_position='波中', main_lines={'半导体'})
@@ -342,24 +329,24 @@ class TestNewRules20260524:
                                market_position='波中', main_lines={'半导体'})
         assert bt2 is None, f'3/25量比1.10非涨停不应是突破买点，实际: {bt2}'
 
-    def test_midcycle_big_body_no_pullback_fails(self):
+    def test_midcycle_big_body_no_pullback_fails(self, stocks):
         """
         规则5: 中继买点大实体+距支撑远应被过滤
         德明利(001309) 2026-03-20: 阴线实体87%+距支撑+2.68%, vol_ratio=0.60
         不是真回踩 -> 应返回None
         """
-        raw = self._load_data()
+        raw = stocks.get('stocks', stocks)
         bt = detect_buy_point('001309', '2026-03-20', raw,
                               market_position='波中', main_lines={'半导体'})
         assert bt is None, f'3/20大实体+距支撑远不应是中继买点，实际: {bt}'
 
-    def test_dili_pullback_captured(self):
+    def test_dili_pullback_captured(self, stocks):
         """
         规则6: 地量+乖离率双重验证，回踩到位被正确识别为中继买点
         德明利(001309) 2026-04-21: 地量(近20日15%分位以下)+乖离率EMA5在±2%内
         新规则通过地量分位法+乖离率双路径识别
         """
-        raw = self._load_data()
+        raw = stocks.get('stocks', stocks)
         bt = detect_buy_point('001309', '2026-04-21', raw,
                               market_position='波中', main_lines={'半导体'})
         assert bt is not None, f'4/21地量+乖离率应被识别为中继买点'
@@ -368,13 +355,13 @@ class TestNewRules20260524:
         reason = str(detail.get('pullback_reason', ''))
         assert '乖离' in reason or '支撑' in reason, f'应检测到回踩到位: {reason}'
 
-    def test_yinbaoyang_shrink_does_not_exit(self):
+    def test_yinbaoyang_shrink_does_not_exit(self, stocks):
         """
         规则7: 缩量阴包阳(量比<0.8)观察一天，不触发止盈退出
         沪硅产业(688126) 2026-03-09: 阴包阳+日跌幅-1.69%(>-3%)
         应返回False(小阴观察)
         """
-        raw = self._load_data()
+        raw = stocks.get('stocks', stocks)
         # 定位K线索引
         kls = None
         for sec, stocks in raw.items():

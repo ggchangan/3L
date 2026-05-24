@@ -7,11 +7,10 @@
 """
 import pytest, json, os, copy
 from scripts.trend_trading import decide_system
-from scripts.trend_candidates import toggle_trend_stock, _load_manual
+from scripts.trend_candidates import toggle_trend_stock
+from backend.core.trend_trading import _load_manual_trend as _load_manual
 
-MANUAL_PATH = '/home/ubuntu/data/3l/private/manual_trend_stocks.json'
-WATCHLIST_PATH = '/home/ubuntu/data/3l/watchlist.json'
-INDUSTRY_MAP_PATH = '/home/ubuntu/data/3l/stock_industry_map.json'
+from config import MANUAL_TREND_PATH as MANUAL_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH
 
 
 class TestTrendWatchlistConsistency:

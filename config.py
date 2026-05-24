@@ -50,7 +50,6 @@ SCRIPTS_DIR = os.path.join(WWW_DIR, 'scripts')
 # 缓存目录/文件
 # =====================================================
 CACHE_DIR = os.path.join(DATA_DIR, 'cache')
-CACHE_MAX_AGE_DAYS = 7  # 缓存文件超过此天数自动清理
 KEY_POINTS_DIR = os.path.join(DATA_DIR, 'key_points')
 
 # =====================================================
@@ -76,18 +75,6 @@ REVIEW_CHARTS_DIR = os.path.join(WWW_DIR, 'review_charts')
 REVIEW_DATA_PATH = os.path.join(PRIVATE_DIR, 'review_data.json')
 
 # =====================================================
-# JS / CSS
-# =====================================================
-JS_DIR = os.path.join(WWW_DIR, 'js')
-CSS_DIR = os.path.join(WWW_DIR, 'css')
-
-# =====================================================
-# 日志
-# =====================================================
-LOG_LEVEL = _env('LOG_LEVEL', 'INFO')
-LOG_DIR = _env('LOG_DIR', os.path.join(WWW_DIR, 'logs'))
-
-# =====================================================
 # 服务器配置
 # =====================================================
 SERVER_PORT = int(_env('PORT', '8080'))
@@ -101,8 +88,6 @@ MOMENTUM_CACHE_PREFIX = os.path.join(WWW_DIR, 'data', 'cache', 'momentum_')
 # =====================================================
 SIMULATION_DIR = os.path.join(DATA_DIR, 'simulation')
 SIMULATION_V3_DIR = os.path.join(SIMULATION_DIR, 'v3')
-FILES_DIR = os.path.join(WWW_DIR, 'files')
-CHARTS_DIR = os.path.join(WWW_DIR, 'charts')
 
 # =====================================================
 # 日志

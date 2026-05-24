@@ -6,7 +6,7 @@ from scripts.trend_trading import (
     decide_system, decide_system_with_detail, _load_manual_trend,
 )
 
-MANUAL_PATH = '/home/ubuntu/data/3l/private/manual_trend_stocks.json'
+from config import MANUAL_TREND_PATH as MANUAL_PATH
 
 
 class TestManualTrendList:

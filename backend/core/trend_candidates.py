@@ -4,10 +4,12 @@
 同时生成 trend_ 趋势交易SVG图表
 """
 import json, os, sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))  # add www to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+from backend.core.data_layer import _load_json
 from backend.core.ema_utils import ema_list, get_structure, get_stage
 from backend.core.gen_trend_chart import gen_trend_svg
+from backend.core.trend_trading import _load_manual_trend
 import config
 
 DATA_DIR = config.DATA_DIR
@@ -22,7 +24,7 @@ def scan_trend_candidates(main_line_names, sub_main_names):
     """扫描主线+次级主线，返回完整个股分析数据"""
     imap = _load_json(INDUSTRY_MAP_PATH, {})
     all_s = _load_json(ALL_STOCKS_PATH, {}).get('stocks', {})
-    manual = _load_manual()
+    manual = _load_manual_trend()
 
     result = {
         'main_lines': _scan_industries(main_line_names, imap, all_s, manual),
@@ -134,26 +136,8 @@ def _find_klines(code, all_s):
         if code in codes:
             return codes[code]
     return []
-
-
-def _load_json(path, default=None):
-    try:
-        with open(path, encoding='utf-8') as f:
-            return json.load(f)
-    except:
-        return default if default is not None else {}
-
-
-def _load_manual():
-    try:
-        with open(MANUAL_TREND_PATH) as f:
-            return set(json.load(f))
-    except:
-        return set()
-
-
 def toggle_trend_stock(code, enable):
-    manual = set(_load_manual())
+    manual = set(_load_manual_trend())
     changed = False
     if enable and code not in manual:
         manual.add(code)
@@ -203,7 +187,7 @@ def get_tracked_stocks():
     """返回已手动标记趋势交易的股票完整分析数据（不经过主线筛选）"""
     imap = _load_json(INDUSTRY_MAP_PATH, {})
     all_s = _load_json(ALL_STOCKS_PATH, {}).get('stocks', {})
-    manual = _load_manual()
+    manual = _load_manual_trend()
 
     candidates = []
     for code in sorted(manual):
