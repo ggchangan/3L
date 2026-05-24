@@ -1,334 +1,333 @@
-     1|<!DOCTYPE html>
-     2|<html lang="zh-CN">
-     3|<head>
-     4|<meta charset="utf-8">
-     5|<meta name="viewport" content="width=device-width, initial-scale=1.0">
-     6|<title>3L Skills 追踪</title>
-     7|<link rel="stylesheet" href="/css/base.css?v=1">
-     8|<link rel="stylesheet" href="/css/pages/skills.css?v=1">
-     9|</head>
-    10|<body>
-    11|
-    12|<div style="margin-top:10px;" id="nav-top"></div>
-    13|
-    14|<div class="header">
-    15|    <h1>📖 Skills 追踪</h1>
-    16|    <div class="sub">所有Skills一览 + 逐日更新记录</div>
-    17|</div>
-    18|
-    19|<div class="container">
-    20|
-    21|<!-- ===== Part 1: All Skills ===== -->
-    22|<div class="section">
-    23|    <div class="section-title">📦 全部Skills</div>
-    24|
-    25|    <div class="skill-item">
-    26|        <div class="name">daily-achievements-page <span class="tag updated">更新</span></div>
-    27|        <div class="desc">成果看板持久化工作日志 · PDF生成 · 历史归档 · 隔离规则</div>
-    28|    </div>
-    29|    <div class="skill-item">
-    30|        <div class="name">daily-3l-monitor <span class="tag updated">大幅更新</span></div>
-    31|        <div class="desc">盘中实时盯盘页面 — 成交额对比+板块监测+行业/市场龙头+买点扫描+止损预警</div>
-    32|    </div>
-    33|    <div class="skill-item">
-    34|        <div class="name">daily-3l-review <span class="tag created">创建</span></div>
-    35|        <div class="desc">每日复盘页面完整规范 — 4步骤 · 历史存档 · 自选买点 · 关键点图</div>
-    36|    </div>
-    37|    <div class="skill-item">
-    38|        <div class="name">a-stock-kline-keypoint-chart <span class="tag updated">更新</span></div>
-    39|        <div class="desc">A股3L关键点标注K线图生成（SVG/PNG/PDF），暗色风格，新增支撑/压力线</div>
-    40|    </div>
-    41|    <div class="skill-item">
-    42|        <div class="name">ema10-trend-judgment <span class="tag updated">大幅更新</span></div>
-    43|        <div class="desc">基于EMA10形态法+线性回归的板块/个股结构阶段判断，区间震荡支撑压力定位</div>
-    44|    </div>
-    45|    <div class="skill-item">
-    46|        <div class="name">stock-simulation-v33</div>
-    47|        <div class="desc">3L模拟交易v33引擎 — 跑完整4周模拟、生成报告</div>
-    48|    </div>
-    49|    <div class="skill-item">
-    50|        <div class="name">a-stock-data-sources <span class="tag updated">更新</span></div>
-    51|        <div class="desc">5个稳定A股数据源分层使用方案（mootdx/腾讯/akshare/同花顺）</div>
-    52|    </div>
-    53|    <div class="skill-item">
-    54|        <div class="name">a-stock-3l-analysis</div>
-    55|        <div class="desc">个股3L体系分析（动量主线/最强逻辑/量价择时）</div>
-    56|    </div>
-    57|    <div class="skill-item">
-    58|        <div class="name">a-stock-3l-simulation-v2</div>
-    59|        <div class="desc">3L模拟交易引擎（中继+突破双选，板块动量加权分配）</div>
-    60|    </div>
-    61|    <div class="skill-item">
-    62|        <div class="name">main-line-judgment</div>
-    63|        <div class="desc">20日动量+个股活跃度动态主线板块判定</div>
-    64|    </div>
-    65|    <div class="skill-item">
-    66|        <div class="name">market-scan-workflow</div>
-    67|        <div class="desc">系统化扫描8大方向自选股，30日K线缓存买点分析</div>
-    68|    </div>
-    69|    <div class="skill-item">
-    70|        <div class="name">market-leaders-scan <span class="tag created">创建</span></div>
-    71|        <div class="desc">市场龙头动态扫描 — 5日涨幅行业第一+成交额第一+MA10向上+换手率>3%</div>
-    72|    </div>
-    73|    <div class="skill-item">
-    74|        <div class="name">market-peak-trough</div>
-    75|        <div class="desc">综合评分法判断大盘波峰/波谷/波中，决定总仓位策略</div>
-    76|    </div>
-    77|    <div class="skill-item">
-    78|        <div class="name">acceleration-judgment</div>
-    79|        <div class="desc">3L量价语言判断个股加速信号</div>
-    80|    </div>
-    81|    <div class="skill-item">
-    82|        <div class="name">weekly-report-standard</div>
-    83|        <div class="desc">每周交易报告9部分标准格式，含逐日主线跟踪+买点信号</div>
-    84|    </div>
-    85|    <div class="skill-item">
-    86|        <div class="name">a-stock-chart-pdf</div>
-    87|        <div class="desc">批量生成A股K线关键点SVG/PNG图，生成可分享PDF报告</div>
-    88|    </div>
-    89|    <div class="skill-item">
-    90|        <div class="name">profit-model1-check <span class="tag created">创建</span></div>
-    91|        <div class="desc">盈利模式1检查 — MA10朝上+涨停+回踩买点+业绩好(自动)，含7个数据坑</div>
-    92|    </div>
-    93|    <div class="skill-item">
-    94|        <div class="name">profit-quality-check <span class="tag created">创建</span></div>
-    95|        <div class="desc">业绩质量自动判断 — 扣非净利润增速>30%+营收增速>30%+扣非利润>1亿</div>
-    96|    </div>
-    97|    <div class="skill-item">
-    98|        <div class="name">a-stock-simulation</div>
-    99|        <div class="desc">基础模拟交易引擎（自定义本金/日期/选股/仓位）</div>
-   100|    </div>
-   101|</div>
-   102|
-   103|<!-- ===== Part 2: Update Records ===== -->
-   104|<div class="section">
-   105|    <div class="section-title">📝 更新记录</div>
-   106|
-   107|    <!-- Day card: 2026-05-22 -->
-   108|    <div class="day-card">
-   109|        <div class="date-badge">2026-05-22</div>
-   110|
-   111|        <div class="change-item">
-   112|            <div class="sname">stock-simulation-v33 <span class="tag updated">更新</span></div>
-   113|            <div class="sdesc">回测出口改用真实3L退出规则，替代5天硬出场假逻辑</div>
-   114|            <ul class="spoints">
-   115|                <li>simulate_trade() 使用真实3L规则：加速止盈/放量滞涨/动力减弱/阴包阳三维退出</li>
-   116|                <li>4个出口检测函数从测试文件提取到 buy_point_detection.py 正式模块</li>
-   117|                <li>server.py 回测端点改用真实模拟，import json/traceback 作用域bug修复</li>
-   118|                <li>光迅科技60天回测验证：2笔信号累计+49.07%（此前假逻辑+53%，真实%有所修正）</li>
-   119|            </ul>
-   120|        </div>
-   121|
-   122|        <div class="change-item">
-   123|            <div class="sname">a-stock-3l-simulation-v2 <span class="tag updated">更新</span></div>
-   124|            <div class="sdesc">退出规则同步更新 + 光迅科技趋势股卖飞案例</div>
-   125|            <ul class="spoints">
-   126|                <li>回测止损/止盈策略更新为真实3L检测函数</li>
-   127|                <li>新增 trend_trade_exit_problem.md 趋势股加速止盈卖飞案例记录</li>
-   128|                <li>skill文档同步更新退出规则描述</li>
-   129|            </ul>
-   130|        </div>
-   131|
-   132|        <div class="change-item">
-   133|            <div class="sname">acceleration-judgment <span class="tag updated">更新</span></div>
-   134|            <div class="sdesc">加速判定升级为D方案两步法，取代EMA10斜率比法</div>
-   135|            <ul class="spoints">
-   136|                <li>核心改变：先找确认过程（局部低点+回调>5%+守住EMA20），有确认=上行趋势，无确认=加速</li>
-   137|                <li>乖离率从硬阈值降为观测指标，不再用于分界</li>
-   138|                <li>12只全量验证通过（6转上行+6留加速），含大族数控/伟创电气/奥比中光/阳光电源等</li>
-   139|            </ul>
-   140|        </div>
-   141|
-   142|        <div class="change-item">
-   143|            <div class="sname">ema10-trend-judgment <span class="tag updated">更新</span></div>
-   144|            <div class="sdesc">结构判断终版：EMA10极值+双侧末端校验；阶段判断改用乖离率变化</div>
-   145|            <ul class="spoints">
-   146|                <li>结构：EMA10极值位置初判 → 上涨降级(滞后修正) → 下降升级(末端反弹) → 区间→下降(对称校验)</li>
-   147|                <li>阶段：乖离率变化三段论代替EMA10斜率比（扩大=上行/收窄=回踩/横盘=整理）</li>
-   148|                <li>中继买点不再依赖 stage 返回值，改用乖离率变化+回踩到位三选一</li>
-   149|                <li>203只自选股全量测试，四类修复案例(润泽科技/皓元医药/宁德时代/天华新能)全部通过</li>
-   150|            </ul>
-   151|        </div>
-   152|
-   153|        <div class="change-item">
-   154|            <div class="sname">profit-model2-check <span class="tag created">创建</span></div>
-   155|            <div class="sdesc">盈利模式2检查 — 趋势票回踩EMA5买点</div>
-   156|            <ul class="spoints">
-   157|                <li>6条件趋势票判定（上涨趋势/上行或缩量/≥60%在EMA5/不破EMA10/多头排列/涨幅≥30%）</li>
-   158|                <li>回踩买点：趋势票6条件全部通过 + 收盘离EMA5 ±1.5%</li>
-   159|                <li>trend_stock标签仅用于复盘展示，不再参与主买点判定（2026-05-22变更）</li>
-   160|            </ul>
-   161|        </div>
-   162|
-   163|        <div class="change-item">
-   164|            <div class="sname">stock-action-judgment <span class="tag updated">更新</span></div>
-   165|            <div class="sdesc">操作信号判定 — 退出规则/D方案加速同步+突破评分+买回机制</div>
-   166|            <ul class="spoints">
-   167|                <li>突破买点多维评分（突破幅度/涨幅/量比/实体，≥5分有效）</li>
-   168|                <li>突破后3天向前确认机制 + 上涨趋势不产生重复突破买点</li>
-   169|                <li>止损：关键点×0.97 + 买回机制（拉回关键点+阳线→买回）</li>
-   170|                <li>右侧止盈：阴包阳（放量=供应确认/缩量=正常波动） + 大阴线反转</li>
-   171|                <li>德明利90天回测终版：13笔，6盈7亏，盈亏比2.78，累计+2.46%</li>
-   172|            </ul>
-   173|        </div>
-   174|
-   175|        <div class="change-item">
-   176|            <div class="sname">market-peak-trough <span class="tag updated">更新</span></div>
-   177|            <div class="sdesc">波峰波谷V5置信度打分方案上线，取代旧4维加权方案</div>
-   178|            <ul class="spoints">
-   179|                <li>pk_score/vl_score各0~4分，4条件独立判定（趋势转折+乖离率位置+量价信号+方向确认）</li>
-   180|                <li>5档映射（偏波峰/波中偏上/波中/波中偏下/偏波谷）</li>
-   181|                <li>3指数回测：中证全指/沪深300/创业板指，NEAR阈值召回率67~91%，误报率3~6%</li>
-   182|                <li>极值自动升级：bias20&gt;8%自动pk≥3，&lt;-8%自动vl≥3</li>
-   183|                <li>PDF综合文档+16个回归测试</li>
-   184|            </ul>
-   185|        </div>
-   186|    </div>
-   187|
-   188|    <!-- Day card: 2026-05-20 (newest first) -->
-   189|    <div class="day-card">
-   190|        <div class="date-badge">2026-05-20</div>
-   191|
-   192|        <div class="change-item">
-   193|            <div class="sname">profit-model1-check <span class="tag created">创建</span></div>
-   194|            <div class="sdesc">盈利模式1检查 — MA10朝上+涨停+回踩买点+业绩好(自动)，7个数据坑</div>
-   195|            <ul class="spoints">
-   196|                <li>判断个股是否符合各盈利模式的标志条件（盈利模式1/2/3...）</li>
-   197|                <li>条件④已自动化：用profit-quality-check判断扣非净利润增速+营收增速是否达标</li>
-   198|                <li>可扩展多个模式的判断规则</li>
-   199|            </ul>
-   200|        </div>
-   201|
-   202|        <div class="change-item">
-   203|            <div class="sname">profit-quality-check <span class="tag created">创建</span></div>
-   204|            <div class="sdesc">业绩质量自动判断模块 — 扣非净利润增速>30%+营收增速>30%+扣非利润>1亿</div>
-   205|            <ul class="spoints">
-   206|                <li>247只自选股批量扫描，48只通过业绩检查</li>
-   207|                <li>数据源：akshare stock_financial_abstract_ths（同花顺财务摘要）</li>
-   208|                <li>带缓存机制，自动按日缓存 financial_data_cache.json</li>
-   209|            </ul>
-   210|        </div>
-   211|
-   212|        <div class="change-item">
-   213|            <div class="sname">profit-model1-check <span class="tag created">创建</span></div>
-   214|            <div class="sdesc">盈利模式1检查 — MA10朝上+涨停+回踩买点+业绩好(自动)，7个数据坑</div>
-   215|            <ul class="spoints">
-   216|                <li>判断个股是否符合各盈利模式的标志条件（盈利模式1/2/3...）</li>
-   217|                <li>条件④已自动化：用profit-quality-check判断扣非净利润增速+营收增速是否达标</li>
-   218|                <li>可扩展多个模式的判断规则</li>
-   219|            </ul>
-   220|        </div>
-   221|
-   222|        <div class="change-item">
-   223|            <div class="sname">daily-3l-monitor <span class="tag updated">大幅更新</span></div>
-   224|            <div class="sdesc">盘中实时盯盘页面完整规范 — 7卡片·市场龙头·缓存策略·80条pitfalls</div>
-   225|            <ul class="spoints">
-   226|                <li>新增市场龙头动态扫描API文档（4条件筛选链+过滤漏斗+缓存持久化）</li>
-   227|                <li>新增Badge标注规则（去"交易时间"前缀，只写刷新频率）</li>
-   228|                <li>新增数据持久化约定（收盘后缓存可见）</li>
-   229|                <li>新增腾讯批量行情接口说明（key匹配问题+可用字段索引）</li>
-   230|                <li>新增Bug修复笔记（负涨幅误杀 rank_gain_1st > 0 修复）</li>
-   231|                <li>新增pitfall 18~20（缓存层删除/结构判断5次迭代/板块tab互斥）</li>
-   232|                <li>累计80条pitfalls覆盖所有调试中踩过的坑</li>
-   233|            </ul>
-   234|        </div>
-   235|
-   236|        <div class="change-item">
-   237|            <div class="sname">market-leaders-scan <span class="tag created">创建</span></div>
-   238|            <div class="sdesc">市场龙头动态扫描完整算法文档</div>
-   239|            <ul class="spoints">
-   240|                <li>4条件筛选链：5日涨幅行业第一+成交额行业第一+MA10向上+换手率>3%</li>
-   241|                <li>缓存策略：交易日10分钟刷新+非交易时间持久化</li>
-   242|                <li>已知边界情况：负涨幅处理/日K线不足/腾讯停机/成交额单位</li>
-   243|            </ul>
-   244|        </div>
-   245|
-   246|        <div class="change-item">
-   247|            <div class="sname">ema10-trend-judgment <span class="tag updated">大幅更新</span></div>
-   248|            <div class="sdesc">基于EMA10形态法+线性回归的板块/个股结构阶段判断</div>
-   249|            <ul class="spoints">
-   250|                <li>结构算法修正：从端点对比(e10[-1]/e10[-6])改为形态法(涨天数比70%/30%阈值)</li>
-   251|                <li>阶段算法新增：线性回归半段对比法（加速&gt;1.8倍/滞涨&lt;0.4倍/转跌/转涨）</li>
-   252|                <li>区间震荡位置判断定稿v4：支撑=突破点，压力=15日最高，区间底部/中段/顶部</li>
-   253|                <li>完整版本演进记录(v1→v4)，含电池/白酒/能源金属真实数据案例</li>
-   254|            </ul>
-   255|        </div>
-   256|
-   257|        <div class="change-item">
-   258|            <div class="sname">每日更新记录补正 <span class="tag updated">修正</span></div>
-   259|            <div class="sdesc">ema10-trend-judgment 更新描述修正 — 最终定稿为EMA10极值位置法</div>
-   260|            <ul class="spoints">
-   261|                <li>原记录描述为"形态法(涨天数比70%/30%阈值)"，但最终定稿是EMA10极值位置法（前25%/后25%判趋势），非涨天数比也非形态法</li>
-   262|                <li>该算法历经5次迭代最终定稿，最终版本是看EMA10最高最低在15日的尾部/头部位置</li>
-   263|                <li>补充EMA10固有滞后说明：价格已见顶但EMA10可能仍在走高（2-3天滞后），属正常特性</li>
-   264|            </ul>
-   265|        </div>
-   266|
-   267|        <div class="change-item">
-   268|            <div class="sname">a-stock-kline-keypoint-chart <span class="tag updated">更新</span></div>
-   269|            <div class="sdesc">A股3L关键点标注K线图生成（SVG/PNG/PDF）</div>
-   270|            <ul class="spoints">
-   271|                <li>新增板块图支撑线（绿色虚线#4caf50，最近突破点）和压力线（红色虚线#f44336，15日最高）</li>
-   272|                <li>保存60日K线JSON缓存供区间位置判断复用</li>
-   273|            </ul>
-   274|        </div>
-   275|
-   276|        <div class="change-item">
-   277|            <div class="sname">daily-achievements-page <span class="tag updated">大幅更新</span></div>
-   278|            <div class="sdesc">成果看板持久化工作日志 · PDF生成 · 历史归档 · 隔离规则</div>
-   279|            <ul class="spoints">
-   280|                <li>更新成果完整流程（专项PDF生成→fileDesc映射→当日不archive）</li>
-   281|                <li>新增重点记忆章节（每个待办挂PDF/0→1描述/不碰旧PDF/模拟隔离）</li>
-   282|                <li>新增复盘已知约定（toggleChart TR判断/📊无字/独立卡片区）</li>
-   283|                <li>新增pitfall 10~13（图表布局/TR判断/图标统一/onclick规范）</li>
-   284|            </ul>
-   285|        </div>
-   286|
-   287|        <div class="change-item">
-   288|            <div class="sname">daily-3l-review <span class="tag created">创建</span></div>
-   289|            <div class="sdesc">每日复盘页面完整规范 — 4步骤 · 历史存档 · 自选买点 · 关键点图</div>
-   290|            <ul class="spoints">
-   291|                <li>页面4步骤结构+导航栏+历史复盘列表</li>
-   292|                <li>JS加载逻辑（初始加载/历史跳转/图表切换/toggleChart）</li>
-   293|                <li>行业板块TOP15数据源+领涨股图表方案</li>
-   294|                <li>15条pitfalls（含本次调试总结的所有坑）</li>
-   295|            </ul>
-   296|        </div>
-   297|
-   298|        <div class="change-item">
-   299|            <div class="sname">a-stock-data-sources <span class="tag updated">更新</span></div>
-   300|            <div class="sdesc">5个稳定A股数据源分层使用方案</div>
-   301|            <ul class="spoints">
-   302|                <li>新增同花顺行业板块实时排名章节</li>
-   303|                <li>新增大盘资金流向数据章节</li>
-   304|                <li>新增IP封锁验证日志（2026-05-20实测）</li>
-   305|            </ul>
-   306|        </div>
-   307|    </div>
-   308|
-   309|    <!-- Day card: 2026-05-19 -->
-   310|    <div class="day-card">
-   311|        <div class="date-badge">2026-05-19</div>
-   312|
-   313|        <div class="change-item">
-   314|            <div class="sname">buy_point_detection <span class="tag updated">更新</span></div>
-   315|            <div class="sdesc">盈利模式1条件④从默认通过改为业绩自动检查</div>
-   316|            <ul class="spoints">
-   317|                <li>check_zhongji/check_tupo/check_profit_model1 统一前缀兼容（SH/SZ/裸代码）</li>
-   318|                <li>find_idx 日期格式兼容（横杠/无横杠）</li>
-   319|                <li>5/19复盘3只🏆：普冉股份、海光信息、鹏辉能源</li>
-   320|            </ul>
-   321|        </div>
-   322|    </div>
-   323|
-   324|</div>
-   325|
-   326|</div>
-   327|
-   328|<div id="nav-bottom"></div>
-   329|<div class="footer">3L 交易体系 · Hermes Agent · 2026</div>
-   330|<script src="/js/config.js"></script>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3L Skills 追踪</title>
+<link rel="stylesheet" href="/css/base.css?v=1">
+<link rel="stylesheet" href="/css/pages/skills.css?v=1">
+</head>
+<body>
+
+<div style="margin-top:10px;" id="nav-top"></div>
+
+<div class="header">
+    <h1>📖 Skills 追踪</h1>
+    <div class="sub">所有Skills一览 + 逐日更新记录</div>
+</div>
+
+<div class="container">
+
+<!-- ===== Part 1: All Skills ===== -->
+<div class="section">
+    <div class="section-title">📦 全部Skills</div>
+
+    <div class="skill-item">
+        <div class="name">daily-achievements-page <span class="tag updated">更新</span></div>
+        <div class="desc">成果看板持久化工作日志 · PDF生成 · 历史归档 · 隔离规则</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">daily-3l-monitor <span class="tag updated">大幅更新</span></div>
+        <div class="desc">盘中实时盯盘页面 — 成交额对比+板块监测+行业/市场龙头+买点扫描+止损预警</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">daily-3l-review <span class="tag created">创建</span></div>
+        <div class="desc">每日复盘页面完整规范 — 4步骤 · 历史存档 · 自选买点 · 关键点图</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-kline-keypoint-chart <span class="tag updated">更新</span></div>
+        <div class="desc">A股3L关键点标注K线图生成（SVG/PNG/PDF），暗色风格，新增支撑/压力线</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">ema10-trend-judgment <span class="tag updated">大幅更新</span></div>
+        <div class="desc">基于EMA10形态法+线性回归的板块/个股结构阶段判断，区间震荡支撑压力定位</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">stock-simulation-v33</div>
+        <div class="desc">3L模拟交易v33引擎 — 跑完整4周模拟、生成报告</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-data-sources <span class="tag updated">更新</span></div>
+        <div class="desc">5个稳定A股数据源分层使用方案（mootdx/腾讯/akshare/同花顺）</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-3l-analysis</div>
+        <div class="desc">个股3L体系分析（动量主线/最强逻辑/量价择时）</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-3l-simulation-v2</div>
+        <div class="desc">3L模拟交易引擎（中继+突破双选，板块动量加权分配）</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">main-line-judgment</div>
+        <div class="desc">20日动量+个股活跃度动态主线板块判定</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">market-scan-workflow</div>
+        <div class="desc">系统化扫描8大方向自选股，30日K线缓存买点分析</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">market-leaders-scan <span class="tag created">创建</span></div>
+        <div class="desc">市场龙头动态扫描 — 5日涨幅行业第一+成交额第一+MA10向上+换手率>3%</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">market-peak-trough</div>
+        <div class="desc">综合评分法判断大盘波峰/波谷/波中，决定总仓位策略</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">acceleration-judgment</div>
+        <div class="desc">3L量价语言判断个股加速信号</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">weekly-report-standard</div>
+        <div class="desc">每周交易报告9部分标准格式，含逐日主线跟踪+买点信号</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-chart-pdf</div>
+        <div class="desc">批量生成A股K线关键点SVG/PNG图，生成可分享PDF报告</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">profit-model1-check <span class="tag created">创建</span></div>
+        <div class="desc">盈利模式1检查 — MA10朝上+涨停+回踩买点+业绩好(自动)，含7个数据坑</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">profit-quality-check <span class="tag created">创建</span></div>
+        <div class="desc">业绩质量自动判断 — 扣非净利润增速>30%+营收增速>30%+扣非利润>1亿</div>
+    </div>
+    <div class="skill-item">
+        <div class="name">a-stock-simulation</div>
+        <div class="desc">基础模拟交易引擎（自定义本金/日期/选股/仓位）</div>
+    </div>
+</div>
+
+<!-- ===== Part 2: Update Records ===== -->
+<div class="section">
+    <div class="section-title">📝 更新记录</div>
+
+    <!-- Day card: 2026-05-22 -->
+    <div class="day-card">
+        <div class="date-badge">2026-05-22</div>
+
+        <div class="change-item">
+            <div class="sname">stock-simulation-v33 <span class="tag updated">更新</span></div>
+            <div class="sdesc">回测出口改用真实3L退出规则，替代5天硬出场假逻辑</div>
+            <ul class="spoints">
+                <li>simulate_trade() 使用真实3L规则：加速止盈/放量滞涨/动力减弱/阴包阳三维退出</li>
+                <li>4个出口检测函数从测试文件提取到 buy_point_detection.py 正式模块</li>
+                <li>server.py 回测端点改用真实模拟，import json/traceback 作用域bug修复</li>
+                <li>光迅科技60天回测验证：2笔信号累计+49.07%（此前假逻辑+53%，真实%有所修正）</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">a-stock-3l-simulation-v2 <span class="tag updated">更新</span></div>
+            <div class="sdesc">退出规则同步更新 + 光迅科技趋势股卖飞案例</div>
+            <ul class="spoints">
+                <li>回测止损/止盈策略更新为真实3L检测函数</li>
+                <li>新增 trend_trade_exit_problem.md 趋势股加速止盈卖飞案例记录</li>
+                <li>skill文档同步更新退出规则描述</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">acceleration-judgment <span class="tag updated">更新</span></div>
+            <div class="sdesc">加速判定升级为D方案两步法，取代EMA10斜率比法</div>
+            <ul class="spoints">
+                <li>核心改变：先找确认过程（局部低点+回调>5%+守住EMA20），有确认=上行趋势，无确认=加速</li>
+                <li>乖离率从硬阈值降为观测指标，不再用于分界</li>
+                <li>12只全量验证通过（6转上行+6留加速），含大族数控/伟创电气/奥比中光/阳光电源等</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">ema10-trend-judgment <span class="tag updated">更新</span></div>
+            <div class="sdesc">结构判断终版：EMA10极值+双侧末端校验；阶段判断改用乖离率变化</div>
+            <ul class="spoints">
+                <li>结构：EMA10极值位置初判 → 上涨降级(滞后修正) → 下降升级(末端反弹) → 区间→下降(对称校验)</li>
+                <li>阶段：乖离率变化三段论代替EMA10斜率比（扩大=上行/收窄=回踩/横盘=整理）</li>
+                <li>中继买点不再依赖 stage 返回值，改用乖离率变化+回踩到位三选一</li>
+                <li>203只自选股全量测试，四类修复案例(润泽科技/皓元医药/宁德时代/天华新能)全部通过</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">profit-model2-check <span class="tag created">创建</span></div>
+            <div class="sdesc">盈利模式2检查 — 趋势票回踩EMA5买点</div>
+            <ul class="spoints">
+                <li>6条件趋势票判定（上涨趋势/上行或缩量/≥60%在EMA5/不破EMA10/多头排列/涨幅≥30%）</li>
+                <li>回踩买点：趋势票6条件全部通过 + 收盘离EMA5 ±1.5%</li>
+                <li>trend_stock标签仅用于复盘展示，不再参与主买点判定（2026-05-22变更）</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">stock-action-judgment <span class="tag updated">更新</span></div>
+            <div class="sdesc">操作信号判定 — 退出规则/D方案加速同步+突破评分+买回机制</div>
+            <ul class="spoints">
+                <li>突破买点多维评分（突破幅度/涨幅/量比/实体，≥5分有效）</li>
+                <li>突破后3天向前确认机制 + 上涨趋势不产生重复突破买点</li>
+                <li>止损：关键点×0.97 + 买回机制（拉回关键点+阳线→买回）</li>
+                <li>右侧止盈：阴包阳（放量=供应确认/缩量=正常波动） + 大阴线反转</li>
+                <li>德明利90天回测终版：13笔，6盈7亏，盈亏比2.78，累计+2.46%</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">market-peak-trough <span class="tag updated">更新</span></div>
+            <div class="sdesc">波峰波谷V5置信度打分方案上线，取代旧4维加权方案</div>
+            <ul class="spoints">
+                <li>pk_score/vl_score各0~4分，4条件独立判定（趋势转折+乖离率位置+量价信号+方向确认）</li>
+                <li>5档映射（偏波峰/波中偏上/波中/波中偏下/偏波谷）</li>
+                <li>3指数回测：中证全指/沪深300/创业板指，NEAR阈值召回率67~91%，误报率3~6%</li>
+                <li>极值自动升级：bias20&gt;8%自动pk≥3，&lt;-8%自动vl≥3</li>
+                <li>PDF综合文档+16个回归测试</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Day card: 2026-05-20 (newest first) -->
+    <div class="day-card">
+        <div class="date-badge">2026-05-20</div>
+
+        <div class="change-item">
+            <div class="sname">profit-model1-check <span class="tag created">创建</span></div>
+            <div class="sdesc">盈利模式1检查 — MA10朝上+涨停+回踩买点+业绩好(自动)，7个数据坑</div>
+            <ul class="spoints">
+                <li>判断个股是否符合各盈利模式的标志条件（盈利模式1/2/3...）</li>
+                <li>条件④已自动化：用profit-quality-check判断扣非净利润增速+营收增速是否达标</li>
+                <li>可扩展多个模式的判断规则</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">profit-quality-check <span class="tag created">创建</span></div>
+            <div class="sdesc">业绩质量自动判断模块 — 扣非净利润增速>30%+营收增速>30%+扣非利润>1亿</div>
+            <ul class="spoints">
+                <li>247只自选股批量扫描，48只通过业绩检查</li>
+                <li>数据源：akshare stock_financial_abstract_ths（同花顺财务摘要）</li>
+                <li>带缓存机制，自动按日缓存 financial_data_cache.json</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">profit-model1-check <span class="tag created">创建</span></div>
+            <div class="sdesc">盈利模式1检查 — MA10朝上+涨停+回踩买点+业绩好(自动)，7个数据坑</div>
+            <ul class="spoints">
+                <li>判断个股是否符合各盈利模式的标志条件（盈利模式1/2/3...）</li>
+                <li>条件④已自动化：用profit-quality-check判断扣非净利润增速+营收增速是否达标</li>
+                <li>可扩展多个模式的判断规则</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">daily-3l-monitor <span class="tag updated">大幅更新</span></div>
+            <div class="sdesc">盘中实时盯盘页面完整规范 — 7卡片·市场龙头·缓存策略·80条pitfalls</div>
+            <ul class="spoints">
+                <li>新增市场龙头动态扫描API文档（4条件筛选链+过滤漏斗+缓存持久化）</li>
+                <li>新增Badge标注规则（去"交易时间"前缀，只写刷新频率）</li>
+                <li>新增数据持久化约定（收盘后缓存可见）</li>
+                <li>新增腾讯批量行情接口说明（key匹配问题+可用字段索引）</li>
+                <li>新增Bug修复笔记（负涨幅误杀 rank_gain_1st > 0 修复）</li>
+                <li>新增pitfall 18~20（缓存层删除/结构判断5次迭代/板块tab互斥）</li>
+                <li>累计80条pitfalls覆盖所有调试中踩过的坑</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">market-leaders-scan <span class="tag created">创建</span></div>
+            <div class="sdesc">市场龙头动态扫描完整算法文档</div>
+            <ul class="spoints">
+                <li>4条件筛选链：5日涨幅行业第一+成交额行业第一+MA10向上+换手率>3%</li>
+                <li>缓存策略：交易日10分钟刷新+非交易时间持久化</li>
+                <li>已知边界情况：负涨幅处理/日K线不足/腾讯停机/成交额单位</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">ema10-trend-judgment <span class="tag updated">大幅更新</span></div>
+            <div class="sdesc">基于EMA10形态法+线性回归的板块/个股结构阶段判断</div>
+            <ul class="spoints">
+                <li>结构算法修正：从端点对比(e10[-1]/e10[-6])改为形态法(涨天数比70%/30%阈值)</li>
+                <li>阶段算法新增：线性回归半段对比法（加速&gt;1.8倍/滞涨&lt;0.4倍/转跌/转涨）</li>
+                <li>区间震荡位置判断定稿v4：支撑=突破点，压力=15日最高，区间底部/中段/顶部</li>
+                <li>完整版本演进记录(v1→v4)，含电池/白酒/能源金属真实数据案例</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">每日更新记录补正 <span class="tag updated">修正</span></div>
+            <div class="sdesc">ema10-trend-judgment 更新描述修正 — 最终定稿为EMA10极值位置法</div>
+            <ul class="spoints">
+                <li>原记录描述为"形态法(涨天数比70%/30%阈值)"，但最终定稿是EMA10极值位置法（前25%/后25%判趋势），非涨天数比也非形态法</li>
+                <li>该算法历经5次迭代最终定稿，最终版本是看EMA10最高最低在15日的尾部/头部位置</li>
+                <li>补充EMA10固有滞后说明：价格已见顶但EMA10可能仍在走高（2-3天滞后），属正常特性</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">a-stock-kline-keypoint-chart <span class="tag updated">更新</span></div>
+            <div class="sdesc">A股3L关键点标注K线图生成（SVG/PNG/PDF）</div>
+            <ul class="spoints">
+                <li>新增板块图支撑线（绿色虚线#4caf50，最近突破点）和压力线（红色虚线#f44336，15日最高）</li>
+                <li>保存60日K线JSON缓存供区间位置判断复用</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">daily-achievements-page <span class="tag updated">大幅更新</span></div>
+            <div class="sdesc">成果看板持久化工作日志 · PDF生成 · 历史归档 · 隔离规则</div>
+            <ul class="spoints">
+                <li>更新成果完整流程（专项PDF生成→fileDesc映射→当日不archive）</li>
+                <li>新增重点记忆章节（每个待办挂PDF/0→1描述/不碰旧PDF/模拟隔离）</li>
+                <li>新增复盘已知约定（toggleChart TR判断/📊无字/独立卡片区）</li>
+                <li>新增pitfall 10~13（图表布局/TR判断/图标统一/onclick规范）</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">daily-3l-review <span class="tag created">创建</span></div>
+            <div class="sdesc">每日复盘页面完整规范 — 4步骤 · 历史存档 · 自选买点 · 关键点图</div>
+            <ul class="spoints">
+                <li>页面4步骤结构+导航栏+历史复盘列表</li>
+                <li>JS加载逻辑（初始加载/历史跳转/图表切换/toggleChart）</li>
+                <li>行业板块TOP15数据源+领涨股图表方案</li>
+                <li>15条pitfalls（含本次调试总结的所有坑）</li>
+            </ul>
+        </div>
+
+        <div class="change-item">
+            <div class="sname">a-stock-data-sources <span class="tag updated">更新</span></div>
+            <div class="sdesc">5个稳定A股数据源分层使用方案</div>
+            <ul class="spoints">
+                <li>新增同花顺行业板块实时排名章节</li>
+                <li>新增大盘资金流向数据章节</li>
+                <li>新增IP封锁验证日志（2026-05-20实测）</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Day card: 2026-05-19 -->
+    <div class="day-card">
+        <div class="date-badge">2026-05-19</div>
+
+        <div class="change-item">
+            <div class="sname">buy_point_detection <span class="tag updated">更新</span></div>
+            <div class="sdesc">盈利模式1条件④从默认通过改为业绩自动检查</div>
+            <ul class="spoints">
+                <li>check_zhongji/check_tupo/check_profit_model1 统一前缀兼容（SH/SZ/裸代码）</li>
+                <li>find_idx 日期格式兼容（横杠/无横杠）</li>
+                <li>5/19复盘3只🏆：普冉股份、海光信息、鹏辉能源</li>
+            </ul>
+        </div>
+    </div>
+
+</div>
+
+</div>
+
+<div id="nav-bottom"></div>
+<div class="footer">3L 交易体系 · Hermes Agent · 2026</div>
+<script src="/js/config.js"></script>
     <script src="/js/nav.js"></script>
-   331|</body>
-   332|</html>
-   333|
+</body>
+</html>

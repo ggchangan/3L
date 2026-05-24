@@ -1,134 +1,131 @@
-     1|<!DOCTYPE html>
-     2|<html lang="zh-CN">
-     3|<head>
-     4|    <meta charset="utf-8">
-     5|    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-     6|    <title>3L · 交易日志</title>
-     7|
-     8|
-     9|  <link rel="stylesheet" crossorigin href="/assets/journal-B4iUP2_k.css">
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3L · 交易日志</title>
+  <link rel="stylesheet" crossorigin href="/assets/journal-B4iUP2_k.css">
   <link rel="stylesheet" crossorigin href="/assets/base-FqS57vpu.css">
 </head>
-    10|<body>
-    11|    <div id="nav-top"></div>
-    12|    <div class="header">
-    13|        <h1>✍️ 交易日志</h1>
-    14|        <div class="subtitle">按照简放模板记录每一笔交易 · 坚持写日志是快速提升的捷径</div>
-    15|    </div>
-    16|    <div class="container">
-    17|        <div class="tabs">
-    18|            <div class="tab active" onclick="switchTab('write')">✍️ 写日志</div>
-    19|            <div class="tab" onclick="switchTab('history')">📋 历史记录</div>
-    20|        </div>
-    21|
-    22|        <!-- Write Tab -->
-    23|        <div id="tab-write" class="tab-content active">
-    24|            <div class="journal-form">
-    25|                <div class="form-row">
-    26|                    <div class="form-group">
-    27|                        <label><span class="num">①</span> 日期</label>
-    28|                        <input type="date" id="j-date">
-    29|                    </div>
-    30|                    <div class="form-group">
-    31|                        <label><span class="num">②</span> 标的</label>
-    32|                        <div class="stock-search-wrap">
-    33|                            <input type="text" id="j-stock" placeholder="输入股票代码或名称搜索..." autocomplete="off">
-    34|                            <div class="stock-dropdown" id="stock-dropdown"></div>
-    35|                        </div>
-    36|                    </div>
-    37|                </div>
-    38|
-    39|                <div class="form-group">
-    40|                    <label><span class="num">③</span> 理由/逻辑</label>
-    41|                    <textarea id="j-reason" placeholder="为什么要买？是否符合体系？"></textarea>
-    42|                    <div class="hint">写下具体的买入逻辑：主线方向？趋势确认？量价配合？</div>
-    43|                </div>
-    44|
-    45|                <div class="form-row">
-    46|                    <div class="form-group">
-    47|                        <label><span class="num">④</span> 止损点</label>
-    48|                        <input type="text" id="j-stop-loss" placeholder="如: 25.50元">
-    49|                        <div class="hint">买入同时必须设好止损位</div>
-    50|                    </div>
-    51|                    <div class="form-group">
-    52|                        <label><span class="num">⑤</span> 买卖点</label>
-    53|                        <select id="j-point">
-    54|                            <option value="">请选择</option>
-    55|                            <option value="突破买点">突破买点</option>
-    56|                            <option value="中继买点">中继买点</option>
-    57|                            <option value="回踩买点">回踩买点</option>
-    58|                            <option value="反转买点">反转买点</option>
-    59|                            <option value="恐慌买点">恐慌买点</option>
-    60|                            <option value="左侧止盈">左侧止盈</option>
-    61|                            <option value="右侧止盈">右侧止盈</option>
-    62|                            <option value="止损卖出">止损卖出</option>
-    63|                            <option value="其他">其他</option>
-    64|                        </select>
-    65|                    </div>
-    66|                </div>
-    67|
-    68|                <div class="form-row">
-    69|                    <div class="form-group">
-    70|                        <label><span class="num">⑥</span> 盈亏（%）</label>
-    71|                        <input type="text" id="j-pnl" placeholder="如: +3.5 / -2.1">
-    72|                    </div>
-    73|                    <div class="form-group">
-    74|                        <label><span class="num">⑧</span> 执行评分（1-10）</label>
-    75|                        <input type="number" id="j-score" min="1" max="10" placeholder="1-10">
-    76|                        <div class="hint">是否严格执行了计划？</div>
-    77|                    </div>
-    78|                </div>
-    79|
-    80|                <div class="form-group">
-    81|                    <label><span class="num">⑨</span> 情绪记录</label>
-    82|                    <select id="j-emotion">
-    83|                        <option value="">请选择</option>
-    84|                        <option value="平静">😐 平静</option>
-    85|                        <option value="自信">😎 自信</option>
-    86|                        <option value="贪婪">🤑 贪婪</option>
-    87|                        <option value="恐惧">😰 恐惧</option>
-    88|                        <option value="愤怒">😡 愤怒</option>
-    89|                        <option value="焦虑">😖 焦虑</option>
-    90|                        <option value="犹豫">🤔 犹豫</option>
-    91|                        <option value="懊悔">😩 懊悔</option>
-    92|                        <option value="兴奋">🤩 兴奋</option>
-    93|                    </select>
-    94|                </div>
-    95|
-    96|                <div class="form-group">
-    97|                    <label><span class="num">⑩</span> 反思</label>
-    98|                    <textarea id="j-reflection" placeholder="如果重来一次，哪里可以改进？"></textarea>
-    99|                    <div class="hint">诚实面对自己的交易，这是进步的关键</div>
-   100|                </div>
-   101|
-   102|                <div class="form-actions">
-   103|                    <button class="btn btn-primary" onclick="saveJournal()">💾 保存日志</button>
-   104|                    <button class="btn btn-sm" style="background:#2a2a4e;color:#888;" onclick="clearForm()">清空</button>
-   105|                </div>
-   106|            </div>
-   107|        </div>
-   108|
-   109|        <!-- History Tab -->
-   110|        <div id="tab-history" class="tab-content">
-   111|            <div id="history-list" class="loading"><div class="spinner"></div><br>加载中...</div>
-   112|        </div>
-   113|    </div>
-   114|
-   115|    <!-- Detail Modal -->
-   116|    <div class="detail-overlay" id="detail-overlay" onclick="event.target===this && closeDetail()">
-   117|        <div class="detail-modal">
-   118|            <button class="close-btn" onclick="closeDetail()">×</button>
-   119|            <h2 id="detail-title">交易详情</h2>
-   120|            <div id="detail-body"></div>
-   121|        </div>
-   122|    </div>
-   123|
-   124|    <div id="toast" class="toast"></div>
-   125|
-   126|    <div id="nav-bottom"></div>
-   127|    <script src="/js/config.js"></script>
+<body>
+    <div id="nav-top"></div>
+    <div class="header">
+        <h1>✍️ 交易日志</h1>
+        <div class="subtitle">按照简放模板记录每一笔交易 · 坚持写日志是快速提升的捷径</div>
+    </div>
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('write')">✍️ 写日志</div>
+            <div class="tab" onclick="switchTab('history')">📋 历史记录</div>
+        </div>
+
+        <!-- Write Tab -->
+        <div id="tab-write" class="tab-content active">
+            <div class="journal-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><span class="num">①</span> 日期</label>
+                        <input type="date" id="j-date">
+                    </div>
+                    <div class="form-group">
+                        <label><span class="num">②</span> 标的</label>
+                        <div class="stock-search-wrap">
+                            <input type="text" id="j-stock" placeholder="输入股票代码或名称搜索..." autocomplete="off">
+                            <div class="stock-dropdown" id="stock-dropdown"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label><span class="num">③</span> 理由/逻辑</label>
+                    <textarea id="j-reason" placeholder="为什么要买？是否符合体系？"></textarea>
+                    <div class="hint">写下具体的买入逻辑：主线方向？趋势确认？量价配合？</div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><span class="num">④</span> 止损点</label>
+                        <input type="text" id="j-stop-loss" placeholder="如: 25.50元">
+                        <div class="hint">买入同时必须设好止损位</div>
+                    </div>
+                    <div class="form-group">
+                        <label><span class="num">⑤</span> 买卖点</label>
+                        <select id="j-point">
+                            <option value="">请选择</option>
+                            <option value="突破买点">突破买点</option>
+                            <option value="中继买点">中继买点</option>
+                            <option value="回踩买点">回踩买点</option>
+                            <option value="反转买点">反转买点</option>
+                            <option value="恐慌买点">恐慌买点</option>
+                            <option value="左侧止盈">左侧止盈</option>
+                            <option value="右侧止盈">右侧止盈</option>
+                            <option value="止损卖出">止损卖出</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><span class="num">⑥</span> 盈亏（%）</label>
+                        <input type="text" id="j-pnl" placeholder="如: +3.5 / -2.1">
+                    </div>
+                    <div class="form-group">
+                        <label><span class="num">⑧</span> 执行评分（1-10）</label>
+                        <input type="number" id="j-score" min="1" max="10" placeholder="1-10">
+                        <div class="hint">是否严格执行了计划？</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label><span class="num">⑨</span> 情绪记录</label>
+                    <select id="j-emotion">
+                        <option value="">请选择</option>
+                        <option value="平静">😐 平静</option>
+                        <option value="自信">😎 自信</option>
+                        <option value="贪婪">🤑 贪婪</option>
+                        <option value="恐惧">😰 恐惧</option>
+                        <option value="愤怒">😡 愤怒</option>
+                        <option value="焦虑">😖 焦虑</option>
+                        <option value="犹豫">🤔 犹豫</option>
+                        <option value="懊悔">😩 懊悔</option>
+                        <option value="兴奋">🤩 兴奋</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label><span class="num">⑩</span> 反思</label>
+                    <textarea id="j-reflection" placeholder="如果重来一次，哪里可以改进？"></textarea>
+                    <div class="hint">诚实面对自己的交易，这是进步的关键</div>
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="saveJournal()">💾 保存日志</button>
+                    <button class="btn btn-sm" style="background:#2a2a4e;color:#888;" onclick="clearForm()">清空</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="tab-history" class="tab-content">
+            <div id="history-list" class="loading"><div class="spinner"></div><br>加载中...</div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div class="detail-overlay" id="detail-overlay" onclick="event.target===this && closeDetail()">
+        <div class="detail-modal">
+            <button class="close-btn" onclick="closeDetail()">×</button>
+            <h2 id="detail-title">交易详情</h2>
+            <div id="detail-body"></div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <div id="nav-bottom"></div>
+    <script src="/js/config.js"></script>
     <script src="/js/nav.js"></script>
-   128|<script src="/js/pages/journal.js?v=1"></script>
-   129|</body>
-   130|</html>
-   131|
+<script src="/js/pages/journal.js?v=1"></script>
+</body>
+</html>

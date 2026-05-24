@@ -33,6 +33,21 @@ class TestNavStructure:
             path = os.path.join(WWW_DIR, p)
             assert os.path.isfile(path), f'文件不存在: {path}'
 
+    def test_dist_no_line_number_prefix(self):
+        """frontend/dist/ 下的 HTML 不应有行号前缀脏数据"""
+        dist_dir = os.path.join(os.path.dirname(WWW_DIR), 'frontend', 'dist')
+        for p in PAGES:
+            path = os.path.join(dist_dir, p)
+            if not os.path.isfile(path):
+                continue
+            with open(path, encoding='utf-8') as f:
+                content = f.read()
+            first_line = content.split('\n')[0].lstrip()
+            assert '|' not in first_line or not first_line[0].isdigit(), \
+                f'{p} frontend/dist/ 第一行有行号前缀: {first_line[:20]}'
+            assert content.strip().startswith('<!DOCTYPE html>'), \
+                f'{p} frontend/dist/ 缺少 DOCTYPE 声明'
+
     def test_all_pages_have_nav_top(self):
         """每个页面都有 #nav-top 容器"""
         for p in PAGES:

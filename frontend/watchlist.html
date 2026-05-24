@@ -1,57 +1,56 @@
-     1|<!DOCTYPE html>
-     2|<html lang="zh-CN">
-     3|<head>
-     4|    <meta charset="utf-8">
-     5|    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-     6|    <title>3L · 自选股管理</title>
-     7|    <link rel="stylesheet" href="/css/stock_card.css">
-     8|<link rel="stylesheet" href="/css/base.css?v=1">
-     9|<link rel="stylesheet" href="/css/pages/watchlist.css?v=1">
-    10|</head>
-    11|<body>
-    12|    <div id="nav-top"></div>
-    13|    <div class="header">
-    14|        <h1>📋 自选股管理</h1>
-    15|        <div class="subtitle">增删自选股 · 更换方向 · 实时保存</div>
-    16|        <div class="stats" id="stats">加载中...</div>
-    17|    </div>
-    18|    <div class="container">
-    19|        <!-- 添加区 -->
-    20|        <div class="add-section">
-    21|            <h3>➕ 添加自选股</h3>
-    22|            <div class="add-row">
-    23|                <input class="search-input" id="addSearch" placeholder="输入代码或名称搜索..." oninput="searchStock(this.value)">
-    24|                <select class="dir-select" id="addDir">
-    25|                    <option value="半导体">半导体</option>
-    26|                    <option value="算力">算力</option>
-    27|                    <option value="机器人">机器人</option>
-    28|                    <option value="新能源">新能源</option>
-    29|                    <option value="创新药">创新药</option>
-    30|                    <option value="AI应用">AI应用</option>
-    31|                    <option value="商业航天">商业航天</option>
-    32|                    <option value="资源股">资源股</option>
-    33|                </select>
-    34|                <button class="btn btn-green" onclick="addStock()">添加</button>
-    35|            </div>
-    36|            <div id="searchResults" class="search-results" style="display:none;"></div>
-    37|        </div>
-    38|
-    39|        <!-- 工具条 -->
-    40|        <div class="toolbar">
-    41|            <input class="search-input" id="filterInput" placeholder="🔍 筛选股票..." oninput="renderCards()" style="max-width:250px;">
-    42|            <div class="dir-tabs" id="dirTabs" style="flex:1;"></div>
-    43|        </div>
-    44|
-    45|        <!-- 卡片区 -->
-    46|        <div class="cards-area" id="cardsArea"><div class="loading"><div class="spinner"></div></div></div>
-    47|    </div>
-    48|    <div class="footer">自选股管理</div>
-    49|    <div id="toast" class="toast"></div>
-    50|    <div id="nav-bottom"></div>
-    51|    <script src="/js/config.js"></script>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3L · 自选股管理</title>
+    <link rel="stylesheet" href="/css/stock_card.css">
+<link rel="stylesheet" href="/css/base.css?v=1">
+<link rel="stylesheet" href="/css/pages/watchlist.css?v=1">
+</head>
+<body>
+    <div id="nav-top"></div>
+    <div class="header">
+        <h1>📋 自选股管理</h1>
+        <div class="subtitle">增删自选股 · 更换方向 · 实时保存</div>
+        <div class="stats" id="stats">加载中...</div>
+    </div>
+    <div class="container">
+        <!-- 添加区 -->
+        <div class="add-section">
+            <h3>➕ 添加自选股</h3>
+            <div class="add-row">
+                <input class="search-input" id="addSearch" placeholder="输入代码或名称搜索..." oninput="searchStock(this.value)">
+                <select class="dir-select" id="addDir">
+                    <option value="半导体">半导体</option>
+                    <option value="算力">算力</option>
+                    <option value="机器人">机器人</option>
+                    <option value="新能源">新能源</option>
+                    <option value="创新药">创新药</option>
+                    <option value="AI应用">AI应用</option>
+                    <option value="商业航天">商业航天</option>
+                    <option value="资源股">资源股</option>
+                </select>
+                <button class="btn btn-green" onclick="addStock()">添加</button>
+            </div>
+            <div id="searchResults" class="search-results" style="display:none;"></div>
+        </div>
+
+        <!-- 工具条 -->
+        <div class="toolbar">
+            <input class="search-input" id="filterInput" placeholder="🔍 筛选股票..." oninput="renderCards()" style="max-width:250px;">
+            <div class="dir-tabs" id="dirTabs" style="flex:1;"></div>
+        </div>
+
+        <!-- 卡片区 -->
+        <div class="cards-area" id="cardsArea"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <div class="footer">自选股管理</div>
+    <div id="toast" class="toast"></div>
+    <div id="nav-bottom"></div>
+    <script src="/js/config.js"></script>
     <script src="/js/nav.js?v=5"></script>
-    52|    <script src="/js/stock_card.js?v=5"></script>
-    53|<script src="/js/pages/watchlist.js?v=1"></script>
-    54|</body>
-    55|</html>
-    56|
+    <script src="/js/stock_card.js?v=5"></script>
+<script src="/js/pages/watchlist.js?v=1"></script>
+</body>
+</html>

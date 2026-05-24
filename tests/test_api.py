@@ -132,6 +132,22 @@ class TestCoreAPI:
             s = d['stocks'][0]
             must_have(s, 'code', 'name', 'price', 'change', 'gain_30d', 'sector')
 
+    def test_static_pages_serve_clean_html(self):
+        """所有前端页面通过 HTTP 访问应以 <!DOCTYPE html> 开头"""
+        pages = [
+            'index.html', 'review.html', 'monitor.html', 'macro.html',
+            'top_gainers.html', 'simulation.html', 'industry.html',
+            'watchlist.html', 'journal.html', 'tips.html',
+            'tip-detail.html', 'trend_candidates.html', 'stock_analysis.html',
+            'skills.html',
+        ]
+        for page in pages:
+            resp = urllib.request.urlopen(f'{BASE}/{page}', timeout=5)
+            html = resp.read().decode('utf-8')
+            assert html.strip().startswith('<!DOCTYPE html>'), (
+                f'{page} 不以 DOCTYPE 开头, 前50字符: {html[:50]}'
+            )
+
 
 # =====================================================
 # 监测页面 API
