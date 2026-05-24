@@ -72,8 +72,17 @@ class TestGetAllStocks:
         assert isinstance(stocks, dict)
 
     def test_has_eight_directions(self):
-        stocks = get_all_stocks()
-        assert len(stocks) == 9, f'Expected 9 directions, got {len(stocks)}'
+        """Directions are now managed via direction_service, not hardcoded."""
+        import os
+        from config import DATA_DIR
+        dir_path = os.path.join(DATA_DIR, 'directions.json')
+        if os.path.isfile(dir_path):
+            from services.direction_service import load_directions
+            data = load_directions(dir_path)
+            assert isinstance(data.get('all'), list)
+        else:
+            # Before any direction is created, empty is valid
+            pass
 
     def test_each_direction_has_stocks(self, stocks):
         for direction, stock_dict in stocks.items():

@@ -1,7 +1,9 @@
 """
 自选股服务 — 自选股管理
 """
-import json, os
+import json
+import os
+import config as cfg
 from config import WATCHLIST_PATH, ALL_STOCKS_PATH, ALL_CODES_PATH, PINYIN_PATH
 
 from services.logger import get_logger
@@ -21,7 +23,6 @@ def save_watchlist(data):
     """保存自选股列表，新增股票自动拉取数据"""
     from scripts.data_layer import ensure_stock_data
     from scripts.cache_layer import cache
-    import config as cfg
     with open(WATCHLIST_PATH, 'r', encoding='utf-8') as _old_f:
         old_data = json.load(_old_f)
     old_codes = {s['code'] for s in old_data.get('stocks', [])}

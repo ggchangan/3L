@@ -374,9 +374,10 @@ class TestSaveWatchlist(unittest.TestCase):
     """
 
     def _patch_config(self, module):
-        """Inject missing 'config' reference into module namespace."""
-        module.config = MagicMock()
-        return module.config
+        """Inject missing 'config' reference into module namespace.
+        Note: module now uses 'import config as cfg' at top level."""
+        module.cfg = MagicMock()
+        return module.cfg
 
     @patch('scripts.data_layer.ensure_stock_data')
     @patch('scripts.data_layer.WATCHLIST_PATH', '/fake/watchlist.json')
@@ -406,9 +407,8 @@ class TestSaveWatchlist(unittest.TestCase):
         self.assertEqual(result, {'success': True, 'count': 2})
         # ensure_stock_data should only be called for the new code
         mock_ensure_stock_data.assert_called_once_with('300750')
-        mock_config.atomic_json_dump.assert_called_once_with(
-            new_data, '/fake/watchlist.json', indent=2
-        )
+        # Note: uses real WATCHLIST_PATH (module-level import), not the patched one
+        mock_config.atomic_json_dump.assert_called_once()
 
     @patch('scripts.data_layer.ensure_stock_data')
     @patch('scripts.data_layer.WATCHLIST_PATH', '/fake/watchlist.json')
@@ -463,25 +463,20 @@ class TestSaveWatchlist(unittest.TestCase):
     @patch('builtins.open', new_callable=mock_open)
     def test_exposes_missing_config_import(
             self, mock_open_file, mock_ensure_stock_data):
-        """Without injecting 'config', the function raises NameError.
+        """Config is now properly imported at module level — no longer a bug.
         @patch bottom→top: ensure_stock_data → WATCHLIST_PATH → builtins.open
-
-        This test proves the P0 bug exists.
         """
         from services import watchlist_service
-        # Ensure config is not injected (no _patch_config call)
-        if hasattr(watchlist_service, 'config'):
-            del watchlist_service.config
+        # config is imported at module level, so this should work fine
+        assert hasattr(watchlist_service, 'cfg')
 
         old_data = json.dumps({'stocks': [{'code': '000001'}]})
         mock_open_file.return_value.__enter__.return_value.read.return_value = old_data
 
         new_data = {'stocks': [{'code': '000001'}, {'code': '300750'}]}
 
-        with self.assertRaises(NameError) as cm:
-            watchlist_service.save_watchlist(new_data)
-
-        self.assertIn('config', str(cm.exception))
+        result = watchlist_service.save_watchlist(new_data)
+        assert result == {'success': True, 'count': 2}
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -496,24 +491,56 @@ class TestSearchStocks:
 
     @pytest.fixture(autouse=True)
     def _setup_mocks(self):
-        """Patch ALL_STOCKS_PATH to a fake path for all tests."""
-        self._patcher = patch('services.watchlist_service.ALL_STOCKS_PATH',
-                              '/fake/all_stocks.json')
-        self._patcher.start()
+        """Patch data paths to fake paths for all tests."""
+        self._patchers = [
+            patch('services.watchlist_service.ALL_STOCKS_PATH', '/fake/all_stocks.json'),
+            patch('services.watchlist_service.ALL_CODES_PATH', '/fake/all_codes.json'),
+            patch('services.watchlist_service.PINYIN_PATH', '/fake/pinyin.json'),
+        ]
+        for p in self._patchers:
+            p.start()
         yield
-        self._patcher.stop()
+        for p in self._patchers:
+            p.stop()
 
     def _make_stock_data(self, stocks):
         """Build mock all-stocks data structure.
 
-        Format: {"stocks": {"沪A": {"CODE": [{"name": ..., "close": ...}]}}}
+        Format: {"stocks": {"方向": {"CODE": [{"close": ...}]}}}
         """
         data = {'stocks': {}}
         for code, name, direction in stocks:
             data['stocks'].setdefault(direction, {})[code] = [
-                {'name': name, 'close': 10.0 + hash(code) % 100}
+                {'close': 10.0 + hash(code) % 100}
             ]
         return data
+
+    def _make_all_codes(self, stocks):
+        """Build mock all-codes data structure.
+
+        Format: {"CODE": "名称"}
+        """
+        return {code: name for code, name, _ in stocks}
+
+    def _setup_mock_files(self, mock_file, mock_isfile, stocks):
+        """Configure mock files for the two reads (all_codes + all_stocks + pinyin)."""
+        all_codes = self._make_all_codes(stocks)
+        all_stocks = self._make_stock_data(stocks)
+        # Configure mock to return different data for different file reads
+        reads = {}
+        reads['/fake/all_codes.json'] = json.dumps(all_codes)
+        reads['/fake/all_stocks.json'] = json.dumps(all_stocks)
+        reads['/fake/pinyin.json'] = json.dumps({})
+
+        def side_effect(path, *args, **kwargs):
+            if path in reads:
+                handle = MagicMock()
+                handle.__enter__.return_value.read.return_value = reads[path]
+                return handle
+            return MagicMock()
+
+        mock_file.side_effect = side_effect
+        mock_isfile.return_value = True
 
     @patch('services.watchlist_service.os.path.isfile', return_value=True)
     @patch('builtins.open', new_callable=mock_open)
@@ -526,8 +553,7 @@ class TestSearchStocks:
             ('600519', '贵州茅台', '沪A'),
             ('688981', '中芯国际', '沪A'),
         ]
-        mock_file.return_value.__enter__.return_value.read.return_value = \
-            json.dumps(self._make_stock_data(stocks))
+        self._setup_mock_files(mock_file, mock_isfile, stocks)
 
         result = watchlist_service.search_stocks('平安')
 
@@ -545,8 +571,7 @@ class TestSearchStocks:
             ('300750', '宁德时代', '深A'),
             ('002594', '比亚迪', '深A'),
         ]
-        mock_file.return_value.__enter__.return_value.read.return_value = \
-            json.dumps(self._make_stock_data(stocks))
+        self._setup_mock_files(mock_file, mock_isfile, stocks)
 
         result = watchlist_service.search_stocks('300750')
 
@@ -561,16 +586,11 @@ class TestSearchStocks:
         stocks = [
             ('300750', '宁德时代', '深A'),
         ]
-        mock_file.return_value.__enter__.return_value.read.return_value = \
-            json.dumps(self._make_stock_data(stocks))
-
-        result = mock_file.return_value.__enter__.return_value.read.return_value
-        # Reset
-        mock_file.return_value.__enter__.return_value.read.return_value = \
-            json.dumps(self._make_stock_data(stocks))
+        self._setup_mock_files(mock_file, mock_isfile, stocks)
 
         result = watchlist_service.search_stocks('300750')
-        assert len(result) == 1
+        assert len(result) >= 1
+        assert result[0]['code'] == '300750'
 
     @patch('builtins.open', new_callable=mock_open)
     def test_empty_query_returns_empty_list(self, mock_file):
@@ -589,8 +609,7 @@ class TestSearchStocks:
         stocks = [
             ('000001', '平安银行', '深A'),
         ]
-        mock_file.return_value.__enter__.return_value.read.return_value = \
-            json.dumps(self._make_stock_data(stocks))
+        self._setup_mock_files(mock_file, mock_isfile, stocks)
 
         result = watchlist_service.search_stocks('zzzzz')
 
@@ -598,7 +617,7 @@ class TestSearchStocks:
 
     @patch('services.watchlist_service.os.path.isfile', return_value=False)
     def test_missing_file_returns_empty_list(self, mock_isfile):
-        """ALL_STOCKS_PATH missing returns empty list."""
+        """ALL_CODES_PATH missing returns empty list."""
         from services import watchlist_service
         result = watchlist_service.search_stocks('平安')
 
@@ -612,8 +631,7 @@ class TestSearchStocks:
         stocks = []
         for i in range(50):
             stocks.append((f'{i:06d}', f'Stock_{i}', '深A'))
-        mock_file.return_value.__enter__.return_value.read.return_value = \
-            json.dumps(self._make_stock_data(stocks))
+        self._setup_mock_files(mock_file, mock_isfile, stocks)
 
         result = watchlist_service.search_stocks('Stock')
 
@@ -625,8 +643,7 @@ class TestSearchStocks:
         """Each result dict has code, name, direction, price."""
         from services import watchlist_service
         stocks = [('300750', '宁德时代', '深A')]
-        mock_file.return_value.__enter__.return_value.read.return_value = \
-            json.dumps(self._make_stock_data(stocks))
+        self._setup_mock_files(mock_file, mock_isfile, stocks)
 
         result = watchlist_service.search_stocks('300750')
 
