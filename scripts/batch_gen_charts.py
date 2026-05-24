@@ -5,6 +5,7 @@
 """
 import json, os, sys, math
 from collections import OrderedDict
+from datetime import date
 
 # 从 config 读取路径（支持环境变量覆盖）
 import config
@@ -100,13 +101,21 @@ def gen_svg(name, code, klines, kps, output_path):
         sv.append(f'<text x="{pl-4}" y="{yp+3}" text-anchor="end" font-family="sans-serif" font-size="8" fill="#666666">{y_val:.1f}</text>')
     sv.append(f'<line x1="{pl}" y1="{bv}" x2="{W-pr}" y2="{bv}" stroke="#2a2a4e" stroke-width="0.5"/>')
 
+    # ── 判断最后一根K线是否是盘中（日期=今天） ──
+    today_str = date.today().strftime('%Y-%m-%d')
+    last_date = klines[-1].get('date', '')
+    is_intraday = last_date == today_str
+
     for i in range(n):
         x = px(i) - cw * 0.35
         w = max(cw * 0.55, 1)
         vh = volumes[i] / vm * 40
         is_up = closes[i] >= opens[i]
         vc = '#ff4444' if is_up else '#44aa44'
-        sv.append(f'<rect x="{x}" y="{bv-vh}" width="{w}" height="{max(vh, 0.5)}" fill="{vc}" opacity="0.35"/>')
+        is_last = (i == n - 1) and is_intraday
+        vdash = ' stroke-dasharray="3,2"' if is_last else ''
+        vopa = '0.25' if is_last else '0.35'
+        sv.append(f'<rect x="{x}" y="{bv-vh}" width="{w}" height="{max(vh, 0.5)}" fill="{vc}" opacity="{vopa}"{vdash}/>')
 
     for ema_vals, color in [(ema5, '#ffd700'), (ema10, '#ff6b6b'), (ema20, '#4ecdc4')]:
         pts = []
@@ -124,9 +133,17 @@ def gen_svg(name, code, klines, kps, output_path):
         yo, yc = py(op), py(cl)
         is_up = cl >= op
         color = '#ff4444' if is_up else '#44aa44'
-        sv.append(f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" stroke="{color}" stroke-width="0.5" opacity="0.6"/>')
+        is_last = (i == n - 1) and is_intraday
+        dash = ' stroke-dasharray="4,3"' if is_last else ''
+        opa = '0.3' if is_last else '0.6'
+        bopa = '0.4' if is_last else '0.8'
+        sv.append(f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" stroke="{color}" stroke-width="0.5" opacity="{opa}"{dash}/>')
         bt, bb = min(yo, yc), max(yo, yc)
-        sv.append(f'<rect x="{x-w/2}" y="{bt}" width="{w}" height="{max(bb-bt, 0.5)}" fill="{color}" opacity="0.8"/>')
+        sv.append(f'<rect x="{x-w/2}" y="{bt}" width="{w}" height="{max(bb-bt, 0.5)}" fill="{color}" opacity="{bopa}"{dash} rx="1"/>')
+    # 盘中标记
+    if is_intraday:
+        lx = px(n - 1)
+        sv.append(f'<text x="{lx + 20}" y="{py(closes[-1]) - 6}" font-family="sans-serif" font-size="9" fill="#ffd700" opacity="0.8">🕐 盘中</text>')
 
     # ── 判断结构（直接用ema_utils，与复盘页一致） ──
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'trading', 'ema10-trend-judgment', 'scripts'))

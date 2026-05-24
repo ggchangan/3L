@@ -11,6 +11,7 @@
 - 明确标注买入区/持有区/警戒区范围
 """
 import json, os, sys, math
+from datetime import date
 
 import config
 
@@ -132,6 +133,10 @@ def gen_trend_svg(name, code, klines, output_path, trend_bias=None):
         sv.append(f'<line x1="{pl}" y1="{yp}" x2="{W-pr}" y2="{yp}" stroke="#2a2a4e" stroke-width="0.5"/>')
         sv.append(f'<text x="{pl-4}" y="{yp+3}" text-anchor="end" font-family="sans-serif" font-size="8" fill="#666666">{y_val:.1f}</text>')
 
+    # ── 判断盘中 ──
+    today_str = date.today().strftime('%Y-%m-%d')
+    is_intraday = klines[-1].get('date', '') == today_str
+
     # 成交量柱
     for i in range(n):
         x = px(i) - cw * 0.35
@@ -139,7 +144,9 @@ def gen_trend_svg(name, code, klines, output_path, trend_bias=None):
         vh = volumes[i] / vm * 35
         is_up = closes[i] >= opens_[i]
         vc = '#ff4444' if is_up else '#44aa44'
-        sv.append(f'<rect x="{x}" y="{bv-vh}" width="{w}" height="{max(vh, 0.5)}" fill="{vc}" opacity="0.35"/>')
+        is_last = (i == n - 1) and is_intraday
+        vdash = ' stroke-dasharray="3,2"' if is_last else ''
+        sv.append(f'<rect x="{x}" y="{bv-vh}" width="{w}" height="{max(vh, 0.5)}" fill="{vc}" opacity="{"0.25" if is_last else "0.35"}"{vdash}/>')
 
     # EMA均线
     for ema_vals, color in [(ema5, '#ffd700'), (ema10, '#ff6b6b'), (ema20, '#4ecdc4')]:
@@ -159,9 +166,16 @@ def gen_trend_svg(name, code, klines, output_path, trend_bias=None):
         yo, yc = py(op), py(cl)
         is_up = cl >= op
         color = '#ff4444' if is_up else '#44aa44'
-        sv.append(f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" stroke="{color}" stroke-width="0.5" opacity="0.6"/>')
+        is_last = (i == n - 1) and is_intraday
+        dash = ' stroke-dasharray="4,3"' if is_last else ''
+        opa = '0.3' if is_last else '0.6'
+        bopa = '0.4' if is_last else '0.8'
+        sv.append(f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" stroke="{color}" stroke-width="0.5" opacity="{opa}"{dash}/>')
         bt, bb = min(yo, yc), max(yo, yc)
-        sv.append(f'<rect x="{x-w/2}" y="{bt}" width="{w}" height="{max(bb-bt, 0.5)}" fill="{color}" opacity="0.8"/>')
+        sv.append(f'<rect x="{x-w/2}" y="{bt}" width="{w}" height="{max(bb-bt, 0.5)}" fill="{color}" opacity="{bopa}"{dash} rx="1"/>')
+    # 盘中标记
+    if is_intraday:
+        sv.append(f'<text x="{px(n-1) + 20}" y="{py(closes[-1]) - 6}" font-family="sans-serif" font-size="9" fill="#ffd700" opacity="0.8">🕐 盘中</text>')
 
     # ── 买点标记（类似3L关键点图风格） ──
     # 策略：找BIAS5从>2%下降到<2%的位置（进入买入区），或者从负值回升到正值

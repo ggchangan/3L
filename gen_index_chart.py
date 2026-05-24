@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """生成中证全指(000985)关键点K线图 - 使用正确的数据源"""
 import json, os, math
+from datetime import date
 import akshare as ak
 
 WWW_DIR = os.environ.get('WWW_DIR', '/home/ubuntu/3l-server')
@@ -103,13 +104,20 @@ def gen_svg(data, kps, output_path):
     
     sv.append(f'<line x1="{pl}" y1="{bv}" x2="{W-pr}" y2="{bv}" stroke="#2a2a4e" stroke-width="0.5"/>')
     
+    # ── 判断盘中 ──
+    today_str = date.today().strftime('%Y-%m-%d')
+    is_intraday = data[-1].get('day', '') == today_str
+
     for i in range(n):
         x = px(i) - cw * 0.35
         w = max(cw * 0.6, 1)
         vh = volumes[i] / vm * 50
         is_up = closes[i] >= opens[i]
         vc = '#ff4444' if is_up else '#44aa44'
-        sv.append(f'<rect x="{x}" y="{bv-vh}" width="{w}" height="{max(vh, 0.5)}" fill="{vc}" opacity="0.35"/>')
+        is_last = (i == n - 1) and is_intraday
+        vdash = ' stroke-dasharray="3,2"' if is_last else ''
+        vopa = '0.25' if is_last else '0.35'
+        sv.append(f'<rect x="{x}" y="{bv-vh}" width="{w}" height="{max(vh, 0.5)}" fill="{vc}" opacity="{vopa}"{vdash}/>')
     
     for ema_vals, color in [(ema5, '#ffd700'), (ema10, '#ff6b6b'), (ema20, '#4ecdc4')]:
         pts = []
@@ -127,9 +135,16 @@ def gen_svg(data, kps, output_path):
         yo, yc = py(op), py(cl)
         is_up = cl >= op
         color = '#ff4444' if is_up else '#44aa44'
-        sv.append(f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" stroke="{color}" stroke-width="0.5" opacity="0.6"/>')
+        is_last = (i == n - 1) and is_intraday
+        dash = ' stroke-dasharray="4,3"' if is_last else ''
+        opa = '0.3' if is_last else '0.6'
+        bopa = '0.4' if is_last else '0.8'
+        sv.append(f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" stroke="{color}" stroke-width="0.5" opacity="{opa}"{dash}/>')
         bt, bb = min(yo, yc), max(yo, yc)
-        sv.append(f'<rect x="{x-w/2}" y="{bt}" width="{w}" height="{max(bb-bt, 0.5)}" fill="{color}" opacity="0.8"/>')
+        sv.append(f'<rect x="{x-w/2}" y="{bt}" width="{w}" height="{max(bb-bt, 0.5)}" fill="{color}" opacity="{bopa}"{dash} rx="1"/>')
+    # 盘中标记
+    if is_intraday:
+        sv.append(f'<text x="{px(n-1) + 20}" y="{py(closes[-1]) - 6}" font-family="sans-serif" font-size="9" fill="#ffd700" opacity="0.8">🕐 盘中</text>')
     
     sz = 5
     for kp in kps:
