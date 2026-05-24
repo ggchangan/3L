@@ -237,6 +237,25 @@ class Handler(SimpleHTTPRequestHandler):
                 self._serve_file(fp, ct, no_cache=True)
                 return
 
+        # --- 后端生成的公开文件（/pub/ → data/public/）---
+        if path.startswith('/pub/'):
+            rel = urllib.parse.unquote(path[len('/pub/'):]).lstrip('/')
+            fp = os.path.join(config.PUBLIC_DIR, rel)
+            if os.path.isdir(fp):
+                # 目录 → 返回 JSON 文件列表
+                try:
+                    files = sorted(f for f in os.listdir(fp) if not f.startswith('.'))
+                    self.send_json({'files': files})
+                except Exception as e:
+                    self.send_json({'files': [], 'error': str(e)})
+                return
+            if os.path.isfile(fp):
+                ct, _ = mimetypes.guess_type(fp)
+                self._serve_file(fp, ct)
+                return
+            self.send_error(404)
+            return
+
         super().do_GET()
 
     def _authenticate(self):

@@ -69,9 +69,16 @@ MANUAL_TREND_PATH = os.path.join(PRIVATE_DIR, 'manual_trend_stocks.json')
 BT_RESULTS_PATH = os.path.join(WWW_DIR, 'files', 'buy_signal_backtest_results.json')
 
 # =====================================================
+# 公开访问的后端生成文件（统一由 /pub/ 路由服务）
+# =====================================================
+PUBLIC_DIR = os.path.join(WWW_DIR, 'data', 'public')
+CHARTS_DIR = os.path.join(PUBLIC_DIR, 'charts')
+FILES_DIR = os.path.join(PUBLIC_DIR, 'files')
+
+# =====================================================
 # 复盘图表
 # =====================================================
-REVIEW_CHARTS_DIR = os.path.join(WWW_DIR, 'review_charts')
+REVIEW_CHARTS_DIR = CHARTS_DIR
 REVIEW_DATA_PATH = os.path.join(PRIVATE_DIR, 'review_data.json')
 
 # =====================================================

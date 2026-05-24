@@ -174,7 +174,7 @@ for i,(clr,lbl) in enumerate(legends):
 sv.append('</svg>')
 svg_content = '\n'.join(sv)
 
-OUT = '/home/ubuntu/3l-server/review_charts/德明利_关键点图.svg'
+OUT = '/home/ubuntu/3l-server/data/public/charts/德明利_关键点图.svg'
 with open(OUT, 'w') as f:
     f.write(svg_content)
 print(f"已生成: {OUT}")

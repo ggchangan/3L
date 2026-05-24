@@ -181,7 +181,7 @@ def run_backtest(code_q, days=60, stocks=None, market_position='波中', main_li
         'name': stock_name,
         'direction': stock_direction,
         'signals': all_signals,
-        'chart_svg': f'/review_charts/bt_{resolved_code}.svg',
+        'chart_svg': f'/pub/charts/bt_{resolved_code}.svg',
         'has_chart': has_chart,
         **combined_stats,
     }

@@ -95,8 +95,8 @@ def run_daily_review():
     run_script('Step3a 中证全指图',
         [sys.executable, os.path.join(WWW_DIR, 'gen_index_chart.py')])
     try:
-        shutil.copy2(os.path.join(WWW_DIR, 'review_charts', 'sz000985.svg'),
-                     os.path.join(WWW_DIR, 'review_charts', 'zzqz_v2.svg'))
+        shutil.copy2(os.path.join(config.CHARTS_DIR, 'sz000985.svg'),
+                     os.path.join(config.CHARTS_DIR, 'zzqz_v2.svg'))
         logs.append(f'  ✅SVG已复制')
     except Exception as e:
         logs.append(f'  ⚠️SVG复制失败: {e}')

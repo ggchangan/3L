@@ -28,28 +28,20 @@
         '德明利_R4量比1.1报告_20260524.pdf': '德明利R4回测—量比>1.1/7笔交易/K线图/每笔明细/累计收益+61.40%',
         };
 
-        // Load files from /files/ directory listing
-        fetch('/files/?v=' + Date.now())
-            .then(r => r.text())
-            .then(html => {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const links = doc.querySelectorAll('a');
+        // Load files from /pub/files/ directory listing
+        fetch('/pub/files/?v=' + Date.now())
+            .then(r => r.json())
+            .then(data => {
                 const pdfs = [];
                 const otherFiles = [];
-                
-                links.forEach(a => {
-                    const href = a.getAttribute('href');
-                    if (href && !href.endsWith('/')) {
-                        const name = decodeURIComponent(href);
-                        if (name.endsWith('.pdf')) {
-                            pdfs.push({ name, url: '/files/' + href });
-                        } else {
-                            otherFiles.push({ name, url: '/files/' + href });
-                        }
+                for (const href of (data.files || [])) {
+                    const name = decodeURIComponent(href);
+                    if (name.endsWith('.pdf')) {
+                        pdfs.push({ name, url: '/pub/files/' + href });
+                    } else {
+                        otherFiles.push({ name, url: '/pub/files/' + href });
                     }
-                });
-
+                }
                 // Sort: newest first (by name which has date prefix)
                 pdfs.sort().reverse();
 

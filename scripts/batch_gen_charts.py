@@ -7,12 +7,14 @@ import json, os, sys, math
 from collections import OrderedDict
 
 # 从 config 读取路径（支持环境变量覆盖）
-WWW_DIR = os.environ.get('WWW_DIR', '/home/ubuntu/3l-server')
+import config
+
+WWW_DIR = config.WWW_DIR
 DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
 DATA_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
 SCAN_PATH = os.path.join(DATA_DIR, 'latest_scan_result.json')
 HOLDINGS_PATH = os.path.join(WWW_DIR, 'private', 'holdings.json')
-OUT_DIR = os.path.join(WWW_DIR, 'review_charts')
+OUT_DIR = config.CHARTS_DIR
 
 # ── EMA 计算 ──
 def ema(data, period):

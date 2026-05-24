@@ -180,7 +180,7 @@ for i,(clr,lbl) in enumerate(legends):
 
 sv.append('</svg>')
 
-OUT = '/home/ubuntu/3l-server/review_charts/德明利_交易记录.svg'
+OUT = '/home/ubuntu/3l-server/data/public/charts/德明利_交易记录.svg'
 with open(OUT, 'w') as f: f.write('\n'.join(sv))
 png_out = OUT.replace('.svg', '.png')
 subprocess.run(['rsvg-convert', '-w', '1600', '-f', 'png', OUT, '-o', png_out], check=True)

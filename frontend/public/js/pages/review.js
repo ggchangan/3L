@@ -29,7 +29,7 @@
                     document.getElementById('indexChartObj').data = data.charts.index_chart;
                     document.getElementById('fundFlowImg').src = data.charts.fund_flow;
                 } else {
-                    document.getElementById('indexChartObj').data = '/review_charts/zzqz_v2.svg';
+                    document.getElementById('indexChartObj').data = '/pub/charts/zzqz_v2.svg';
                     document.getElementById('fundFlowImg').src = '/charts/fund_flow_chart.png';
                 }
             })

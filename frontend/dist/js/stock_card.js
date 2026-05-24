@@ -139,7 +139,7 @@ function signalStockCard(s, idx) {
             </div>
             <div style="margin-top:2px;font-size:11px;color:${conclusionColor};padding:2px 0;">💡 ${conclusion}</div>
             <div id="${chartId}" class="chart-container" style="display:none;margin-top:6px;">
-                <object data="/review_charts/${chartPrefix}${s.code}.svg?t=${Date.now()}" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;"></object>
+                <object data="/pub/charts/${chartPrefix}${s.code}.svg?t=${Date.now()}" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;"></object>
             </div>
         </div>
     `;

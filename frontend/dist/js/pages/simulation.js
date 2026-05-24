@@ -4,7 +4,7 @@
         const WEEK_PNLS = { w1: '+7.68%', w2: '-0.88%', w3: '-2.10%', w4: '+3.34%' };
         const WEEK_TRADES = { w1: 13, w2: 27, w3: 28, w4: 16 };
         const WEEK_MAIN = { w1: '半导体', w2: '创新药→算力', w3: '商业航天→算力', w4: '半导体' };
-        const WEEK_REPORT = { w1: '/files/模拟交易v33_第1周报告.pdf', w2: '/files/模拟交易v33_第2周报告.pdf', w3: '/files/模拟交易v33_第3周报告.pdf', w4: '/files/模拟交易v33_第4周报告.pdf' };
+        const WEEK_REPORT = { w1: '/pub/files/模拟交易v33_第1周报告.pdf', w2: '/pub/files/模拟交易v33_第2周报告.pdf', w3: '/pub/files/模拟交易v33_第3周报告.pdf', w4: '/pub/files/模拟交易v33_第4周报告.pdf' };
 
         // 交易数据（从PKL中提取的缩略版）
         const TRADE_DATA = {

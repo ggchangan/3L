@@ -4,7 +4,7 @@ import json, os, math
 import akshare as ak
 
 WWW_DIR = os.environ.get('WWW_DIR', '/home/ubuntu/3l-server')
-REVIEW_CHARTS_DIR = os.path.join(WWW_DIR, 'review_charts')
+REVIEW_CHARTS_DIR = os.path.join(WWW_DIR, 'data', 'public', 'charts')
 
 def get_kline():
     df = ak.stock_zh_index_daily_tx(symbol='sh000985')

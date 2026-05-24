@@ -997,10 +997,10 @@ def generate_daily_review(date_str=None):
     # 归档图表（按日期目录隔离，名称不变）
     try:
         import shutil
-        chart_archive_dir = os.path.join(WWW_DIR, 'review_charts', 'archive', date_str)
+        chart_archive_dir = os.path.join(config.CHARTS_DIR, 'archive', date_str)
         os.makedirs(chart_archive_dir, exist_ok=True)
         src_charts = [
-            (os.path.join(WWW_DIR, 'review_charts', 'zzqz_v2.svg'), 'zzqz_v2.svg'),
+            (os.path.join(config.CHARTS_DIR, 'zzqz_v2.svg'), 'zzqz_v2.svg'),
             (os.path.join(WWW_DIR, 'charts', 'fund_flow_chart.png'), 'fund_flow_chart.png'),
         ]
         for src, basename in src_charts:
@@ -1010,8 +1010,8 @@ def generate_daily_review(date_str=None):
                 print(f"[3L复盘] 📊 图表已归档: archive/{date_str}/{basename}")
         # 在存档JSON中记录图表路径（供历史前端加载）
         review['charts'] = {
-            'index_chart': f'/review_charts/archive/{date_str}/zzqz_v2.svg',
-            'fund_flow': f'/review_charts/archive/{date_str}/fund_flow_chart.png',
+            'index_chart': f'/pub/charts/archive/{date_str}/zzqz_v2.svg',
+            'fund_flow': f'/pub/charts/archive/{date_str}/fund_flow_chart.png',
         }
         # 重新保存存档（更新chart路径）
         save_json(os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'), review)

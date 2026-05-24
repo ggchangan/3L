@@ -12,8 +12,10 @@
 """
 import json, os, sys, math
 
+import config
+
 DATA_PATH = "/home/ubuntu/data/3l/all_stocks_60d.json"
-OUT_DIR = "/home/ubuntu/3l-server/review_charts"
+OUT_DIR = config.CHARTS_DIR
 
 
 def ema(data, period):

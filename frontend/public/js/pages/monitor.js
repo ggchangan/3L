@@ -135,7 +135,7 @@ function toggleIndexChart() {
     if (panel.style.display === 'none') {
         panel.style.display = 'block';
         // 防缓存：每次展开加时间戳
-        obj.data = '/review_charts/zzqz_v2.svg?t=' + Date.now();
+        obj.data = '/pub/charts/zzqz_v2.svg?t=' + Date.now();
     } else {
         panel.style.display = 'none';
     }
@@ -387,7 +387,7 @@ function toggleMChart(id, code) {
     const obj = div.querySelector('object');
     if (div.style.display === 'none') {
         div.style.display = 'block';
-        obj.data = '/review_charts/' + code + '.svg?t=' + Date.now();
+        obj.data = '/pub/charts/' + code + '.svg?t=' + Date.now();
     } else {
         div.style.display = 'none';
         // 不清空data，保持缓存
