@@ -11,11 +11,15 @@ from scripts.trend_trading import decide_system_with_detail, simulate_trend_trad
 
 
 
-def run_backtest(code_q, days=60, stocks=None):
+def run_backtest(code_q, days=60, stocks=None, market_position='波中', main_lines=None):
     """对指定股票代码/名称执行回测，返回结果字典。
     
+    market_position: 大盘位置（波谷/波中/波峰），影响买点阈值
+    main_lines: 主线方向集合，影响评分系数
     stocks 可选参数，用于测试注入；生产不传走缓存。
     """
+    if main_lines is None:
+        main_lines = {'半导体'}
 
     # 搜索股票（精确code → 模糊code → 模糊名称 → 全市场）
     if stocks is None:
@@ -50,7 +54,7 @@ def run_backtest(code_q, days=60, stocks=None):
             df = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
             bt = detect_buy_point(
                 resolved_code, df, sub,
-                market_position='波中', main_lines={'半导体'},
+                market_position=market_position, main_lines=main_lines,
             )
             if bt:
                 entry = bt['close']

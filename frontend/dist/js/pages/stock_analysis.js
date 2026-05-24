@@ -1,5 +1,7 @@
 // 图表切换（signalStockCard调用）— toggleChart已移至stock_card.js
 
+let lastCode = '';
+
 async function search() {
     const q = document.getElementById('stockInput').value.trim();
     if (!q) return;
@@ -10,7 +12,7 @@ async function search() {
     area.innerHTML = '<div class="loading"><div class="spinner"></div>正在分析...</div>';
     
     try {
-        const res = await fetch(`/api/stock-analysis?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`http://43.136.177.133:8080/api/stock-analysis?q=${encodeURIComponent(q)}`);
         const data = await res.json();
         
         if (data.error) {
@@ -18,6 +20,7 @@ async function search() {
             return;
         }
         
+        lastCode = data.code;
         area.innerHTML = renderResult(data);
     } catch (e) {
         area.innerHTML = `<div class="error-box">❌ 请求失败: ${e.message}</div>`;
@@ -44,12 +47,12 @@ function renderResult(d) {
 }
 
 async function runBacktest() {
-    const q = document.getElementById('stockInput').value.trim();
-    if (!q) return;
+    const code = lastCode || document.getElementById('stockInput').value.trim();
+    if (!code) return;
     const area = document.getElementById('btResultArea');
     area.innerHTML = '<div class="loading"><div class="spinner"></div>正在跑回测...</div>';
     try {
-        const res = await fetch(`/api/stock-backtest?code=${encodeURIComponent(q)}&days=60`);
+        const res = await fetch(`http://43.136.177.133:8080/api/stock-backtest?code=${encodeURIComponent(code)}&days=60`);
         const d = await res.json();
         if (d.error) { area.innerHTML = `<div class="error-box">❌ ${d.error}</div>`; return; }
         let tableRows = '';

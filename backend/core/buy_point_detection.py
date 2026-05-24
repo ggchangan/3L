@@ -915,15 +915,19 @@ def gen_trade_chart_svg(kls, signals, stock_name, code, chart_abs):
         vm = max(vo) if max(vo) > 0 else 1
 
         sv = []
-        sv.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780">')
+        sv.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">')
         sv.append('<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1a2e"/><stop offset="100%" stop-color="#16213e"/></linearGradient><filter id="sh"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.3"/></filter></defs>')
-        sv.append(f'<rect width="1200" height="780" fill="url(#bg)"/>')
+        sv.append(f'<rect width="1200" height="900" fill="url(#bg)"/>')
         sv.append(f'<text x="600" y="26" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#fff" font-weight="bold">{stock_name}({code}) 交易 — {len(signals)}笔信号</text>')
+        # ── Layout constants ──
         pl, pr, pt, pb = 70, 40, 50, 120
-        cw = (1200 - pl - pr) / n
-        bv = 780 - pb - 50
+        ec_top = 690          # equity curve panel top
+        pnl_top = 800         # P&L distribution panel top
+        svg_w, svg_h = 1200, 900
+        cw = (svg_w - pl - pr) / n
+        bv = svg_h - pb - 50  # volume bars baseline
         px = lambda i: pl + i * cw + cw / 2
-        py = lambda v: pt + (mx - v) / rg * (780 - pt - pb - 50)
+        py = lambda v: pt + (mx - v) / rg * (svg_h - pt - pb - 50 - 120)
         for i in range(5):
             yv = mx - i * rg / 4
             yp = py(yv)
@@ -985,6 +989,64 @@ def gen_trade_chart_svg(kls, signals, stock_name, code, chart_abs):
             xl = pl + i * 140
             sv.append(f'<rect x="{xl}" y="{bv + 8}" width="10" height="10" fill="{clr}" opacity="0.85" rx="1"/>')
             sv.append(f'<text x="{xl + 14}" y="{bv + 17}" font-family="sans-serif" font-size="10" fill="#888">{lbl}</text>')
+
+        # ── 资金曲线面板 (equity curve) ──
+        sv.append(f'<text x="{pl}" y="{ec_top + 14}" font-family="sans-serif" font-size="12" fill="#aaa" font-weight="bold">📈 资金曲线</text>')
+        sv.append(f'<line x1="{pl}" y1="{ec_top + 20}" x2="{svg_w - pr}" y2="{ec_top + 20}" stroke="#2a2a4e" stroke-width="0.5"/>')
+        # 找到有exit_date的信号，计算时间轴上的累计收益
+        ec_pts = []
+        ec_mx, ec_mn = -999, 999
+        for s in signals:
+            if s.get('exit_date') and s.get('cum_gain') is not None:
+                ei2 = find_idx(s['exit_date'], kls)
+                if ei2 >= 0:
+                    ec_pts.append((px(ei2), s['cum_gain']))
+                    ec_mx = max(ec_mx, s['cum_gain'])
+                    ec_mn = min(ec_mn, s['cum_gain'])
+        if len(ec_pts) >= 2:
+            ec_rg = ec_mx - ec_mn if ec_mx != ec_mn else 1
+            ec_py = lambda v: ec_top + 110 - (v - ec_mn) / ec_rg * 90
+            ec_center = (ec_mx + ec_mn) / 2
+            # 0% reference line
+            sv.append(f'<line x1="{pl}" y1="{ec_py(0):.1f}" x2="{svg_w - pr}" y2="{ec_py(0):.1f}" stroke="#2a2a4e" stroke-width="0.5" stroke-dasharray="4,4"/>')
+            sv.append(f'<text x="{svg_w - pr + 4}" y="{ec_py(0) + 3}" font-family="sans-serif" font-size="8" fill="#555">0%</text>')
+            # 基准线标注
+            for v in [ec_mn, ec_center, ec_mx]:
+                sv.append(f'<text x="{pl - 4}" y="{ec_py(v) + 3}" text-anchor="end" font-family="sans-serif" font-size="8" fill="#555">{v:+.0f}%</text>')
+            # 连线和点
+            pts_str = ' '.join(f'{x:.1f},{ec_py(v):.1f}' for x, v in ec_pts)
+            sv.append(f'<polyline points="{pts_str}" fill="none" stroke="#4ecdc4" stroke-width="2" opacity="0.9"/>')
+            for x, v in ec_pts:
+                sv.append(f'<circle cx="{x:.1f}" cy="{ec_py(v):.1f}" r="3" fill="#4ecdc4" opacity="0.9"/>')
+                sv.append(f'<text x="{x:.1f}" y="{ec_py(v) - 6}" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#aaa">{v:+.1f}%</text>')
+        else:
+            sv.append(f'<text x="{pl + 10}" y="{ec_top + 60}" font-family="sans-serif" font-size="12" fill="#555">信号不足，无法绘制资金曲线</text>')
+
+        # ── 盈亏分布面板 (P&L distribution) ──
+        sv.append(f'<text x="{pl}" y="{pnl_top + 14}" font-family="sans-serif" font-size="12" fill="#aaa" font-weight="bold">📊 盈亏分布</text>')
+        sv.append(f'<line x1="{pl}" y1="{pnl_top + 20}" x2="{svg_w - pr}" y2="{pnl_top + 20}" stroke="#2a2a4e" stroke-width="0.5"/>')
+        gains = [s['gain'] for s in signals if s.get('gain') is not None]
+        if gains:
+            # 按盈亏区间分组: <-10%, -10~-5%, -5~0%, 0~5%, 5~10%, >10%
+            buckets = [(-50, -10), (-10, -5), (-5, 0), (0, 5), (5, 10), (10, 50)]
+            bucket_labels = ['&lt;-10%', '-10~-5%', '-5~0%', '0~5%', '5~10%', '&gt;10%']
+            bucket_colors = ['#e94560', '#ff6b6b', '#ff9999', '#99cc99', '#44aa44', '#4ecdc4']
+            counts = [sum(1 for g in gains if lo <= g < hi) for lo, hi in buckets]
+            mc = max(max(counts), 1)
+            bar_w = 80
+            bar_gap = 20
+            start_x = pl + 30
+            bar_h_max = 50
+            for bi, (cnt, lbl, clr) in enumerate(zip(counts, bucket_labels, bucket_colors)):
+                bx = start_x + bi * (bar_w + bar_gap)
+                bh = cnt / mc * bar_h_max
+                sv.append(f'<rect x="{bx}" y="{pnl_top + 65 - bh:.1f}" width="{bar_w}" height="{max(bh, 1):.1f}" fill="{clr}" opacity="0.8" rx="3"/>')
+                sv.append(f'<text x="{bx + bar_w / 2}" y="{pnl_top + 65 - bh - 4}" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#fff">{cnt}</text>')
+                sv.append(f'<text x="{bx + bar_w / 2}" y="{pnl_top + 78}" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#888">{lbl}</text>')
+            # 区间坐标线
+            sv.append(f'<line x1="{start_x - 5}" y1="{pnl_top + 65}" x2="{start_x + 6 * (bar_w + bar_gap) - bar_gap + 5}" y2="{pnl_top + 65}" stroke="#2a2a4e" stroke-width="0.5"/>')
+        else:
+            sv.append(f'<text x="{pl + 10}" y="{pnl_top + 60}" font-family="sans-serif" font-size="12" fill="#555">无盈亏数据</text>')
         sv.append('</svg>')
         with open(chart_abs, 'w') as f:
             f.write('\n'.join(sv))

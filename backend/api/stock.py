@@ -16,10 +16,13 @@ def _handle_stock_backtest(h, path):
     params = parse_query(path)
     code = params.get('code', [''])[0].strip()
     days = int(params.get('days', ['60'])[0])
+    market_position = params.get('market_position', ['波中'])[0].strip()
+    main_lines_raw = params.get('main_lines', [''])[0].strip()
     if not code:
         h.send_json({'error': '请输入股票代码或名称'})
         return
-    h.send_json(run_backtest(code, days))
+    main_lines = set(m.strip() for m in main_lines_raw.split(',') if m.strip()) if main_lines_raw else {'半导体'}
+    h.send_json(run_backtest(code, days, market_position=market_position, main_lines=main_lines))
 
 
 def register_routes(routes):

@@ -855,6 +855,35 @@ class TestBacktestServiceWithMock:
         result = run_backtest('000000', stocks=MOCK_STOCKS)
         assert 'error' in result
 
+    def test_backtest_with_market_position_param(self):
+        """回测支持传入market_position参数"""
+        from services.backtest_service import run_backtest
+        r1 = run_backtest('688999', stocks=MOCK_STOCKS, market_position='波谷')
+        assert 'error' not in r1
+        assert r1['code'] == '688999'
+
+    def test_backtest_with_main_lines_param(self):
+        """回测支持传入main_lines参数"""
+        from services.backtest_service import run_backtest
+        r2 = run_backtest('688999', stocks=MOCK_STOCKS, main_lines={'半导体', '算力'})
+        assert 'error' not in r2
+        assert r2['code'] == '688999'
+
+    def test_backtest_chart_has_equity_curve(self):
+        """回测图表SVG包含资金曲线面板"""
+        from services.backtest_service import run_backtest
+        r = run_backtest('688999', stocks=MOCK_STOCKS)
+        assert r.get('has_chart') is not None
+        assert r.get('chart_svg') is not None
+
+    def test_backtest_signal_has_trading_system(self):
+        """回测信号包含trading_system字段"""
+        from services.backtest_service import run_backtest
+        r = run_backtest('688999', stocks=MOCK_STOCKS)
+        for s in r.get('signals', []):
+            assert 'trading_system' in s
+            assert s['trading_system'] in ('3l', 'trend')
+
 
 class TestTopGainersServiceWithMock:
     """top_gainers_service 测试 — mock 注入"""

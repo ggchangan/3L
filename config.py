@@ -125,7 +125,7 @@ def cleanup_cache():
     import re, time, logging
     logger = logging.getLogger('config.cleanup')
     now = time.time()
-    max_age = CACHE_MAX_AGE_DAYS * 86400
+    max_age = 30 * 86400  # 默认保留30天
     total_removed = 0
 
     for cache_path in [CACHE_DIR, os.path.join(WWW_DIR, 'data', 'cache')]:
