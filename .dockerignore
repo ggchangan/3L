@@ -1,0 +1,15 @@
+# 3L 交易系统 — Docker .dockerignore
+# 排除不需要复制到 Docker 镜像的文件
+
+.git
+.gitignore
+.venv
+.venv.bak
+__pycache__
+*.pyc
+.env
+logs/
+data/
+node_modules/
+.DS_Store
+*.md

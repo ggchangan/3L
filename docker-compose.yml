@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  server:
+    build: .
+    container_name: 3l-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - /home/ubuntu/data/3l:/data
+      - ./logs:/app/logs
+    environment:
+      - WWW_DIR=/app
+      - DATA_DIR=/data
+      - PORT=8080
+      - LOG_LEVEL=INFO
+      - LOG_DIR=/app/logs
+    restart: unless-stopped

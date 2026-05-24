@@ -1,0 +1,85 @@
+     1|<!DOCTYPE html>
+     2|<html lang="zh-CN">
+     3|<head>
+     4|    <meta charset="utf-8">
+     5|    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+     6|    <meta http-equiv="Pragma" content="no-cache">
+     7|    <meta http-equiv="Expires" content="0">
+     8|    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     9|    <title>3L 交易体系 · 成果跟踪</title>
+    10|
+    11|
+    12|  <link rel="stylesheet" crossorigin href="/assets/index-BA3zvOM3.css">
+  <link rel="stylesheet" crossorigin href="/assets/base-FqS57vpu.css">
+</head>
+    13|<body>
+    14|    <div style="margin-top:10px;" id="nav-top"></div>
+    15|    <div class="header">
+    16|        <h1>📊 3L 交易体系 · 成果跟踪</h1>
+    17|        <div class="subtitle">动量主线 · 最强逻辑 · 量价择时</div>
+    18|        <div class="date-badge" id="todayDate">加载中...</div>
+    19|    </div>
+    20|
+    21|    <div class="container" id="app">
+    22|        <!-- Today's Report -->
+    23|        <div class="card-today">
+    24|            <div class="card-title">📄 今日报告</div>
+    25|            <div class="card-meta" id="todayMeta">2026-05-19 生成</div>
+    26|            <ul class="file-list" id="todayFiles">
+    27|                <!-- dynamically loaded from /files/ -->
+    28|            </ul>
+    29|            <ul class="file-list" style="margin-top:4px;">
+    30|                <li>
+    31|                    <span class="file-name">德明利R4回测 — 量比>1.1（含7笔交易图+明细） <span class="tag pdf">PDF</span></span>
+    32|                    <a href="/files/%E5%BE%B7%E6%98%8E%E5%88%A9_R4%E9%87%8F%E6%AF%941.1%E6%8A%A5%E5%91%8A_20260524.pdf" target="_blank" style="color:#e94560; text-decoration:none; font-size:13px;">下载</a>
+    33|                </li>
+    34|                <li>
+    35|                    <span class="file-name">德明利(001309) 3L优化回测报告 <span class="tag pdf">PDF</span></span>
+    36|                    <a href="/files/%E5%BE%B7%E6%98%8E%E5%88%A9_3L%E4%BC%98%E5%8C%96%E5%9B%9E%E6%B5%8B%E6%8A%A5%E5%91%8A.pdf" target="_blank" style="color:#e94560; text-decoration:none; font-size:13px;">下载</a>
+    37|                </li>
+    38|                <li>
+    39|                    <span class="file-name">买点信号回测报告（328只自选股历史数据） <span class="tag pdf">PDF</span></span>
+    40|                    <a href="/files/%E4%B9%B0%E7%82%B9%E4%BF%A1%E5%8F%B7%E5%9B%9E%E6%B5%8B%E6%8A%A5%E5%91%8A_20260522.pdf" target="_blank" style="color:#e94560; text-decoration:none; font-size:13px;">下载</a>
+    41|                </li>
+    42|                <li>
+    43|                    <span class="file-name">波峰波谷判定方法（含回测数据） <span class="tag pdf">PDF</span></span>
+    44|                    <a href="/files/%E6%B3%A2%E5%B3%B0%E6%B3%A2%E8%B0%B7%E5%88%A4%E5%AE%9A_%E7%BB%BC%E5%90%88%E6%96%87%E6%A1%A3.pdf" target="_blank" style="color:#e94560; text-decoration:none; font-size:13px;">下载</a>
+    45|                </li>
+    46|            </ul>
+    47|        </div>
+    48|
+    49|        <!-- Progress Bar -->
+    50|        <div class="section-title">📊 整体完成进度</div>
+    51|        <div class="card-today" style="padding: 20px;">
+    52|            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+    53|                <span style="color:#e0e0e0; font-size:14px;">数据管线 + 看板 + 交易系统</span>
+    54|                <span style="color:#4ecdc4; font-size:18px; font-weight:bold;" id="progressPct">70%</span>
+    55|            </div>
+    56|            <div style="width:100%; height:16px; background:#1a1a2e; border-radius:10px; overflow:hidden; border:1px solid #2a2a4e;">
+    57|                <div id="progressBar" style="width:70%; height:100%; background:linear-gradient(90deg, #e94560, #4ecdc4); border-radius:10px; transition: width 0.5s;"></div>
+    58|            </div>
+    59|            <div style="display:flex; justify-content:space-between; margin-top:6px; color:#666; font-size:11px;">
+    60|                <span>数据源 7/8 ✅</span>
+    61|                <span>看板 3/3 ✅</span>
+    62|                <span>交易系统 2/3 ⏳</span>
+    63|            </div>
+    64|        </div>
+    65|
+    66|        <!-- Today's Completed -->
+    67|        <div class="section-title">✅ 今日完成</div>
+    68|        <div class="card-today" style="padding: 20px;">
+    69|            <ul class="file-list" id="doneList">
+    70|            </ul>
+    71|    </div>
+    72|
+    73|    <div id="nav-bottom"></div>
+    74|    <div class="footer">
+    75|        3L 交易体系 · 每日成果看板 · Hermes Agent · 2026
+    76|    </div>
+    77|    <script src="/js/config.js"></script>
+    <script src="/js/nav.js?v=2"></script>
+    78|
+    79|<script src="/js/pages/index.js?v=1"></script>
+    80|</body>
+    81|</html>
+    82|

@@ -1,0 +1,141 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3L 盘中盯盘</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="/css/base.css?v=1">
+<link rel="stylesheet" href="/css/pages/monitor.css?v=1">
+</head>
+<body>
+<div style="margin-top:10px;" id="nav-top"></div>
+<div class="header">
+    <h1>📡 3L 盘中盯盘</h1>
+    <div class="update-badge" id="updateBadge">等待数据...</div>
+</div>
+
+<div class="grid">
+    <!-- 警示区 -->
+    <div class="card warning-card">
+        <div class="card-title">⚠️ 盘中纪律警示</div>
+        <div class="warnings">
+            <div class="warn-item">
+                <div class="num">01</div>
+                <div class="text">不看分时图，只看日K线</div>
+            </div>
+            <div class="warn-item">
+                <div class="num">02</div>
+                <div class="text">不做T+0，盘中不临时起意</div>
+            </div>
+            <div class="warn-item">
+                <div class="num">03</div>
+                <div class="text">按计划执行，达到条件才操作</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 大盘观测（含中证全指行情+成交额对比+关键点图+异常事件） -->
+    <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">📡 大盘观测 <span class="badge" id="updateBadgeMonitor">实时</span></div>
+        <!-- 中证全指行情 -->
+        <div class="quote-grid" id="quoteGrid" style="margin-bottom:8px;">
+            <div class="quote-item">
+                <div class="label">中证全指 000985</div>
+                <div class="value" id="qPrice">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="label">涨跌幅</div>
+                <div class="value" id="qChange">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="label">今日成交额</div>
+                <div class="value" id="qVolume">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="label">较昨日同期</div>
+                <div class="value" id="qVolRatio">--</div>
+            </div>
+        </div>
+        <!-- 成交额对比图 -->
+        <div class="chart-container">
+            <canvas id="volumeChart"></canvas>
+        </div>
+        <div style="text-align:center;font-size:11px;color:#666;margin-top:4px;margin-bottom:12px;">
+            今日累计 <span id="todayVolLabel">--</span>&nbsp;&nbsp;|&nbsp;&nbsp;
+            昨日全天 <span id="yesterdayVolLabel">--</span>&nbsp;&nbsp;<span id="yesterdayDateLabel" style="color:#555;"></span>&nbsp;&nbsp;|&nbsp;&nbsp;
+            <span id="volRatioLabel" style="font-weight:bold;"></span>
+        </div>
+        <!-- 功能入口 -->
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <div onclick="toggleIndexChart()" style="flex:1; min-width:180px; padding:10px 14px; background:#16213e; border-radius:8px; cursor:pointer; border:1px solid #2a2a4a;">
+                <div style="font-size:13px; color:#ffd700;">📈 中证全指关键点图</div>
+                <div style="font-size:11px; color:#888; margin-top:4px;">60日K线 + 7种关键点标注</div>
+            </div>
+            <div onclick="toggleEventPlaceholder()" style="flex:1; min-width:180px; padding:10px 14px; background:#16213e; border-radius:8px; cursor:pointer; border:1px solid #2a2a4a;">
+                <div style="font-size:13px; color:#e94560;">⚠️ 异常事件</div>
+                <div style="font-size:11px; color:#888; margin-top:4px;">盘中异常波动、关键点位警示</div>
+            </div>
+        </div>
+        <!-- 关键点图 -->
+        <div id="indexChartPanel" style="display:none; margin-top:12px;">
+            <object id="indexChartObj" data="/review_charts/zzqz_v2.svg?t=0" type="image/svg+xml" style="width:100%; height:550px; border-radius:8px;"></object>
+        </div>
+        <!-- 异常事件占位符 -->
+        <div id="eventPlaceholderPanel" style="display:none; margin-top:12px; padding:16px; background:#16213e; border-radius:8px;">
+            <div style="font-size:13px; color:#e94560; margin-bottom:8px;">⚠️ 异常事件记录（待完善）</div>
+            <div class="empty" style="padding:30px;">暂无异常事件记录</div>
+            <div style="font-size:11px; color:#555; margin-top:8px; line-height:1.6;">
+                此处将展示：盘中异常波动、关键点位突破失败、量价背离等警示信息。<br>
+                功能开发中...
+            </div>
+        </div>
+    </div>
+
+    <!-- 板块监测 -->
+    <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">📊 板块监测 <span class="badge">10分钟刷新</span></div>
+        <div id="topSectorsArea">
+            <div class="empty">加载中...</div>
+        </div>
+    </div>
+
+    <!-- 龙头观测 -->
+    <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">
+            🏆 龙头观测
+            <span class="badge">10分钟刷新</span>
+            <span class="tab-btn active" id="tabIndustryLeaders" onclick="switchLeaderTab('industry')">行业龙头</span>
+            <span class="tab-btn" id="tabMarketLeaders" onclick="switchLeaderTab('market')">市场龙头</span>
+        </div>
+        <div id="leaderArea">
+            <div class="empty">加载中...</div>
+        </div>
+    </div>
+
+    <!-- 盘中机会 -->
+    <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">🎯 盘中机会 <span class="badge">每1小时扫描</span></div>
+        <div id="buySignalsArea">
+            <div class="empty">正在扫描...</div>
+        </div>
+    </div>
+
+    <!-- 止损预警 -->
+    <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">🛑 止损预警 <span class="badge" id="stopLossBadge">0</span></div>
+        <div id="stopLossArea">
+            <div class="empty">暂无触发止损</div>
+        </div>
+    </div>
+</div>
+
+<div id="nav-bottom" style="text-align:center;margin-top:30px;padding-top:16px;border-top:1px solid #2a2a4a;"></div>
+
+
+<script src="/nav.js"></script>
+<script src="/js/stock_card.js"></script>
+<script src="/js/pages/monitor.js?v=1"></script>
+</body>
+</html>

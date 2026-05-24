@@ -1,0 +1,95 @@
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #0f0f1a; color: #e0e0e0; min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-bottom: 2px solid #22c55e;
+            padding: 24px 20px; text-align: center;
+        }
+        .header h1 { font-size: 24px; color: #fff; letter-spacing: 3px; }
+        .header .subtitle { color: #a0a0b0; font-size: 13px; margin-top: 6px; }
+        .header .stats { color: #22c55e; font-size: 13px; margin-top: 6px; }
+        .container { max-width: 800px; margin: 0 auto; padding: 12px; }
+
+        /* 工具条 */
+        .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+        .search-input {
+            flex: 1; min-width: 150px; padding: 7px 12px; border-radius: 6px;
+            background: #1a1a30; border: 1px solid #2a2a4e; color: #e0e0e0; font-size: 13px;
+        }
+        .search-input:focus { border-color: #22c55e; outline: none; }
+        .btn {
+            padding: 7px 16px; border-radius: 6px; border: none; cursor: pointer;
+            font-size: 12px; font-weight: bold; transition: all .2s;
+        }
+        .btn-green { background: #22c55e; color: #000; }
+        .btn-green:hover { background: #16a34a; }
+        .btn-red { background: #e94560; color: #fff; }
+        .btn-red:hover { background: #d63852; }
+        .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+        /* 方向Tab */
+        .dir-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+        .dir-tab {
+            padding: 3px 10px; font-size: 11px; cursor: pointer; border-radius: 10px;
+            background: #1e1e3a; color: #888; border: 1px solid #2a2a4e; transition: all .2s;
+        }
+        .dir-tab:hover { border-color: #22c55e; }
+        .dir-tab.active { background: #1a3a2a; color: #22c55e; border-color: #22c55e; font-weight: bold; }
+
+        /* 个股卡片列表 */
+        .cards-area { min-height: 200px; }
+
+        /* 卡片底部操作栏 */
+        .card-actions {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 12px; background: rgba(0,0,0,0.2);
+            border: 1px solid #2a2a4e; border-top: none; border-radius: 0 0 12px 12px;
+            margin-top: -2px;
+        }
+        .card-actions .left { display: flex; align-items: center; gap: 8px; }
+        .card-actions .right { display: flex; align-items: center; gap: 8px; }
+        .dir-select {
+            background: #1a1a30; color: #e0e0e0; border: 1px solid #2a2a4e; border-radius: 4px;
+            padding: 3px 6px; font-size: 11px; cursor: pointer;
+        }
+        .dir-select:focus { border-color: #22c55e; outline: none; }
+        .trend-badge {
+            font-size: 11px; padding: 2px 8px; border-radius: 8px; font-weight: bold;
+            background: rgba(255, 107, 53, 0.15); color: #ff6b35; border: 1px solid rgba(255, 107, 53, 0.3);
+        }
+        .trend-badge.inactive { background: #1a1a30; color: #555; border-color: #2a2a4e; }
+
+        /* 添加区 */
+        .add-section {
+            background: #16162a; border: 1px solid #22c55e; border-radius: 8px;
+            padding: 12px; margin-bottom: 10px;
+        }
+        .add-section h3 { font-size: 14px; color: #22c55e; margin-bottom: 8px; }
+        .add-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .add-row .search-input { max-width: 280px; }
+        .add-row .dir-select { padding: 7px 12px; font-size: 12px; }
+
+        .search-results {
+            background: #1a1a30; border: 1px solid #2a2a4e; border-radius: 6px;
+            max-height: 200px; overflow-y: auto; margin-top: 4px;
+        }
+        .search-result-item {
+            padding: 6px 10px; cursor: pointer; font-size: 12px; display: flex; justify-content: space-between;
+            border-bottom: 1px solid #1a1a30; transition: background .15s;
+        }
+        .search-result-item:hover { background: #2a2a4e; color: #22c55e; }
+        .search-result-item .sr-name { color: #ffd700; }
+        .search-result-item .sr-code { color: #666; }
+        .search-result-item .sr-ind { color: #888; font-size: 11px; }
+        }
+        .toast {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: #1a1a2e; border: 1px solid #22c55e; color: #22c55e;
+            padding: 8px 20px; border-radius: 6px; font-size: 13px;
+            opacity: 0; transition: opacity .3s; z-index: 999;
+        }
+        .toast.show { opacity: 1; }
+        .footer { text-align: center; color: #555; font-size: 12px; padding: 16px; }

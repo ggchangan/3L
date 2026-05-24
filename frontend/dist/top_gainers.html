@@ -1,0 +1,60 @@
+     1|<!DOCTYPE html>
+     2|<html lang="zh-CN">
+     3|<head>
+     4|<meta charset="UTF-8">
+     5|<meta name="viewport" content="width=device-width, initial-scale=1.0">
+     6|<title>30日涨幅榜</title>
+     7|
+     8|<script src="/js/stock_card.js"></script>
+     9|
+    10|
+    11|  <link rel="stylesheet" crossorigin href="/assets/top_gainers-WPPPd1Sv.css">
+  <link rel="stylesheet" crossorigin href="/assets/stock_card-Bt821oyZ.css">
+  <link rel="stylesheet" crossorigin href="/assets/base-FqS57vpu.css">
+</head>
+    12|<body>
+    13|<div style="margin-top:10px;" id="nav-top"></div>
+    14|<div class="header">
+    15|    <h1>📈 30日涨幅榜</h1>
+    16|    <div class="subtitle">全市场个股 · 近30日涨幅排序 · 板块分布</div>
+    17|</div>
+    18|
+    19|<div class="container">
+    20|    <!-- 控制栏 -->
+    21|    <div class="controls">
+    22|        <label for="datePicker">📅 截止日期</label>
+    23|        <input type="date" id="datePicker">
+    24|        <label for="limitSelect">展示</label>
+    25|        <select id="limitSelect">
+    26|            <option value="30">30只</option>
+    27|            <option value="50" selected>50只</option>
+    28|            <option value="66">66只</option>
+    29|            <option value="100">100只</option>
+    30|        </select>
+    31|        <button class="btn-query" id="queryBtn" onclick="loadData()">🔍 查询</button>
+    32|        <span id="loadingHint" style="color:#888;font-size:12px;margin-left:auto;"></span>
+    33|    </div>
+    34|
+    35|    <!-- 摘要 -->
+    36|    <div class="summary" id="summaryArea" style="display:none;"></div>
+    37|
+    38|    <!-- 饼图 -->
+    39|    <div class="pie-section" id="pieSection" style="display:none;">
+    40|        <div class="pie-title">📊 板块分布</div>
+    41|        <div class="pie-container">
+    42|            <div class="pie-svg-container" id="pieContainer"></div>
+    43|            <div class="pie-legend" id="pieLegend"></div>
+    44|        </div>
+    45|    </div>
+    46|
+    47|    <!-- 股票列表 -->
+    48|    <div id="stockList"></div>
+    49|</div>
+    50|
+    51|<div style="margin-top:10px;" id="nav-bottom"></div>
+    52|
+    53|<script src="/js/config.js"></script>
+    <script src="/js/nav.js"></script>
+    54|<script src="/js/pages/top_gainers.js?v=1"></script>
+    55|</body>
+    56|</html>

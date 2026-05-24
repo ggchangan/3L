@@ -1,0 +1,18 @@
+[Unit]
+Description=3L TradingView Web Server (Port 8080)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/home/ubuntu/3l-server
+EnvironmentFile=/home/ubuntu/3l-server/.env
+ExecStart=/home/ubuntu/3l-server/.venv/bin/python /home/ubuntu/3l-server/server.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
