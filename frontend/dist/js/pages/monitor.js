@@ -230,7 +230,7 @@ function renderTopSectors(data) {
         html += '<table class="signal-table">';
         html += '<tr><th>#</th><th>板块</th><th>涨幅</th><th>结构</th><th>阶段</th><th style="width:30px;"></th></tr>';
         yesterdayList.forEach((b, i) => {
-            const c = parseFloat(b.chg || 0);
+            const c = parseFloat(b.chg5d || b.chg || 0);
             const safeName = b.name.replace(/'/g, "\\'");
             html += `<tr>
                 <td style="color:#555;width:20px;">${i+1}</td>
@@ -420,7 +420,7 @@ function toggleMChart(id, code) {
     const obj = div.querySelector('object');
     if (div.style.display === 'none') {
         div.style.display = 'block';
-        obj.data = '/pub/charts/' + code + '.svg?t=' + Date.now();
+        obj.data = '/api/stock-chart?code=' + code + '&t=' + Date.now();
     } else {
         div.style.display = 'none';
         // 不清空data，保持缓存

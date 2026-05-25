@@ -259,6 +259,7 @@ def main():
                 'direction': direction,
                 'price': bt.get('close', klines[-1]['close']),
                 'change_pct': round(bt.get('gain', 0), 2),
+                'signal': 'buy',
                 'buy_type': bt.get('buy_type', ''),
                 'buy_point': bt.get('buy_type', ''),
                 'structure': bt.get('structure', ''),
@@ -271,14 +272,7 @@ def main():
             }
             signals.append(signal)
             
-            # ★ 当场生成SVG — klines数据已在手，无需二次拉取
-            try:
-                kps = find_keypoints(klines)
-                out_path = os.path.join(SVG_OUT_DIR, f'{code}.svg')
-                gen_svg(name, code, klines, kps, out_path)
-                svg_ok += 1
-            except Exception as e:
-                print(f"  SVG失败 {code}: {e}", file=sys.stderr)
+            # SVG不预生成，由前端点📊时按需调用 /api/stock-chart 生成
         
         # 趋势买点检测
         try:
@@ -296,6 +290,7 @@ def main():
                     'direction': direction,
                     'price': _tb.get('price', klines[-1]['close']),
                     'change_pct': 0,
+                    'signal': 'buy',
                     'buy_type': _tb['buy_type'],
                     'buy_point': _tb['buy_type'],
                     'structure': _tb.get('bias5_zone', ''),
@@ -308,21 +303,10 @@ def main():
                     'trend_buy_reason': _tb.get('reason', ''),
                     'trading_system': 'trend',
                 })
-                # 生成SVG
-                try:
-                    kps = find_keypoints(klines)
-                    out_path = os.path.join(SVG_OUT_DIR, f'{code}.svg')
-                    if not os.path.exists(out_path):
-                        gen_svg(name, code, klines, kps, out_path)
-                        svg_ok += 1
-                except Exception:
-                    pass
         except Exception as e:
             print(f"  趋势买点失败 {code}: {e}", file=sys.stderr)
     
     signals.sort(key=lambda x: (0 if x.get('buy_type') == '突破买点' else 1, -(x.get('score', 0))))
-    
-    print(f"SVG: {svg_ok}只已生成", file=sys.stderr)
     
     result = {
         'signals': signals,

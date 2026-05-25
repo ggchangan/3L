@@ -561,6 +561,7 @@ def get_top_sectors_with_5d():
         except:
             return None
     
+    # === 今日涨幅TOP10（用TOP15的60日数据计算结构/阶段/5日涨幅） ===
     # 并行拉取TOP15的60日数据
     import concurrent.futures
     s60d = {}
@@ -571,6 +572,25 @@ def get_top_sectors_with_5d():
             r = f.result()
             if r is not None:
                 s60d[name] = r
+    
+    # === 5日涨幅：检查全部90个板块中已有缓存的数据 ===
+    # 对今日涨幅TOP15之外的板块，只读缓存不算结构/阶段
+    all_sector_names = [b['板块'] for b in today_data]
+    for name in all_sector_names:
+        if name in s60d:
+            continue
+        kf = os.path.join(REVIEW_CHARTS, f'sector_{name}_kline.json')
+        if os.path.isfile(kf):
+            try:
+                with open(kf) as f:
+                    kd = json.load(f)
+                if kd and 'closes' in kd and len(kd['closes']) >= 6:
+                    c60 = kd['closes']
+                    cur = c60[-1]
+                    chg5d = round((cur / c60[-6] - 1) * 100, 2)
+                    s60d[name] = kd  # 加入s60d供_compute_one用
+            except:
+                pass
     
     # === 工具函数 ===
     def _ema_list(d, p):
@@ -659,15 +679,40 @@ def get_top_sectors_with_5d():
             'structure': structure, 'phase': phase,
         }
     
-    # === 计算TOP15所有结果 ===
+    # === 计算TOP15所有结果（用于今日涨幅/结构/阶段） ===
     all_results = [_compute_one(name, today_chg_map.get(name, 0)) for name in top15_names]
+    
+    # === 5日涨幅：全量板块参与排序 ===
+    # 所有在s60d中有数据的板块（含TOP15已计算的 + 其他有缓存的）
+    all_with_5d = []
+    seen_in_results = {r['name'] for r in all_results if r.get('chg5d') is not None}
+    # TOP15的结果
+    for r in all_results:
+        if r.get('chg5d') is not None:
+            all_with_5d.append(r)
+    # 其他有缓存的板块（只需chg5d，不需要结构/阶段）
+    for name in all_sector_names:
+        if name in seen_in_results:
+            continue
+        kd = s60d.get(name)
+        if not kd or 'closes' not in kd or len(kd['closes']) < 6:
+            continue
+        c60 = kd['closes']
+        cur = c60[-1]
+        chg5d = round((cur / c60[-6] - 1) * 100, 2)
+        all_with_5d.append({
+            'name': name,
+            'chg': today_chg_map.get(name, 0),
+            'chg5d': chg5d,
+            'structure': '-',
+            'phase': '-',
+        })
     
     # 今日涨幅TOP10
     today_top10 = sorted(all_results, key=lambda x: x['chg'], reverse=True)[:10]
     
-    # 5日涨幅TOP10（从有60日数据的板块中排）
-    has_5d = [s for s in all_results if s.get('chg5d') is not None]
-    chg5d_top10 = sorted(has_5d, key=lambda x: x['chg5d'], reverse=True)[:10]
+    # 5日涨幅TOP10（从全量有数据的板块中排）
+    chg5d_top10 = sorted(all_with_5d, key=lambda x: x['chg5d'], reverse=True)[:10]
     
     # 昨日涨幅TOP10
     yesterday_top10 = sorted(all_results, key=lambda x: x.get('yesterday_chg', 0), reverse=True)[:10]
