@@ -18,23 +18,23 @@ from unittest.mock import patch, MagicMock
 
 class TestToYyyymmdd:
     def test_already_yyyy_mm_dd(self):
-        from generate_review_data import to_yyyymmdd
+        from services.review_compute_service import to_yyyymmdd
         assert to_yyyymmdd('2026-05-24') == '2026-05-24'
 
     def test_slash_format(self):
-        from generate_review_data import to_yyyymmdd
+        from services.review_compute_service import to_yyyymmdd
         assert to_yyyymmdd('2026/05/24') == '2026-05-24'
 
     def test_empty_string(self):
-        from generate_review_data import to_yyyymmdd
+        from services.review_compute_service import to_yyyymmdd
         assert to_yyyymmdd('') == ''
 
     def test_none_input(self):
-        from generate_review_data import to_yyyymmdd
+        from services.review_compute_service import to_yyyymmdd
         assert to_yyyymmdd(None) == ''
 
     def test_whitespace_stripped(self):
-        from generate_review_data import to_yyyymmdd
+        from services.review_compute_service import to_yyyymmdd
         assert to_yyyymmdd(' 2026-05-24 ') == '2026-05-24'
 
 
@@ -47,19 +47,19 @@ class TestIsTradingDay:
 
     def test_known_sunday_is_not_trading_day(self):
         """2026-05-24 是周日 → 非交易日"""
-        from generate_review_data import is_trading_day
+        from services.review_compute_service import is_trading_day
         result = is_trading_day('2026-05-24')
         assert result is False
 
     def test_known_friday_is_trading_day(self):
         """2026-05-22 是周五 → 交易日"""
-        from generate_review_data import is_trading_day
+        from services.review_compute_service import is_trading_day
         result = is_trading_day('2026-05-22')
         assert result is True
 
     def test_saturday_is_not_trading_day(self):
         """2026-05-23 是周六 → 非交易日"""
-        from generate_review_data import is_trading_day
+        from services.review_compute_service import is_trading_day
         result = is_trading_day('2026-05-23')
         assert result is False
 
@@ -102,7 +102,7 @@ class TestGenerateTradingPlan:
     def test_returns_expected_structure(self, sample_market_cycle, sample_mainline_data,
                                         sample_signals_data, sample_holdings_review):
         """交易计划返回标准dict结构"""
-        from generate_review_data import generate_trading_plan
+        from services.review_compute_service import generate_trading_plan
         result = generate_trading_plan(
             sample_market_cycle, sample_mainline_data, sample_signals_data,
             [],  # existing_holdings
@@ -119,7 +119,7 @@ class TestGenerateTradingPlan:
     def test_main_lines_from_input(self, sample_market_cycle, sample_mainline_data,
                                     sample_signals_data):
         """主线方向来自 mainline_data"""
-        from generate_review_data import generate_trading_plan
+        from services.review_compute_service import generate_trading_plan
         result = generate_trading_plan(
             sample_market_cycle, sample_mainline_data, sample_signals_data, [],
         )
@@ -129,7 +129,7 @@ class TestGenerateTradingPlan:
     def test_position_detail_based_on_cycle(self, sample_market_cycle, sample_mainline_data,
                                             sample_signals_data):
         """仓位说明基于大盘位置"""
-        from generate_review_data import generate_trading_plan
+        from services.review_compute_service import generate_trading_plan
         result = generate_trading_plan(
             sample_market_cycle, sample_mainline_data, sample_signals_data, [],
         )
@@ -138,7 +138,7 @@ class TestGenerateTradingPlan:
     def test_buy_signal_creates_action(self, sample_market_cycle, sample_mainline_data,
                                        sample_signals_data, sample_holdings_review):
         """买点信号生成可执行操作项"""
-        from generate_review_data import generate_trading_plan
+        from services.review_compute_service import generate_trading_plan
         result = generate_trading_plan(
             sample_market_cycle, sample_mainline_data, sample_signals_data, [],
             holdings_review=sample_holdings_review,
@@ -149,7 +149,7 @@ class TestGenerateTradingPlan:
     def test_holdings_action_priority_sell_highest(self, sample_market_cycle, sample_mainline_data,
                                                    sample_signals_data):
         """卖出信号优先级标记为'高'"""
-        from generate_review_data import generate_trading_plan
+        from services.review_compute_service import generate_trading_plan
         holdings = [
             {'code': '000001', 'name': '平安银行', 'signal': 'sell',
              'stage': '转弱', 'structure': '下降趋势'},
@@ -165,7 +165,7 @@ class TestGenerateTradingPlan:
     def test_empty_holdings_no_actions(self, sample_market_cycle, sample_mainline_data,
                                        sample_signals_data):
         """空持仓 → 无个股操作建议"""
-        from generate_review_data import generate_trading_plan
+        from services.review_compute_service import generate_trading_plan
         result = generate_trading_plan(
             sample_market_cycle, sample_mainline_data, sample_signals_data, [],
         )
@@ -181,7 +181,7 @@ class TestGetBuySellSignals:
 
     def test_returns_tuple(self):
         """返回的是三元组"""
-        from generate_review_data import get_buy_sell_signals
+        from services.review_compute_service import get_buy_sell_signals
         holdings = [{'code': '300750', 'direction': '新能源',
                       'name': '宁德时代', 'price': 180.0}]
         buy_signals = [{'code': '688981', 'name': '中芯国际',
@@ -192,7 +192,7 @@ class TestGetBuySellSignals:
 
     def test_first_element_has_holdings_and_signals(self):
         """第一元素包含 holdings 和 signals 键"""
-        from generate_review_data import get_buy_sell_signals
+        from services.review_compute_service import get_buy_sell_signals
         result = get_buy_sell_signals([], [], date_str='2026-05-22')
         signals = result[0]
         assert 'holdings' in signals
