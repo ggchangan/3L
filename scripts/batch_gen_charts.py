@@ -5,6 +5,7 @@
 """
 import json, os, sys, math
 from collections import OrderedDict
+from datetime import datetime
 
 # 从 config 读取路径（支持环境变量覆盖）
 import config
@@ -101,8 +102,13 @@ def gen_svg(name, code, klines, kps, output_path):
     sv.append(f'<line x1="{pl}" y1="{bv}" x2="{W-pr}" y2="{bv}" stroke="#2a2a4e" stroke-width="0.5"/>')
 
     # ── 判断最后一根K线是否需要盘中虚线标记 ──
-    # 复盘图表的数据是固化的（非实时），不画盘中虚线
-    is_intraday = False
+    # 只有今天且此刻在交易时段内（9:30-15:00）才画盘中标记
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    last_date = klines[-1].get('date', '')
+    now_hour = datetime.now().hour
+    now_min = datetime.now().minute
+    is_trading_hours = (now_hour > 9 or (now_hour == 9 and now_min >= 30)) and now_hour < 15
+    is_intraday = last_date == today_str and is_trading_hours
 
     for i in range(n):
         x = px(i) - cw * 0.35
