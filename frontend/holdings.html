@@ -48,12 +48,13 @@
 </div>
 <div class="container" id="app">
 
-    <!-- 股票概况（合并统计+方向分布） -->
+    <!-- 股票概况（饼图+方向+评估合并） -->
     <div class="overview-block" id="overviewArea" style="display:none;">
         <div class="ov-title">📊 股票概况</div>
         <div class="ov-body">
             <div class="ov-pie" id="pieContainer"></div>
             <div class="ov-legend" id="pieLegend"></div>
+            <div class="ov-assessment" id="ovAssessment"></div>
         </div>
         <div class="ov-stats" id="ovStats"></div>
     </div>
@@ -70,9 +71,7 @@
             <button class="add-btn-sm" onclick="event.stopPropagation();openAddModal()">＋ 新增</button>
         </div>
         <div id="cardBody">
-            <div class="add-btn-wrap"><button class="add-btn" onclick="openAddModal()">＋ 新增持仓</button></div>
             <div id="cardList"></div>
-            <div class="add-btn-wrap"><button class="add-btn" onclick="openAddModal()">＋ 新增持仓</button></div>
         </div>
     </div>
 
@@ -83,13 +82,7 @@
         <button class="add-btn" onclick="openAddModal()">＋ 新增第一只持仓</button>
     </div>
 
-    <!-- 评估 -->
-    <div class="section-card" id="assessmentSection" style="display:none;">
-        <div class="section-title assessment">📊 持仓评估</div>
-        <div id="assessmentContent"></div>
-    </div>
-
-    <!-- 建议 -->
+    <!-- 建议（独立） -->
     <div class="section-card" id="suggestionSection" style="display:none;">
         <div class="section-title suggestion">📋 持仓建议</div>
         <div id="suggestionContent"></div>
@@ -180,7 +173,6 @@ async function loadData() {
     const ca = document.getElementById('cardArea');
     const em = document.getElementById('emptyState');
     const oa = document.getElementById('overviewArea');
-    const as = document.getElementById('assessmentSection');
     const ss = document.getElementById('suggestionSection');
     const ut = document.getElementById('updateTime');
 
@@ -189,7 +181,6 @@ async function loadData() {
     em.style.display = 'none';
     es.style.display = 'none';
     oa.style.display = 'none';
-    as.style.display = 'none';
     ss.style.display = 'none';
 
     try {
@@ -225,9 +216,9 @@ async function loadData() {
         ca.style.display = 'block';
         renderCards(holdings);
 
-        // 饼图 + 评估+建议
-        renderPie(holdings);
-        renderAssessment(data);
+        // 饼图 + 概况评估（合并到股票概况块）
+        renderPie(holdings, data);
+        renderSuggestions(data);
 
     } catch (err) {
         ls.style.display = 'none';
@@ -302,14 +293,15 @@ function renderCards(holdings) {
 // ═══════════════════════════════════════════════════════════════
 // 饼图（复用 top_gainers 的 SVG 方案）
 // ═══════════════════════════════════════════════════════════════
-function renderPie(holdings) {
+function renderPie(holdings, assessmentData) {
     if (!holdings || holdings.length === 0) {
         document.getElementById('pieContainer').innerHTML = '';
         document.getElementById('pieLegend').innerHTML = '';
+        document.getElementById('ovAssessment').innerHTML = '';
         return;
     }
 
-    const cashRatio = (HOLDINGS_DATA && HOLDINGS_DATA.cash_ratio) || 0;
+    const cashRatio = (assessmentData && assessmentData.cash_ratio) || 0;
 
     // 按方向汇总仓位
     const dirMap = {};
@@ -330,7 +322,7 @@ function renderPie(holdings) {
         .sort((a, b) => b.pct - a.pct);
 
     const total = pieData.reduce((s, d) => s + d.pct, 0);
-    const svgW = 260, svgH = 260, cx = 130, cy = 130, r = 100;
+    const svgW = 220, svgH = 220, cx = 110, cy = 110, r = 85;
 
     let startAngle = -90;
     let paths = '';
@@ -357,7 +349,7 @@ function renderPie(holdings) {
         const tx = cx + textR * Math.cos(lRad);
         const ty = cy + textR * Math.sin(lRad);
         if (d.pct >= 5) {
-            paths += `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#fff" font-weight="600">${d.pct.toFixed(0)}%</text>`;
+            paths += `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#fff" font-weight="600">${d.pct.toFixed(0)}%</text>`;
         }
 
         const countDisplay = d.count > 0 ? d.count + '只' : '';
@@ -371,48 +363,97 @@ function renderPie(holdings) {
         startAngle = endAngle;
     });
 
-    paths += `<circle cx="${cx}" cy="${cy}" r="40" fill="#0f0f1a" stroke="#2a2a4e" stroke-width="1"/>
-        <text x="${cx}" y="${cy - 5}" text-anchor="middle" font-size="20" font-weight="700" fill="#e94560">${holdings.length}</text>
-        <text x="${cx}" y="${cy + 12}" text-anchor="middle" font-size="10" fill="#888">只个股</text>`;
+    paths += `<circle cx="${cx}" cy="${cy}" r="32" fill="#0f0f1a" stroke="#2a2a4e" stroke-width="1"/>
+        <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="17" font-weight="700" fill="#e94560">${holdings.length}</text>
+        <text x="${cx}" y="${cy + 10}" text-anchor="middle" font-size="9" fill="#888">只个股</text>`;
 
-    document.getElementById('pieContainer').innerHTML = `<svg width="100%" height="100%" viewBox="0 0 ${svgW} ${svgH}" style="max-width:240px;max-height:240px;">${paths}</svg>`;
+    document.getElementById('pieContainer').innerHTML = `<svg width="100%" height="100%" viewBox="0 0 ${svgW} ${svgH}" style="max-width:220px;max-height:220px;">${paths}</svg>`;
     document.getElementById('pieLegend').innerHTML = legendHtml;
+
+    // ── 右侧：持仓评估概览 ──
+    const totalRatio = 100 - cashRatio;
+    const assessItems = [];
+
+    // 1. 总仓位
+    if (totalRatio > 80) {
+        assessItems.push({ text: `总仓位 ${totalRatio.toFixed(1)}%`, cls: 'high' });
+    } else if (totalRatio < 50) {
+        assessItems.push({ text: `总仓位 ${totalRatio.toFixed(1)}%`, cls: 'medium' });
+    } else {
+        assessItems.push({ text: `总仓位 ${totalRatio.toFixed(1)}%`, cls: 'low' });
+    }
+
+    // 2. 最大单只集中
+    let maxR = 0, maxName = '';
+    holdings.forEach(h => { if (h.ratio > maxR) { maxR = h.ratio; maxName = h.name; } });
+    if (maxR >= 15) {
+        assessItems.push({ text: `${maxName} ${maxR}%`, cls: 'high' });
+    } else if (maxR >= 10) {
+        assessItems.push({ text: `${maxName} ${maxR}%`, cls: 'medium' });
+    }
+
+    // 3. 方向集中度
+    const dirMap = {};
+    holdings.forEach(h => {
+        const d = h.direction || '其他';
+        dirMap[d] = (dirMap[d] || 0) + (h.ratio || 0);
+    });
+    Object.entries(dirMap).forEach(([dir, ratio]) => {
+        if (ratio >= 40) {
+            assessItems.push({ text: `${dir} ${ratio.toFixed(1)}% 集中`, cls: 'high' });
+        } else if (ratio >= 30) {
+            assessItems.push({ text: `${dir} ${ratio.toFixed(1)}% 集中`, cls: 'medium' });
+        }
+    });
+
+    // 4. 现金
+    if (cashRatio < 5) {
+        assessItems.push({ text: `现金 ${cashRatio.toFixed(1)}%`, cls: 'high' });
+    } else if (cashRatio > 40) {
+        assessItems.push({ text: `现金 ${cashRatio.toFixed(1)}%`, cls: 'medium' });
+    } else {
+        assessItems.push({ text: `现金 ${cashRatio.toFixed(1)}%`, cls: 'low' });
+    }
+
+    // 去重：方向集中和总仓位只显示最严重的前2条
+    const critical = assessItems.filter(x => x.cls === 'high').slice(0, 2);
+    const warnings = assessItems.filter(x => x.cls === 'medium').slice(0, 2);
+    const ok = assessItems.filter(x => x.cls === 'low').slice(0, 2);
+    const ordered = [...critical, ...warnings, ...ok];
+
+    const iconMap = { high: '🔴', medium: '⚠️', low: '✅' };
+    document.getElementById('ovAssessment').innerHTML =
+        '<div class="oa-title">持仓评估</div>' +
+        ordered.map(it =>
+            `<div class="oa-item ${it.cls}">${iconMap[it.cls]} ${it.text}</div>`
+        ).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 评估 & 建议
+// 持仓建议（独立区块）
 // ═══════════════════════════════════════════════════════════════
-function renderAssessment(data) {
+function renderSuggestions(data) {
     const holdings = data.holdings || [];
     const cashRatio = data.cash_ratio || 100;
     const totalRatio = 100 - cashRatio;
 
-    const as = document.getElementById('assessmentSection');
     const ss = document.getElementById('suggestionSection');
-    const ac = document.getElementById('assessmentContent');
     const sc = document.getElementById('suggestionContent');
 
-    const items = [];
     const suggestions = [];
 
-    // 1. 总仓位评估
+    // 1. 总仓位
     if (totalRatio > 80) {
-        items.push({ text: `总仓位 ${totalRatio.toFixed(1)}% 偏高，可能超过市场建议仓位`, cls: 'high' });
         suggestions.push(`建议适当减仓，控制总仓位在建议范围内`);
     } else if (totalRatio < 50) {
-        items.push({ text: `总仓位 ${totalRatio.toFixed(1)}% 偏低，资金利用率不足`, cls: 'medium' });
         suggestions.push(`当前仓位偏低，可在主线确认后适当加仓`);
-    } else {
-        items.push({ text: `总仓位 ${totalRatio.toFixed(1)}%，处于合理范围`, cls: 'low' });
     }
 
     // 2. 单只集中度
     holdings.forEach(h => {
         if (h.ratio >= 15) {
-            items.push({ text: `🔴 ${h.name} 仓位 ${h.ratio}% 严重集中（>15%）`, cls: 'high' });
             suggestions.push(`${h.name} 仓位过高，若跌破止损需果断减仓`);
         } else if (h.ratio >= 10) {
-            items.push({ text: `⚠️ ${h.name} 仓位 ${h.ratio}% 偏集中（>10%）`, cls: 'medium' });
             suggestions.push(`${h.name} 仓位超过10%，注意分散风险`);
         }
     });
@@ -425,25 +466,17 @@ function renderAssessment(data) {
     });
     Object.entries(dirMap).forEach(([dir, ratio]) => {
         if (ratio >= 40) {
-            items.push({ text: `🔴 ${dir} 方向总仓位 ${ratio.toFixed(1)}% 严重集中（>40%）`, cls: 'high' });
             suggestions.push(`${dir} 方向占比过高，建议减仓分散`);
         } else if (ratio >= 30) {
-            items.push({ text: `⚠️ ${dir} 方向总仓位 ${ratio.toFixed(1)}% 偏集中（>30%）`, cls: 'medium' });
             suggestions.push(`${dir} 方向 ${holdings.filter(h => (h.direction||'其他')===dir).length} 只标的，可考虑聚焦核心`);
-        } else {
-            items.push({ text: `${dir} 方向总仓位 ${ratio.toFixed(1)}%，分布合理`, cls: 'low' });
         }
     });
 
-    // 4. 现金评估
+    // 4. 现金
     if (cashRatio < 5) {
-        items.push({ text: `⚠️ 现金仅 ${cashRatio.toFixed(1)}%，调仓空间有限`, cls: 'high' });
         suggestions.push(`现金不足5%，考虑适当减仓预留调仓空间`);
     } else if (cashRatio > 40) {
-        items.push({ text: `现金 ${cashRatio.toFixed(1)}% 充足，仓位利用率偏低`, cls: 'medium' });
         suggestions.push(`现金较多，可在板块回调时择机加仓`);
-    } else {
-        items.push({ text: `现金 ${cashRatio.toFixed(1)}%，调仓空间充裕`, cls: 'low' });
     }
 
     // 5. 方向数量
@@ -451,16 +484,6 @@ function renderAssessment(data) {
     if (dirCount > 5) {
         suggestions.push(`涉及 ${dirCount} 个方向，考虑聚焦主营方向`);
     }
-
-    // 渲染
-    if (items.length === 0) {
-        as.style.display = 'none';
-        ss.style.display = 'none';
-        return;
-    }
-
-    as.style.display = 'block';
-    ac.innerHTML = items.map(it => `<div class="item ${it.cls}">${it.text}</div>`).join('');
 
     if (suggestions.length > 0) {
         ss.style.display = 'block';

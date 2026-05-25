@@ -525,11 +525,10 @@ class TestHoldingsPageStructure:
                     f'可能缺少索引参数的 map: {m[:80]}...'
 
     def test_assessment_and_suggestion_present(self):
-        """持仓评估和建议区块存在"""
+        """持仓评估（概况块内）和建议区块存在"""
         html = self._load_html()
-        assert 'assessmentSection' in html
+        assert 'ovAssessment' in html
         assert 'suggestionSection' in html
-        assert 'assessmentContent' in html
         assert 'suggestionContent' in html
 
     def test_empty_state_present(self):
