@@ -113,10 +113,43 @@ body {
 }
 .dir-icon-bar:hover { background: rgba(255,215,0,0.1); border-color: #ffd700; }
 
+/* 方向管理面板（折叠） */
+.dir-panel {
+    background: #1a1a30; border: 1px solid #2a2a4e; border-radius: 10px;
+    padding: 10px 14px; margin: -6px 0 10px;
+}
+.dir-add-row { display: flex; gap: 6px; align-items: center; margin: 10px 0; }
+.dir-add-row .search-input { flex: 1; min-width: 100px; }
+.dir-list { display: flex; flex-direction: column; gap: 4px; }
+.dir-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 10px; border-radius: 6px;
+    background: rgba(255,255,255,0.03); border: 1px solid #2a2a4e;
+}
+.dir-item.inactive { opacity: 0.5; }
+.dir-item-name { font-size: 13px; font-weight: bold; color: #e0e0e0; }
+.dir-item-count { font-size: 11px; color: #888; margin-left: 6px; }
+.dir-item-actions { display: flex; gap: 4px; align-items: center; }
+.dir-toggle {
+    padding: 2px 8px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 11px; font-weight: bold; transition: all .2s;
+}
+.dir-toggle.on { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+.dir-toggle.off { background: rgba(233,69,96,0.15); color: #e94560; border: 1px solid rgba(233,69,96,0.3); }
+.dir-suggestions {
+    display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; margin-bottom: 6px;
+}
+.dir-suggestion-tag {
+    padding: 2px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;
+    background: #1a3a2a; color: #22c55e; border: 1px solid #22c55e;
+    transition: all .15s;
+}
+.dir-suggestion-tag:hover { background: #22c55e; color: #000; }
+
 /* 统一卡片外框 — 包住卡片+操作栏 */
 .watchlist-card-wrapper {
     background: linear-gradient(135deg, #1a1a2e, #16213e);
-    border: 1px solid #2a2a4e;
+    border: 0 solid #2a2a4e;
     border-radius: 12px;
     margin-bottom: 12px;
     overflow: hidden;
@@ -150,39 +183,6 @@ body {
 .watchlist-card-actions .wca-left {
     display: flex; align-items: center; gap: 8px;
 }
-
-/* 方向管理面板重新样式 */
-.dir-panel {
-    background: #1a1a30; border: 1px solid #2a2a4e; border-radius: 10px;
-    padding: 10px 14px; margin: -6px 0 10px;
-}
-.dir-add-row { display: flex; gap: 6px; align-items: center; margin: 10px 0; }
-.dir-add-row .search-input { flex: 1; min-width: 100px; }
-.dir-list { display: flex; flex-direction: column; gap: 4px; }
-.dir-item {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 6px 10px; border-radius: 6px;
-    background: rgba(255,255,255,0.03); border: 1px solid #2a2a4e;
-}
-.dir-item.inactive { opacity: 0.5; }
-.dir-item-name { font-size: 13px; font-weight: bold; color: #e0e0e0; }
-.dir-item-count { font-size: 11px; color: #888; margin-left: 6px; }
-.dir-item-actions { display: flex; gap: 4px; align-items: center; }
-.dir-toggle {
-    padding: 2px 8px; border-radius: 8px; border: none; cursor: pointer;
-    font-size: 11px; font-weight: bold; transition: all .2s;
-}
-.dir-toggle.on { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
-.dir-toggle.off { background: rgba(233,69,96,0.15); color: #e94560; border: 1px solid rgba(233,69,96,0.3); }
-.dir-suggestions {
-    display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; margin-bottom: 6px;
-}
-.dir-suggestion-tag {
-    padding: 2px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;
-    background: #1a3a2a; color: #22c55e; border: 1px solid #22c55e;
-    transition: all .15s;
-}
-.dir-suggestion-tag:hover { background: #22c55e; color: #000; }
 
 /* 方向搜索股票结果 */
 .dir-stock-results {

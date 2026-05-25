@@ -119,7 +119,7 @@ function signalStockCard(s, idx) {
     if (s.profit_model1) tags += '<span class="tag" style="background:#e94560;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">🏆 盈利1</span>';
     if (s.trend_stock) tags += '<span class="tag" style="background:#2196f3;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;">📈 趋势股</span>';
     return `
-        <div class="stock-item" style="border-left:3px solid ${color};">
+        <div class="stock-item">
             <div style="display:flex;justify-content:space-between;align-items:center;">
                 <div><span class="name">${structIcon} ${s.name}</span>
                 <span class="code">${s.code}</span>${tags}${buyBadge}</div>

@@ -142,7 +142,7 @@ function renderCards() {
             buy_point: s.buy_point || '', profit_model1: s.profit_model1 || false,
             trend_stock: s.trend_stock || false, vol_analysis: s.vol_analysis || '',
         };
-        html += `<div class="watchlist-card-wrapper${tracked ? '' : ' untracked'}" style="border-left:3px solid ${leftColor};">`;
+        html += `<div class="watchlist-card-wrapper${tracked ? '' : ' untracked'}" style="border-left:3px solid ${leftColor};border-radius:12px 0 0 12px;">`;
         html += signalStockCard(cardData, 'wl_' + i);
 
         // 底部操作栏 — 在统一容器内

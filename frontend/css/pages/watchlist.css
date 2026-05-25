@@ -146,14 +146,39 @@ body {
 }
 .dir-suggestion-tag:hover { background: #22c55e; color: #000; }
 
-/* 卡片底部操作栏（独立于卡片） */
+/* 统一卡片外框 — 包住卡片+操作栏 */
+.watchlist-card-wrapper {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 0 solid #2a2a4e;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+/* 未跟踪方向 → 卡片变灰降级 */
+.watchlist-card-wrapper.untracked {
+    opacity: 0.55;
+    filter: grayscale(0.4);
+}
+.watchlist-card-wrapper.untracked:hover {
+    opacity: 0.8;
+    filter: grayscale(0.2);
+}
+
+/* 卡片内的 stock-item 去掉自身的左边线和透明背景，用 wrapper 的 */
+.watchlist-card-wrapper .stock-item {
+    background: transparent !important;
+    border-left: none !important;
+    border-bottom: 1px solid #2a2a4e;
+    border-radius: 0 !important;
+    padding: 12px 14px 10px;
+}
+
+/* 底部操作栏（在统一容器内：无边框/圆角，只留内边距+背景条） */
 .watchlist-card-actions {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 5px 14px 7px;
-    background: linear-gradient(135deg, #1a1a2e, #16213e);
-    border: 1px solid #2a2a4e; border-top: none;
-    border-radius: 0 0 12px 12px;
-    margin-top: -13px; margin-bottom: 10px;
+    padding: 7px 14px;
+    background: rgba(0,0,0,0.15);
 }
 .watchlist-card-actions .wca-left {
     display: flex; align-items: center; gap: 8px;
