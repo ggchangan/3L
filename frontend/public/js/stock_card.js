@@ -133,7 +133,7 @@ function signalStockCard(s, idx) {
                 <div class="field"><span class="l">阶段:</span> <span class="v" style="color:${color};font-weight:bold;">${icon} ${s.stage||'--'}</span></div>
                 ${buyPointHtml}
                 ${stopLossHtml}
-                <div class="field"><span class="l">板块:</span> <span class="v" style="color:#aaa;font-size:11px;">${s.sector||'--'}</span>${s.direction ? `<span style="color:#555;margin:0 4px;">|</span><span class="l">方向:</span> <span class="v" style="color:#4ecdc4;font-size:11px;">${s.direction}</span>` : ''}</div>
+                <div class="field"><span class="l">板块:</span> <span class="v" style="color:#aaa;font-size:11px;">${s.sector||'--'}</span>${s.sector_chg !== undefined ? `<span style="color:${s.sector_chg>=0?'#ff4444':'#44aa44'};font-size:11px;margin-left:4px;">${s.sector_chg>=0?'+':''}${s.sector_chg.toFixed(2)}%</span>` : ''}${s.direction ? `<span style="color:#555;margin:0 4px;">|</span><span class="l">方向:</span> <span class="v" style="color:#4ecdc4;font-size:11px;">${s.direction}</span>` : ''}</div>
                 ${s.mainline_level ? `<div class="field"><span class="l">定位:</span> <span class="v" style="color:${s.mainline_level==='主线'?'#e94560':s.mainline_level==='次级主线'?'#ffd700':'#666'};font-size:11px;">${s.mainline_level}</span></div>` : ''}
                 <div class="field"><span class="l" style="cursor:pointer;color:#4ecdc4;" onclick="toggleChart('${chartId}')">📊</span></div>
             </div>

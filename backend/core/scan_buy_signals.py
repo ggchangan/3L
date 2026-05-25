@@ -253,12 +253,14 @@ def main():
             else:
                 vol_text = f'量能正常{vr:.0%}'
             
+            gain_val = round(bt.get('gain', 0), 2)
             signal = {
                 'code': code,
                 'name': name,
                 'direction': direction,
                 'price': bt.get('close', klines[-1]['close']),
-                'change_pct': round(bt.get('gain', 0), 2),
+                'change': gain_val,
+                'change_pct': gain_val,
                 'signal': 'buy',
                 'buy_type': bt.get('buy_type', ''),
                 'buy_point': bt.get('buy_type', ''),
@@ -284,12 +286,14 @@ def main():
                 _all_stocks_full = _ad.get('stocks', _ad)
             _tb = detect_trend_buy(code, today_str, _all_stocks_full, main_lines)
             if _tb:
+                _tb_gain = round(_tb.get('gain', 0), 2)
                 signals.append({
                     'code': code,
                     'name': name,
                     'direction': direction,
                     'price': _tb.get('price', klines[-1]['close']),
-                    'change_pct': 0,
+                    'change': _tb_gain,
+                    'change_pct': _tb_gain,
                     'signal': 'buy',
                     'buy_type': _tb['buy_type'],
                     'buy_point': _tb['buy_type'],

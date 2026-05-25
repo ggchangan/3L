@@ -225,7 +225,10 @@ def ensure_stock_data(code):
         url = f'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={prefix}{local_code},day,,,60,qfq'
         r = requests.get(url, timeout=15)
         raw = r.json()
-        klines_raw = raw['data'].get(f'{prefix}{local_code}', {}).get('qfqday', [])
+        data_node = raw.get('data', {})
+        if not isinstance(data_node, dict):
+            return (False, f'API返回异常: data字段类型={type(data_node).__name__}')
+        klines_raw = data_node.get(f'{prefix}{local_code}', {}).get('qfqday', [])
         if not klines_raw or len(klines_raw) < 5:
             return (False, f'数据不足: {len(klines_raw)}条')
         
