@@ -130,6 +130,12 @@ EXPECTED_ROUTES_POST = [
     '/api/watchlist/save',
     '/api/tips/save-journal',
     '/api/update',
+    '/api/directions/add',
+    '/api/directions/remove',
+    '/api/directions/toggle',
+    '/api/directions/reorder',
+    '/api/workbench/save',
+    '/api/holdings/save',
 ]
 
 
@@ -153,7 +159,7 @@ class TestRouteCompleteness:
         count = len(fresh_routes._exact)
         expected_min = len(EXPECTED_ROUTES_GET)
         assert count >= expected_min, f'路由数 {count} 不足 {expected_min}'
-        assert count <= expected_min + 5, \
+        assert count <= expected_min + 6, \
             f'路由数 {count} 超出预期 {expected_min}，可能有未预期的路由'
 
 
@@ -172,3 +178,7 @@ def test_post_route_handlers_exist():
     assert hasattr(mod, '_handle_save_journal')
     mod = importlib.import_module('backend.api.system')
     assert hasattr(mod, '_handle_update')
+    mod = importlib.import_module('backend.api.holdings')
+    assert hasattr(mod, '_handle_save')
+    mod = importlib.import_module('backend.api.workbench')
+    assert hasattr(mod, '_handle_save')
