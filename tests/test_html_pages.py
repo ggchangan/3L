@@ -100,6 +100,41 @@ class TestNavStructure:
         """nav.js 在 </body> 前（已在 test_nav_js_before_body_end 中验证）"""
 
 
+class TestNavContent:
+    """验证 nav.js 的导航内容结构"""
+
+    def test_main_nav_order(self):
+        """主导航顺序：盯盘/复盘/工作台排前三位"""
+        nav_js = read_page('nav.js')
+        # 提取 MAIN_NAV 中的 id 顺序
+        import re
+        ids = re.findall(r"id:\s*'(\w+)'", nav_js.split('FOOTER_LINKS')[0])
+        top3 = ids[:3]
+        assert top3 == ['monitor', 'review', 'workbench'], \
+            f'主导航前三位应为 monitor/review/workbench，实际: {top3}'
+        assert 'home' not in ids, '主导航不应包含 home(成果跟踪)'
+        assert 'skills' not in ids, '主导航不应包含 skills'
+
+    def test_footer_links_present(self):
+        """底部项目管理链接存在"""
+        nav_js = read_page('nav.js')
+        assert '⚙ 项目管理' in nav_js
+        assert '📖 Skills' in nav_js
+        assert '📊 模拟交易' in nav_js
+
+
+class TestServerRedirect:
+    """验证服务端重定向"""
+
+    def test_home_redirects_to_monitor(self):
+        """首页 / 应重定向到 monitor.html"""
+        server_code = read_page('server.py')
+        assert "'/': '/monitor.html'" in server_code, \
+            'server.py 中 / 应跳转到 monitor.html'
+        assert "'/': '/index.html'" not in server_code, \
+            'server.py 中 / 不应再跳转到 index.html'
+
+
 class TestPageSpecific:
 
     def test_index_has_daily_update(self):
