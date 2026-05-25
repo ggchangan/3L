@@ -23,33 +23,34 @@ body {
     font-weight: 600;
 }
 .overview-block .ov-body {
-    display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;
+    display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;
 }
-.overview-block .ov-pie svg { max-width: 220px; max-height: 220px; flex-shrink: 0; }
+.overview-block .ov-pie { flex-shrink: 0; }
+.overview-block .ov-pie svg { max-width: 260px; max-height: 260px; }
 .overview-block .ov-legend {
-    display: flex; flex-direction: column; gap: 4px; min-width: 130px;
-    padding-top: 2px; flex-shrink: 0;
+    display: flex; flex-direction: column; gap: 4px; min-width: 140px;
+    padding-top: 4px; flex-shrink: 0;
 }
 .overview-block .ov-legend .legend-item {
     display: flex; align-items: center; gap: 6px; font-size: 12px;
 }
 .overview-block .ov-legend .legend-dot {
-    width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
 }
-.overview-block .ov-legend .legend-name { color: #e0e0e0; min-width: 44px; font-size: 11px; }
-.overview-block .ov-legend .legend-count { color: #888; min-width: 28px; font-size: 11px; }
-.overview-block .ov-legend .legend-pct { color: #4ecdc4; font-weight: 600; font-size: 11px; }
+.overview-block .ov-legend .legend-name { color: #e0e0e0; min-width: 48px; }
+.overview-block .ov-legend .legend-count { color: #888; min-width: 28px; }
+.overview-block .ov-legend .legend-pct { color: #4ecdc4; font-weight: 600; }
 
 /* ── 右侧评估列 ── */
 .overview-block .ov-assessment {
-    flex: 1; min-width: 160px; padding-top: 2px;
-    border-left: 1px solid #2a2a4e; padding-left: 16px;
+    flex: 1; min-width: 200px; padding-top: 4px;
+    border-left: 1px solid #2a2a4e; padding-left: 20px;
 }
 .overview-block .ov-assessment .oa-title {
     font-size: 12px; color: #888; margin-bottom: 6px; font-weight: 500;
 }
 .overview-block .ov-assessment .oa-item {
-    font-size: 12px; padding: 2px 0; line-height: 1.7;
+    font-size: 12px; padding: 1px 0; line-height: 1.8;
 }
 .overview-block .ov-assessment .oa-item.high { color: #e94560; }
 .overview-block .ov-assessment .oa-item.medium { color: #ffd700; }
@@ -223,6 +224,7 @@ body {
     .container { padding: 12px; }
     .overview-block .ov-body { flex-direction: column; align-items: stretch; }
     .overview-block .ov-pie { text-align: center; }
+    .overview-block .ov-pie svg { max-width: 220px; max-height: 220px; }
     .overview-block .ov-assessment { border-left: none; padding-left: 0; border-top: 1px solid #2a2a4e; padding-top: 10px; margin-top: 6px; }
     .overview-block .ov-stats { justify-content: center; }
     .modal { width: 100%; margin: 10px; padding: 16px; }
