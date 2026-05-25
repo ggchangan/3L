@@ -38,7 +38,7 @@
             <!-- 单只搜索 -->
             <div id="addSingle" class="add-tab-content">
                 <div class="add-row">
-                    <input class="search-input" id="addSearch" placeholder="输入代码/名称/首字母搜索..." oninput="searchStock(this.value)">
+                    <input class="search-input" id="addSearch" placeholder="输入代码/名称/首字母搜索..." oninput="searchStock(this.value)" onblur="hideSearchResults()">
                     <select class="dir-select" id="addDir"></select>
                     <button class="btn btn-green" onclick="addStock()">添加</button>
                 </div>

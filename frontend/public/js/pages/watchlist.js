@@ -469,6 +469,14 @@ function selectSearchResult(code, name, dir) {
     document.getElementById('searchResults').style.display = 'none';
 }
 
+// 搜索输入框失焦 → 延迟隐藏结果（让点击结果的 onclick 先触发）
+function hideSearchResults() {
+    setTimeout(() => {
+        const el = document.getElementById('searchResults');
+        if (el) el.style.display = 'none';
+    }, 200);
+}
+
 async function addStock() {
     const input = document.getElementById('addSearch');
     const code = input.dataset.selectedCode;
