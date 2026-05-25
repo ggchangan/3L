@@ -500,7 +500,7 @@ document.getElementById('stockSearch').addEventListener('input', function() {
 async function searchStocks(q) {
     const el = document.getElementById('searchResults');
     try {
-        const resp = await fetch('/api/search-stocks?q=' + encodeURIComponent(q));
+        const resp = await fetch('/api/directions/stocks?q=' + encodeURIComponent(q));
         const data = await resp.json();
         const results = data.stocks || [];
         if (results.length === 0) {
@@ -508,8 +508,8 @@ async function searchStocks(q) {
             return;
         }
         el.innerHTML = results.slice(0, 10).map(s =>
-            `<div class="result-item" onclick="selectStock('${s.name}', '${s.code}')">
-                <span>${s.name}</span>
+            `<div class="result-item" onclick="selectStock('${s.name}', '${s.code}', ${s.price || 0})">
+                <span>${s.name} <span style="color:#4ecdc4;font-size:11px;">${s.price ? s.price.toFixed(2) : ''}</span></span>
                 <span class="ri-code">${s.code}</span>
             </div>`
         ).join('');
@@ -519,34 +519,20 @@ async function searchStocks(q) {
     }
 }
 
-function selectStock(name, code) {
+function selectStock(name, code, price) {
     SELECTED_STOCK = { name, code };
     document.getElementById('selectedName').textContent = name;
     document.getElementById('selectedCode').textContent = code;
     document.getElementById('stockSearch').value = name;
     document.getElementById('searchResults').style.display = 'none';
 
-    // 获取实时价
-    fetchPrice(code).then(p => {
-        document.getElementById('selectedPrice').textContent = p.price !== null ? p.price.toFixed(2) + ' 元' : '获取中...';
-        if (p.price !== null) cachedPrices[code] = p.price;
-        calcStopLossPct();
-    });
-}
-
-async function fetchPrice(code) {
-    try {
-        const resp = await fetch('/api/holdings?_=' + Date.now());
-        // Try to get price from the response by matching code
-        // Actually, we can use the holdings endpoint — but it's too heavy.
-        // For simplicity, use the existing stock info API
-        const resp2 = await fetch('/api/search-stocks?q=' + code);
-        const data = await resp2.json();
-        // Check if any stock info has price data
-        return { price: null };
-    } catch (err) {
-        return { price: null };
+    if (price && price > 0) {
+        cachedPrices[code] = price;
+        document.getElementById('selectedPrice').textContent = price.toFixed(2) + ' 元';
+    } else {
+        document.getElementById('selectedPrice').textContent = '价格获取中...';
     }
+    calcStopLossPct();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -579,14 +565,17 @@ async function loadDirections() {
     const sel = document.getElementById('directionSelect');
     sel.innerHTML = '<option value="">请选择方向</option>';
     try {
-        const resp = await fetch('/api/directions/list');
+        const resp = await fetch('/api/directions/get');
         const data = await resp.json();
-        const dirs = data.directions || [];
-        dirs.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d;
-            opt.textContent = d;
-            sel.appendChild(opt);
+        const dirs = data.directions || {};
+        // dirs is {name: active_bool}, filter active ones
+        Object.entries(dirs).forEach(([name, active]) => {
+            if (active) {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                sel.appendChild(opt);
+            }
         });
     } catch (err) {
         console.error('方向加载失败:', err);
