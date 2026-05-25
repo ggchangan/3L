@@ -31,6 +31,9 @@ def _handle_stock_chart(h, path):
     if not code:
         h.send_json({'error': 'missing code param'})
         return
+    if code in ('undefined', 'null', 'None', ''):
+        h.send_json({'error': f'invalid code: {code}'})
+        return
     svg_str, err = generate_stock_chart(code)
     if err:
         h.send_json({'error': err})

@@ -381,9 +381,7 @@ function renderBuySignalsPage() {
     // 每只股票用公共 signalStockCard
     pageItems.forEach((s, idx) => {
         const card = signalStockCard(s, start + idx + 1);
-        html += card.replace(/id="hchart_/g, `id="mchart_${activeSignalDir}_`)
-                    .replace(/toggleChart\('hchart_/g, `toggleMChart('mchart_${activeSignalDir}_`)
-                    .replace(/toggleChart\('/g, `toggleMChart('`);
+        html += card.replace(/id="hchart_/g, `id="mchart_${activeSignalDir}_`).replace(/toggleChart\('hchart_/g, `toggleChart\('mchart_${activeSignalDir}_`);
     });
 
     // 分页
@@ -414,18 +412,6 @@ function goSignalDirPage(page) {
 }
 
 // 买点信号图表切换（点击📊展开/收起K线图）
-function toggleMChart(id, code) {
-    const div = document.getElementById(id);
-    if (!div) return;
-    const obj = div.querySelector('object');
-    if (div.style.display === 'none') {
-        div.style.display = 'block';
-        obj.data = '/api/stock-chart?code=' + code + '&t=' + Date.now();
-    } else {
-        div.style.display = 'none';
-        // 不清空data，保持缓存
-    }
-}
 
 // ====== 龙头观测 ======
 let leaderTab = 'industry';

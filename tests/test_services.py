@@ -930,3 +930,30 @@ class TestTrendServiceWithMock:
             assert 'change' in s
             assert 'structure' in s
             assert 'stage' in s
+
+
+# ── 个股K线图API防御性回归测试 ──────────────────────────
+
+
+class TestStockChartDefensive(unittest.TestCase):
+    """避免"修了好几次还修不好"的回归测试"""
+
+    @patch('services.stock_chart_service._fetch_realtime_quote')
+    @patch('services.stock_chart_service.get_stock_klines')
+    @patch('services.stock_chart_service.ensure_stock_data')
+    def test_invalid_code_rejected_early(self, mock_ensure, mock_klines, mock_rt):
+        """无效code如'undefined'不应调用ensure_stock_data/腾讯API"""
+        mock_klines.return_value = []  # 不在缓存
+        mock_ensure.return_value = (False, 'API返回异常: data字段类型=list')
+        from services.stock_chart_service import generate_stock_chart
+        svg, err = generate_stock_chart('undefined')
+        self.assertIsNone(svg)
+        self.assertIn('API返回异常', err)
+
+    def test_normal_code_skips_ensure_if_cached(self):
+        """正常code且在缓存中的，不调腾讯API"""
+        from services.stock_chart_service import generate_stock_chart
+        # 缓存中有600391的可直接生成SVG
+        svg, err = generate_stock_chart('000988')
+        self.assertIsNotNone(svg, f'应在缓存中: {err}')
+        self.assertIn('<svg', svg)
