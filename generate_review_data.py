@@ -628,6 +628,17 @@ def load_review_data(date_str, existing, ww_dir, latest_scan_path):
                         'trend_bias': r.get('trend_bias', ''),
                         'trend_buy_type': r.get('trend_buy_type', ''),
                     })
+                # 只保留启用方向的自选股
+                try:
+                    wl = get_watchlist()
+                    active_dirs = get_active_dirs()
+                    enabled_codes = {s['code'] for s in wl if s.get('direction', '其他') in active_dirs}
+                    if enabled_codes:
+                        before = len(buy_signals)
+                        buy_signals = [s for s in buy_signals if s['code'] in enabled_codes]
+                        print(f"[3L复盘] 🎯 方向过滤: {before}→{len(buy_signals)}条 (启用方向股票)")
+                except Exception as ef:
+                    print(f"[3L复盘] ⚠️ 方向过滤失败: {ef}")
         except Exception as e:
             print(f"[3L复盘] ⚠️ 读取最新扫描结果失败: {e}")
     
