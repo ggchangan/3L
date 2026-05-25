@@ -121,6 +121,56 @@ def _format_volume(v):
     return f'{v:.0f}'
 
 
+def _resolve_today_candle_state(now_hour, now_min, quote, last_date_str, today_str):
+    """
+    决定今日蜡烛的渲染状态（三态）
+
+    Args:
+        now_hour: 当前小时 (0-23)
+        now_min: 当前分钟 (0-59)
+        quote: 腾讯实时行情 dict 或 None
+        last_date_str: 最后一条K线的日期 (YYYYMMDD)
+        today_str: 今日日期 (YYYYMMDD)
+
+    Returns:
+        dict:
+            - type: 'none' | 'trading' | 'settled'
+            - is_dashed: bool（仅 trading/settled）
+            - label_prefix: '实时' | '涨跌'
+            - date_label: '实时' | '今日'
+            - vol_prefix: '实时量' | '量'
+            - legend_label: '今日(虚线)' | '今日(实心)'
+            - estimate_volume: bool
+    """
+    has_today = quote and quote.get('close', 0) > 0 and last_date_str != today_str
+    if not has_today:
+        return {'type': 'none'}
+
+    now_total_min = now_hour * 60 + now_min
+    is_trading = (9 * 60 + 30) <= now_total_min < (15 * 60)  # 9:30 ≤ now < 15:00
+
+    if is_trading:
+        return {
+            'type': 'trading',
+            'is_dashed': True,
+            'label_prefix': '实时',
+            'date_label': '实时',
+            'vol_prefix': '实时量',
+            'legend_label': '今日(虚线)',
+            'estimate_volume': True,
+        }
+    else:
+        return {
+            'type': 'settled',
+            'is_dashed': False,
+            'label_prefix': '涨跌',
+            'date_label': '今日',
+            'vol_prefix': '量',
+            'legend_label': '今日(实心)',
+            'estimate_volume': False,
+        }
+
+
 def generate_stock_chart(code):
     """
     生成个股 K 线 SVG（60 日 K 线 + 今日实时虚线蜡烛 + 成交量预估）
@@ -176,7 +226,8 @@ def generate_stock_chart(code):
     # 判断今天数据是否已有（如果最后一天的日期就是今天，说明已收盘）
     last_date = str(data_60[-1].get('date', '')).replace('-', '')
     today_str = now.strftime('%Y%m%d')
-    has_today = rt and rt['close'] > 0 and last_date != today_str
+    st = _resolve_today_candle_state(now.hour, now.minute, rt, last_date, today_str)
+    has_today = st['type'] != 'none'
 
     # 汇总最高最低
     all_highs = list(highs)
@@ -233,12 +284,12 @@ def generate_stock_chart(code):
     nd15 = min(15, len(closes))
     hi_15 = max(highs[-nd15:]) if nd15 > 0 else mx
 
-    # 今日虚线蜡烛的 label
+    # 今日蜡烛的 title label
     today_label = ''
     if has_today:
         pct = rt.get('change_pct', 0)
         sign = '+' if pct >= 0 else ''
-        today_label = f'今日 {sign}{pct:.2f}%'
+        today_label = f'{st["label_prefix"]} {sign}{pct:.2f}%'
 
     # ── 5. 组装 SVG ────────────────────────────────────────
     sv = []
@@ -380,21 +431,18 @@ def generate_stock_chart(code):
             f'压力 {hi_15:.2f}</text>'
         )
 
-    # 5k. 今日蜡烛ï¼盘中虚线+å®æ¶标记ï¼收盘实心+ä»æ¥标记ï¼
+    # 5k. 今日蜡烛（盘中虚线+实时标记，收盘实心+今日标记）
     if has_today:
-        idx_today = n  # æåä¸æ ¹ä¹åçç´¢å¼
+        idx_today = n  # 最后一根之后的索引
         x = px(idx_today)
         w = max(cw * 0.5, 1)
 
-        # æ¶çåï¼15:00+ï¼æ°æ®å·²æ¯å¨å¤©æç»ï¼å®å¿è¡ç+æ¶¨è·å¹æ è®°
-        # çä¸­ï¼èçº¿è¡ç+å®æ¶æ è®°
-        is_after_market = now.hour >= 15
-        candle_style = '' if is_after_market else ' stroke-dasharray="4,3"'
-        vol_style = '' if is_after_market else ' stroke-dasharray="3,2"'
-        vol_fill = 'opacity="0.3"' if is_after_market else 'opacity="0.25"'
-        label_prefix = 'æ¶¨è·' if is_after_market else 'å®æ¶'
-        date_label = 'ä»æ¥' if is_after_market else 'å®æ¶'
-        info_vol_prefix = 'é' if is_after_market else 'å®æ¶é'
+        candle_style = ' stroke-dasharray="4,3"' if st['is_dashed'] else ''
+        vol_style = ' stroke-dasharray="3,2"' if st['is_dashed'] else ''
+        vol_fill = 'opacity="0.25"' if st['is_dashed'] else 'opacity="0.3"'
+        label_prefix = st['label_prefix']
+        date_label = st['date_label']
+        info_vol_prefix = st['vol_prefix']
 
         r_open  = rt['open']
         r_close = rt['close']
@@ -426,7 +474,7 @@ def generate_stock_chart(code):
         sv.append(
             f'<rect x="{x - w / 2}" y="{bt}" width="{w}" '
             f'height="{max(bb - bt, 0.5)}" '
-            f'fill="{clr if is_after_market else "none"}" '
+            f'fill="{clr if not st["is_dashed"] else "none"}" '
             f'stroke="{clr}" stroke-width="1.2"{candle_style} opacity="0.7"/>'
         )
 
@@ -435,8 +483,8 @@ def generate_stock_chart(code):
         try:
             hh = now.hour
             mm = now.minute
-            # çä¸­æé¢ä¼°å¨å¤©éï¼æ¶çåç¨å®éé
-            if not is_after_market:
+            # 盘中才预估全天量，收盘后用实际量
+            if st['estimate_volume']:
                 total_min = 240  # Aè¡å¨å¤©äº¤æ 240åé
                 if hh < 12:
                     elapsed_min = (hh - 9) * 60 + mm - 30 if hh >= 9 else 0
@@ -520,7 +568,7 @@ def generate_stock_chart(code):
         ('#2196f3', '突破'), ('#ff9800', '前高/量'), ('#4caf50', '前低'),
     ]
     if has_today:
-        legend_items.append(('#ffffff', '今日(实心)' if (now.hour >= 15) else '今日(虚线)'))
+        legend_items.append(('#ffffff', st['legend_label']))
     for idx, (clr2, lbl) in enumerate(legend_items):
         lx = 50 + idx * 100
         sv.append(
@@ -666,7 +714,8 @@ def generate_index_chart():
 
     today_str = now.strftime('%Y%m%d')
     last_date_str = str(data[-1]['day']).replace('-', '')
-    has_today = rt and rt['close'] > 0 and last_date_str != today_str
+    st = _resolve_today_candle_state(now.hour, now.minute, rt, last_date_str, today_str)
+    has_today = st['type'] != 'none'
 
     closes = [k['close'] for k in data]
     highs = [k['high'] for k in data]
@@ -720,7 +769,7 @@ def generate_index_chart():
     else:
         pct = 0
         sign = ''
-    today_label = f'今日 {sign}{pct:.2f}%' if has_today else ''
+    today_label = f'{st["label_prefix"]} {sign}{pct:.2f}%' if has_today else ''
 
     # ── Build SVG ────────────────────────────────────────
     sv = []
@@ -868,26 +917,31 @@ def generate_index_chart():
         is_up = r_close >= r_open
         clr = '#ff4444' if is_up else '#44aa44'
 
-        # Dashed wick
+        candle_style = ' stroke-dasharray="4,3"' if st['is_dashed'] else ''
+        vol_style = ' stroke-dasharray="3,2"' if st['is_dashed'] else ''
+
+        # Candle wick
         sv.append(
             f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" '
-            f'stroke="{clr}" stroke-width="0.5" opacity="0.4" stroke-dasharray="4,3"/>'
+            f'stroke="{clr}" stroke-width="0.5" opacity="0.4"{candle_style}/>'
         )
-        # Dashed body
+        # Candle body
         bt, bb = min(yo, yc), max(yo, yc)
         sv.append(
             f'<rect x="{x - w / 2}" y="{bt}" width="{w}" '
-            f'height="{max(bb - bt, 0.5)}" fill="none" '
-            f'stroke="{clr}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.7" rx="1"/>'
+            f'height="{max(bb - bt, 0.5)}" '
+            f'fill="{clr if not st["is_dashed"] else "none"}" '
+            f'stroke="{clr}" stroke-width="1.2"{candle_style} opacity="0.7" rx="1"/>'
         )
 
-        # Dashed volume bar
+        # Volume bar
         r_vol = rt.get('volume_hand', 0)
         vh_rt = (r_vol / 10000) / vm * 50
+        vol_fill = 'opacity="0.25"' if st['is_dashed'] else 'opacity="0.3"'
         sv.append(
             f'<rect x="{x - cw * 0.35}" y="{bv - vh_rt}" width="{max(cw * 0.6, 1)}" '
-            f'height="{max(vh_rt, 0.5)}" fill="{clr}" opacity="0.25" '
-            f'stroke="{clr}" stroke-width="0.6" stroke-dasharray="3,2"/>'
+            f'height="{max(vh_rt, 0.5)}" fill="{clr}" {vol_fill} '
+            f'stroke="{clr}" stroke-width="0.6"{vol_style}/>'
         )
 
         # Real-time label
@@ -900,7 +954,7 @@ def generate_index_chart():
         sv.append(
             f'<text x="{x}" y="{pt + 12}" text-anchor="middle" '
             f'font-family="sans-serif" font-size="11" fill="{pct_color}" '
-            f'font-weight="bold">{"涨跌" if not is_trading else "实时"} {sign2}{rt["change_pct"]:.2f}%</text>'
+            f'font-weight="bold">{st["label_prefix"]} {sign2}{rt["change_pct"]:.2f}%</text>'
         )
 
         # Text annotation near the candle
@@ -908,7 +962,7 @@ def generate_index_chart():
         label_y = yc - 6
         sv.append(
             f'<text x="{label_x}" y="{label_y}" font-family="sans-serif" '
-            f'font-size="9" fill="#ffd700" opacity="0.8">今日 {sign2}{rt["change_pct"]:.2f}%</text>'
+            f'font-size="9" fill="#ffd700" opacity="0.8">{st["label_prefix"]} {sign2}{rt["change_pct"]:.2f}%</text>'
         )
         sv.append(
             f'<text x="{label_x}" y="{label_y + 11}" font-family="sans-serif" '
@@ -939,7 +993,7 @@ def generate_index_chart():
         sv.append(
             f'<text x="{xd}" y="{bv + 16}" text-anchor="middle" '
             f'font-family="sans-serif" font-size="9" fill="#ff9800" '
-            f'transform="rotate(-45,{xd},{bv + 16})">{"今日" if not is_trading else "实时"}</text>'
+            f'transform="rotate(-45,{xd},{bv + 16})">{st["date_label"]}</text>'
         )
 
     # Legend
@@ -949,7 +1003,7 @@ def generate_index_chart():
         ('#ffd700', 'EMA5'), ('#ff6b6b', 'EMA10'), ('#4ecdc4', 'EMA20'),
     ]
     if has_today:
-        legend_items.append(('#ffffff', '今日(实心)' if (now.hour >= 15) else '今日(虚线)'))
+        legend_items.append(('#ffffff', st['legend_label']))
     for idx, (clr2, lbl) in enumerate(legend_items):
         lx = 80 + idx * 160
         sv.append(
