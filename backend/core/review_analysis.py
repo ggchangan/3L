@@ -283,7 +283,9 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
                 pass
 
         sector = s.get('sector', '')
-        # 用真实 THS 行业取代
+        # sector in buy_signals == user direction
+        direction = sector
+        # 用真实 THS 行业取代作为板块显示
         imap = get_industry_map()
         ths_ind = imap.get(code, {})
         real_sector = ths_ind.get('ths_industry', '') if isinstance(ths_ind, dict) else sector
@@ -314,6 +316,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             'name': s.get('name', '?'),
             'code': code,
             'sector': real_sector or sector,
+            'direction': direction,
             'buy_point': buy_point_display,
             'price': s.get('price', 0),
             'change': s.get('change', 0),
