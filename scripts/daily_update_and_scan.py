@@ -59,7 +59,7 @@ def update_cache():
     print(f"  缓存: {cached_date} (最新日 {cache_latest})")
     print(f"  mootdx最新: {latest_mootdx}")
 
-    if latest_mootdx <= cache_latest:
+    if latest_mootdx <= cache_latest and latest_mootdx <= cached_date:
         print("✅ 已最新，跳过")
         return data
 
@@ -75,7 +75,7 @@ def update_cache():
                 new_records = []
                 for _, row in bars.iterrows():
                     d = row["datetime"][:10].replace("-", "")
-                    if d > cache_latest:
+                    if d > cached_date:
                         new_records.append({
                             "date": d,
                             "open": round(float(row["open"]), 2),

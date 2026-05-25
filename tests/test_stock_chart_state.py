@@ -104,18 +104,17 @@ class TestTodayCandleState(unittest.TestCase):
         st = _resolve_today_candle_state(8, 0, _q(), '20260522', '20260525')
         self.assertEqual(st['type'], 'none')
 
-    # ── 场景 D: 非交易日 ──────────────────────────
+    # ── 场景 D: 非交易日（周末）──────────────────────────
 
-    def test_saturday_quote_no_trading(self):
-        """周六10:00，有昨日收盘价但不是今日有效交易 → 不画蜡烛"""
-        # 如果今天是周六，last_date 是周五，today_str 是周六
-        # 腾讯可能返回周五收盘数据，close > 0，但这不是今日交易数据
-        # has_today 逻辑会认为需要画蜡烛（last_date != today_str）
-        # 但周六不应该画 — 这条先标记一下，需要完善 has_today 逻辑
+    def test_saturday_no_trading(self):
+        """周六10:00 → 不画蜡烛"""
+        st = _resolve_today_candle_state(10, 0, _q(), '20260522', '20260523')
+        self.assertEqual(st['type'], 'none')
+
+    def test_sunday_no_trading(self):
+        """周日10:00 → 不画蜡烛"""
         st = _resolve_today_candle_state(10, 0, _q(), '20260522', '20260524')
-        # 周六不是交易日，但当前逻辑不判断交易日历
-        # 这个用例只是观察行为
-        self.assertIn(st['type'], ('trading', 'settled', 'none'))
+        self.assertEqual(st['type'], 'none')
 
     # ── 场景 E: 15:00 边界值的分钟级确认 ──────────────
 
