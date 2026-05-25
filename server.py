@@ -224,7 +224,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/review.html': None,
             '/monitor': '/monitor.html',
             '/monitor.html': None,
-            '/': '/index.html',
+            '/': '/monitor.html',
         }
         if path in aliases and aliases[path]:
             self.path = aliases[path]
