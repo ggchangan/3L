@@ -148,7 +148,10 @@ function renderCards() {
         // 底部操作栏 — 在统一容器内
         let tag = '';
         if (!tracked) tag = '<span class="tag-untracked">未跟踪</span>';
-        const dirOpts = active.map(d =>
+        // 方向选择：包括当前股票的已有方向（即使已禁用），确保 select 能正确显示当前值
+        const allDirSet = new Set(active);
+        allDirSet.add(s.direction || '其他');
+        const dirOpts = Array.from(allDirSet).map(d =>
             `<option value="${d}" ${s.direction === d ? 'selected' : ''}>${d}</option>`
         ).join('');
         html += `<div class="watchlist-card-actions">
