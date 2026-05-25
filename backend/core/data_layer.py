@@ -33,6 +33,14 @@ def _save_json(path, data):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+def _atomic_save_json(path, data):
+    """原子写入：临时文件 → rename 覆盖，避免读到半成品"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.rename(tmp, path)
+
 # ====== K线数据 ======
 def _load_all_stocks_from_disk():
     raw = _load_json(ALL_STOCKS_PATH, {})
@@ -48,10 +56,15 @@ def get_last_updated():
     return raw.get('last_updated', '')
 
 def save_all_stocks(stocks, last_updated=None):
-    """保存K线数据"""
+    """原子保存K线数据"""
     data = {'last_updated': last_updated or datetime.now().strftime('%Y%m%d'), 'stocks': stocks}
-    _save_json(ALL_STOCKS_PATH, data)
+    _atomic_save_json(ALL_STOCKS_PATH, data)
     cache.invalidate('all_stocks')
+
+def load_all_stocks_uncached():
+    """强制从磁盘读取K线数据（不走缓存），供更新脚本使用"""
+    raw = _load_json(ALL_STOCKS_PATH, {})
+    return raw.get('stocks', raw)
 
 def get_stock_klines(code, direction=None, stocks=None):
     """获取单只股票K线列表，stocks 为 get_all_stocks() 返回值"""

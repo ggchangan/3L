@@ -2,6 +2,7 @@
 """
 唯一数据更新脚本 — 17:00 cron 运行
 范围 = watchlist 自选股，全量更新K线数据
+所有文件I/O通过 backend.core.data_layer 完成
 
 用法:
     python3 scripts/update_stock_data.py
@@ -12,39 +13,20 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import DATA_DIR
+from backend.core.data_layer import (
+    get_watchlist,
+    load_all_stocks_uncached,
+    get_last_updated,
+    get_industry_map,
+    save_all_stocks,
+)
 
-DATA_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
-WATCHLIST_PATH = os.path.join(DATA_DIR, 'watchlist.json')
-INDUSTRY_MAP_PATH = os.path.join(DATA_DIR, 'stock_industry_map.json')
+CACHE_DIR = os.path.join(DATA_DIR, '.cache')
 
-TMP_PATH = DATA_PATH + '.tmp'
 
 def log(msg):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print(f'[{timestamp}] {msg}')
-
-def get_watchlist_codes():
-    """从watchlist获取所有股票代码"""
-    try:
-        with open(WATCHLIST_PATH) as f:
-            raw = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-    codes = set()
-    stocks = raw.get('stocks', []) if isinstance(raw, dict) else raw
-    for s in stocks:
-        code = s.get('code', '') if isinstance(s, dict) else str(s)
-        if code:
-            codes.add(code[-6:])  # 标准化6位代码
-    return sorted(codes)
-
-
-def _normalize_code(code):
-    """标准化为6位代码"""
-    for pfx in ['SH', 'SZ', 'sh', 'sz']:
-        if code.startswith(pfx):
-            code = code[len(pfx):]
-    return code[-6:] if len(code) >= 6 else code
 
 
 def _get_stock_name(code):
@@ -63,33 +45,6 @@ def _get_stock_name(code):
     except Exception:
         pass
     return None
-
-
-def load_existing_data():
-    """加载现有数据，返回 {code: {sector, klines, name}}"""
-    result = {}
-    try:
-        with open(DATA_PATH) as f:
-            raw = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return result, None
-
-    stocks = raw.get('stocks', raw)
-    for sector, sec_data in stocks.items():
-        for code, klines in sec_data.items():
-            name = klines[0].get('name', '') if klines else ''
-            result[code] = {'sector': sector, 'klines': klines, 'name': name}
-    last_updated = raw.get('last_updated', '')
-    return result, last_updated
-
-
-def load_industry_map():
-    """加载行业映射，返回 {code: {name, ths_industry, direction}}"""
-    try:
-        with open(INDUSTRY_MAP_PATH) as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
 
 
 def fetch_klines_from_mootdx(client, code, count=800):
@@ -113,22 +68,37 @@ def fetch_klines_from_mootdx(client, code, count=800):
         return []
 
 
+def _flatten_stocks(sector_map):
+    """{sector: {code: [klines]}} → {code: {sector, klines, name}}"""
+    result = {}
+    for sector, codes in sector_map.items():
+        for code, klines in codes.items():
+            name = klines[0].get('name', '') if klines else ''
+            result[code] = {'sector': sector, 'klines': klines, 'name': name}
+    return result
+
+
 def main():
     t0 = time.time()
 
-    # 1. 读watchlist
-    codes = get_watchlist_codes()
+    # 1. 读watchlist（通过 data_layer）
+    wl = get_watchlist()
+    codes = sorted(set(
+        s.get('code', '')[-6:] for s in wl if s.get('code')
+    ))
     if not codes:
         log('⚠️ 自选股列表为空，跳过')
         return
     log(f'📋 自选股共 {len(codes)} 只')
 
-    # 2. 加载现有数据
-    existing, last_updated = load_existing_data()
+    # 2. 加载现有数据（不走缓存，要最新）
+    existing_sector_map = load_all_stocks_uncached()
+    existing = _flatten_stocks(existing_sector_map)
+    last_updated = get_last_updated()
     log(f'📂 现有数据: {len(existing)} 只, 上次更新: {last_updated or "无"}')
 
     # 3. 加载行业映射
-    industry_map = load_industry_map()
+    industry_map = get_industry_map()
     log(f'🗺️  行业映射: {len(industry_map)} 只')
 
     # 4. 连接mootdx
@@ -137,7 +107,6 @@ def main():
 
     # 5. 确定最新交易日
     today_str = datetime.now().strftime('%Y%m%d')
-    # 用第一只股票检测mootdx最新日
     if codes:
         sample = client.bars(symbol=codes[0], frequency=9, start=0, count=3)
         if sample is not None and len(sample) > 0:
@@ -158,20 +127,17 @@ def main():
         log('✅ 已最新，跳过')
         return
 
-    # 7. 逐只更新
-    new_codes = [c for c in codes if c not in existing]
-    update_codes = [c for c in codes if c in existing]
-
-    updated = 0
-    new_added = 0
-    names_fixed = 0
-
-    # 批量更新前清理缓存
-    cache_path = os.path.join(DATA_DIR, '.cache', 'all_stocks.json')
+    # 7. 清除缓存
+    cache_path = os.path.join(CACHE_DIR, 'all_stocks.json')
     try:
         os.remove(cache_path)
     except (FileNotFoundError, OSError):
         pass
+
+    # 8. 逐只更新
+    updated = 0
+    new_added = 0
+    names_fixed = 0
 
     for code in codes:
         try:
@@ -199,17 +165,14 @@ def main():
                 if isinstance(im, dict):
                     name = im.get('name', '')
                 if not name:
-                    # 从腾讯API取名称
                     name = _get_stock_name(code)
                     if name:
                         names_fixed += 1
 
-                # 取最近60根
                 records = records[-60:]
                 for r in records:
                     r['name'] = name or code
 
-                # 确定行业归属
                 ths_industry = '未知'
                 if isinstance(im, dict) and im.get('ths_industry'):
                     ths_industry = im['ths_industry']
@@ -222,17 +185,15 @@ def main():
                 new_added += 1
         except Exception as e:
             log(f'  ⚠️ {code}: {e}')
-            # 个别失败不影响整体
 
-    # 8. 组装输出
+    # 9. 组装输出
     sector_map = {}
     for code, info in existing.items():
-        if code in codes:  # 只保留watchlist里的股票
+        if code in codes:
             sec = info.get('sector', '未知')
             if sec not in sector_map:
                 sector_map[sec] = {}
             klines = info['klines']
-            # 确保名称字段
             name = info.get('name', '')
             if name and klines:
                 for k in klines:
@@ -242,16 +203,8 @@ def main():
                 klines.pop(0)
             sector_map[sec][code] = klines
 
-    output = {
-        'last_updated': latest_mootdx,
-        'stocks': sector_map,
-    }
-
-    # 9. 原子写入
-    os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
-    with open(TMP_PATH, 'w') as f:
-        json.dump(output, f, ensure_ascii=False)
-    os.rename(TMP_PATH, DATA_PATH)
+    # 10. 原子保存（通过 data_layer）
+    save_all_stocks(sector_map, last_updated=latest_mootdx)
 
     elapsed = time.time() - t0
     log(f'✅ 完成: {updated}只更新, {new_added}只新增, {names_fixed}只补名')

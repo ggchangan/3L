@@ -133,3 +133,65 @@ class TestGetIndustryMap:
     def test_is_dict(self):
         im = get_industry_map()
         assert isinstance(im, dict), f'Expected dict, got {type(im).__name__}'
+
+
+class TestAtomicSave:
+    """Verify atomic save — uses temp dirs, never touches production data."""
+
+    def _save_via_temp_path(self, stocks, last_updated, tmp_dir):
+        """Helper: save data using _atomic_save_json to a temp path."""
+        from backend.core.data_layer import _atomic_save_json
+        from config import ALL_STOCKS_PATH as REAL_PATH
+        test_path = os.path.join(tmp_dir, 'test_stocks.json')
+        data = {'last_updated': last_updated, 'stocks': stocks}
+        _atomic_save_json(test_path, data)
+        return test_path
+
+    def test_atomic_write_creates_file(self, tmp_path):
+        """Atomic write creates the target file with correct content."""
+        test_path = self._save_via_temp_path(
+            {'test_dir': {'000001': [{'date': '20260525', 'close': 10.0}]}},
+            '20260525',
+            tmp_path
+        )
+        assert os.path.isfile(test_path), 'File was not created'
+
+    def test_atomic_write_no_tmp_residue(self, tmp_path):
+        """No .tmp file remains after atomic write."""
+        test_path = self._save_via_temp_path({'test_dir': {}}, '20260525', tmp_path)
+        tmp_residue = test_path + '.tmp'
+        assert not os.path.exists(tmp_residue), f'Tmp residue file left: {tmp_residue}'
+
+    def test_atomic_write_content_correct(self, tmp_path):
+        """Content written matches input data."""
+        import json
+        expected_stocks = {'test_dir': {'000001': [{'date': '20260525', 'close': 10.0}]}}
+        test_path = self._save_via_temp_path(expected_stocks, '20260525', tmp_path)
+        with open(test_path) as f:
+            loaded = json.load(f)
+        assert loaded['last_updated'] == '20260525'
+        assert loaded['stocks'] == expected_stocks
+
+    def test_save_all_stocks_uses_atomic_write(self, monkeypatch, tmp_path):
+        """save_all_stocks() uses atomic write internally."""
+        from backend.core import data_layer as dl
+        test_path = os.path.join(tmp_path, 'all_stocks.json')
+        monkeypatch.setattr(dl, 'ALL_STOCKS_PATH', test_path)
+        dl.save_all_stocks({'test': {}}, last_updated='20260525')
+        assert os.path.isfile(test_path)
+        # No .tmp residue
+        assert not os.path.exists(test_path + '.tmp')
+
+    def test_uncached_load_returns_latest_saved(self, monkeypatch, tmp_path):
+        """load_all_stocks_uncached() reads the latest saved file, bypassing cache."""
+        import json
+        from backend.core import data_layer as dl
+        test_path = os.path.join(tmp_path, 'all_stocks.json')
+        monkeypatch.setattr(dl, 'ALL_STOCKS_PATH', test_path)
+        # Write test data directly
+        data = {'last_updated': '20260525', 'stocks': {'测试方向': {'000001': [{'date': '20260525'}]}}}
+        with open(test_path, 'w') as f:
+            json.dump(data, f)
+        loaded = dl.load_all_stocks_uncached()
+        assert isinstance(loaded, dict)
+        assert '测试方向' in loaded
