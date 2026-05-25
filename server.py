@@ -303,6 +303,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/directions/toggle': ('backend.api.directions', '_handle_set_active'),
             '/api/directions/reorder': ('backend.api.directions', '_handle_reorder'),
             '/api/workbench/save': ('backend.api.workbench', '_handle_save'),
+            '/api/holdings/save': ('backend.api.holdings', '_handle_save'),
         }
         if self.path in post_routes:
             mod_name, func_name = post_routes[self.path]
