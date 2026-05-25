@@ -135,7 +135,7 @@ function toggleIndexChart() {
     if (panel) {
         panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         if (obj && panel.style.display === 'block') {
-            obj.data = '/pub/charts/zzqz_v2.svg?t=' + Date.now();
+            obj.data = '/api/index-chart?t=' + Date.now();
         }
     }
 }

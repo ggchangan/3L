@@ -421,6 +421,22 @@ def get_sector_chart(name):
                 f'font-size="10" fill="#888888">{lbl}</text>'
             )
 
+        # 数据日期标签
+        last_date = str(data[-1]['day'])
+        now_str = now.strftime('%Y-%m-%d')
+        if last_date == now_str:
+            sv.append(
+                f'<text x="{W / 2}" y="{H - 4}" text-anchor="middle" '
+                f'font-family="sans-serif" font-size="9" fill="#555">'
+                f'数据截至: {last_date}  |  🟢 盘中更新</text>'
+            )
+        else:
+            sv.append(
+                f'<text x="{W / 2}" y="{H - 4}" text-anchor="middle" '
+                f'font-family="sans-serif" font-size="9" fill="#555">'
+                f'数据截至: {last_date} (上一交易日)</text>'
+            )
+
         sv.append('</svg>')
 
         os.makedirs(os.path.dirname(svg_file), exist_ok=True)

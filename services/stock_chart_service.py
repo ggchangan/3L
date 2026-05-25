@@ -12,11 +12,15 @@
 import json
 import math
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
+import akshare as ak
 
 from backend.core.data_layer import get_all_stocks, ensure_stock_data, get_stock_klines
+
+# 中证全指K线图输出目录
+REVIEW_CHARTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'public', 'charts')
 
 
 def _fetch_realtime_quote(code):
@@ -517,3 +521,454 @@ def generate_stock_chart(code):
     sv.append('</svg>')
 
     return '\n'.join(sv), None
+
+
+def _ema_index(values, period):
+    """指数移动平均（用于中证全指）"""
+    result = [None] * len(values)
+    if not values:
+        return result
+    k = 2.0 / (period + 1)
+    result[0] = values[0]
+    for i in range(1, len(values)):
+        result[i] = (values[i] - result[i - 1]) * k + result[i - 1]
+    return result
+
+
+def _find_index_keypoints(data):
+    """中证全指关键点识别（同 gen_index_chart.py）"""
+    closes = [k['close'] for k in data]
+    highs = [k['high'] for k in data]
+    lows = [k['low'] for k in data]
+    opens = [k['open'] for k in data]
+    volumes = [k['volume'] for k in data]
+    n = len(data)
+    kps = []
+    for i in range(5, n):
+        if highs[i] == max(highs[max(0, i - 10):i + 1]) and i > 0:
+            kps.append({'idx': i, 'type': 1, 'label': '前高', 'y': highs[i]})
+        if lows[i] == min(lows[max(0, i - 10):i + 1]) and i > 0:
+            kps.append({'idx': i, 'type': 1, 'label': '前低', 'y': lows[i]})
+        if i >= 10:
+            vw = volumes[i - 10:i]
+            if len(vw) > 0 and max(vw) > 0:
+                if volumes[i] >= max(vw) * 1.5:
+                    kps.append({'idx': i, 'type': 1, 'label': '量',
+                                'y': highs[i] + (highs[i] - lows[i]) * 0.5})
+                elif volumes[i] <= min(vw) * 0.5 and volumes[i] > 0:
+                    kps.append({'idx': i, 'type': 1, 'label': '量',
+                                'y': highs[i] + (highs[i] - lows[i]) * 0.5})
+            ph = max(highs[i - 10:i])
+            if closes[i] > ph and closes[i] > opens[i]:
+                kps.append({'idx': i, 'type': 2, 'label': '突', 'y': highs[i]})
+            if i >= 1 and closes[i] > opens[i] and closes[i - 1] < opens[i - 1] \
+                    and closes[i] > opens[i - 1] and opens[i] < closes[i - 1]:
+                kps.append({'idx': i, 'type': 2, 'label': '反', 'y': lows[i]})
+    return kps
+
+
+def generate_index_chart():
+    """生成中证全指K线SVG（含今日实时叠加）
+    Returns: (svg_absolute_path, error_or_none)
+    """
+    svg_file = os.path.join(REVIEW_CHARTS_DIR, 'zzqz_v2.svg')
+    svg_file2 = os.path.join(REVIEW_CHARTS_DIR, 'sz000985.svg')
+
+    now = datetime.now()
+    is_trading = 9 * 60 + 30 <= now.hour * 60 + now.minute <= 15 * 60  # 9:30-15:00
+    is_weekday = now.weekday() < 5
+
+    # 10-min cache during trading; 1h outside
+    if os.path.isfile(svg_file):
+        age = now.timestamp() - os.path.getmtime(svg_file)
+        if age < 600:  # 10 min
+            return svg_file, None
+        if not is_weekday or not is_trading:
+            if age < 3600:  # 1 hour
+                return svg_file, None
+
+    # ── Fetch 60-day kline data ──────────────────────────
+    try:
+        ak_data = ak.stock_zh_index_daily_tx(symbol='sh000985')
+        ak_data = ak_data.tail(60).reset_index(drop=True)
+    except Exception as e:
+        if os.path.isfile(svg_file):
+            return svg_file, None
+        return None, f'failed to fetch index data: {e}'
+
+    data = []
+    for _, row in ak_data.iterrows():
+        data.append({
+            'day': str(row['date']),
+            'open': float(row['open']),
+            'high': float(row['high']),
+            'low': float(row['low']),
+            'close': float(row['close']),
+            'volume': float(row['amount']) / 1e4,  # scale amount for volume bars
+        })
+
+    # ── Fetch real-time quote (直连腾讯，index 不走 _fetch_realtime_quote) ──
+    rt = None
+    try:
+        r = requests.get(
+            'https://qt.gtimg.cn/q=sh000985',
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://finance.qq.com',
+            },
+            timeout=5,
+        )
+        text = r.text
+        try:
+            text = text.decode('gbk')
+        except (UnicodeDecodeError, AttributeError):
+            pass
+        fields = text.split('"')[1].split('~') if '"' in text else []
+        if len(fields) >= 40:
+            def _f(idx, default=0):
+                try:
+                    return float(fields[idx]) if fields[idx] else default
+                except (ValueError, IndexError):
+                    return default
+            def _fi(idx, default=0):
+                v = fields[idx] if idx < len(fields) else ''
+                try:
+                    return int(v) if v.strip().isdigit() else default
+                except (ValueError, IndexError):
+                    return default
+            rt = {
+                'open': _f(5),
+                'close': _f(3),
+                'high': _f(33),
+                'low': _f(34),
+                'volume_hand': _fi(6),
+                'prev_close': _f(4),
+                'change_pct': _f(32),
+                'amount': _f(37),
+                'name': fields[1] if len(fields) > 1 else '',
+            }
+    except Exception:
+        pass
+
+    today_str = now.strftime('%Y%m%d')
+    last_date_str = str(data[-1]['day']).replace('-', '')
+    has_today = rt and rt['close'] > 0 and last_date_str != today_str
+
+    closes = [k['close'] for k in data]
+    highs = [k['high'] for k in data]
+    lows = [k['low'] for k in data]
+    opens_p = [k['open'] for k in data]
+    volumes = [k['volume'] for k in data]
+    n = len(data)
+
+    # y-axis range
+    all_highs = list(highs)
+    all_lows = list(lows)
+    if has_today:
+        all_highs.append(rt['high'])
+        all_lows.append(rt['low'])
+
+    mx = max(all_highs[-60:])
+    mn = min(all_lows[-60:])
+    rg = mx - mn if mx != mn else 1
+
+    total_bars = n + (1 if has_today else 0)
+
+    # ── SVG params (1000x550 as gen_index_chart.py) ──────
+    W, H = 1000, 550
+    pl, pr, pt, pb = 70, 30, 36, 70
+    cw = (W - pl - pr) / total_bars
+    bv = H - pb
+
+    def px(i): return pl + i * cw + cw / 2
+    def py(v): return pt + (mx - v) / rg * (H - pt - pb)
+
+    # EMAs
+    e5 = _ema_index(closes, 5)
+    e10 = _ema_index(closes, 10)
+    e20 = _ema_index(closes, 20)
+    vm = max(volumes) if max(volumes) > 0 else 1
+
+    # Keypoints
+    kps = _find_index_keypoints(data)
+    cur_close = closes[-1] if closes else 0
+    bk_pts_chart = sorted(
+        [kp for kp in kps if kp['label'] == '突' and kp['y'] < cur_close],
+        key=lambda x: x['y'], reverse=True
+    )
+    nd15 = min(15, len(closes))
+    hi_15 = max(highs[-nd15:]) if nd15 > 0 else mx
+
+    # Today label
+    if has_today:
+        pct = rt.get('change_pct', 0)
+        sign = '+' if pct >= 0 else ''
+    else:
+        pct = 0
+        sign = ''
+    today_label = f'今日 {sign}{pct:.2f}%' if has_today else ''
+
+    # ── Build SVG ────────────────────────────────────────
+    sv = []
+    sv.append(
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
+        f'viewBox="0 0 {W} {H}">'
+    )
+    sv.append(f'<rect width="{W}" height="{H}" fill="#1a1a2e"/>')
+
+    # Title
+    title_text = '中证全指(000985) K线图'
+    if today_label:
+        title_text += f'  |  {today_label}'
+    sv.append(
+        f'<text x="{W / 2}" y="24" text-anchor="middle" '
+        f'font-family="sans-serif" font-size="18" fill="#ffffff" '
+        f'font-weight="bold">{title_text}</text>'
+    )
+
+    # Grid lines
+    for i in range(6):
+        yv = mx - i * rg / 5
+        yp = py(yv)
+        sv.append(
+            f'<line x1="{pl}" y1="{yp}" x2="{W - pr}" y2="{yp}" '
+            f'stroke="#2a2a4e" stroke-width="0.5"/>'
+        )
+        sv.append(
+            f'<text x="{pl - 5}" y="{yp + 3}" text-anchor="end" '
+            f'font-family="sans-serif" font-size="9" fill="#666666">{yv:.0f}</text>'
+        )
+    sv.append(
+        f'<line x1="{pl}" y1="{bv}" x2="{W - pr}" y2="{bv}" '
+        f'stroke="#2a2a4e" stroke-width="0.5"/>'
+    )
+
+    # Historical volume bars
+    for i in range(n):
+        x = px(i) - cw * 0.35
+        w = max(cw * 0.6, 1)
+        vh = volumes[i] / vm * 50
+        is_up = closes[i] >= opens_p[i]
+        vc = '#ff4444' if is_up else '#44aa44'
+        sv.append(
+            f'<rect x="{x}" y="{bv - vh}" width="{w}" '
+            f'height="{max(vh, 0.5)}" fill="{vc}" opacity="0.35"/>'
+        )
+
+    # EMA lines
+    for ev, clr in [(e5, '#ffd700'), (e10, '#ff6b6b'), (e20, '#4ecdc4')]:
+        pts = []
+        for i in range(n):
+            if ev[i] is not None:
+                pts.append(f'{px(i)},{py(ev[i]):.2f}')
+        if pts:
+            sv.append(
+                f'<polyline points="{" ".join(pts)}" fill="none" '
+                f'stroke="{clr}" stroke-width="1" opacity="0.7"/>'
+            )
+
+    # Historical candles
+    for i in range(n):
+        x = px(i)
+        w = max(cw * 0.5, 1)
+        hi, lo = highs[i], lows[i]
+        op, cl = opens_p[i], closes[i]
+        yh = py(hi)
+        yl = py(lo)
+        yo = py(op)
+        yc = py(cl)
+        is_up = cl >= op
+        clr = '#ff4444' if is_up else '#44aa44'
+        sv.append(
+            f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" '
+            f'stroke="{clr}" stroke-width="0.5" opacity="0.6"/>'
+        )
+        bt, bb = min(yo, yc), max(yo, yc)
+        sv.append(
+            f'<rect x="{x - w / 2}" y="{bt}" width="{w}" '
+            f'height="{max(bb - bt, 0.5)}" fill="{clr}" opacity="0.8" rx="1"/>'
+        )
+
+    # Keypoints
+    sz = 5
+    for kp in kps:
+        i = kp['idx']
+        xp = px(i)
+        yp = py(kp['y'])
+        clr = '#ff9800' if kp['type'] == 1 else '#2196f3'
+        sv.append(
+            f'<rect x="{xp - sz}" y="{yp - sz}" width="{sz * 2}" '
+            f'height="{sz * 2}" fill="{clr}" opacity="0.85"/>'
+        )
+        sv.append(
+            f'<text x="{xp}" y="{yp - sz - 3}" text-anchor="middle" '
+            f'font-family="sans-serif" font-size="9" fill="{clr}">{kp["label"]}</text>'
+        )
+
+    # Support line
+    if bk_pts_chart:
+        sy = py(bk_pts_chart[0]['y'])
+        sv.append(
+            f'<line x1="{pl}" y1="{sy}" x2="{W - pr}" y2="{sy}" '
+            f'stroke="#4caf50" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.7"/>'
+        )
+        sv.append(
+            f'<text x="{pl + 4}" y="{sy - 4}" font-family="sans-serif" '
+            f'font-size="10" fill="#4caf50" font-weight="bold">'
+            f'支撑 {bk_pts_chart[0]["y"]:.0f}</text>'
+        )
+
+    # Resistance line
+    if hi_15:
+        ry = py(hi_15)
+        sv.append(
+            f'<line x1="{pl}" y1="{ry}" x2="{W - pr}" y2="{ry}" '
+            f'stroke="#f44336" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.7"/>'
+        )
+        sv.append(
+            f'<text x="{pl + 4}" y="{ry - 4}" font-family="sans-serif" '
+            f'font-size="10" fill="#f44336" font-weight="bold">'
+            f'压力 {hi_15:.0f}</text>'
+        )
+
+    # Today's dashed candle (real-time overlay)
+    if has_today:
+        idx_today = n
+        x = px(idx_today)
+        w = max(cw * 0.5, 1)
+
+        r_open = rt['open']
+        r_close = rt['close']
+        r_high = rt['high']
+        r_low = rt['low']
+
+        if r_high < r_low or r_high <= 0:
+            r_high = max(r_open, r_close, r_low) + 0.01
+        if r_low <= 0 or r_low > r_high:
+            r_low = min(r_open, r_close, r_high) - 0.01
+
+        yh = py(r_high)
+        yl = py(r_low)
+        yo = py(r_open)
+        yc = py(r_close)
+        is_up = r_close >= r_open
+        clr = '#ff4444' if is_up else '#44aa44'
+
+        # Dashed wick
+        sv.append(
+            f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" '
+            f'stroke="{clr}" stroke-width="0.5" opacity="0.4" stroke-dasharray="4,3"/>'
+        )
+        # Dashed body
+        bt, bb = min(yo, yc), max(yo, yc)
+        sv.append(
+            f'<rect x="{x - w / 2}" y="{bt}" width="{w}" '
+            f'height="{max(bb - bt, 0.5)}" fill="none" '
+            f'stroke="{clr}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.7" rx="1"/>'
+        )
+
+        # Dashed volume bar
+        r_vol = rt.get('volume_hand', 0)
+        vh_rt = (r_vol / 10000) / vm * 50
+        sv.append(
+            f'<rect x="{x - cw * 0.35}" y="{bv - vh_rt}" width="{max(cw * 0.6, 1)}" '
+            f'height="{max(vh_rt, 0.5)}" fill="{clr}" opacity="0.25" '
+            f'stroke="{clr}" stroke-width="0.6" stroke-dasharray="3,2"/>'
+        )
+
+        # Real-time label
+        pct_color = '#ff4444' if rt['change_pct'] >= 0 else '#44aa44'
+        sign2 = '+' if rt['change_pct'] >= 0 else ''
+        sv.append(
+            f'<rect x="{x - 35}" y="{pt - 2}" width="90" height="18" '
+            f'rx="3" fill="#1a1a2e" stroke="{pct_color}" stroke-width="0.6"/>'
+        )
+        sv.append(
+            f'<text x="{x}" y="{pt + 12}" text-anchor="middle" '
+            f'font-family="sans-serif" font-size="11" fill="{pct_color}" '
+            f'font-weight="bold">实时 {sign2}{rt["change_pct"]:.2f}%</text>'
+        )
+
+        # Text annotation near the candle
+        label_x = x + 20
+        label_y = yc - 6
+        sv.append(
+            f'<text x="{label_x}" y="{label_y}" font-family="sans-serif" '
+            f'font-size="9" fill="#ffd700" opacity="0.8">今日 {sign2}{rt["change_pct"]:.2f}%</text>'
+        )
+        sv.append(
+            f'<text x="{label_x}" y="{label_y + 11}" font-family="sans-serif" '
+            f'font-size="8" fill="#888">开:{r_open:.0f} 高:{r_high:.0f} '
+            f'低:{r_low:.0f} 现:{r_close:.0f}</text>'
+        )
+
+    # Date labels
+    step = max(1, n // 8)
+    for i in range(0, n, step):
+        xd = px(i)
+        d = str(data[i]['day'])
+        mm, dd = d[5:7], d[8:10]
+        sv.append(
+            f'<text x="{xd}" y="{bv + 16}" text-anchor="middle" '
+            f'font-family="sans-serif" font-size="9" fill="#666666" '
+            f'transform="rotate(-45,{xd},{bv + 16})">{mm}/{dd}</text>'
+        )
+    ldt = str(data[-1]['day'])
+    sv.append(
+        f'<text x="{px(n - 1)}" y="{bv + 16}" text-anchor="middle" '
+        f'font-family="sans-serif" font-size="9" fill="#666666" '
+        f'transform="rotate(-45,{px(n - 1)},{bv + 16})">'
+        f'{ldt[5:7]}/{ldt[8:10]}</text>'
+    )
+    if has_today:
+        xd = px(n)
+        sv.append(
+            f'<text x="{xd}" y="{bv + 16}" text-anchor="middle" '
+            f'font-family="sans-serif" font-size="9" fill="#ff9800" '
+            f'transform="rotate(-45,{xd},{bv + 16})">实时</text>'
+        )
+
+    # Legend
+    ly2 = bv + 10
+    legend_items = [
+        ('#ff9800', '第1类参考点'), ('#2196f3', '第2类供需改变'),
+        ('#ffd700', 'EMA5'), ('#ff6b6b', 'EMA10'), ('#4ecdc4', 'EMA20'),
+    ]
+    if has_today:
+        legend_items.append(('#ffffff', '今日(虚线)'))
+    for idx, (clr2, lbl) in enumerate(legend_items):
+        lx = 80 + idx * 160
+        sv.append(
+            f'<rect x="{lx}" y="{ly2}" width="10" height="10" '
+            f'fill="{clr2}" opacity="0.8" rx="1"/>'
+        )
+        sv.append(
+            f'<text x="{lx + 14}" y="{ly2 + 9}" font-family="sans-serif" '
+            f'font-size="11" fill="#888888">{lbl}</text>'
+        )
+
+    # Data freshness label
+    timestamp = now.strftime('%Y-%m-%d %H:%M')
+    if has_today:
+        sv.append(
+            f'<text x="{W / 2}" y="{H - 8}" text-anchor="middle" '
+            f'font-family="sans-serif" font-size="9" fill="#555">'
+            f'数据截至: {timestamp}  |  历史日K线: {data[-1]["day"]} (上一交易日收盘)  |  🟢 盘中更新</text>'
+        )
+    else:
+        sv.append(
+            f'<text x="{W / 2}" y="{H - 8}" text-anchor="middle" '
+            f'font-family="sans-serif" font-size="9" fill="#555">'
+            f'数据截至: {data[-1]["day"]} (已收盘)</text>'
+        )
+
+    sv.append('</svg>')
+
+    content = '\n'.join(sv)
+    os.makedirs(os.path.dirname(svg_file), exist_ok=True)
+    with open(svg_file, 'w') as f:
+        f.write(content)
+    with open(svg_file2, 'w') as f:
+        f.write(content)
+
+    return svg_file, None

@@ -29,3 +29,4 @@ server.pid
 
 # Build output copies (source in frontend/css/)
 frontend/dist/css/
+private/review_data.json
