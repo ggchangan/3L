@@ -95,14 +95,14 @@ class TestTodayCandleState(unittest.TestCase):
         self.assertFalse(st['is_dashed'])
 
     def test_settled_midnight(self):
-        """凌晨00:00 → 已收盘"""
+        """凌晨00:00 → 未开盘，不画蜡烛"""
         st = _resolve_today_candle_state(0, 0, _q(), '20260522', '20260525')
-        self.assertEqual(st['type'], 'settled')
+        self.assertEqual(st['type'], 'none')
 
     def test_settled_early_morning_08_00(self):
-        """08:00 盘前 → 已收盘（昨日数据）"""
+        """08:00 盘前 → 未开盘，不画蜡烛"""
         st = _resolve_today_candle_state(8, 0, _q(), '20260522', '20260525')
-        self.assertEqual(st['type'], 'settled')
+        self.assertEqual(st['type'], 'none')
 
     # ── 场景 D: 非交易日 ──────────────────────────
 

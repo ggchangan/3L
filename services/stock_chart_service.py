@@ -143,6 +143,11 @@ def _resolve_today_candle_state(now_hour, now_min, quote, last_date_str, today_s
             - estimate_volume: bool
     """
     has_today = quote and quote.get('close', 0) > 0 and last_date_str != today_str
+    if has_today:
+        # 今日K线仅限交易日 9:30 后才显示（避免凌晨用前一日收盘数据冒充今日）
+        now_total_min = now_hour * 60 + now_min
+        if datetime.now().weekday() >= 5 or now_total_min < 9 * 60 + 30:
+            has_today = False
     if not has_today:
         return {'type': 'none'}
 
