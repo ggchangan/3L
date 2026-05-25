@@ -213,6 +213,25 @@ def get_main_lines():
     return []
 
 
+# ── 盘中预估全天成交量 ──
+def _estimate_full_day_volume(current_vol, now=None):
+    """预估全天成交量（股），A股：09:30-11:30(120min)+13:00-15:00(120min)=240min"""
+    if now is None:
+        now = datetime.now()
+    total_min = 240  # A股全天交易240分钟
+    h, m = now.hour, now.minute
+    if h < 9 or (h == 9 and m < 30):
+        return current_vol  # 还没开盘
+    if h < 12:
+        elapsed = (h - 9) * 60 + m - 30  # 上午 09:30-11:30
+    elif h < 13:
+        elapsed = 120  # 午休 11:30-13:00，上午已满
+    else:
+        elapsed = 120 + (h - 13) * 60 + m  # 下午 13:00-15:00
+    elapsed = max(1, min(elapsed, total_min))
+    return int(current_vol * total_min / elapsed)
+
+
 def main():
     stocks = load_stock_list()
     print(f"加载自选股: {len(stocks)}只", file=sys.stderr)
@@ -224,6 +243,8 @@ def main():
     today_str = datetime.now().strftime('%Y-%m-%d')
     signals = []
     svg_ok = 0
+    now = datetime.now()
+    is_trading_hours = (9 <= now.hour < 15)  # 盘中
     
     for s in stocks:
         code = s['code']
@@ -235,15 +256,27 @@ def main():
         if len(klines) < 30:
             continue
         
+        # 盘中：用预估全天成交量替代今日真实成交量
+        vol_estimated = False
+        if is_trading_hours:
+            last_k = klines[-1]
+            today_str_short = last_k.get('date', '').replace('-', '')
+            if today_str_short == now.strftime('%Y%m%d'):
+                actual_vol = last_k.get('volume', 0)
+                if actual_vol > 0:
+                    est_vol = _estimate_full_day_volume(actual_vol, now)
+                    if est_vol != actual_vol:
+                        print(f"  {code} {name}: 预估量 {actual_vol}→{est_vol} (股)", file=sys.stderr)
+                        last_k['volume'] = est_vol
+                        vol_estimated = True
+        
         all_stocks = {direction: {code: klines}}
         bt = detect_buy_point(code, today_str, all_stocks,
                               market_position=market_position,
                               main_lines=main_lines)
         
         if bt:
-            # 盘中只扫突破买点
-            if bt.get('buy_type', '') not in ('突破买点',):
-                continue
+            # 不再限制买点类型：突破/中继/回踩都输出
             # 量能文本
             vr = bt.get('vol_ratio', 0)
             if vr < 0.7:
