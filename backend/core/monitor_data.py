@@ -500,6 +500,13 @@ def get_top_sectors_with_5d():
             r = requests.get('http://127.0.0.1:8080/api/industry-boards',
                             headers={'User-Agent': 'Mozilla/5.0'}, timeout=30)
             today_data = r.json().get('data', [])
+            # 保存到缓存
+            if today_data:
+                try:
+                    with open(today_cache_file, 'w') as f:
+                        json.dump({'date': today_str(), 'data': today_data}, f, ensure_ascii=False)
+                except:
+                    pass
         except:
             return {'today_top5': [], 'chg5d_top5': []}
     

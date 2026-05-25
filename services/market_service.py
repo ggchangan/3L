@@ -159,9 +159,17 @@ def get_sector_chart(name):
 
     svg_file = os.path.join(REVIEW_CHARTS_DIR, f'sector_{name}.svg')
 
-    # 检查缓存（1 小时 TTL）
-    if os.path.isfile(svg_file) and (datetime.now().timestamp() - os.path.getmtime(svg_file)) <= 3600:
-        return svg_file, None
+    # 检查缓存（交易时间10分钟，非交易时间1小时）
+    now = datetime.now()
+    is_trading = 9 * 60 + 30 <= now.hour * 60 + now.minute <= 15 * 60
+    if os.path.isfile(svg_file):
+        age = now.timestamp() - os.path.getmtime(svg_file)
+        if is_trading:
+            if age < 600:  # 10分钟
+                return svg_file, None
+        else:
+            if age < 3600:  # 1小时
+                return svg_file, None
 
     # 生成板块关键点图
     try:
@@ -421,21 +429,71 @@ def get_sector_chart(name):
                 f'font-size="10" fill="#888888">{lbl}</text>'
             )
 
-        # 数据日期标签
+        # 数据日期标签 + 今日实时叠加
         last_date = str(data[-1]['day'])
         now_str = now.strftime('%Y-%m-%d')
-        if last_date == now_str:
-            sv.append(
-                f'<text x="{W / 2}" y="{H - 4}" text-anchor="middle" '
-                f'font-family="sans-serif" font-size="9" fill="#555">'
-                f'数据截至: {last_date}  |  🟢 盘中更新</text>'
-            )
+        
+        # 尝试从行业板块缓存获取今日涨跌幅
+        today_chg = None
+        try:
+            bc_path = os.path.join(CACHE_DIR, f'industry_boards_{now.strftime("%Y-%m-%d")}.json')
+            if os.path.isfile(bc_path):
+                with open(bc_path) as f:
+                    bc = json.load(f)
+                bc_data = bc.get('data', bc) if isinstance(bc, dict) else bc
+                for b in bc_data:
+                    if b.get('板块', '') == name:
+                        today_chg = float(b.get('涨跌幅', 0) or 0)
+                        break
+        except:
+            pass
+
+        has_today_data = (last_date == now_str) or (today_chg is not None)
+        
+        # 在K线区域叠加今日虚线蜡烛
+        if has_today_data and nd > 0:
+            today_idx = nd
+            yesterday_close = c60[-1]
+            today_open = yesterday_close
+            today_close_est = yesterday_close * (1 + (today_chg or 0) / 100) if today_chg is not None else yesterday_close
+            today_high = max(today_open, today_close_est) * 1.005
+            today_low = min(today_open, today_close_est) * 0.995
+            
+            all_h = list(h60) + [today_high]
+            all_l = list(l60) + [today_low]
+            mx2 = max(all_h[-61:])
+            mn2 = min(all_l[-61:])
+            rg2 = mx2 - mn2 if mx2 != mn2 else 1
+            
+            total_bars = nd + 1
+            cw2 = (W - pl - pr) / total_bars
+            bv = H - pb
+            
+            def px2(i): return pl + i * cw2 + cw2 / 2
+            def py2(v): return pt + (mx2 - v) / rg2 * (H - pt - pb)
+            
+            x = px2(today_idx)
+            w2 = max(cw2 * 0.5, 1)
+            is_up = today_close_est >= today_open
+            clr = '#ff4444' if is_up else '#44aa44'
+            yh = py2(today_high); yl = py2(today_low)
+            yo = py2(today_open); yc = py2(today_close_est)
+            
+            sv.append(f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" stroke="{clr}" stroke-width="0.5" opacity="0.35" stroke-dasharray="4,3"/>')
+            bt, bb = min(yo, yc), max(yo, yc)
+            sv.append(f'<rect x="{x-w2/2}" y="{bt}" width="{w2}" height="{max(bb-bt,0.5)}" fill="{clr}" opacity="0.25" stroke="{clr}" stroke-width="0.5" stroke-dasharray="4,3" rx="1"/>')
+            
+            chg_sign = '+' if (today_chg or 0) >= 0 else ''
+            sv.append(f'<text x="{x + 12}" y="{py2(max(today_open, today_close_est)) - 6}" font-family="sans-serif" font-size="10" fill="#ffd700" opacity="0.8">今日 {chg_sign}{today_chg:.2f}%</text>')
+            sv.append(f'<text x="{x + 12}" y="{py2(max(today_open, today_close_est)) + 6}" font-family="sans-serif" font-size="8" fill="#888">开:{today_open:.0f} 估:{today_close_est:.0f}</text>')
+            sv.append(f'<text x="{x}" y="{bv + 16}" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#ffd700" transform="rotate(-45,{x},{bv+16})">📌今</text>')
+        
+        if has_today_data and today_chg is not None:
+            sv.append(f'<text x="{W / 2}" y="{H - 4}" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#555">数据截至: {now_str}  |  历史K线: {last_date}  |  🟢 今日 {today_chg:+.2f}%</text>')
+        elif has_today_data:
+            sv.append(f'<text x="{W / 2}" y="{H - 4}" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#555">数据截至: {last_date}  |  🟢 盘中更新</text>')
         else:
-            sv.append(
-                f'<text x="{W / 2}" y="{H - 4}" text-anchor="middle" '
-                f'font-family="sans-serif" font-size="9" fill="#555">'
-                f'数据截至: {last_date} (上一交易日)</text>'
-            )
+            sv.append(f'<text x="{W / 2}" y="{H - 4}" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#555">数据截至: {last_date} (上一交易日)</text>')
 
         sv.append('</svg>')
 
