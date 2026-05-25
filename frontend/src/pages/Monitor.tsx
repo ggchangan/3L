@@ -12,6 +12,8 @@ import AlarmLayer from '../components/AlarmLayer'
 
 export default function Monitor() {
   const [updateTime, setUpdateTime] = useState('等待数据...')
+  const [collapseSectors, setCollapseSectors] = useState(true)
+  const [collapseBuySignals, setCollapseBuySignals] = useState(true)
 
   useEffect(() => {
     const tick = () => {
@@ -55,20 +57,13 @@ export default function Monitor() {
 
           {/* 板块监测 */}  
           <div className="info-block">
-            <div className="block-title" style={{ cursor: 'pointer' }} onClick={e => {
-              const body = (e.currentTarget.parentElement?.querySelector('.ib-body') as HTMLElement)
-              if (body) {
-                body.style.display = body.style.display === 'none' ? 'block' : 'none'
-                const toggle = e.currentTarget.querySelector('.ib-toggle')
-                if (toggle) toggle.textContent = body.style.display === 'none' ? '▶' : '▼'
-              }
-            }}>
+            <div className="block-title" style={{ cursor: 'pointer' }} onClick={() => setCollapseSectors(v => !v)}>
               📊 板块监测 <span className="badge">10分钟刷新</span>
-              <span className="collapse-indicator ib-toggle">▼</span>
+              <span className="collapse-indicator ib-toggle">{collapseSectors ? '▼' : '▶'}</span>
             </div>
-            <div className="ib-body">
+            {collapseSectors && <div className="ib-body">
               <SectorMonitor />
-            </div>
+            </div>}
           </div>
 
           {/* 龙头观测 */}

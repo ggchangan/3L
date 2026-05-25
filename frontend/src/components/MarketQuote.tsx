@@ -100,7 +100,7 @@ export default function MarketQuote() {
   const yIsEst = data?.yesterday_is_estimated
 
   return (
-    <div className="info-block">
+    <>
       <div className="block-title">📡 大盘观测</div>
       <div className="quote-grid">
         <div className="quote-item">
@@ -135,9 +135,15 @@ export default function MarketQuote() {
       </div>
       {showIndexChart && (
         <div style={{ marginTop: 8 }}>
-          <object data={`/api/index-chart?t=${chartTs.current}`} type="image/svg+xml" style={{ width: '100%', height: 550, borderRadius: 8 }}></object>
+          <div style={{ width: '100%', height: 550, overflow: 'hidden', borderRadius: 8 }}>
+            <img
+              src={`/api/index-chart?t=${chartTs.current}`}
+              alt="中证全指关键点图"
+              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+            />
+          </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

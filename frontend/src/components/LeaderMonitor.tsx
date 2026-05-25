@@ -24,6 +24,7 @@ export default function LeaderMonitor() {
   const [sortCol, setSortCol] = useState<SortCol>('chg')
   const [sortAsc, setSortAsc] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [collapsed, setCollapsed] = useState(true)
 
   useEffect(() => {
     setLoading(true)
@@ -86,17 +87,20 @@ export default function LeaderMonitor() {
 
   return (
     <>
-      <div className="block-title" style={{ marginBottom: 0, cursor: 'default' }}>
+      <div className="block-title" style={{ marginBottom: 0, cursor: 'pointer' }} onClick={() => setCollapsed(v => !v)}>
         🏆 龙头观测
         <span
           className={`tab-btn ${tab === 'industry' ? 'active' : ''}`}
-          onClick={() => { setTab('industry'); setPage(1) }}
+          onClick={e => { e.stopPropagation(); setTab('industry'); setPage(1) }}
         >行业龙头</span>
         <span
           className={`tab-btn ${tab === 'market' ? 'active' : ''}`}
-          onClick={() => { setTab('market'); setPage(1) }}
+          onClick={e => { e.stopPropagation(); setTab('market'); setPage(1) }}
         >市场龙头</span>
+        <span className="collapse-indicator">{collapsed ? '▶' : '▼'}</span>
       </div>
+
+      {!collapsed && (<>
 
       {tab === 'market' && marketLeaders.length === 0 ? (
         <div className="empty">
@@ -176,6 +180,8 @@ export default function LeaderMonitor() {
           </div>
         </>
       )}
+      </>
+    )}
     </>
   )
 }

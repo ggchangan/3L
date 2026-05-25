@@ -1,6 +1,118 @@
-/* React SPA 全局样式 */
+/* ═══════════════════════════════════════
+   3L 系统全局样式 — React 版
+   覆盖所有 React 页面的基础主题
+   ═══════════════════════════════════════ */
+
+/* ===== 基础重置 ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ===== 暗色主题 ===== */
 body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  font-family: -apple-system, 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  background: #0f0f23;
+  color: #e0e0e0;
+  min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ===== 动画 ===== */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block; width: 24px; height: 24px;
+  border: 3px solid #2a2a4e; border-top-color: #4ecdc4;
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+
+.loading { text-align: center; padding: 40px; color: #888; font-size: 14px; }
+.loading p { color: #888; margin-top: 12px; }
+
+/* ===== 通用空白状态 ===== */
+.empty {
+  color: #555;
+  text-align: center;
+  padding: 30px;
+  font-size: 13px;
+}
+
+/* ===== 涨跌颜色 ===== */
+.up { color: #ff4444; }
+.down { color: #44aa44; }
+
+/* ===== 标签 ===== */
+.tag {
+  display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 11px;
+}
+.tag.red { background: #e94560; color: #fff; }
+.tag.green { background: #4ecdc4; color: #000; }
+.tag.yellow { background: #ffd700; color: #000; }
+.tag.blue { background: #2196f3; color: #fff; }
+.tag.gray { background: #444; color: #aaa; }
+.tag.orange { background: #ff9800; color: #000; }
+.tag.purple { background: #9C27B0; color: #fff; }
+
+/* ===== 登录按钮 ===== */
+.header {
+  background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+  border-bottom: 2px solid #e94560;
+  padding: 20px;
+  text-align: center;
+}
+.header h1 {
+  font-size: 22px;
+  color: #fff;
+  letter-spacing: 3px;
+}
+.header .update-badge {
+  display: inline-block;
+  background: #e94560;
+  color: #fff;
+  padding: 3px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+/* ===== 个股卡片（通用） ===== */
+.stock-item {
+  background: #0f0f23;
+  border: 1px solid #2a2a4a;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+}
+.stock-item .name {
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.stock-item .code {
+  color: #666;
+  font-size: 10px;
+  margin-left: 6px;
+}
+.stock-item .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.stock-item .field { font-size: 12px; }
+.stock-item .field .l { color: #888; }
+.stock-item .field .v { color: #e0e0e0; }
+.stock-item .field .v.danger { color: #e94560; }
+.stock-item .field .v.warn { color: #4ecdc4; }
+.stock-item .field .v.hold { color: #ffd700; }
+
+/* ===== 错误卡片 ===== */
+.error-card {
+  background: rgba(233,69,96,0.1);
+  border: 1px solid #e94560;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  color: #e94560;
+  font-size: 14px;
 }
