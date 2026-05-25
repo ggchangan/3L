@@ -137,6 +137,18 @@ class TestGenerateHoldingsReview:
         result = self._make_review(holdings=[], timing_signals_holdings=[])
         assert result == []
 
+    def test_sector_field_is_preserved(self):
+        """持仓复盘结果应有 sector 字段（用于前端按方向分组）"""
+        result = self._make_review()
+        for item in result:
+            assert 'sector' in item, f'{item["code"]} 缺少 sector 字段'
+            assert item['sector'] != '', f'{item["code"]} sector 不应为空'
+            # sector 应来源于 MOCK_HOLDINGS 的 direction
+            code = item['code']
+            expected = next((h['direction'] for h in MOCK_HOLDINGS if h['code'] == code), '')
+            if expected:
+                assert item['sector'] == expected, f'{code}: 期望 {expected}, 实际 {item["sector"]}'
+
     def test_stock_not_in_data_returns_error(self):
         """持仓股不在 stocks 数据中 → 标记为数据缺失"""
         result = self._make_review(holdings=[{'code': 'XXXXX', 'name': '未知股'}])

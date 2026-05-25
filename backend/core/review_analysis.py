@@ -176,6 +176,7 @@ def generate_holdings_review(holdings, stocks, buy_signals,
         result.append({
             'code': code,
             'name': h.get('name', d.get('name', code)),
+            'sector': sector,
             'structure': structure,
             'stage': stage,
             'price': h.get('close', 0),
