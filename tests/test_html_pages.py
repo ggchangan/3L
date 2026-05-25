@@ -8,6 +8,7 @@ import os
 import re
 
 WWW_DIR = os.path.dirname(os.path.dirname(__file__))
+FE_SRC = os.path.join(WWW_DIR, 'frontend')  # Vite 源文件目录
 
 # 所有主页面（排除 archive/ 子目录页面）
 PAGES = [
@@ -20,7 +21,14 @@ PAGES = [
 
 
 def read_page(name):
-    path = os.path.join(WWW_DIR, name)
+    path = os.path.join(FE_SRC, name)
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def read_nav_js():
+    """读取 frontend/public/js/nav.js"""
+    path = os.path.join(FE_SRC, 'public', 'js', 'nav.js')
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
 
@@ -28,9 +36,9 @@ def read_page(name):
 class TestNavStructure:
 
     def test_all_pages_exist(self):
-        """每个定义的主页面文件都存在"""
+        """每个定义的主页面文件都在 frontend/ 中存在"""
         for p in PAGES:
-            path = os.path.join(WWW_DIR, p)
+            path = os.path.join(FE_SRC, p)
             assert os.path.isfile(path), f'文件不存在: {path}'
 
     def test_dist_no_line_number_prefix(self):
@@ -105,7 +113,7 @@ class TestNavContent:
 
     def test_main_nav_order(self):
         """主导航顺序：盯盘/复盘/工作台排前三位"""
-        nav_js = read_page('nav.js')
+        nav_js = read_nav_js()
         # 提取 MAIN_NAV 中的 id 顺序
         import re
         ids = re.findall(r"id:\s*'(\w+)'", nav_js.split('FOOTER_LINKS')[0])
@@ -117,7 +125,7 @@ class TestNavContent:
 
     def test_footer_links_present(self):
         """底部项目管理链接存在"""
-        nav_js = read_page('nav.js')
+        nav_js = read_nav_js()
         assert '📋 每日成果' in nav_js
         assert '📖 Skills' in nav_js
         assert '📊 模拟交易' in nav_js
@@ -128,7 +136,7 @@ class TestServerRedirect:
 
     def test_home_redirects_to_monitor(self):
         """首页 / 应重定向到 monitor.html"""
-        server_code = read_page('server.py')
+        server_code = open(os.path.join(WWW_DIR, 'server.py'), 'r', encoding='utf-8').read()
         assert "'/': '/monitor.html'" in server_code, \
             'server.py 中 / 应跳转到 monitor.html'
         assert "'/': '/index.html'" not in server_code, \
