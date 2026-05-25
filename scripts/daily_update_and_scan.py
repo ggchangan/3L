@@ -82,7 +82,7 @@ def update_cache():
                             "close": round(float(row["close"]), 2),
                             "high": round(float(row["high"]), 2),
                             "low": round(float(row["low"]), 2),
-                            "volume": int(float(row["volume"]))
+                            "volume": int(float(row["volume"])) * 100  # mootdx单位为手(100股)，转股
                         })
                 if new_records:
                     seen = {k["date"] for k in klines}
