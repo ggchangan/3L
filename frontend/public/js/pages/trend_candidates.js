@@ -23,13 +23,15 @@ function showToast(msg) {
 // ── 加载数据 ──
 async function loadData() {
     try {
-        const [r1, r2] = await Promise.all([
+        const [r1, r2, r3] = await Promise.all([
             fetch('/api/trend-candidates'),
             fetch('/api/trend-tracked'),
+            fetch('/api/watchlist'),    // 加载自选股，供搜索用
         ]);
         const candidates = await r1.json();
         const tracked = await r2.json();
-        rawData = { candidates, tracked };
+        const wl = await r3.json();
+        rawData = { candidates, tracked, watchlist: wl.stocks || [] };
         render();
     } catch (e) {
         document.getElementById('cardsArea').innerHTML = '<div class="empty">❌ 加载失败</div>';
@@ -148,24 +150,40 @@ function getAutoCandidates() {
     return Object.values(merged);
 }
 
-// ── 搜索框 ──
+// ── 搜索框（客户端匹配，支持代码/名称/拼音首字母）──
+let _wlCache = null;
 function onSearchInput(val) {
     clearTimeout(searchTimer);
     const el = document.getElementById('searchResults');
     if (!val || val.length < 1) { el.style.display = 'none'; return; }
     searchTimer = setTimeout(async () => {
         try {
-            const r = await fetch('/api/trend-candidates/search-watchlist?q=' + encodeURIComponent(val));
-            const data = await r.json();
-            if (!data.results || data.results.length === 0) {
+            // 获取手动趋势列表（用于标记 in_trend）
+            let manualCodes = new Set();
+            if (rawData?.tracked?.candidates) {
+                manualCodes = new Set(rawData.tracked.candidates.map(c => c.code));
+            }
+            const wl = rawData?.watchlist || [];
+            const q = val.trim().toLowerCase();
+
+            // 客户端匹配：代码/名称/拼音首字母
+            const results = wl.filter(s => {
+                const code = (s.code || '').toLowerCase();
+                const name = (s.name || '').toLowerCase();
+                const py = getPinyinInitials(s.name || '').toLowerCase();
+                return code.includes(q) || name.includes(q) || py.includes(q);
+            });
+
+            if (results.length === 0) {
                 el.innerHTML = '<div class="search-result-item" style="color:#888;">无匹配自选股</div>';
                 el.style.display = 'block';
                 return;
             }
-            el.innerHTML = data.results.map(st => {
-                const label = st.in_trend ? '✅ 已加入' : '➕ 加入';
-                const color = st.in_trend ? '#4ecdc4' : '#2196f3';
-                return `<div class="search-result-item" onclick="addFromWatchlist('${st.code}', ${!st.in_trend})" style="cursor:pointer;">
+            el.innerHTML = results.slice(0, 20).map(st => {
+                const inTrend = manualCodes.has(st.code);
+                const label = inTrend ? '✅ 已加入' : '➕ 加入';
+                const color = inTrend ? '#4ecdc4' : '#2196f3';
+                return `<div class="search-result-item" onclick="addFromWatchlist('${st.code}', ${!inTrend})" style="cursor:pointer;">
                     <span><span class="sr-name">${st.name}</span> <span class="sr-code">${st.code}</span></span>
                     <span class="sr-ind">${st.direction || ''}</span>
                     <span style="float:right;color:${color};font-size:11px;">${label}</span>
