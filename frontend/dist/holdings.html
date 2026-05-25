@@ -37,7 +37,7 @@
     display: flex; align-items: center; gap: 8px;
 }
 </style>
-  <link rel="stylesheet" crossorigin href="/assets/holdings-vo9N7zK_.css">
+  <link rel="stylesheet" crossorigin href="/assets/holdings-Um1baVOa.css">
   <link rel="stylesheet" crossorigin href="/assets/stock_card-Bt821oyZ.css">
 </head>
 <body>
@@ -62,11 +62,18 @@
     <div class="loading-state" id="loadingState">⌛ 加载持仓数据...</div>
     <div class="error-state" id="errorState" style="display:none;"></div>
 
-    <!-- 卡片区 -->
+    <!-- 卡片区（可折叠） -->
     <div id="cardArea" style="display:none;">
-        <div class="add-btn-wrap"><button class="add-btn" onclick="openAddModal()">＋ 新增持仓</button></div>
-        <div id="cardList"></div>
-        <div class="add-btn-wrap"><button class="add-btn" onclick="openAddModal()">＋ 新增持仓</button></div>
+        <div class="card-section-header" onclick="toggleCardSection()">
+            <span id="cardToggleIcon">▼</span>
+            <span>个股信息 <span id="cardCount" style="color:#888;font-size:12px;"></span></span>
+            <button class="add-btn-sm" onclick="event.stopPropagation();openAddModal()">＋ 新增</button>
+        </div>
+        <div id="cardBody">
+            <div class="add-btn-wrap"><button class="add-btn" onclick="openAddModal()">＋ 新增持仓</button></div>
+            <div id="cardList"></div>
+            <div class="add-btn-wrap"><button class="add-btn" onclick="openAddModal()">＋ 新增持仓</button></div>
+        </div>
     </div>
 
     <!-- 空状态 -->
@@ -241,7 +248,13 @@ function renderCards(holdings) {
         '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560'
     };
 
-    list.innerHTML = holdings.map((h, i) => {
+    // 按涨幅降序排列（保留原始索引用于编辑/删除）
+    const indexed = holdings.map((h, i) => ({ idx: i, item: h }));
+    indexed.sort((a, b) => (b.item.change ?? -999) - (a.item.change ?? -999));
+
+    document.getElementById('cardCount').textContent = '(' + holdings.length + '只)';
+
+    list.innerHTML = indexed.map(({ idx: origIdx, item: h }) => {
         const cardData = {
             name: h.name, code: h.code, price: h.price, change: h.change,
             signal: 'hold',
@@ -278,8 +291,8 @@ function renderCards(holdings) {
                     </span>
                 </div>
                 <div style="display:flex;gap:4px;">
-                    <button onclick="openEditModal(${i})" style="background:rgba(233,69,96,0.15);border:1px solid #e94560;border-radius:6px;color:#e94560;cursor:pointer;padding:3px 10px;font-size:12px;">✏️ 编辑</button>
-                    <button onclick="openDeleteConfirm(${i})" style="background:rgba(233,69,96,0.15);border:1px solid #e94560;border-radius:6px;color:#e94560;cursor:pointer;padding:3px 10px;font-size:12px;">🗑️ 删除</button>
+                    <button onclick="openEditModal(${origIdx})" style="background:rgba(233,69,96,0.15);border:1px solid #e94560;border-radius:6px;color:#e94560;cursor:pointer;padding:3px 10px;font-size:12px;">✏️ 编辑</button>
+                    <button onclick="openDeleteConfirm(${origIdx})" style="background:rgba(233,69,96,0.15);border:1px solid #e94560;border-radius:6px;color:#e94560;cursor:pointer;padding:3px 10px;font-size:12px;">🗑️ 删除</button>
                 </div>
             </div>
         </div>`;
@@ -731,6 +744,17 @@ document.addEventListener('keydown', function(e) {
         closeConfirm();
     }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// 可折叠卡片区
+// ═══════════════════════════════════════════════════════════════
+let CARD_COLLAPSED = false;
+
+function toggleCardSection() {
+    CARD_COLLAPSED = !CARD_COLLAPSED;
+    document.getElementById('cardBody').style.display = CARD_COLLAPSED ? 'none' : 'block';
+    document.getElementById('cardToggleIcon').textContent = CARD_COLLAPSED ? '▶' : '▼';
+}
 
 // ═══════════════════════════════════════════════════════════════
 // 启动

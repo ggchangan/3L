@@ -46,6 +46,25 @@ body {
 }
 .overview-block .ov-stats b { color: #e0e0e0; }
 
+/* ── 可折叠卡片区 ── */
+.card-section-header {
+    display: flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 1px solid #2a2a4e; border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 12px;
+    cursor: pointer; font-size: 14px; color: #e0e0e0; user-select: none;
+    transition: border-color 0.2s;
+}
+.card-section-header:hover { border-color: #4ecdc4; }
+.card-section-header span { flex: 1; }
+.add-btn-sm {
+    background: #e94560; color: #fff; border: none;
+    border-radius: 6px; padding: 5px 14px;
+    font-size: 12px; cursor: pointer; font-weight: 600;
+    transition: background 0.2s; flex-shrink: 0;
+}
+.add-btn-sm:hover { background: #ff6b81; }
+
 /* ── 新增按钮 ── */
 .add-btn-wrap { text-align: center; margin: 12px 0; }
 .add-btn {
