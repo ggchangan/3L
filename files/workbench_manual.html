@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>3L交易工作台 · 使用手册</title>
+<style>
+body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #222; max-width: 720px; margin: 0 auto; padding: 40px 20px; line-height: 1.8; }
+h1 { font-size: 22px; margin-bottom: 6px; }
+.subtitle { color: #666; font-size: 13px; margin-bottom: 30px; }
+h2 { font-size: 16px; margin: 28px 0 12px; padding-bottom: 6px; border-bottom: 2px solid #e94560; }
+h2 .badge { display: inline-block; background: #e94560; color: #fff; font-size: 10px; padding: 1px 8px; border-radius: 8px; margin-right: 6px; }
+p, li { font-size: 13px; color: #444; }
+ul { padding-left: 18px; }
+li { margin-bottom: 4px; }
+.highlight { background: #fff3e0; border-left: 3px solid #ff9800; padding: 8px 14px; border-radius: 4px; font-size: 12px; margin: 10px 0; }
+</style>
+</head>
+<body>
+
+<h1>🧑 3L 交易工作台 · 使用手册</h1>
+<div class="subtitle">2026-05-25 · v1 · 分析 → 定计划 → 写日志</div>
+
+<h2><span class="badge">STEP 1</span>📊 今日复盘摘要</h2>
+<p>自动加载当天复盘数据，让你在写日志之前先了解今日整体环境。</p>
+<ul>
+<li><b>大盘周期</b> — 当前结构位置、建议仓位</li>
+<li><b>主线</b> — 今日最强板块</li>
+<li><b>买点信号</b> — 满足买入条件的个股数量</li>
+</ul>
+<p>点击「📎 打开完整复盘」可查看完整的4步复盘页面（大盘判定、主线排名、持仓复盘、买点信号）。</p>
+
+<h2><span class="badge">TODO</span>📌 待办</h2>
+<p>记录今日需要完成的交易相关事项，简单的清单管理。</p>
+<ul>
+<li>点击「＋ 添加待办」创建新待办</li>
+<li>勾选复选框标记为已完成</li>
+<li>点击 ✕ 删除不需要的待办</li>
+</ul>
+<p class="highlight">💡 保存后待办会存入当天日志，切换日期不会丢失。</p>
+
+<h2><span class="badge">PLAN</span>📋 明日计划</h2>
+<p>规划下一个交易日的操作策略，按三类分别记录：</p>
+<ul>
+<li><b>🟢 买入</b> — 想买的标的、触发条件（如"回踩EMA5"、"突破前高"）、计划数量</li>
+<li><b>🔴 卖出</b> — 准备卖出的标的、止盈/止损条件</li>
+<li><b>👁️ 观察</b> — 关注的板块/个股、需要确认的关键点</li>
+</ul>
+<p>每行可编辑输入框。状态选项：</p>
+<ul>
+<li>⏳ 待触发 — 条件还未满足</li>
+<li>⚡ 已触发 — 条件已达到但还没操作</li>
+<li>✅ 已执行 — 已按计划操作</li>
+<li>❌ 未触发 — 条件未出现，无需操作</li>
+</ul>
+<p class="highlight">💡 保存后的计划会在第二天"执行复盘"区自动加载，方便对照检查。</p>
+
+<h2><span class="badge">DONE</span>✍️ 今日操作</h2>
+<p>自由记录今天的实际买卖操作。建议包含：</p>
+<ul>
+<li>买入/卖出价格、数量</li>
+<li>成交时间、执行情况</li>
+<li>盘中观察到的关键信号</li>
+<li>操作时的想法和依据</li>
+</ul>
+<p>纯文字记录，按自己的习惯写即可。坚持记录才能发现问题模式。</p>
+
+<h2><span class="badge">REVIEW</span>🔄 执行复盘</h2>
+<p>回顾昨日计划执行情况，这是提升交易纪律的关键环节。</p>
+<ul>
+<li>上方灰色区域<b>自动加载昨天保存的计划</b></li>
+<li>对照检查：哪些触发了？哪些执行了？哪些漏掉了？</li>
+<li>下方可补充说明偏差原因、意外情况、改进方向</li>
+</ul>
+<p class="highlight">💡 先看昨日计划再写反思，避免凭记忆回复盘，容易遗漏。</p>
+
+<h2><span class="badge">LEARN</span>💡 今日反思</h2>
+<p>诚实复盘今天的交易，包含三个维度：</p>
+<ul>
+<li><b>纪律遵守</b> — 是否严格按照昨日计划执行？完全 / 大部分偏差 / 严重偏离</li>
+<li><b>评分</b> — 给自己的执行打分（1~5星）</li>
+<li><b>学到了什么</b> — 做对了什么？做错了什么？下次怎么改进？</li>
+</ul>
+<p class="highlight">💡 坚持每天写反思，3个月后回头看进步最大。</p>
+
+<h2>💾 保存与日期导航</h2>
+<p>底部操作栏：</p>
+<ul>
+<li><b>💾 保存交易日志</b> — 将当前所有区块的数据保存到当天日期</li>
+<li><b>← 前一天 / 后一天 →</b> — 切换到其他日期的日志查看或编辑</li>
+</ul>
+<p>每个日期独立存储，互不干扰。可以随时翻看历史日志。</p>
+
+<div class="highlight" style="margin-top:30px;">
+3L 交易体系 · 工作台定位：<b>"人做决策，系统做算法+报警"</b><br>
+工作台是每日复盘之后的执行层：分析环境→定计划→写日志→第二天检查执行。
+</div>
+
+</body>
+</html>

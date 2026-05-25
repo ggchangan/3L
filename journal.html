@@ -6,6 +6,29 @@
     <title>3L · 交易工作台</title>
 <link rel="stylesheet" href="/css/base.css?v=1">
 <link rel="stylesheet" href="/css/pages/workbench.css?v=1">
+<style>
+/* 使用提示 */
+.hint-icon {
+    font-size: 13px; color: #555; cursor: pointer; margin-left: 4px;
+    transition: color 0.2s;
+}
+.hint-icon:hover { color: #4ecdc4; }
+.hint-tooltip {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    background: #1a1a2e; border: 1px solid #4ecdc4; border-radius: 12px;
+    padding: 20px 24px; max-width: 400px; z-index: 1000;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6); display: none;
+}
+.hint-tooltip h4 { color: #4ecdc4; font-size: 14px; margin-bottom: 8px; }
+.hint-tooltip p { color: #ccc; font-size: 12px; line-height: 1.7; margin: 0; }
+.hint-tooltip .close-hint {
+    float: right; color: #888; cursor: pointer; font-size: 16px; padding: 0 4px;
+}
+.hint-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999;
+    display: none;
+}
+</style>
 </head>
 <body>
     <div style="margin-top:10px;" id="nav-top"></div>
@@ -22,6 +45,7 @@
             <div class="section-title">
                 <span class="step">STEP 1</span>
                 今日复盘摘要
+                <span class="hint-icon" onclick="showHint('reviewSummary')">ℹ️</span>
                 <span style="font-size:12px; color:#666; font-weight:normal;">
                     <a href="/review.html" style="color:#22c55e;">📎 打开完整复盘</a>
                 </span>
@@ -48,6 +72,7 @@
             <div class="section-title">
                 <span class="step">TODO</span>
                 📌 待办
+                <span class="hint-icon" onclick="showHint('todos')">ℹ️</span>
             </div>
             <div id="todoList">
                 <div class="empty">暂无待办，点击下方添加</div>
@@ -60,6 +85,7 @@
             <div class="section-title">
                 <span class="step">PLAN</span>
                 📋 明日计划
+                <span class="hint-icon" onclick="showHint('plan')">ℹ️</span>
             </div>
 
             <div style="margin-bottom:8px;">
@@ -95,6 +121,7 @@
             <div class="section-title">
                 <span class="step">DONE</span>
                 ✍️ 今日操作
+                <span class="hint-icon" onclick="showHint('operations')">ℹ️</span>
                 <span style="font-size:12px; color:#666; font-weight:normal;">自由记录</span>
             </div>
             <textarea style="width:100%; min-height:80px; background:#1a1a30; border:1px solid #2a2a4e; border-radius:6px; color:#e0e0e0; font-size:13px; padding:10px; resize:vertical; box-sizing:border-box;" id="opText" placeholder="记录今天的买卖操作、成交价格、执行情况…"></textarea>
@@ -105,6 +132,7 @@
             <div class="section-title">
                 <span class="step">REVIEW</span>
                 🔄 执行复盘
+                <span class="hint-icon" onclick="showHint('execReview')">ℹ️</span>
                 <span style="font-size:12px; color:#666; font-weight:normal;">昨日计划执行情况</span>
             </div>
             <div style="background:rgba(255,255,255,0.03); border:1px dashed #2a2a4e; border-radius:8px; padding:12px;" id="yesterdayPlan">
@@ -118,6 +146,7 @@
             <div class="section-title">
                 <span class="step">LEARN</span>
                 💡 今日反思
+                <span class="hint-icon" onclick="showHint('reflection')">ℹ️</span>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                 <div>
@@ -160,6 +189,83 @@
     <div class="footer">
         3L 交易体系 · 交易工作台 · 分析→定计划→写日志
     </div>
+
+    <!-- ℹ️ 使用提示 -->
+    <div class="hint-overlay" id="hintOverlay" onclick="hideHint()"></div>
+    <div class="hint-tooltip" id="hintTooltip">
+        <span class="close-hint" onclick="hideHint()">×</span>
+        <h4 id="hintTitle"></h4>
+        <p id="hintBody"></p>
+    </div>
+    <script>
+    const HINTS = {
+        reviewSummary: {
+            title: '📊 今日复盘摘要',
+            body: '自动加载当天复盘数据，快速了解整体环境：<br>'
+                + '• <b>大盘周期</b> — 当前结构位置、建议仓位<br>'
+                + '• <b>主线</b> — 今日最强板块<br>'
+                + '• <b>买点信号</b> — 满足买入条件的个股数量<br><br>'
+                + '点击「📎 打开完整复盘」查看完整4步复盘。',
+        },
+        todos: {
+            title: '📌 待办',
+            body: '记录今日需要完成的交易相关事项：<br>'
+                + '• 点击「＋ 添加待办」创建新待办<br>'
+                + '• 勾选复选框标记为已完成<br>'
+                + '• 点击 ✕ 删除待办<br><br>'
+                + '保存后待办会存入当天日志，换日期不会丢失。',
+        },
+        plan: {
+            title: '📋 明日计划',
+            body: '规划下一个交易日的操作策略：<br><br>'
+                + '<b>🟢 买入</b> — 想买的标的、触发条件、计划数量<br>'
+                + '<b>🔴 卖出</b> — 准备卖出的标的、止盈/止损条件<br>'
+                + '<b>👁️ 观察</b> — 关注的板块/个股、需要确认的关键点<br><br>'
+                + '每行可编辑，状态分「待触发/已触发/已执行/未触发」。<br>'
+                + '每日保存后，第二天在执行复盘区自动加载。',
+        },
+        operations: {
+            title: '✍️ 今日操作',
+            body: '自由记录今天的实际买卖操作：<br>'
+                + '• 买入/卖出价格、数量<br>'
+                + '• 成交时间、执行情况<br>'
+                + '• 盘中观察到的关键信号<br><br>'
+                + '纯文字记录，按自己的习惯写即可。',
+        },
+        execReview: {
+            title: '🔄 执行复盘',
+            body: '回顾昨日计划执行情况：<br><br>'
+                + '上方灰色区域自动加载<b>昨天保存的计划</b>，<br>'
+                + '对照检查哪些触发了、哪些执行了、哪些漏掉了。<br><br>'
+                + '下方可补充说明：<br>'
+                + '• 偏差原因：为什么没按计划执行？<br>'
+                + '• 意外情况：盘中出现了什么变化？<br>'
+                + '• 改进方向：下次怎么做得更好？',
+        },
+        reflection: {
+            title: '💡 今日反思',
+            body: '诚实复盘今天的交易，这是进步的关键：<br><br>'
+                + '<b>纪律遵守</b><br>是否严格按照昨日计划执行？<br>'
+                + '完全、大部分偏差、严重偏离 — 三个选项。<br><br>'
+                + '<b>评分</b><br>给自己的执行打星。<br><br>'
+                + '<b>学到了什么</b><br>'
+                + '做对了什么？做错了什么？下次怎么改进？<br>'
+                + '坚持写反思，3个月后回头看进步最大。',
+        },
+    };
+    function showHint(id) {
+        const h = HINTS[id];
+        if (!h) return;
+        document.getElementById('hintTitle').textContent = h.title;
+        document.getElementById('hintBody').innerHTML = h.body;
+        document.getElementById('hintTooltip').style.display = 'block';
+        document.getElementById('hintOverlay').style.display = 'block';
+    }
+    function hideHint() {
+        document.getElementById('hintTooltip').style.display = 'none';
+        document.getElementById('hintOverlay').style.display = 'none';
+    }
+    </script>
     <script src="/js/config.js"></script>
     <script src="/js/nav.js?v=5"></script>
     <script src="/js/stock_card.js"></script>
