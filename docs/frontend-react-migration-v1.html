@@ -149,17 +149,39 @@ JSON response
 
 <p><strong>build.py 变更：</strong> 简化。不再需要 inject_stock_card_css 等补丁，因为 React 的 CSS Modules 自带作用域隔离。</p>
 
-<h2>6. 风险与注意事项</h2>
+<h2>6. 开发原则</h2>
 
-<ol>
-<li><strong>后端不动</strong> — 这是规则。迁移期间不改后端 API，确保新旧前端都能用</li>
-<li><strong>不重写逻辑</strong> — 从现有 JS 直接翻译成 React，不做功能改进。改进是另一个话题</li>
-<li><strong>SVG 图表</strong> — 后端生成的 SVG 用 <code>dangerouslySetInnerHTML</code> 内嵌，不需要重写</li>
-<li><strong>旧页面保留</strong> — 出问题时快速回退：改 server.py 路由指向旧 HTML 即可</li>
-<li><strong>TypeScript 严格度</strong> — 先 loose（<code>strict: false</code>），稳定后再收严</li>
-</ol>
+<h3>6.1 TDD 强制性</h3>
 
-<h2>7. 执行计划</h2>
+<p>每个步骤必须遵守 RED → GREEN → REFACTOR 三阶段，不得跳过测试直接写业务逻辑：</p>
+<pre><code>✅ [RED]   先写测试（断言当前行为或预期行为）
+✅ [GREEN] 改代码让测试通过
+✅ [GREEN] 全回归确认 0 新增失败
+✅ 提交</code></pre>
+
+<h3>6.2 后端不动</h3>
+<p>迁移期间不改后端 API。新旧前端同时能工作。</p>
+
+<h3>6.3 不重写逻辑</h3>
+<p>从现有 JS 直接翻译成 React，不做功能改进。改进是另一个话题。</p>
+
+<h3>6.4 SVG 图表保持现状</h3>
+<p>后端生成的 SVG 用 <code>dangerouslySetInnerHTML</code> 内嵌，不需要重写。</p>
+
+<h3>6.5 旧页面保留，随时回退</h3>
+<p>出问题时快速回退：改 server.py 路由指向旧 HTML 即可。</p>
+
+<h2>7. 风险管理</h2>
+
+<table>
+<tr><th>风险</th><th>影响</th><th>缓解</th></tr>
+<tr><td>React 版页面渲染不一致</td><td>用户看到错误数据</td><td>新旧页面同时运行，对比验证</td></tr>
+<tr><td>TypeScript 类型定义不准</td><td>运行时类型错误</td><td>先 loose mode，稳定后收严</td></tr>
+<tr><td>构建流程中断</td><td>页面无法部署</td><td>build.py 加入回退逻辑，Vite 失败时用旧 dist</td></tr>
+<tr><td>迁移周期太长</td><td>新旧两套维护成本</td><td>每页独立提交，不积压</td></tr>
+</table>
+
+<h2>8. 执行计划</h2>
 
 <h3>Phase 0.5：清理冗余文件（1 次提交）</h3>
 
@@ -177,13 +199,12 @@ JSON response
   项目根目录的 CSS/JS（如果存在）
   旧 build.py 中的 inject_stock_card_css 等补丁（迁移后不再需要）
 
-步骤 4: 验证
-  systemctl restart 3l-server → 页面正常打开
-  所有 API 端点正常返回
-
-测试:
-  手动打开 monitor/review/workbench 等页面，确认正常渲染
-  pytest tests/ 全回归</code></pre>
+步骤 4: TDD 验证
+  ✅ [RED] 写测试：确认页面正常响应（curl 返回 200）
+  ✅ [GREEN] 删除旧文件
+  ✅ [GREEN] 重启 server
+  ✅ [GREEN] 全回归：pytest tests/（0 新增失败）
+  手动打开 monitor/review/workbench 等页面，确认正常渲染</code></pre>
 
 <h3>Phase 0：基建搭建（1 次提交）</h3>
 
@@ -197,14 +218,11 @@ JSON response
   src/main.tsx   → React 入口
   src/App.tsx    → 路由定义
 
-步骤 3: 验证
-  npm run dev → 能打开 React 空页面
-  npm run build → 构建成功
-  python3 build.py → 部署正常
-
-测试:
-  tests/test_frontend_build.py → 验证构建不报错
-  手动打开浏览器确认首页渲染</code></pre>
+步骤 3: TDD 验证
+  ✅ [RED] 写测试：tests/test_frontend_build.py（构建不报错）
+  ✅ [GREEN] npm run dev → 能打开 React 空页面
+  ✅ [GREEN] npm run build → 构建成功
+  ✅ [GREEN] python3 build.py → 部署正常，浏览器确认首页渲染</code></pre>
 
 <h3>Phase 1：Monitor 页面 + StockCard 组件（首期迁移）</h3>
 
