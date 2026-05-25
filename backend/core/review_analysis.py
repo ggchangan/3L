@@ -171,6 +171,12 @@ def generate_holdings_review(holdings, stocks, buy_signals,
         if code_sig == 'buy' and card_buy_point:
             buy_point = card_buy_point
 
+        # 手动止损优先于自动生成止损
+        manual_sl = d.get('stop_loss_price')
+        if manual_sl is not None:
+            sl = float(manual_sl)
+            sl_pct = round((card_price - sl) / card_price * 100, 2) if card_price and card_price > 0 else None
+
         result.append({
             'code': code,
             'name': h.get('name', d.get('name', code)),
