@@ -14,7 +14,7 @@ WWW_DIR = config.WWW_DIR
 DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
 DATA_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
 SCAN_PATH = os.path.join(DATA_DIR, 'latest_scan_result.json')
-HOLDINGS_PATH = os.path.join(WWW_DIR, 'private', 'holdings.json')
+HOLDINGS_PATH = os.path.join(DATA_DIR, 'private', 'holdings.json')
 OUT_DIR = config.CHARTS_DIR
 
 # ── EMA 计算 ──
