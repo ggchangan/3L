@@ -7,7 +7,7 @@ __pycache__/
 *.pyc
 *.pyo
 
-# OS
+# OS / editor
 .DS_Store
 .zcompdump*
 Thumbs.db
@@ -16,17 +16,31 @@ Thumbs.db
 test_snapshots/
 .pytest_cache/
 
-# Server PID
+# Server
 server.pid
 
 # Logs
 *.log
 
-# Environment / local
+# Environment
 .env
+.env.*
 .venv/
 .hermes/
 
 # Build output copies (source in frontend/css/)
 frontend/dist/css/
-private/review_data.json
+
+# Private user data
+private/
+data/3l/private/
+
+# Generated cache/data
+data/cache/
+data/public/
+review_charts/
+files/
+
+# Hidden config files that shouldn't be tracked
+.ssh/
+.config/
