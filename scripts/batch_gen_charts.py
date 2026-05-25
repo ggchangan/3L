@@ -5,7 +5,6 @@
 """
 import json, os, sys, math
 from collections import OrderedDict
-from datetime import date
 
 # 从 config 读取路径（支持环境变量覆盖）
 import config
@@ -101,10 +100,9 @@ def gen_svg(name, code, klines, kps, output_path):
         sv.append(f'<text x="{pl-4}" y="{yp+3}" text-anchor="end" font-family="sans-serif" font-size="8" fill="#666666">{y_val:.1f}</text>')
     sv.append(f'<line x1="{pl}" y1="{bv}" x2="{W-pr}" y2="{bv}" stroke="#2a2a4e" stroke-width="0.5"/>')
 
-    # ── 判断最后一根K线是否是盘中（日期=今天） ──
-    today_str = date.today().strftime('%Y-%m-%d')
-    last_date = klines[-1].get('date', '')
-    is_intraday = last_date == today_str
+    # ── 判断最后一根K线是否需要盘中虚线标记 ──
+    # 复盘图表的数据是固化的（非实时），不画盘中虚线
+    is_intraday = False
 
     for i in range(n):
         x = px(i) - cw * 0.35
