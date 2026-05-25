@@ -588,7 +588,7 @@ def load_review_data(date_str, existing, ww_dir, latest_scan_path):
     Returns: (holdings, buy_signals, all_stocks)
     """
     # 从 holdings.json 读取最新持仓数据
-    holdings_file = os.path.join(ww_dir, 'private', 'holdings.json')
+    holdings_file = os.path.join(DATA_DIR, 'private', 'holdings.json')
     live_holdings = []
     if os.path.isfile(holdings_file):
         try:
@@ -674,7 +674,7 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
             try:
                 import requests as req
                 hdrs = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'}
-                hf = os.path.join(ww_dir, 'private', 'holdings.json')
+                hf = os.path.join(DATA_DIR, 'private', 'holdings.json')
                 if os.path.isfile(hf):
                     with open(hf) as f:
                         hdata = json.load(f)

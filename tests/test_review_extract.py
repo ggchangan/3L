@@ -13,13 +13,15 @@ class TestLoadReviewData:
 
     def test_empty_holdings_file_returns_empty(self):
         """holdings.json 不存在时返回空列表"""
+        from unittest.mock import patch
         from generate_review_data import load_review_data
-        holdings, buy_signals, _ = load_review_data(
-            date_str='2026-05-22',
-            existing={'holdings': [], 'buy_signals': []},
-            ww_dir='/tmp/nonexistent',
-            latest_scan_path='/tmp/nonexistent/scan.json',
-        )
+        with patch('generate_review_data.os.path.isfile', return_value=False):
+            holdings, buy_signals, _ = load_review_data(
+                date_str='2026-05-22',
+                existing={'holdings': [], 'buy_signals': []},
+                ww_dir='/tmp/nonexistent',
+                latest_scan_path='/tmp/nonexistent/scan.json',
+            )
         assert holdings == []
         assert buy_signals == []
 
