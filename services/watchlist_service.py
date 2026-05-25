@@ -21,8 +21,7 @@ def get_watchlist():
 
 
 def save_watchlist(data, wl_path=None):
-    """保存自选股列表，新增股票自动拉取数据"""
-    from scripts.data_layer import ensure_stock_data
+    """保存自选股列表（数据由 update_stock_data.py 统一更新）"""
     from scripts.cache_layer import cache
     p = wl_path or WATCHLIST_PATH
     new_stocks = data.get('stocks', [])
@@ -36,12 +35,9 @@ def save_watchlist(data, wl_path=None):
     if len(old_codes) > 50 and len(new_stocks) < 10:
         return {'success': False, 'error': f'安全保护：不能将{len(old_codes)}只自选股覆盖为{len(new_stocks)}只'}
     new_codes = {s['code'] for s in new_stocks}
-    added = new_codes - old_codes
-    for code in added:
-        ensure_stock_data(code)
     _save_watchlist_data(data, p)
     cache.invalidate('watchlist')
-    log.info('自选股已保存 (%d只, 新增%d只)', len(new_stocks), len(added))
+    log.info('自选股已保存 (%d只)', len(new_stocks))
     return {'success': True, 'count': len(new_stocks)}
 
 

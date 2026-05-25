@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 import requests
 import akshare as ak
 
-from backend.core.data_layer import get_all_stocks, ensure_stock_data, get_stock_klines
+from backend.core.data_layer import get_all_stocks, get_stock_klines
 
 # 中证全指K线图输出目录
 REVIEW_CHARTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'public', 'charts')
@@ -203,15 +203,7 @@ def generate_stock_chart(code):
     klines = get_stock_klines(raw_code, stocks=stocks)
 
     if not klines or len(klines) < 10:
-        # 尝试拉取
-        ok, msg = ensure_stock_data(raw_code)
-        if not ok:
-            return None, f'获取数据失败: {msg}'
-        stocks = get_all_stocks()
-        klines = get_stock_klines(raw_code, stocks=stocks)
-
-    if not klines or len(klines) < 10:
-        return None, f'数据不足: {len(klines) if klines else 0} 根K线'
+        return None, f'数据不足: {len(klines) if klines else 0} 根K线（等待17:00数据更新）'
 
     # 股票名称
     name = klines[0].get('name', raw_code) if klines else raw_code
