@@ -10,7 +10,7 @@ from datetime import datetime
 # 导入统一算法和数据获取函数
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from backend.core.buy_point_detection import get_realtime_kline
-from backend.core.data_layer import ALL_STOCKS_PATH, WATCHLIST_PATH, REVIEW_CHARTS_DIR, REVIEW_ARCHIVE_DIR
+from backend.core.data_layer import ALL_STOCKS_PATH, WATCHLIST_PATH, REVIEW_CHARTS_DIR, REVIEW_ARCHIVE_DIR, MAINLINES_CACHE_PATH
 
 # 自选股数据
 STOCKS_FILE = ALL_STOCKS_PATH
@@ -199,6 +199,15 @@ def get_market_position():
 
 
 def get_main_lines():
+    """从主线缓存读取主线列表"""
+    try:
+        if os.path.isfile(MAINLINES_CACHE_PATH):
+            with open(MAINLINES_CACHE_PATH) as f:
+                data = json.load(f)
+            return data.get('lines', [])
+    except:
+        pass
+    # 兜底：从复盘存档读（首次加载页面时缓存尚未写入，此时可能已有存档）
     try:
         archive_dir = REVIEW_ARCHIVE_DIR
         if os.path.isdir(archive_dir):
@@ -207,6 +216,29 @@ def get_main_lines():
                 with open(os.path.join(archive_dir, archives[-1])) as f:
                     rd = json.load(f)
                 return [l['name'] for l in rd.get('mainline', {}).get('lines', [])]
+    except:
+        pass
+    return []
+
+
+def get_sub_main_lines():
+    """从主线缓存读取次级主线列表"""
+    try:
+        if os.path.isfile(MAINLINES_CACHE_PATH):
+            with open(MAINLINES_CACHE_PATH) as f:
+                data = json.load(f)
+            return data.get('secondary', [])
+    except:
+        pass
+    # 兜底：从复盘存档读
+    try:
+        archive_dir = REVIEW_ARCHIVE_DIR
+        if os.path.isdir(archive_dir):
+            archives = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')])
+            if archives:
+                with open(os.path.join(archive_dir, archives[-1])) as f:
+                    rd = json.load(f)
+                return [l['name'] for l in rd.get('mainline', {}).get('secondary', [])]
     except:
         pass
     return []

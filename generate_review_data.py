@@ -947,6 +947,13 @@ def generate_daily_review(date_str=None):
     save_json(os.path.join(WWW_DIR, 'private', 'review_data.json'), review)
     print(f"[3L复盘] ✅ 已保存 {date_str} 复盘数据")
 
+    # 写入主线缓存（全局共享：主线/次级主线名称列表）
+    _mainlines_cache = {
+        'lines': [l['name'] for l in mainline_data.get('lines', [])],
+        'secondary': [l['name'] for l in mainline_data.get('secondary', [])],
+    }
+    save_json(config.MAINLINES_CACHE_PATH, _mainlines_cache)
+
     # 补充生成买点信号的关键点图
     try:
         bp_script = os.path.join(config.SCRIPTS_DIR, 'batch_gen_charts.py')
