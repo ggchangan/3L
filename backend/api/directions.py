@@ -3,7 +3,8 @@ import json
 import os
 import requests
 from services.direction_service import (
-    get_all, get_active, add, remove, set_active, get_suggestions,
+    get_all, get_active, get_all_ordered, add, remove, set_active, get_suggestions,
+    reorder,
 )
 
 INDUSTRY_MAP_PATH = os.environ.get('INDUSTRY_MAP_PATH',
@@ -181,6 +182,7 @@ def _handle_get_all(h, path):
     h.send_json({
         'directions': get_all(),
         'active': get_active(),
+        'all': get_all_ordered(),
         'suggestions': get_suggestions(),
     })
 
@@ -230,6 +232,19 @@ def _handle_set_active(h, path, body):
             h.send_json({'success': False, 'error': '方向名称不能为空'})
             return
         r = set_active(name, active)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_reorder(h, path, body):
+    try:
+        data = json.loads(body)
+        names = data.get('names', [])
+        if not names or len(names) < 2:
+            h.send_json({'success': False, 'error': '至少需要2个方向'})
+            return
+        r = reorder(names)
         h.send_json(r)
     except Exception as e:
         h.send_json({'success': False, 'error': str(e)})

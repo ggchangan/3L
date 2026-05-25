@@ -189,38 +189,97 @@ function switchAddTab(tab) {
     document.getElementById('addBoard').style.display = tab === 'board' ? 'block' : 'none';
 }
 
+let _dragSourceName = null;
+
 async function renderDirList() {
     const data = await loadDirections();
     const dirs = data.directions || {};
     const active = data.active || [];
+    const ordered = data.all || [];
     const el = document.getElementById('dirList');
 
-    const entries = Object.entries(dirs);
-    if (entries.length === 0) {
+    if (ordered.length === 0) {
         el.innerHTML = '<div style="color:#888;padding:10px;text-align:center;font-size:13px;">暂无方向，点击上方添加</div>';
         return;
     }
 
     let html = '';
-    for (const [name, enabled] of entries) {
-        if (name === '其他') continue; // 其他是保留项，不显示
+    ordered.forEach((name) => {
+        if (name === '其他') return;
         const isActive = active.includes(name);
-        html += `<div class="dir-item ${isActive ? '' : 'inactive'}">
+        html += `<div class="dir-item ${isActive ? '' : 'inactive'}" draggable="true"
+            data-dir-name="${name}"
+            ondragstart="onDirDragStart(event)"
+            ondragover="onDirDragOver(event)"
+            ondrop="onDirDrop(event)"
+            ondragend="onDirDragEnd(event)">
             <div>
                 <span class="dir-item-name">${name}</span>
                 <span class="dir-item-count">${countByDir(name)} 只</span>
                 ${isActive ? '' : '<span style="color:#e94560;font-size:11px;margin-left:6px;">未跟踪</span>'}
             </div>
             <div class="dir-item-actions">
+                <span style="cursor:grab;color:#555;margin-right:6px;font-size:14px;">⠿</span>
                 <button class="dir-toggle ${isActive ? 'on' : 'off'}" onclick="toggleDir('${name}', ${!isActive})">
                     ${isActive ? '✅ 启用' : '⛔ 禁用'}
                 </button>
                 <button class="btn btn-red btn-sm" onclick="removeDir('${name}')">✕</button>
             </div>
         </div>`;
-    }
+    });
     el.innerHTML = html;
     renderSuggestions(data.suggestions || {});
+}
+
+// ── 拖拽排序 ──
+function onDirDragStart(e) {
+    _dragSourceName = e.currentTarget.dataset.dirName;
+    e.currentTarget.style.opacity = '0.4';
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function onDirDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    e.currentTarget.style.borderColor = '#22c55e';
+}
+
+async function onDirDrop(e) {
+    e.preventDefault();
+    e.currentTarget.style.borderColor = '';
+    const targetName = e.currentTarget.dataset.dirName;
+    if (!_dragSourceName || _dragSourceName === targetName) return;
+
+    const data = dirData || await loadDirections();
+    const ordered = data.all || [];
+    const si = ordered.indexOf(_dragSourceName);
+    const ti = ordered.indexOf(targetName);
+    if (si === -1 || ti === -1) return;
+
+    const newOrder = [...ordered];
+    newOrder.splice(si, 1);
+    newOrder.splice(ti, 0, _dragSourceName);
+
+    try {
+        const r = await fetch('/api/directions/reorder', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({names: newOrder}),
+        });
+        const result = await r.json();
+        if (result.success) {
+            await loadDirections();
+            renderDirList();
+            render();
+        } else {
+            showToast('⚠️ ' + (result.error || '排序失败'), true);
+        }
+    } catch(e) { showToast('⚠️ 排序失败', true); }
+}
+
+function onDirDragEnd(e) {
+    e.currentTarget.style.opacity = '1';
+    e.currentTarget.style.borderColor = '';
+    _dragSourceName = null;
 }
 
 function countByDir(name) {

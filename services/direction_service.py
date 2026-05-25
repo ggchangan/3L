@@ -89,6 +89,32 @@ def set_active(name, active):
     return {'success': True}
 
 
+# ── 排序 ──
+
+def get_all_ordered():
+    """返回有序的所有方向名称列表"""
+    data = _load()
+    return data.get('all', [])
+
+
+def reorder(names):
+    """重新排序方向"""
+    data = _load()
+    existing = set(data['all'])
+    if set(names) != existing:
+        missing = existing - set(names)
+        extra = set(names) - existing
+        msg = []
+        if missing: msg.append(f'缺少: {missing}')
+        if extra: msg.append(f'多余: {extra}')
+        return {'success': False, 'error': '; '.join(msg) or '方向集合不匹配'}
+    data['all'] = names
+    active_set = set(data['active'])
+    data['active'] = [n for n in names if n in active_set]
+    _save(data)
+    return {'success': True}
+
+
 # ── 建议来源 ──
 
 def get_suggestions():

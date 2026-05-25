@@ -291,6 +291,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/directions/add': ('backend.api.directions', '_handle_add'),
             '/api/directions/remove': ('backend.api.directions', '_handle_remove'),
             '/api/directions/toggle': ('backend.api.directions', '_handle_set_active'),
+            '/api/directions/reorder': ('backend.api.directions', '_handle_reorder'),
         }
         if self.path in post_routes:
             mod_name, func_name = post_routes[self.path]
