@@ -1,14 +1,17 @@
 """方向管理 API 路由"""
 import json
 import os
+import sys
 import requests
 from services.direction_service import (
     get_all, get_active, get_all_ordered, add, remove, set_active, get_suggestions,
     reorder,
 )
 
+DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
+
 INDUSTRY_MAP_PATH = os.environ.get('INDUSTRY_MAP_PATH',
-    os.path.join(os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'stock_industry_map.json'))
+    os.path.join(DATA_DIR, 'stock_industry_map.json'))
 
 
 def _load_industry_map():
@@ -21,7 +24,7 @@ def _load_industry_map():
 def _get_stock_names():
     """从 all_stocks.json 加载股票名称"""
     sp = os.environ.get('ALL_STOCKS_PATH',
-        os.path.join(os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'all_stocks_60d.json'))
+        os.path.join(DATA_DIR, 'all_stocks_60d.json'))
     if not os.path.isfile(sp):
         return {}
     with open(sp) as f:
@@ -70,7 +73,7 @@ def _batch_realtime(codes):
 
 def _load_board_constituents():
     """加载板块成分股缓存"""
-    path = '/home/ubuntu/data/3l/board_constituents.json'
+    path = os.path.join(DATA_DIR, 'board_constituents.json')
     if os.path.isfile(path):
         with open(path) as f:
             data = json.load(f)
@@ -80,11 +83,86 @@ def _load_board_constituents():
 
 def _load_all_a_stocks():
     """加载全量A股股票列表 {code: name}"""
-    path = os.path.join(os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'all_a_stocks.json')
+    path = os.path.join(DATA_DIR, 'all_a_stocks.json')
     if os.path.isfile(path):
         with open(path) as f:
             return json.load(f)
     return {}
+
+
+def _fetch_concept_stocks(name):
+    """获取概念板块成分股（缓存优先，按需抓取）
+
+    用 push2test.eastmoney.com 直连（push2主域名已被服务商IP封锁）
+    """
+    board_constituents_path = os.path.join(DATA_DIR, 'board_constituents.json')
+    if os.path.isfile(board_constituents_path):
+        try:
+            with open(board_constituents_path) as f:
+                bc_data = json.load(f)
+            boards = bc_data.get('boards', bc_data)
+            if name in boards:
+                entry = boards[name]
+                if isinstance(entry, dict) and 'stocks' in entry and entry['stocks']:
+                    return entry['stocks']
+                elif isinstance(entry, list) and entry:
+                    return entry
+        except:
+            pass
+    # 直连 push2test（push2主域名被封，push2test可用）
+    import requests as _req
+    _h = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://quote.eastmoney.com/'}
+    _base = 'https://push2test.eastmoney.com/api/qt/clist/get'
+    try:
+        # 1. 获取概念板块列表，找 code
+        _all_params = {
+            'pn': '1', 'pz': '500', 'po': '1', 'np': '1',
+            'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+            'fltt': '2', 'invt': '2', 'fid': 'f3',
+            'fs': 'm:90 t:3 f:!50',
+            'fields': 'f12,f14',
+        }
+        r = _req.get(_base, params=_all_params, headers=_h, timeout=10)
+        r.raise_for_status()
+        all_data = r.json()
+        board_code = None
+        for item in all_data.get('data', {}).get('diff', []):
+            if item.get('f14') == name:
+                board_code = item.get('f12')
+                break
+        if not board_code:
+            return []
+        # 2. 获取该板块的成分股
+        _stk_params = {
+            'pn': '1', 'pz': '200', 'po': '1', 'np': '1',
+            'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+            'fltt': '2', 'invt': '2', 'fid': 'f3',
+            'fs': f'b:{board_code} f:!50',
+            'fields': 'f12,f14',
+        }
+        r2 = _req.get(_base, params=_stk_params, headers=_h, timeout=10)
+        r2.raise_for_status()
+        stk_data = r2.json()
+        stks = []
+        for item in stk_data.get('data', {}).get('diff', []):
+            code = str(item.get('f12', ''))
+            if code.startswith('BK'):
+                continue
+            stks.append({'code': code, 'name': item.get('f14', ''), 'industry': ''})
+        # 3. 缓存
+        if stks:
+            try:
+                with open(board_constituents_path) as f:
+                    all_boards = json.load(f)
+                all_boards.setdefault('boards', {})[name] = {'type': 'concept', 'stocks': stks}
+                json.dump(all_boards, open(board_constituents_path, 'w'), ensure_ascii=False, indent=2)
+            except:
+                pass
+        return stks
+    except Exception as e:
+        import logging
+        logging.getLogger('server').error(f'概念板块抓取失败 [{name}]: {e}')
+        return []
 
 
 def _handle_search_stocks(h, path):
@@ -102,6 +180,40 @@ def _handle_search_stocks(h, path):
 
     matched = []
     seen = set()
+
+    # 0. 先检查是否匹配概念板块（优先于个股名称搜索）
+    board_cache_path = os.path.join(DATA_DIR, 'board_names_cache.json')
+    if os.path.isfile(board_cache_path):
+        try:
+            with open(board_cache_path) as f:
+                bc = json.load(f)
+            # 行业板块
+            for name in bc.get('industry', []):
+                if q in name.lower():
+                    break  # industry boards are handled via layer 2
+            # 概念板块 — 按需抓取
+            for name in bc.get('concept', []):
+                if q in name.lower():
+                    stocks_data = _fetch_concept_stocks(name)
+                    if stocks_data:
+                        codes = [s['code'] for s in stocks_data]
+                        quotes = _batch_realtime(codes)
+                        matched = []
+                        for s in stocks_data:
+                            qq = quotes.get(s['code'], {})
+                            info = imap.get(s['code'], {})
+                            matched.append({
+                                'code': s['code'], 'name': s['name'],
+                                'direction': info.get('direction', ''),
+                                'industry': info.get('ths_industry', s.get('industry', '')),
+                                'price': qq.get('price', 0), 'change': qq.get('change', 0),
+                                'change_pct': qq.get('change_pct', 0),
+                            })
+                        matched.sort(key=lambda x: x['change_pct'], reverse=True)
+                        h.send_json({'stocks': matched[:30], 'total': len(matched)})
+                        return
+        except:
+            pass
 
     # 1. 搜索全量A股：匹配 code / name
     for code, name in names.items():
@@ -127,28 +239,18 @@ def _handle_search_stocks(h, path):
                     matched.append({'code': code, 'name': names.get(code, ''), 'direction': direction, 'industry': industry})
 
     if not matched:
-        # 3. 兜底：检查缓存中的同花顺行业/概念板块名
-        board_cache_path = '/home/ubuntu/data/3l/board_names_cache.json'
+        # 3. 兜底：检查行业板块名（概念板块已在 layer 0 处理）
+        board_cache_path = os.path.join(DATA_DIR, 'board_names_cache.json')
         if os.path.isfile(board_cache_path):
             try:
                 with open(board_cache_path) as f:
                     bc = json.load(f)
-                # 行业板块
                 for name in bc.get('industry', []):
                     if q in name.lower():
                         h.send_json({
                             'stocks': [], 'total': 0,
                             'board_info': {'name': name, 'type': 'industry',
-                                'note': '该板块无成分股数据，建议按个股名称/代码搜索'}
-                        })
-                        return
-                # 概念板块
-                for name in bc.get('concept', []):
-                    if q in name.lower():
-                        h.send_json({
-                            'stocks': [], 'total': 0,
-                            'board_info': {'name': name, 'type': 'concept',
-                                'note': '该板块无成分股数据，建议按个股名称/代码搜索'}
+                                'note': '该行业板块无成分股数据，建议按个股名称/代码搜索'}
                         })
                         return
             except:
@@ -225,7 +327,7 @@ def _handle_remove(h, path, body):
             return
         # 2. 从 watchlist 删除该方向的所有股票
         removed = 0
-        wl_path = '/home/ubuntu/data/3l/watchlist.json'
+        wl_path = os.path.join(DATA_DIR, 'watchlist.json')
         if os.path.isfile(wl_path):
             with open(wl_path, 'r', encoding='utf-8') as f:
                 wl = json.load(f)

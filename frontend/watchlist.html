@@ -49,6 +49,7 @@
                 <div class="add-row">
                     <input class="search-input" id="boardSearch" placeholder="输入行业/板块/方向名..." oninput="onBoardSearch(this.value)">
                     <select class="dir-select" id="boardDir" onchange="updateBoardDirLabel()"></select>
+                    <button class="btn btn-green btn-sm" onclick="batchAddDirStocks()">添加</button>
                 </div>
                 <div id="boardResults" class="dir-stock-results" style="display:none;"></div>
             </div>
@@ -69,6 +70,7 @@
     <script src="/js/config.js"></script>
     <script src="/js/nav.js?v=5"></script>
     <script src="/js/stock_card.js?v=5"></script>
+<script src="/js/pinyin_initials.js?v=1"></script>
 <script src="/js/pages/watchlist.js?v=5"></script>
 </body>
 </html>
