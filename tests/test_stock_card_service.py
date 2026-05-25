@@ -264,3 +264,139 @@ class TestGetStockCardIntegration:
             date_str='20260920',
         )
         assert card['trading_system'] == '3l'
+
+    def test_empty_card_all_fields(self):
+        """_empty_card 包含所有卡片字段"""
+        from services.stock_card_service import _empty_card
+        card = _empty_card('000001', '测试', '半导体', 'AI', '数据不足')
+        assert card['code'] == '000001'
+        assert card['name'] == '测试'
+        assert card['sector'] == '半导体'
+        assert card['direction'] == 'AI'
+        assert card['conclusion'] == '数据不足'
+        # 所有数值字段有默认值
+        assert card['ema5'] is None
+        assert card['ema10'] is None
+        assert card['ema20'] is None
+        assert card['ema30'] is None
+        assert card['vol_ratio'] == 0
+        assert card['deviation_pct'] == 0
+        assert card['stop_loss'] is None
+        assert card['stop_loss_pct'] is None
+
+    def test_get_stock_card_insufficient_data(self):
+        """K线不足30条 → 返回空卡片"""
+        from services.stock_card_service import get_stock_card
+        # mock klines 返回不足30条
+        import services.stock_card_service as scs
+        def mock_short_klines(code, direction=None, stocks=None):
+            return [{'date': '20260920', 'close': 100, 'volume': 1000}]
+        import pytest
+        monkeypatch = pytest.MonkeyPatch()
+        monkeypatch.setattr('services.stock_card_service.get_stock_klines', mock_short_klines)
+        try:
+            card = get_stock_card(code='000001', date_str='20260920')
+            assert card['code'] == '000001'
+            assert card['structure'] == '--'
+            assert card['trading_reason'] == '数据不足'
+        finally:
+            monkeypatch.undo()
+
+    def test_get_stock_card_with_external_klines(self):
+        """传入外部 klines → 优先使用，不走 data_layer"""
+        from services.stock_card_service import get_stock_card
+        from tests.test_stock_card_service import _make_klines, _UPTREND, _DATES
+
+        klines = _make_klines(_UPTREND, _DATES)
+        card = get_stock_card(
+            code='999999',
+            date_str='20260920',
+            klines=klines,
+        )
+        assert card['code'] == '999999'
+        assert card['structure'] == '上涨趋势'
+        assert card['stage'] != '--'
+        assert card['price'] > 0
+
+    def test_get_stock_card_with_downtrend_klines(self):
+        """下降趋势K线 → structure=下降趋势"""
+        from services.stock_card_service import get_stock_card
+        from tests.test_stock_card_service import _make_klines, _DOWNTREND, _DATES
+        klines = _make_klines(_DOWNTREND, _DATES)
+        card = get_stock_card(code='999999', date_str='20260920', klines=klines)
+        assert card['structure'] == '下降趋势'
+        assert card['signal'] == 'hold'
+
+    def test_get_stock_card_with_range_klines(self):
+        """区间震荡K线 → structure=区间震荡"""
+        from services.stock_card_service import get_stock_card
+        from tests.test_stock_card_service import _make_klines, _RANGE, _DATES
+        klines = _make_klines(_RANGE, _DATES)
+        card = get_stock_card(code='999999', date_str='20260920', klines=klines)
+        assert card['structure'] == '区间震荡'
+
+    def test_get_stock_card_with_direction(self):
+        """传入 direction → card['direction'] 正确"""
+        from services.stock_card_service import get_stock_card
+        from tests.test_stock_card_service import _make_klines, _UPTREND, _DATES
+        klines = _make_klines(_UPTREND, _DATES)
+        card = get_stock_card(
+            code='999999', date_str='20260920',
+            direction='AI应用', klines=klines,
+        )
+        assert card['direction'] == 'AI应用'
+        # 没有行业映射时 sector 取 direction
+        assert card['sector'] == 'AI应用'
+
+    def test_get_stock_card_with_mainlines_struct(self):
+        """main_lines 传 dict 格式（含 lines/secondary）"""
+        from services.stock_card_service import get_stock_card
+        from tests.test_stock_card_service import _make_klines, _UPTREND, _DATES
+        klines = _make_klines(_UPTREND, _DATES)
+        card = get_stock_card(
+            code='999999', date_str='20260920',
+            klines=klines,
+            main_lines={'lines': [{'name': '半导体'}], 'secondary': []},
+        )
+        assert card['trading_system'] in ('3l', 'trend')
+
+    def test_get_stock_card_with_mainlines_list(self):
+        """main_lines 传 list 格式（字符串列表）"""
+        from services.stock_card_service import get_stock_card
+        from tests.test_stock_card_service import _make_klines, _UPTREND, _DATES
+        klines = _make_klines(_UPTREND, _DATES)
+        # 带 sector=半导体 则 klines 需要传给 card，但卡片的 sector 来自 klines
+        # 用不存在的 direction 测试
+        card = get_stock_card(
+            code='999999', date_str='20260920',
+            klines=klines,
+            main_lines=['半导体', '算力'],
+        )
+        assert card['trading_system'] in ('3l', 'trend')
+
+    def test_build_tags(self):
+        """_build_tags 正确生成标签"""
+        from services.stock_card_service import _build_tags
+        tags = _build_tags({'profit_model1': True, 'trend_stock': False})
+        assert '盈利1' in tags[0] if tags else True
+
+        tags2 = _build_tags({'profit_model1': True, 'trend_stock': True})
+        assert len(tags2) == 2
+        assert '盈利1' in tags2[0]
+        assert '趋势' in tags2[1]
+
+        tags3 = _build_tags({'profit_model1': False, 'trend_stock': False})
+        assert tags3 == []
+
+    def test_get_stock_card_ema_fields(self):
+        """卡片 ema5/10/20/30 数值合理"""
+        from services.stock_card_service import get_stock_card
+        from tests.test_stock_card_service import _make_klines, _UPTREND, _DATES
+        klines = _make_klines(_UPTREND, _DATES)
+        card = get_stock_card(code='999999', date_str='20260920', klines=klines)
+        assert card['ema5'] is not None and card['ema5'] > 0
+        assert card['ema10'] is not None and card['ema10'] > 0
+        assert card['ema20'] is not None and card['ema20'] > 0
+        assert card['ema30'] is not None and card['ema30'] > 0
+        # ema5 应接近收盘价
+        assert abs(card['ema5'] - card['price']) / card['price'] < 0.1
