@@ -9,6 +9,7 @@ import type {
   ExternalMappingData,
   IndustryBoardItem,
   IndustryMap,
+  ReviewData,
 } from './types'
 
 const BASE = '' // 同源请求，无前缀
@@ -61,6 +62,19 @@ export function fetchIndustryMap(): Promise<IndustryMap> {
 
 export function fetchStockSummary(code: string): Promise<Record<string, unknown>> {
   return fetchJson(`/api/stock-summary?code=${code}`)
+}
+
+/** 复盘相关 API */
+export function fetchReviewDates(): Promise<{ dates: string[] }> {
+  return fetchJson('/api/review/dates')
+}
+
+export function fetchReviewByDate(date: string): Promise<ReviewData> {
+  return fetchJson<ReviewData>(`/api/review/${date}`)
+}
+
+export function fetchMarket(): Promise<Record<string, unknown>> {
+  return fetchJson('/api/market')
 }
 
 /** 格式化成交额 */

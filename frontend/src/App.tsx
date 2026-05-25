@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Monitor from './pages/Monitor'
+import Review from './pages/Review'
 
 export default function App() {
   return (
@@ -7,10 +8,10 @@ export default function App() {
       <Routes>
         {/* 已迁移的 React 页面 */}
         <Route path="/monitor" element={<Monitor />} />
+        <Route path="/review" element={<Review />} />
         <Route path="/" element={<Monitor />} />
 
         {/* 未迁移的旧页面：通过 window.location 跳转 */}
-        <Route path="/review" element={<LegacyRedirect to="/review.html" />} />
         <Route path="/journal" element={<LegacyRedirect to="/journal.html" />} />
         <Route path="/watchlist" element={<LegacyRedirect to="/watchlist.html" />} />
         <Route path="/trend_candidates" element={<LegacyRedirect to="/trend_candidates.html" />} />

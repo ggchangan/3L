@@ -231,6 +231,7 @@ class Handler(SimpleHTTPRequestHandler):
         # --- URL 重定向（302 跳转） ---
         redirects = {
             '/monitor.html': '/monitor',
+            '/review.html': '/review',
         }
         if path in redirects:
             self.send_response(302)

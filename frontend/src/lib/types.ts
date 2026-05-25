@@ -156,3 +156,44 @@ export interface IndustryBoardItem {
 
 /** 行业映射 */
 export type IndustryMap = Record<string, { ths_industry?: string }>
+
+/** 复盘数据结构 */
+export interface ReviewData {
+  date?: string
+  market?: {
+    price?: number | string
+    change?: number
+    score?: number
+    position?: string
+    position_pct?: string
+    strategy?: string
+    build_per_stock_pct?: string
+    pk_score?: number
+    vl_score?: number
+    bias20?: number
+    bias20_chg_3d?: number
+  }
+  mainline?: {
+    lines?: { name: string; chg_20d: number }[]
+    secondary?: { name: string; chg_20d: number }[]
+    persistence?: { name: string; days: number }[]
+    all_ranked?: { name: string; chg_20d: number }[]
+  }
+  holdings_review?: BuySignalItem[]
+  holdings?: BuySignalItem[]
+  buy_signals_review?: BuySignalItem[]
+  trading_plan?: {
+    overall_strategy?: string
+    position_level?: string
+    build_per_stock_pct?: string
+    main_lines?: string[]
+    position_detail?: string
+    holdings_action?: { stock: string; action: string; reason: string; priority: string }[]
+    buy_priority?: (BuySignalItem & { is_main?: boolean })[]
+    risk_items?: string[]
+  }
+  charts?: {
+    index_chart?: string
+    fund_flow?: string
+  }
+}
