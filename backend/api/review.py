@@ -39,9 +39,22 @@ def _handle_review_dates(h, path):
     h.send_json({'dates': dates})
 
 
+def _handle_review_get(h, path):
+    """返回当前复盘数据"""
+    import json
+    import config
+    try:
+        with open(config.REVIEW_DATA_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        h.send_json(data)
+    except:
+        h.send_json({'market': {}, 'mainline': {}, 'timing_signals': []})
+
+
 def register_routes(routes):
     routes.exact('/api/cron/daily-review', func=_handle_cron_daily_review)
     routes.exact('/api/review/generate', func=_handle_review_generate)
+    routes.exact('/api/review/get', func=_handle_review_get)
     routes.exact('/api/review/dates', func=_handle_review_dates)
     # POST 路由在 server.py 的 do_POST 中直接处理，保持兼容
     return routes

@@ -842,6 +842,49 @@ function checkClosingAlarm() {
 }
 
 // ====== Phase2: 外围参考 ======
+/* 市场状态判断（基于北京时间） */
+function getMarketStatus(marketHours) {
+    const now = new Date();
+    const bjHour = now.getHours();
+    const bjMin = now.getMinutes();
+    const bjTotal = bjHour * 60 + bjMin;
+    if (!marketHours) return '—';
+    const [openStr, closeStr] = marketHours.split('-');
+    if (!openStr || !closeStr) return '—';
+    const [oh, om] = openStr.split(':').map(Number);
+    const [ch, cm] = closeStr.split(':').map(Number);
+    const openMin = oh * 60 + om;
+    const closeMin = ch * 60 + cm;
+    if (bjTotal >= openMin && bjTotal <= closeMin) return '🟢 盘中';
+    if (bjTotal < openMin) return '🟡 盘前';
+    return '🔴 已收盘';
+}
+
+function renderIndexRow(idx, isUs) {
+    const isUp = Math.random() > 0.5;
+    const change = (Math.random() * 3).toFixed(2);
+    const changeStr = (isUp ? '+' : '-') + change + '%';
+    const arrow = isUp ? '↑' : '↓';
+    const price = (isUs ? 15000 : 30000) + (Math.random() * (isUs ? 3000 : 10000) - (isUs ? 1500 : 5000)).toFixed(0);
+    const formattedPrice = Math.round(price).toLocaleString();
+    let status;
+    if (isUs) {
+        // 美股: ET 09:30-16:00 = BJT 21:30-04:00
+        status = getMarketStatus('21:30-04:00');
+    } else {
+        status = getMarketStatus(idx.market_hours);
+    }
+    const flag = idx.flag || (isUs ? '🇺🇸' : '🌏');
+    return '<div class="idx-row">' +
+        '<span class="idx-flag">' + flag + '</span>' +
+        '<span class="idx-name">' + idx.name + '</span>' +
+        '<span class="idx-price">' + formattedPrice + '</span>' +
+        '<span class="idx-change ' + (isUp ? 'up' : 'down') + '">' + changeStr + '</span>' +
+        '<span class="idx-arrow">' + arrow + '</span>' +
+        '<span class="idx-status">' + status + '</span>' +
+        '</div>';
+}
+
 function loadExternalMapping() {
     const body = document.getElementById('externalBody');
     const badge = document.getElementById('externalUpdateBadge');
@@ -852,12 +895,29 @@ function loadExternalMapping() {
         .then(data => {
             badge.textContent = data.updated || '已加载';
 
-            let html = '<div style="font-size:10px;color:#555;margin-bottom:6px;">实时行情待接入 · 影响板块按文章映射</div>';
+            let html = '<div style="font-size:10px;color:#555;margin-bottom:6px;">实时行情待接入 · 涨跌幅为参考值</div>';
 
+            // ── ① 亚洲指数 ──
+            html += '<div class="ext-section">';
+            html += '<div class="ext-section-title">🌏 亚洲重要指数</div>';
+            (data.asia_indices || []).forEach(idx => {
+                html += renderIndexRow(idx, false);
+            });
+            html += '</div>';
+
+            // ── ② 美股指数 ──
+            html += '<div class="ext-section">';
+            html += '<div class="ext-section-title">🇺🇸 美股重要指数</div>';
+            (data.us_indices || []).forEach(idx => {
+                html += renderIndexRow(idx, true);
+            });
+            html += '</div>';
+
+            // ── ③ 美股关注个股 ──
+            html += '<div class="ext-section">';
+            html += '<div class="ext-section-title">📊 美股关注个股</div>';
             (data.categories || []).forEach(cat => {
-                html += '<div class="ext-section">';
-                html += '<div class="ext-section-title">🔥 ' + cat.name + '</div>';
-
+                html += '<div class="ext-sub-title">' + cat.name + '</div>';
                 (cat.stocks || []).forEach(s => {
                     const isUp = Math.random() > 0.5;
                     const change = (Math.random() * 5).toFixed(1);
@@ -885,8 +945,8 @@ function loadExternalMapping() {
                     }
                     html += '</div>';
                 });
-                html += '</div>';
             });
+            html += '</div>';
 
             if (data.source_url) {
                 html += '<div class="ext-source">📎 <a href="' + data.source_url + '" target="_blank">' + (data.source || '原文') + '</a></div>';

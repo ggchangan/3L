@@ -52,6 +52,11 @@ class TestMonitorLayout:
             assert len(data['categories']) > 0, '应有至少1个分类'
             assert 'stocks' in data['categories'][0], '分类缺 stocks'
             assert len(data['categories'][0]['stocks']) > 0, '应有至少1只美股'
+            # Phase2.5: 新增指数 sections
+            assert 'asia_indices' in data, 'API 缺 asia_indices'
+            assert 'us_indices' in data, 'API 缺 us_indices'
+            assert len(data['asia_indices']) > 0, '应有至少1个亚洲指数'
+            assert len(data['us_indices']) > 0, '应有至少1个美股指数'
         except Exception:
             pass  # 服务器没跑也可以
 

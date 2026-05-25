@@ -50,6 +50,24 @@
         .collapse-indicator { margin-left: auto; font-size: 11px; color: #888; }
         .ext-section { margin-bottom: 10px; }
         .ext-section-title { font-size: 11px; color: #888; margin-bottom: 6px; padding: 2px 6px; border-left: 2px solid #e94560; }
+        .ext-sub-title { font-size: 10px; color: #666; margin: 3px 0 2px 8px; }
+
+        /* 指数行（无展开详情） */
+        .idx-row {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 8px; margin-bottom: 1px; border-radius: 4px;
+            background: rgba(255,255,255,0.008); font-size: 11px;
+            transition: background 0.15s;
+        }
+        .idx-row:hover { background: rgba(255,255,255,0.03); }
+        .idx-flag { font-size: 13px; min-width: 18px; text-align: center; }
+        .idx-name { color: #ccc; min-width: 80px; font-weight: 500; }
+        .idx-price { color: #999; min-width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
+        .idx-change { min-width: 60px; font-weight: 600; text-align: right; }
+        .idx-arrow { font-size: 10px; min-width: 12px; }
+        .idx-status { font-size: 9px; color: #666; margin-left: auto; white-space: nowrap; }
+
+        /* 个股行（可展开详情） */
         .ext-row {
             display: flex; align-items: center; gap: 8px;
             padding: 5px 8px; margin-bottom: 2px; border-radius: 6px;
