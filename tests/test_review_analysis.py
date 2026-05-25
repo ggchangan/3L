@@ -138,16 +138,20 @@ class TestGenerateHoldingsReview:
         assert result == []
 
     def test_sector_field_is_preserved(self):
-        """持仓复盘结果应有 sector 字段（用于前端按方向分组）"""
-        result = self._make_review()
-        for item in result:
-            assert 'sector' in item, f'{item["code"]} 缺少 sector 字段'
-            assert item['sector'] != '', f'{item["code"]} sector 不应为空'
-            # sector 应来源于 MOCK_HOLDINGS 的 direction
-            code = item['code']
-            expected = next((h['direction'] for h in MOCK_HOLDINGS if h['code'] == code), '')
-            if expected:
-                assert item['sector'] == expected, f'{code}: 期望 {expected}, 实际 {item["sector"]}'
+        """持仓复盘结果应有 sector 字段（真实THS行业而非用户方向）"""
+        from unittest.mock import patch
+        with patch('backend.core.review_analysis.get_industry_map') as mock_imap:
+            mock_imap.return_value = {
+                '688999': {'ths_industry': '半导体设备'},
+                '688111': {'ths_industry': '半导体材料'},
+            }
+            result = self._make_review()
+            for item in result:
+                assert 'sector' in item, f'{item["code"]} 缺少 sector 字段'
+                assert item['sector'] != '', f'{item["code"]} sector 不应为空'
+            # 验证是 THS 行业而非 direction
+            assert result[0]['sector'] == '半导体设备'
+            assert result[1]['sector'] == '半导体材料'
 
     def test_stock_not_in_data_returns_error(self):
         """持仓股不在 stocks 数据中 → 标记为数据缺失"""
@@ -165,6 +169,30 @@ class TestGenerateHoldingsReview:
             # 至少 signal 是 buy（取决于 judge_signal 的判定）
             # 这是一个行为验证，不是严格的断言
             assert item['signal'] in ('buy', 'hold', '无信号')
+
+    def test_sector_is_ths_industry(self):
+        """sector 字段应为 THS 真实行业板块，不是用户 direction"""
+        from unittest.mock import patch
+        with patch('backend.core.review_analysis.get_industry_map') as mock_imap:
+            mock_imap.return_value = {
+                '688999': {'ths_industry': '半导体设备'},
+                '688111': {'ths_industry': '半导体材料'},
+            }
+            result = self._make_review()
+            item999 = next(r for r in result if r['code'] == '688999')
+            item111 = next(r for r in result if r['code'] == '688111')
+            assert item999['sector'] == '半导体设备', f'应为THS行业, 实际={item999["sector"]}'
+            assert item111['sector'] == '半导体材料', f'应为THS行业, 实际={item111["sector"]}'
+
+    def test_direction_from_holdings(self):
+        """direction 字段应来自原始 holdings 的 direction"""
+        result = self._make_review()
+        for item in result:
+            code = item['code']
+            expected_dir = next((h['direction'] for h in MOCK_HOLDINGS if h['code'] == code), None)
+            if expected_dir:
+                assert 'direction' in item, f'{code} 缺少 direction'
+                assert item['direction'] == expected_dir, f'{code}: 期望 direction={expected_dir}, 实际={item["direction"]}'
 
 
 # ═══════════════════════════════════════════════════════════════════

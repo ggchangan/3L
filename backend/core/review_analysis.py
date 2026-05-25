@@ -7,6 +7,8 @@ review_analysis.py — 复盘数据分析模块
 
 import sys
 
+from backend.core.data_layer import get_industry_map
+
 
 def _recalc_stage_for_range(structure, stage, code, stocks):
     """区间震荡：用关键点支撑位重算stage
@@ -150,6 +152,13 @@ def generate_holdings_review(holdings, stocks, buy_signals,
                 pass
 
         sector = bs_lookup.get('sector', d.get('direction', ''))
+        # 用真实 THS 行业取代 direction 作为板块
+        imap = get_industry_map()
+        ths_ind = imap.get(code, {})
+        if isinstance(ths_ind, dict) and ths_ind.get('ths_industry'):
+            real_sector = ths_ind['ths_industry']
+        else:
+            real_sector = sector
         mainline_level = get_mainline_level(sector, main_line_names, sub_main_names)
 
         # 止损位
@@ -176,7 +185,8 @@ def generate_holdings_review(holdings, stocks, buy_signals,
         result.append({
             'code': code,
             'name': h.get('name', d.get('name', code)),
-            'sector': sector,
+            'sector': real_sector,
+            'direction': d.get('direction', ''),
             'structure': structure,
             'stage': stage,
             'price': h.get('close', 0),
@@ -273,6 +283,10 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
                 pass
 
         sector = s.get('sector', '')
+        # 用真实 THS 行业取代
+        imap = get_industry_map()
+        ths_ind = imap.get(code, {})
+        real_sector = ths_ind.get('ths_industry', '') if isinstance(ths_ind, dict) else sector
         mainline_level = get_mainline_level(sector, main_line_names, sub_main_names)
 
         # 止损位
@@ -299,7 +313,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
         result.append({
             'name': s.get('name', '?'),
             'code': code,
-            'sector': sector,
+            'sector': real_sector or sector,
             'buy_point': buy_point_display,
             'price': s.get('price', 0),
             'change': s.get('change', 0),
