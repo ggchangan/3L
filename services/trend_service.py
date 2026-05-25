@@ -8,26 +8,12 @@ import config
 
 
 def get_trend_candidates():
-    """趋势候选扫描 — 扫描主线候选标的，结合复盘存档中的次级主线
-
-    返回 scan_trend_candidates() 的原始结果 dict。
-    """
-    from scripts.scan_buy_signals import get_main_lines
+    """趋势候选扫描 — 从主线缓存读取主线+次级主线，扫描全市场候选标的"""
+    from scripts.scan_buy_signals import get_main_lines, get_sub_main_lines
     from scripts.trend_candidates import scan_trend_candidates
-    from scripts.data_layer import REVIEW_ARCHIVE_DIR
 
     main_lines = get_main_lines() or []
-
-    # 读取复盘存档获取次级主线
-    sub_main_names = []
-    try:
-        archives = sorted([f for f in os.listdir(REVIEW_ARCHIVE_DIR) if f.endswith('.json')])
-        if archives:
-            with open(os.path.join(REVIEW_ARCHIVE_DIR, archives[-1])) as f:
-                rd = json.load(f)
-            sub_main_names = [l['name'] for l in rd.get('mainline', {}).get('secondary', [])]
-    except Exception:
-        pass
+    sub_main_names = get_sub_main_lines() or []
 
     result = scan_trend_candidates(main_lines, sub_main_names)
     return result

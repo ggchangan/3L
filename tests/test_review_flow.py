@@ -42,7 +42,9 @@ class TestModuleImport:
         try:
             import generate_review_data
             assert hasattr(generate_review_data, 'generate_daily_review')
-            assert hasattr(generate_review_data, 'is_trading_day')
+            # 计算函数已迁移到 services.review_compute_service
+            from services.review_compute_service import is_trading_day
+            assert callable(is_trading_day)
         finally:
             os.chdir(old_cwd)
 
@@ -121,18 +123,17 @@ class TestGenerateCommandLine:
             os.chdir(old_cwd)
 
     def test_is_trading_day_function(self):
-        """交易日判断函数可调用"""
+        """交易日判断函数可调用（已迁移到 review_compute_service）"""
         import subprocess
         result = subprocess.run(
             [sys.executable, '-c',
-             'import generate_review_data; '
-             'r = generate_review_data.is_trading_day("2026-05-22"); '
+             'from services.review_compute_service import is_trading_day; '
+             'r = is_trading_day("2026-05-22"); '
              'print(r)'],
             capture_output=True, text=True, timeout=30,
             env={**os.environ, 'TQDM_DISABLE': '1'}
         )
         assert result.returncode == 0, f'调用失败:\n{result.stderr}'
-        # 2026-05-22 是周五，应该是交易日
         assert 'True' in result.stdout or 'False' in result.stdout
 
 

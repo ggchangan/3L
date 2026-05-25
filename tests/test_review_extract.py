@@ -14,25 +14,23 @@ class TestLoadReviewData:
     def test_empty_holdings_file_returns_empty(self):
         """holdings.json 不存在时返回空列表"""
         from unittest.mock import patch
-        from generate_review_data import load_review_data
-        with patch('generate_review_data.os.path.isfile', return_value=False):
+        from services.review_service import load_review_data
+        with patch('services.review_service.os.path.isfile', return_value=False):
             holdings, buy_signals, _ = load_review_data(
                 date_str='2026-05-22',
                 existing={'holdings': [], 'buy_signals': []},
                 ww_dir='/tmp/nonexistent',
-                latest_scan_path='/tmp/nonexistent/scan.json',
             )
         assert holdings == []
         assert buy_signals == []
 
     def test_uses_existing_as_fallback(self):
         """holdings.json 有问题时用 existing 数据"""
-        from generate_review_data import load_review_data
+        from services.review_service import load_review_data
         holdings, buy_signals, _ = load_review_data(
             date_str='2026-05-22',
             existing={'holdings': [{'code': '000001', 'name': '平安'}], 'buy_signals': [{'code': '000001'}]},
             ww_dir='/tmp/nonexistent',
-            latest_scan_path='/tmp/nonexistent/scan.json',
         )
         assert len(holdings) >= 1
         # 至少拿到 existing 中的持仓
@@ -47,7 +45,7 @@ class TestScanBuySignalsIfNeeded:
 
     def test_returns_existing_if_not_empty(self):
         """buy_signals 非空 → 不扫描，直接返回"""
-        from generate_review_data import scan_buy_signals_if_needed
+        from services.review_service import scan_buy_signals_if_needed
         result, stocks = scan_buy_signals_if_needed(
             buy_signals=[{'code': '000001', 'name': '平安'}],
             all_stocks_60d={},
@@ -62,7 +60,7 @@ class TestScanBuySignalsIfNeeded:
 
     def test_empty_signals_stays_empty(self):
         """buy_signals 为空且无数据源 → 空列表"""
-        from generate_review_data import scan_buy_signals_if_needed
+        from services.review_service import scan_buy_signals_if_needed
         result, stocks = scan_buy_signals_if_needed(
             buy_signals=[],
             all_stocks_60d=None,

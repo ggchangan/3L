@@ -83,6 +83,9 @@ FILES_DIR = os.path.join(PUBLIC_DIR, 'files')
 REVIEW_CHARTS_DIR = CHARTS_DIR
 REVIEW_DATA_PATH = os.path.join(PRIVATE_DIR, 'review_data.json')
 
+# 主线缓存（每日复盘时写入一次，供趋势候选等模块读取）
+MAINLINES_CACHE_PATH = os.path.join(PRIVATE_DIR, 'mainlines_cache.json')
+
 # =====================================================
 # 服务器配置
 # =====================================================
