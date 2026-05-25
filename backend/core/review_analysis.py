@@ -143,6 +143,8 @@ def generate_holdings_review(holdings, stocks, buy_signals,
                 direction=d.get('direction', ''),
                 klines=kls_for_card,
             )
+            card_price = card['price']
+            card_change = card['change']
             trading_system = card['trading_system']
             trading_reason = card['trading_reason']
             trend_buy_type = card.get('trend_buy_type', '')
@@ -152,6 +154,8 @@ def generate_holdings_review(holdings, stocks, buy_signals,
             sl = card['stop_loss']
             sl_pct = card['stop_loss_pct']
         except Exception:
+            card_price = h.get('close', 0)
+            card_change = h.get('change', 0)
             trading_system = '3l'
             trading_reason = '判定失败'
             trend_buy_type = ''
@@ -168,8 +172,8 @@ def generate_holdings_review(holdings, stocks, buy_signals,
             'direction': d.get('direction', ''),
             'structure': structure,
             'stage': stage,
-            'price': h.get('close', 0),
-            'change': h.get('change', 0),
+            'price': card_price,
+            'change': card_change,
             'ema': h.get('ema', '--'),
             'vol_analysis': h.get('vol_analysis', '--'),
             'signal': code_sig,
@@ -249,6 +253,8 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
                 direction=s.get("sector", ""),
                 klines=kls_for_card,
             )
+            card_price = card["price"]
+            card_change = card["change"]
             trading_system = card["trading_system"]
             trading_reason = card["trading_reason"]
             trend_buy_type = card.get("trend_buy_type", "")
@@ -258,6 +264,8 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             sl = card["stop_loss"]
             sl_pct = card["stop_loss_pct"]
         except Exception:
+            card_price = s.get("price", 0)
+            card_change = s.get("change", 0)
             trading_system = "3l"
             trading_reason = "判定失败"
             trend_buy_type = ""
@@ -276,8 +284,8 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             "sector": real_sector or direction,
             "direction": direction,
             "buy_point": buy_point_display,
-            "price": s.get("price", 0),
-            "change": s.get("change", 0),
+            "price": card_price,
+            "change": card_change,
             "score": s.get("score", 0),
             "profit_model1": s.get("profit_model1", False),
             "trend_stock": s.get("trend_stock", False),
