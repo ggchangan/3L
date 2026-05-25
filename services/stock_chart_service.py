@@ -380,20 +380,30 @@ def generate_stock_chart(code):
             f'压力 {hi_15:.2f}</text>'
         )
 
-    # 5k. 今日实时虚线蜡烛
+    # 5k. 今日蜡烛ï¼盘中虚线+å®æ¶标记ï¼收盘实心+ä»æ¥标记ï¼
     if has_today:
-        idx_today = n  # 最后一根之后的索引
+        idx_today = n  # æåä¸æ ¹ä¹åçç´¢å¼
         x = px(idx_today)
         w = max(cw * 0.5, 1)
+
+        # æ¶çåï¼15:00+ï¼æ°æ®å·²æ¯å¨å¤©æç»ï¼å®å¿è¡ç+æ¶¨è·å¹æ è®°
+        # çä¸­ï¼èçº¿è¡ç+å®æ¶æ è®°
+        is_after_market = now.hour >= 15
+        candle_style = '' if is_after_market else ' stroke-dasharray="4,3"'
+        vol_style = '' if is_after_market else ' stroke-dasharray="3,2"'
+        vol_fill = 'opacity="0.3"' if is_after_market else 'opacity="0.25"'
+        label_prefix = 'æ¶¨è·' if is_after_market else 'å®æ¶'
+        date_label = 'ä»æ¥' if is_after_market else 'å®æ¶'
+        info_vol_prefix = 'é' if is_after_market else 'å®æ¶é'
 
         r_open  = rt['open']
         r_close = rt['close']
         r_high  = rt['high']
         r_low   = rt['low']
-        r_vol   = int(rt.get('volume_hand', 0)) * 100  # 手转股
+        r_vol   = int(rt.get('volume_hand', 0)) * 100  # æè½¬è¡
         r_prev  = rt.get('prev_close', r_close)
 
-        # 防止实时数据异常
+        # é²æ­¢å®æ¶æ°æ®å¼å¸¸
         if r_high < r_low or r_high <= 0:
             r_high = max(r_open, r_close, r_low) + 0.01
         if r_low <= 0 or r_low > r_high:
@@ -406,32 +416,32 @@ def generate_stock_chart(code):
         is_up = r_close >= r_open
         clr = '#ff4444' if is_up else '#44aa44'
 
-        # 虚线影线
+        # å½±çº¿
         sv.append(
             f'<line x1="{x}" y1="{yh}" x2="{x}" y2="{yl}" '
-            f'stroke="{clr}" stroke-width="0.5" opacity="0.4" stroke-dasharray="4,3"/>'
+            f'stroke="{clr}" stroke-width="0.5" opacity="0.4"{candle_style}/>'
         )
-        # 虚线实体
+        # å®ä½ï¼æ¶çå®å¿å¡«åï¼çä¸­èçº¿è¾¹æ¡ï¼
         bt, bb = min(yo, yc), max(yo, yc)
         sv.append(
             f'<rect x="{x - w / 2}" y="{bt}" width="{w}" '
-            f'height="{max(bb - bt, 0.5)}" fill="none" '
-            f'stroke="{clr}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.7"/>'
+            f'height="{max(bb - bt, 0.5)}" '
+            f'fill="{clr if is_after_market else "none"}" '
+            f'stroke="{clr}" stroke-width="1.2"{candle_style} opacity="0.7"/>'
         )
 
-        # 成交量虚线柱（预估：用实时成交量/收盘估算今日总量）
-        # 预估全日成交量 = 实时成交量 / 当前时间占比（A股 09:30~15:00 共 240分钟）
+        # æäº¤éæ±ï¼æ¶çå®å¿ï¼çä¸­èçº¿ï¼
         r_vol_est = r_vol
         try:
             hh = now.hour
             mm = now.minute
-            # 收盘后（15:00+）直接用实际量，不再预估
-            if hh < 15:
-                total_min = 240  # A股全天交易240分钟
+            # çä¸­æé¢ä¼°å¨å¤©éï¼æ¶çåç¨å®éé
+            if not is_after_market:
+                total_min = 240  # Aè¡å¨å¤©äº¤æ 240åé
                 if hh < 12:
                     elapsed_min = (hh - 9) * 60 + mm - 30 if hh >= 9 else 0
                 elif hh < 13:
-                    elapsed_min = 120  # 午休
+                    elapsed_min = 120  # åä¼
                 else:
                     elapsed_min = 120 + (hh - 13) * 60 + mm
                 elapsed_min = max(1, min(elapsed_min, total_min))
@@ -440,14 +450,13 @@ def generate_stock_chart(code):
             pass
 
         vh_rt = py_vol(r_vol_est, vm)
-        # 成交量虚线柱
         sv.append(
             f'<rect x="{x - cw * 0.35}" y="{vh_rt}" width="{max(cw * 0.6, 1)}" '
-            f'height="{max(bv - vh_rt, 0.5)}" fill="{clr}" opacity="0.25" '
-            f'stroke="{clr}" stroke-width="0.6" stroke-dasharray="3,2"/>'
+            f'height="{max(bv - vh_rt, 0.5)}" fill="{clr}" {vol_fill} '
+            f'stroke="{clr}" stroke-width="0.6"{vol_style}/>'
         )
 
-        # 今日标记文字框
+        # æ è®°æå­æ¡
         pct_color = '#ff4444' if rt['change_pct'] >= 0 else '#44aa44'
         sign = '+' if rt['change_pct'] >= 0 else ''
         sv.append(
@@ -457,7 +466,7 @@ def generate_stock_chart(code):
         sv.append(
             f'<text x="{x}" y="{pt + 11}" text-anchor="middle" '
             f'font-family="sans-serif" font-size="10" fill="{pct_color}" '
-            f'font-weight="bold">实时 {sign}{rt["change_pct"]:.2f}%</text>'
+            f'font-weight="bold">{label_prefix} {sign}{rt["change_pct"]:.2f}%</text>'
         )
 
     # 5l. 日期标签
@@ -485,7 +494,7 @@ def generate_stock_chart(code):
         sv.append(
             f'<text x="{xd}" y="{bv + 14}" text-anchor="middle" '
             f'font-family="sans-serif" font-size="8" fill="#ff9800" '
-            f'transform="rotate(-40,{xd},{bv + 14})">实时</text>'
+            f'transform="rotate(-40,{xd},{bv + 14})">{date_label}</text>'
         )
 
     # 5m. 底部信息栏
@@ -494,7 +503,7 @@ def generate_stock_chart(code):
     info_text = f'数据截至: {timestamp}  |  最新K线: {data_date}'
     if has_today:
         vol_text = _format_volume(int(rt.get('volume_hand', 0)) * 100)
-        info_text += f'  |  实时量: {vol_text}'
+        info_text += f'  |  {info_vol_prefix}: {vol_text}'
         if rt['amount'] > 0:
             amt_text = _format_volume(rt['amount'])
             info_text += f'  |  额: {amt_text}'
@@ -511,7 +520,7 @@ def generate_stock_chart(code):
         ('#2196f3', '突破'), ('#ff9800', '前高/量'), ('#4caf50', '前低'),
     ]
     if has_today:
-        legend_items.append(('#ffffff', '今日(虚线)'))
+        legend_items.append(('#ffffff', '今日(实心)' if (now.hour >= 15) else '今日(虚线)'))
     for idx, (clr2, lbl) in enumerate(legend_items):
         lx = 50 + idx * 100
         sv.append(
@@ -891,7 +900,7 @@ def generate_index_chart():
         sv.append(
             f'<text x="{x}" y="{pt + 12}" text-anchor="middle" '
             f'font-family="sans-serif" font-size="11" fill="{pct_color}" '
-            f'font-weight="bold">实时 {sign2}{rt["change_pct"]:.2f}%</text>'
+            f'font-weight="bold">{"涨跌" if not is_trading else "实时"} {sign2}{rt["change_pct"]:.2f}%</text>'
         )
 
         # Text annotation near the candle
@@ -930,7 +939,7 @@ def generate_index_chart():
         sv.append(
             f'<text x="{xd}" y="{bv + 16}" text-anchor="middle" '
             f'font-family="sans-serif" font-size="9" fill="#ff9800" '
-            f'transform="rotate(-45,{xd},{bv + 16})">实时</text>'
+            f'transform="rotate(-45,{xd},{bv + 16})">{"今日" if not is_trading else "实时"}</text>'
         )
 
     # Legend
@@ -940,7 +949,7 @@ def generate_index_chart():
         ('#ffd700', 'EMA5'), ('#ff6b6b', 'EMA10'), ('#4ecdc4', 'EMA20'),
     ]
     if has_today:
-        legend_items.append(('#ffffff', '今日(虚线)'))
+        legend_items.append(('#ffffff', '今日(实心)' if (now.hour >= 15) else '今日(虚线)'))
     for idx, (clr2, lbl) in enumerate(legend_items):
         lx = 80 + idx * 160
         sv.append(
