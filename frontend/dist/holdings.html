@@ -393,12 +393,12 @@ function renderPie(holdings, assessmentData) {
     }
 
     // 3. 方向集中度
-    const dirMap = {};
+    const assessDirMap = {};
     holdings.forEach(h => {
         const d = h.direction || '其他';
-        dirMap[d] = (dirMap[d] || 0) + (h.ratio || 0);
+        assessDirMap[d] = (assessDirMap[d] || 0) + (h.ratio || 0);
     });
-    Object.entries(dirMap).forEach(([dir, ratio]) => {
+    Object.entries(assessDirMap).forEach(([dir, ratio]) => {
         if (ratio >= 40) {
             assessItems.push({ text: `${dir} ${ratio.toFixed(1)}% 集中`, cls: 'high' });
         } else if (ratio >= 30) {
