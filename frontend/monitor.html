@@ -101,27 +101,34 @@
             </div>
         </div>
 
-        <!-- 板块监测 -->
+        <!-- 板块监测（可折叠） -->
         <div class="info-block">
-            <div class="block-title">📊 板块监测 <span class="badge">10分钟刷新</span></div>
-            <div id="topSectorsArea"><div class="empty">加载中...</div></div>
+            <div class="block-title collapse-title" onclick="toggleInfoBlock(this)">
+                📊 板块监测 <span class="badge">10分钟刷新</span>
+                <span class="collapse-indicator ib-toggle">▼</span>
+            </div>
+            <div class="ib-body" id="topSectorsArea"><div class="empty">加载中...</div></div>
         </div>
 
-        <!-- 龙头观测 -->
+        <!-- 龙头观测（可折叠） -->
         <div class="info-block">
-            <div class="block-title">
+            <div class="block-title collapse-title" onclick="toggleInfoBlock(this)">
                 🏆 龙头观测
                 <span class="badge">10分钟刷新</span>
-                <span class="tab-btn active" id="tabIndustryLeaders" onclick="switchLeaderTab('industry')">行业龙头</span>
-                <span class="tab-btn" id="tabMarketLeaders" onclick="switchLeaderTab('market')">市场龙头</span>
+                <span class="tab-btn active" id="tabIndustryLeaders" onclick="event.stopPropagation(); switchLeaderTab('industry')">行业龙头</span>
+                <span class="tab-btn" id="tabMarketLeaders" onclick="event.stopPropagation(); switchLeaderTab('market')">市场龙头</span>
+                <span class="collapse-indicator ib-toggle">▼</span>
             </div>
-            <div id="leaderArea"><div class="empty">加载中...</div></div>
+            <div class="ib-body" id="leaderArea"><div class="empty">加载中...</div></div>
         </div>
 
-        <!-- 盘中机会 -->
+        <!-- 盘中机会（可折叠） -->
         <div class="info-block">
-            <div class="block-title">🎯 盘中机会 <span class="badge">每1小时扫描</span></div>
-            <div id="buySignalsArea"><div class="empty">正在扫描...</div></div>
+            <div class="block-title collapse-title" onclick="toggleInfoBlock(this)">
+                🎯 盘中机会 <span class="badge">每1小时扫描</span>
+                <span class="collapse-indicator ib-toggle">▼</span>
+            </div>
+            <div class="ib-body" id="buySignalsArea"><div class="empty">正在扫描...</div></div>
         </div>
 
         <!-- 止损预警 -->

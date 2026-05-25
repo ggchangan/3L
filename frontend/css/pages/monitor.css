@@ -113,6 +113,9 @@
         }
         .info-block:last-child { margin-bottom: 0; }
         .block-title { font-size: 13px; color: #aaa; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .collapse-title { cursor: pointer; user-select: none; }
+        .collapse-title:hover { color: #ddd; }
+        .ib-body { }
 
         /* 行情 */
         .quote-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }

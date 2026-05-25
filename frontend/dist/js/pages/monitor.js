@@ -160,6 +160,20 @@ function toggleExternal() {
     }
 }
 
+// info-block 折叠：点击 block-title 切换下方 ib-body
+function toggleInfoBlock(titleEl) {
+    const body = titleEl.nextElementSibling;
+    if (!body || !body.classList.contains('ib-body')) return;
+    const toggle = titleEl.querySelector('.ib-toggle');
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        if (toggle) toggle.textContent = '▼';
+    } else {
+        body.style.display = 'none';
+        if (toggle) toggle.textContent = '▶';
+    }
+}
+
 // ====== 板块监测（tab切换：今日涨幅/昨日涨幅 + 每行关键图） ======
 let sectorDataCache = null;
 
