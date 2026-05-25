@@ -241,7 +241,7 @@ class Handler(SimpleHTTPRequestHandler):
 
         # --- URL 别名重定向 ---
         aliases = {
-            '/review': '/review.html',
+            '/review': '/react.html',
             '/review.html': None,
             '/monitor': '/react.html',
             '/': '/react.html',
