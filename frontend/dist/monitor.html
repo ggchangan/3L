@@ -17,7 +17,7 @@
 </div>
 
 <div class="grid">
-    <!-- 警示区 -->
+    <!-- 警示区（① 规则层） -->
     <div class="card warning-card">
         <div class="card-title">⚠️ 盘中纪律警示</div>
         <div class="warnings">
@@ -31,8 +31,16 @@
             </div>
             <div class="warn-item">
                 <div class="num">03</div>
-                <div class="text">按计划执行，达到条件才操作</div>
+                <div class="text" id="dailyRule">按计划执行，达到条件才操作</div>
             </div>
+        </div>
+    </div>
+
+    <!-- ② 计划层（加载昨日日志） -->
+    <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">📋 今日计划 <span class="badge" id="planBadge">加载中</span></div>
+        <div id="todayPlanArea">
+            <div class="empty">正在加载昨日计划…</div>
         </div>
     </div>
 
@@ -119,6 +127,14 @@
         <div class="card-title">🎯 盘中机会 <span class="badge">每1小时扫描</span></div>
         <div id="buySignalsArea">
             <div class="empty">正在扫描...</div>
+        </div>
+    </div>
+
+    <!-- ④ 报警层 -->
+    <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">🔔 报警层 <span class="badge" id="alarmBadge">0</span></div>
+        <div id="alarmPanel">
+            <div class="empty">暂无报警</div>
         </div>
     </div>
 

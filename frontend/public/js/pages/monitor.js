@@ -577,7 +577,250 @@ function updateStopLoss(data) {
     area.innerHTML = html;
 }
 
-// ====== 主刷新 ======
+// ====== Phase2: 计划层 — 加载昨日日志的计划 ======
+function loadTodayPlan() {
+    const area = document.getElementById('todayPlanArea');
+    const badge = document.getElementById('planBadge');
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toISOString().slice(0, 10);
+
+    fetch('/api/workbench/get?date=' + yStr)
+        .then(r => r.json())
+        .then(data => {
+            const plan = data.plan || {};
+            const buy = plan.buy || [];
+            const sell = plan.sell || [];
+            const watch = plan.watch || [];
+            const total = buy.length + sell.length + watch.length;
+
+            if (total === 0) {
+                area.innerHTML = '<div class="empty">昨日无计划</div>';
+                badge.textContent = '0项';
+                badge.style.background = '#555';
+                return;
+            }
+
+            badge.textContent = total + '项';
+            badge.style.background = '#e94560';
+
+            let html = '<div style="font-size:11px;color:#555;margin-bottom:6px;">📅 ' + yStr + ' 计划</div>';
+            if (buy.length) {
+                html += '<div style="font-size:11px;margin-bottom:4px;">🟢 买入：</div>';
+                html += renderPlanItems(buy, 'buy');
+            }
+            if (sell.length) {
+                html += '<div style="font-size:11px;margin:6px 0 4px;">🔴 卖出：</div>';
+                html += renderPlanItems(sell, 'sell');
+            }
+            if (watch.length) {
+                html += '<div style="font-size:11px;margin:6px 0 4px;">👁️ 观察：</div>';
+                html += renderPlanItems(watch, 'watch');
+            }
+            area.innerHTML = html;
+        })
+        .catch(() => {
+            area.innerHTML = '<div class="empty">加载失败</div>';
+            badge.textContent = '失败';
+        });
+}
+
+function renderPlanItems(items, type) {
+    if (type === 'watch') {
+        return items.map(p =>
+            '<div style="display:flex;gap:8px;align-items:center;padding:3px 8px;border-radius:4px;background:rgba(255,255,255,0.02);margin-bottom:2px;font-size:12px;">' +
+                '<span style="color:#e0e0e0;">' + (p.stock || p.sector || '--') + '</span>' +
+                '<span style="color:#888;">→</span>' +
+                '<span style="color:#aaa;">' + (p.focus || '') + '</span>' +
+                '<span style="margin-left:auto;">' + statusLabel(p.status) + '</span>' +
+            '</div>'
+        ).join('');
+    }
+    return items.map(p =>
+        '<div style="display:flex;gap:8px;align-items:center;padding:3px 8px;border-radius:4px;background:rgba(255,255,255,0.02);margin-bottom:2px;font-size:12px;">' +
+            '<span style="color:#e0e0e0;">' + (p.stock || '--') + '</span>' +
+            '<span style="color:#888;font-size:10px;">' + (p.condition || '') + '</span>' +
+            '<span style="color:#555;font-size:10px;">' + (p.qty || '') + '</span>' +
+            '<span style="margin-left:auto;">' + statusLabel(p.status) + '</span>' +
+        '</div>'
+    ).join('');
+}
+
+function statusLabel(s) {
+    switch(s) {
+        case 'executed': return '<span style="color:#22c55e;">✅ 已执行</span>';
+        case 'triggered': return '<span style="color:#ffd700;">⚡ 已触发</span>';
+        case 'not_triggered': return '<span style="color:#e94560;">❌ 未触发</span>';
+        default: return '<span style="color:#888;">⏳ 待触发</span>';
+    }
+}
+
+// ====== Phase2: 报警层 + 声音 ======
+let audioCtx = null;
+
+function getAudioCtx() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return audioCtx;
+}
+
+function playAlarmSound(type) {
+    try {
+        const ctx = getAudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        switch(type) {
+            case 'buy':  // 一声叮
+                osc.frequency.value = 880;
+                osc.type = 'sine';
+                gain.gain.value = 0.3;
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.15);
+                break;
+            case 'stop':  // 急促叮叮叮
+                osc.frequency.value = 660;
+                osc.type = 'square';
+                gain.gain.value = 0.4;
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.08);
+                // Chain 3 beeps
+                setTimeout(() => playAlarmSound('stop'), 200);
+                setTimeout(() => playAlarmSound('stop'), 400);
+                break;
+            case 'warn':  // 一声咚
+                osc.frequency.value = 330;
+                osc.type = 'triangle';
+                gain.gain.value = 0.3;
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.2);
+                break;
+            case 'abnormal':  // 嘟嘟
+                osc.frequency.value = 440;
+                osc.type = 'sawtooth';
+                gain.gain.value = 0.2;
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.1);
+                setTimeout(() => playAlarmSound('abnormal'), 150);
+                break;
+            default:  // 轻叮
+                osc.frequency.value = 660;
+                osc.type = 'sine';
+                gain.gain.value = 0.2;
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.1);
+        }
+    } catch(e) { /* audio not supported */ }
+}
+
+function sendBrowserNotification(title, body) {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+        new Notification(title, { body: body, icon: '/favicon.ico' });
+    } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(p => {
+            if (p === 'granted') {
+                new Notification(title, { body: body, icon: '/favicon.ico' });
+            }
+        });
+    }
+}
+
+function pushAlarm(msg, type) {
+    const panel = document.getElementById('alarmPanel');
+    const badge = document.getElementById('alarmBadge');
+    if (!panel) return;
+
+    // Remove empty state
+    const emptyEl = panel.querySelector('.empty');
+    if (emptyEl) panel.innerHTML = '';
+
+    const colors = { buy: '#22c55e', stop: '#e94560', warn: '#ffd700', abnormal: '#ff9800', info: '#2196f3' };
+    const icons = { buy: '🟢', stop: '🔴', warn: '🟡', abnormal: '🔔', info: 'ℹ️' };
+    const c = colors[type] || '#888';
+    const ic = icons[type] || 'ℹ️';
+
+    const el = document.createElement('div');
+    el.style.cssText = 'display:flex;gap:8px;align-items:flex-start;padding:6px 10px;margin-bottom:4px;border-radius:6px;background:rgba(255,255,255,0.02);border-left:3px solid ' + c + ';font-size:12px;';
+    el.innerHTML = '<span>' + ic + '</span><span style="color:#e0e0e0;">' + msg + '</span>';
+
+    // Prepend so newest is first
+    panel.insertBefore(el, panel.firstChild);
+
+    // Update badge count
+    const count = panel.children.length;
+    badge.textContent = count;
+    badge.style.background = count > 0 ? '#e94560' : '#555';
+
+    // Play sound and notify
+    playAlarmSound(type);
+    sendBrowserNotification('3L 盯盘报警', msg);
+
+    // Keep max 20 alarms
+    while (panel.children.length > 20) {
+        panel.removeChild(panel.lastChild);
+    }
+}
+
+// ====== Phase2: 报警检测 ======
+function checkPlanAlarms(data) {
+    // Load plan from workbench and compare with current market data
+    // Placeholder: for now, basic price checks against plan conditions
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toISOString().slice(0, 10);
+
+    fetch('/api/workbench/get?date=' + yStr)
+        .then(r => r.json())
+        .then(log => {
+            const plan = log.plan || {};
+            const buy = plan.buy || [];
+            const sell = plan.sell || [];
+
+            // Check buy conditions: if stock price is near EMA5 (simplified)
+            // This is a placeholder — real condition detection needs K-line data
+            buy.forEach(p => {
+                if (!p.stock || p.status === 'executed') return;
+                // Check if stock has buy signal
+                fetch('/api/stock-summary?code=' + p.stock)
+                    .then(r => r.json())
+                    .then(s => {
+                        if (s.bias5 !== undefined && Math.abs(s.bias5) < 2) {
+                            pushAlarm(p.stock + ' 接近回踩到位 (BIAS5=' + s.bias5.toFixed(1) + '%)', 'buy');
+                        }
+                    })
+                    .catch(() => {});
+            });
+
+            // Check sell conditions
+            sell.forEach(p => {
+                if (!p.stock || p.status === 'executed') return;
+                fetch('/api/stock-summary?code=' + p.stock)
+                    .then(r => r.json())
+                    .then(s => {
+                        if (s.bias5 !== undefined && s.bias5 < -3) {
+                            pushAlarm(p.stock + ' 跌破均线 (BIAS5=' + s.bias5.toFixed(1) + '%)', 'stop');
+                        }
+                    })
+                    .catch(() => {});
+            });
+        })
+        .catch(() => {});
+}
+
+// 收盘前15分钟提醒
+function checkClosingAlarm() {
+    const now = new Date();
+    const h = now.getHours();
+    const m = now.getMinutes();
+    // A-share close at 15:00
+    if (h === 14 && m >= 45) {
+        pushAlarm('收盘前' + (60 - m) + '分钟，检查有无未执行计划', 'info');
+    }
+}
 function refreshAll() {
     const badge = document.getElementById('updateBadge');
     const now = new Date();
@@ -610,10 +853,18 @@ function refreshAll() {
         .then(data => updateStopLoss(data))
         .catch(() => {});
 
-    // 龙头观测（10分钟刷新）
+    // 检查报警（每60秒一次）
     const nowMs = Date.now();
-    if (!window._lastLeaderRefresh || nowMs - window._lastLeaderRefresh > 600000) {
-        window._lastLeaderRefresh = nowMs;
+    if (!window._lastAlarmCheck || nowMs - window._lastAlarmCheck > 60000) {
+        window._lastAlarmCheck = nowMs;
+        checkPlanAlarms(data);
+        checkClosingAlarm();
+    }
+
+    // 龙头观测（10分钟刷新）
+    const nowMs2 = Date.now();
+    if (!window._lastLeaderRefresh || nowMs2 - window._lastLeaderRefresh > 600000) {
+        window._lastLeaderRefresh = nowMs2;
         if (leaderTab === 'industry') loadIndustryLeaders();
         else loadMarketLeaders();
     }
@@ -627,5 +878,13 @@ function refreshAll() {
 // 先加载板块和行业映射（仅首次），再加载所有数据
 loadTopSectors();
 loadIndustryLeaders();
-loadIndustryMap().then(() => refreshAll());
+loadIndustryMap().then(() => {
+    refreshAll();
+    loadTodayPlan();
+});
 setInterval(refreshAll, REFRESH_INTERVAL);
+
+// 请求浏览器通知权限
+if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+}

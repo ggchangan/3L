@@ -17,7 +17,7 @@
 </div>
 
 <div class="grid">
-    <!-- 警示区 -->
+    <!-- 警示区（① 规则层） -->
     <div class="card warning-card">
         <div class="card-title">⚠️ 盘中纪律警示</div>
         <div class="warnings">
@@ -31,8 +31,16 @@
             </div>
             <div class="warn-item">
                 <div class="num">03</div>
-                <div class="text">按计划执行，达到条件才操作</div>
+                <div class="text" id="dailyRule">按计划执行，达到条件才操作</div>
             </div>
+        </div>
+    </div>
+
+    <!-- ② 计划层（加载昨日日志） -->
+    <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">📋 今日计划 <span class="badge" id="planBadge">加载中</span></div>
+        <div id="todayPlanArea">
+            <div class="empty">正在加载昨日计划…</div>
         </div>
     </div>
 
@@ -80,7 +88,7 @@
         </div>
         <!-- 关键点图 -->
         <div id="indexChartPanel" style="display:none; margin-top:12px;">
-            <object id="indexChartObj" data="/review_charts/zzqz_v2.svg?t=0" type="image/svg+xml" style="width:100%; height:550px; border-radius:8px;"></object>
+            <object id="indexChartObj" data="/pub/charts/zzqz_v2.svg?t=0" type="image/svg+xml" style="width:100%; height:550px; border-radius:8px;"></object>
         </div>
         <!-- 异常事件占位符 -->
         <div id="eventPlaceholderPanel" style="display:none; margin-top:12px; padding:16px; background:#16213e; border-radius:8px;">
@@ -122,6 +130,14 @@
         </div>
     </div>
 
+    <!-- ④ 报警层 -->
+    <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">🔔 报警层 <span class="badge" id="alarmBadge">0</span></div>
+        <div id="alarmPanel">
+            <div class="empty">暂无报警</div>
+        </div>
+    </div>
+
     <!-- 止损预警 -->
     <div class="card" style="grid-column:1/-1;">
         <div class="card-title">🛑 止损预警 <span class="badge" id="stopLossBadge">0</span></div>
@@ -134,7 +150,8 @@
 <div id="nav-bottom" style="text-align:center;margin-top:30px;padding-top:16px;border-top:1px solid #2a2a4a;"></div>
 
 
-<script src="/nav.js"></script>
+<script src="/js/config.js"></script>
+    <script src="/js/nav.js"></script>
 <script src="/js/stock_card.js"></script>
 <script src="/js/pages/monitor.js?v=1"></script>
 </body>
