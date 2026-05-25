@@ -3,129 +3,166 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3L · 交易日志</title>
-  <link rel="stylesheet" crossorigin href="/assets/journal-B4iUP2_k.css">
+    <title>3L · 交易工作台</title>
+  <link rel="stylesheet" crossorigin href="/assets/journal-CniQRHD4.css">
   <link rel="stylesheet" crossorigin href="/assets/base-FqS57vpu.css">
 </head>
 <body>
-    <div id="nav-top"></div>
+    <div style="margin-top:10px;" id="nav-top"></div>
     <div class="header">
-        <h1>✍️ 交易日志</h1>
-        <div class="subtitle">按照简放模板记录每一笔交易 · 坚持写日志是快速提升的捷径</div>
+        <h1>🧑 交易工作台</h1>
+        <div class="sub">分析 → 定计划 → 写日志</div>
+        <div class="date-badge" id="wbDate">加载中...</div>
     </div>
+
     <div class="container">
-        <div class="tabs">
-            <div class="tab active" onclick="switchTab('write')">✍️ 写日志</div>
-            <div class="tab" onclick="switchTab('history')">📋 历史记录</div>
-        </div>
 
-        <!-- Write Tab -->
-        <div id="tab-write" class="tab-content active">
-            <div class="journal-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><span class="num">①</span> 日期</label>
-                        <input type="date" id="j-date">
-                    </div>
-                    <div class="form-group">
-                        <label><span class="num">②</span> 标的</label>
-                        <div class="stock-search-wrap">
-                            <input type="text" id="j-stock" placeholder="输入股票代码或名称搜索..." autocomplete="off">
-                            <div class="stock-dropdown" id="stock-dropdown"></div>
-                        </div>
-                    </div>
+        <!-- ① 今日复盘摘要 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="step">STEP 1</span>
+                今日复盘摘要
+                <span style="font-size:12px; color:#666; font-weight:normal;">
+                    <a href="/review.html" style="color:#22c55e;">📎 打开完整复盘</a>
+                </span>
+            </div>
+            <div class="grid-3" id="reviewSummary">
+                <div class="info-card">
+                    <div class="label">大盘周期</div>
+                    <div class="value" style="font-size:16px;" id="rsMarket">--</div>
                 </div>
-
-                <div class="form-group">
-                    <label><span class="num">③</span> 理由/逻辑</label>
-                    <textarea id="j-reason" placeholder="为什么要买？是否符合体系？"></textarea>
-                    <div class="hint">写下具体的买入逻辑：主线方向？趋势确认？量价配合？</div>
+                <div class="info-card">
+                    <div class="label">主线</div>
+                    <div class="meta" id="rsMainline" style="font-size:14px;font-weight:600;margin-top:4px;">--</div>
                 </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><span class="num">④</span> 止损点</label>
-                        <input type="text" id="j-stop-loss" placeholder="如: 25.50元">
-                        <div class="hint">买入同时必须设好止损位</div>
-                    </div>
-                    <div class="form-group">
-                        <label><span class="num">⑤</span> 买卖点</label>
-                        <select id="j-point">
-                            <option value="">请选择</option>
-                            <option value="突破买点">突破买点</option>
-                            <option value="中继买点">中继买点</option>
-                            <option value="回踩买点">回踩买点</option>
-                            <option value="反转买点">反转买点</option>
-                            <option value="恐慌买点">恐慌买点</option>
-                            <option value="左侧止盈">左侧止盈</option>
-                            <option value="右侧止盈">右侧止盈</option>
-                            <option value="止损卖出">止损卖出</option>
-                            <option value="其他">其他</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><span class="num">⑥</span> 盈亏（%）</label>
-                        <input type="text" id="j-pnl" placeholder="如: +3.5 / -2.1">
-                    </div>
-                    <div class="form-group">
-                        <label><span class="num">⑧</span> 执行评分（1-10）</label>
-                        <input type="number" id="j-score" min="1" max="10" placeholder="1-10">
-                        <div class="hint">是否严格执行了计划？</div>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label><span class="num">⑨</span> 情绪记录</label>
-                    <select id="j-emotion">
-                        <option value="">请选择</option>
-                        <option value="平静">😐 平静</option>
-                        <option value="自信">😎 自信</option>
-                        <option value="贪婪">🤑 贪婪</option>
-                        <option value="恐惧">😰 恐惧</option>
-                        <option value="愤怒">😡 愤怒</option>
-                        <option value="焦虑">😖 焦虑</option>
-                        <option value="犹豫">🤔 犹豫</option>
-                        <option value="懊悔">😩 懊悔</option>
-                        <option value="兴奋">🤩 兴奋</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label><span class="num">⑩</span> 反思</label>
-                    <textarea id="j-reflection" placeholder="如果重来一次，哪里可以改进？"></textarea>
-                    <div class="hint">诚实面对自己的交易，这是进步的关键</div>
-                </div>
-
-                <div class="form-actions">
-                    <button class="btn btn-primary" onclick="saveJournal()">💾 保存日志</button>
-                    <button class="btn btn-sm" style="background:#2a2a4e;color:#888;" onclick="clearForm()">清空</button>
+                <div class="info-card">
+                    <div class="label">买点信号</div>
+                    <div class="value" style="font-size:16px;" id="rsSignals">0</div>
+                    <div class="meta">只</div>
                 </div>
             </div>
         </div>
 
-        <!-- History Tab -->
-        <div id="tab-history" class="tab-content">
-            <div id="history-list" class="loading"><div class="spinner"></div><br>加载中...</div>
+        <!-- ② 待办 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="step">TODO</span>
+                📌 待办
+            </div>
+            <div id="todoList">
+                <div class="empty">暂无待办，点击下方添加</div>
+            </div>
+            <div style="margin-top:8px; font-size:12px; color:#4ecdc4; cursor:pointer;" onclick="addTodo()">＋ 添加待办</div>
         </div>
-    </div>
 
-    <!-- Detail Modal -->
-    <div class="detail-overlay" id="detail-overlay" onclick="event.target===this && closeDetail()">
-        <div class="detail-modal">
-            <button class="close-btn" onclick="closeDetail()">×</button>
-            <h2 id="detail-title">交易详情</h2>
-            <div id="detail-body"></div>
+        <!-- ③ 明日计划 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="step">PLAN</span>
+                📋 明日计划
+            </div>
+
+            <div style="margin-bottom:8px;">
+                <div style="display:inline-block; background:rgba(34,197,94,0.15); color:#22c55e; padding:2px 10px; border-radius:4px; font-size:12px; font-weight:600;">🟢 买入</div>
+            </div>
+            <div style="display:grid; grid-template-columns:80px 1fr 60px 80px 30px; gap:6px; align-items:center; font-size:11px; color:#555; border-bottom:1px solid #2a2a4e; padding:4px 0;">
+                <span>标的</span><span>条件</span><span>数量</span><span>状态</span><span></span>
+            </div>
+            <div id="planBuyRows"></div>
+            <div style="margin-top:4px; font-size:11px; color:#22c55e; cursor:pointer;" onclick="addPlanRow('buy')">＋ 添加买入计划</div>
+
+            <div style="margin-top:12px;">
+                <div style="display:inline-block; background:rgba(233,69,96,0.15); color:#e94560; padding:2px 10px; border-radius:4px; font-size:12px; font-weight:600;">🔴 卖出</div>
+            </div>
+            <div style="display:grid; grid-template-columns:80px 1fr 60px 80px 30px; gap:6px; align-items:center; font-size:11px; color:#555; border-bottom:1px solid #2a2a4e; padding:4px 0;">
+                <span>标的</span><span>条件</span><span>数量</span><span>状态</span><span></span>
+            </div>
+            <div id="planSellRows"></div>
+            <div style="margin-top:4px; font-size:11px; color:#22c55e; cursor:pointer;" onclick="addPlanRow('sell')">＋ 添加卖出计划</div>
+
+            <div style="margin-top:12px;">
+                <div style="display:inline-block; background:rgba(255,215,0,0.15); color:#ffd700; padding:2px 10px; border-radius:4px; font-size:12px; font-weight:600;">👁️ 观察</div>
+            </div>
+            <div style="display:grid; grid-template-columns:80px 1fr 60px 80px 30px; gap:6px; align-items:center; font-size:11px; color:#555; border-bottom:1px solid #2a2a4e; padding:4px 0;">
+                <span>标的/板块</span><span>关注点</span><span>--</span><span>状态</span><span></span>
+            </div>
+            <div id="planWatchRows"></div>
+            <div style="margin-top:4px; font-size:11px; color:#22c55e; cursor:pointer;" onclick="addPlanRow('watch')">＋ 添加观察项</div>
         </div>
-    </div>
 
-    <div id="toast" class="toast"></div>
+        <!-- ④ 今日操作 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="step">DONE</span>
+                ✍️ 今日操作
+                <span style="font-size:12px; color:#666; font-weight:normal;">自由记录</span>
+            </div>
+            <textarea style="width:100%; min-height:80px; background:#1a1a30; border:1px solid #2a2a4e; border-radius:6px; color:#e0e0e0; font-size:13px; padding:10px; resize:vertical; box-sizing:border-box;" id="opText" placeholder="记录今天的买卖操作、成交价格、执行情况…"></textarea>
+        </div>
+
+        <!-- ⑤ 执行复盘 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="step">REVIEW</span>
+                🔄 执行复盘
+                <span style="font-size:12px; color:#666; font-weight:normal;">昨日计划执行情况</span>
+            </div>
+            <div style="background:rgba(255,255,255,0.03); border:1px dashed #2a2a4e; border-radius:8px; padding:12px;" id="yesterdayPlan">
+                <div style="font-size:11px; color:#888;">正在加载昨日计划…</div>
+            </div>
+            <textarea style="width:100%; min-height:60px; background:#1a1a30; border:1px solid #2a2a4e; border-radius:6px; color:#e0e0e0; font-size:13px; padding:10px; resize:vertical; box-sizing:border-box; margin-top:8px;" id="execReviewText" placeholder="补充说明：哪些执行了，哪些没触发，有什么偏差…"></textarea>
+        </div>
+
+        <!-- ⑥ 今日反思 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="step">LEARN</span>
+                💡 今日反思
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div>
+                    <div style="font-size:11px; color:#888; margin-bottom:2px;">纪律遵守</div>
+                    <select style="width:100%; background:#1a1a30; border:1px solid #2a2a4e; border-radius:4px; padding:5px 8px; color:#e0e0e0; font-size:12px;" id="refDiscipline">
+                        <option value="">--</option>
+                        <option value="✅ 完全按计划执行">✅ 完全按计划执行</option>
+                        <option value="⚠️ 大部分执行，有1处偏差">⚠️ 大部分执行，有1处偏差</option>
+                        <option value="❌ 严重偏离计划">❌ 严重偏离计划</option>
+                    </select>
+                </div>
+                <div>
+                    <div style="font-size:11px; color:#888; margin-bottom:2px;">评分</div>
+                    <select style="width:100%; background:#1a1a30; border:1px solid #2a2a4e; border-radius:4px; padding:5px 8px; color:#e0e0e0; font-size:12px;" id="refRating">
+                        <option value="">--</option>
+                        <option value="⭐⭐⭐⭐⭐">⭐⭐⭐⭐⭐</option>
+                        <option value="⭐⭐⭐⭐">⭐⭐⭐⭐</option>
+                        <option value="⭐⭐⭐">⭐⭐⭐</option>
+                        <option value="⭐⭐">⭐⭐</option>
+                        <option value="⭐">⭐</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top:8px;">
+                <div style="font-size:11px; color:#888; margin-bottom:2px;">学到了什么 / 改进点</div>
+                <textarea style="width:100%; min-height:60px; background:#1a1a30; border:1px solid #2a2a4e; border-radius:6px; color:#e0e0e0; font-size:13px; padding:10px; resize:vertical; box-sizing:border-box;" id="refLearned" placeholder="今天做对了什么？做错了什么？下次怎么改进？"></textarea>
+            </div>
+        </div>
+
+        <!-- 操作栏 -->
+        <div style="display:flex; gap:8px; margin-top:16px;">
+            <button class="action-btn green" onclick="saveWorkbench()">💾 保存交易日志</button>
+            <button class="action-btn sec" onclick="loadPrevDay()">← 前一天</button>
+            <button class="action-btn sec" onclick="loadNextDay()">后一天 →</button>
+        </div>
+
+    </div>
 
     <div id="nav-bottom"></div>
+    <div class="footer">
+        3L 交易体系 · 交易工作台 · 分析→定计划→写日志
+    </div>
     <script src="/js/config.js"></script>
-    <script src="/js/nav.js"></script>
-<script src="/js/pages/journal.js?v=1"></script>
+    <script src="/js/nav.js?v=5"></script>
+    <script src="/js/stock_card.js"></script>
+    <script src="/js/pages/workbench.js?v=1"></script>
 </body>
 </html>

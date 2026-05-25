@@ -102,10 +102,20 @@ function renderCards() {
     const active = getActiveDirs();
 
     let filtered = stocks.filter(s => {
-        if (filter && !s.code.includes(filter) && !(s.name||'').toLowerCase().includes(filter)) return false;
-        if (activeDir === '全部') return true;
-        const d = s.direction || '其他';
-        return d === activeDir && active.includes(d);
+        // 方向tab过滤
+        if (activeDir !== '全部') {
+            const d = s.direction || '其他';
+            if (d !== activeDir || !active.includes(d)) return false;
+        }
+        // 筛选框过滤（支持代码、名称、首字母拼音）
+        if (filter) {
+            if (s.code.includes(filter)) return true;
+            const name = (s.name || '').toLowerCase();
+            if (name.includes(filter)) return true;
+            if (getPinyinInitials(name).includes(filter)) return true;
+            return false;
+        }
+        return true;
     });
 
     const structOrder = {'上涨趋势': 0, '区间震荡': 1, '下降趋势': 2};
@@ -116,7 +126,10 @@ function renderCards() {
         const sa = structOrder[a.structure] ?? 3;
         const sb = structOrder[b.structure] ?? 3;
         if (sa !== sb) return sa - sb;
-        return 0;
+        // 第三层：按涨跌幅降序（跌的排后面）
+        const pa = parseFloat(a.change) || 0;
+        const pb = parseFloat(b.change) || 0;
+        return pb - pa;
     });
 
     if (filtered.length === 0) {
@@ -131,8 +144,26 @@ function renderCards() {
         '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560'
     };
     let html = '';
+    let prevTracked = null;
+    let prevStruct = null;
     filtered.forEach((s, i) => {
         const tracked = active.includes(s.direction || '其他');
+        const struct = s.structure || '--';
+
+        // 分组标题
+        if (prevTracked === null || prevTracked !== tracked || prevStruct !== struct) {
+            const statusLabel = tracked ? '✅ 启用方向' : '🚫 未跟踪';
+            const structIcon = struct === '上涨趋势' ? '📈' : struct === '区间震荡' ? '📊' : struct === '下降趋势' ? '📉' : '❓';
+            html += `<div style="padding:8px 10px 2px;font-size:12px;color:#888;border-bottom:1px solid #ffffff0d;">
+                ${statusLabel} · ${structIcon} ${struct}
+                ${prevTracked === null || prevTracked !== tracked
+                    ? `<span style="float:right;font-size:11px;color:#555;">${tracked ? '已启用方向优先' : '未跟踪方向'}</span>`
+                    : ''}
+            </div>`;
+            prevTracked = tracked;
+            prevStruct = struct;
+        }
+
         const leftColor = stageColors[s.stage] || '#888';
         const cardData = {
             name: s.name || s.code, code: s.code, price: s.price, change: s.change,
@@ -345,7 +376,6 @@ async function onBoardSearch(val) {
                     <span class="dir-sr-pct" style="color:${color}">${sign}${pct.toFixed(2)}%</span>
                 </label>`;
             });
-            html += `<button class="btn btn-green btn-sm" onclick="batchAddDirStocks()" style="margin:8px 0;width:100%;">✅ 批量添加已勾选股票</button>`;
             el.innerHTML = html;
             el.style.display = 'block';
         } catch(e) {

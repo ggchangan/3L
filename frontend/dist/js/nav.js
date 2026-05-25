@@ -85,10 +85,8 @@
     if (bottomNav) {
         bottomNav.innerHTML = buildBottomNav();
         bottomNav.style.display = 'flex';
-        bottomNav.style.flexDirection = 'column';
-        bottomNav.style.alignItems = 'center';
-        bottomNav.style.gap = '12px';
-        bottomNav.style.margin = '20px 0';
         bottomNav.style.flexWrap = 'wrap';
+        bottomNav.style.justifyContent = 'center';
+        bottomNav.style.margin = '20px 0';
     }
 })();

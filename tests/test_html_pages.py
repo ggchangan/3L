@@ -152,6 +152,37 @@ class TestPageSpecific:
         html = read_page('monitor.html')
         assert 'monitor.js' in html
 
+    # ── 工作台一致性测试 ──
+
+    def test_workbench_uses_section_not_wb_card(self):
+        """工作台使用标准 .section 而不是自定义 .wb-card/.wb-grid"""
+        html = read_page('journal.html')
+        assert 'wb-grid' not in html, '工作台不应使用 wb-grid 类'
+        assert 'wb-card' not in html, '工作台不应使用 wb-card 类'
+        assert 'wb-actions' not in html, '工作台不应使用 wb-actions 类'
+        assert 'class=\"section' in html, '工作台应使用 .section 卡片'
+
+    def test_workbench_has_action_btn_not_custom_btn(self):
+        """工作台按钮使用标准 .action-btn 而不是自定义 .btn"""
+        html = read_page('journal.html')
+        assert 'action-btn' in html, '按钮应使用 .action-btn 类'
+        assert 'class=\"btn ' not in html, '不应使用自定义 .btn 类'
+
+    def test_workbench_uses_date_badge(self):
+        """工作台日期使用标准 .date-badge 类"""
+        html = read_page('journal.html')
+        assert 'date-badge' in html, '日期应使用 .date-badge 类'
+
+    def test_workbench_has_stock_card_js(self):
+        """工作台引用 stock_card.js"""
+        html = read_page('journal.html')
+        assert 'stock_card.js' in html, '应引用 stock_card.js'
+
+    def test_workbench_has_footer(self):
+        """工作台有 footer"""
+        html = read_page('journal.html')
+        assert '<div class=\"footer\">' in html, '应有 .footer'
+
 
 class TestNoDeadRefs:
 
