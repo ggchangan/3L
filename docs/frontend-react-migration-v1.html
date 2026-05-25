@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>3L 前端 React 迁移方案 v1.0</title>
+<style>
+body{font-family:'Noto Sans CJK SC','PingFang SC',sans-serif;padding:50px 60px;line-height:1.9;max-width:900px;margin:0 auto;color:#1a1a1a}
+h1{font-size:26px;border-bottom:3px solid #1a73e8;padding-bottom:10px}
+h2{font-size:20px;margin-top:36px;color:#1a73e8;border-bottom:1px solid #ddd;padding-bottom:6px}
+h3{font-size:16px;margin-top:28px;color:#333}
+h4{font-size:14px;margin-top:20px;color:#444}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}
+th,td{border:1px solid #ccc;padding:7px 11px;text-align:left}
+th{background:#e8f0fe;font-weight:600}
+code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:12px}
+pre{background:#f6f8fa;border:1px solid #e0e0e0;border-radius:6px;padding:14px;overflow-x:auto;font-size:12px}
+pre code{background:none;padding:0}
+blockquote{border-left:4px solid #1a73e8;margin:16px 0;padding:8px 20px;background:#f8f9fa}
+hr{border:none;border-top:1px solid #eee;margin:24px 0}
+strong{color:#000}
+.tag{display:inline-block;padding:0 8px;border-radius:10px;font-size:11px;font-weight:600}
+.tag-green{background:#e6f7e6;color:#1a7f1a}
+.tag-yellow{background:#fff8e1;color:#b8860b}
+.tag-gray{background:#f0f0f0;color:#666}
+</style></head>
+<body>
+
+<h1>📦 3L 前端架构迁移方案</h1>
+<p><strong>版本：</strong>v1.0 | <strong>日期：</strong>2026-05-26 | <strong>状态：</strong>草案</p>
+
+<hr>
+
+<h2>1. 现状与问题</h2>
+
+<h3>当前架构</h3>
+<pre><code>frontend/
+├── *.html              # 15 个静态 HTML 页面
+├── public/js/pages/    # 15 个对应的 vanilla JS 文件
+├── css/pages/          # 15 个对应的 CSS 文件
+├── dist/               # Vite 构建产物（CSS 压缩 + 前缀）
+├── build.py            # 构建脚本
+├── vite.config.js      # Vite 配置（多页模式，仅处理 CSS）
+└── package.json        # 仅 vite + pinyin-pro</code></pre>
+
+<p><strong>核心问题：</strong></p>
+<table>
+<tr><th>#</th><th>问题</th><th>影响</th></tr>
+<tr><td>1</td><td>数据变更后页面不会自动重绘</td><td>用户改趋势列表 → 页面不变，需要手动刷新/重新生成</td></tr>
+<tr><td>2</td><td>JS 全局作用域，无组件化</td><td>CSS 类名冲突需手动排查（stock_card.js 的 chart-container 被 monitor.css 覆盖过）</td></tr>
+<tr><td>3</td><td>状态管理靠 DOM + 全局变量</td><td>一个页面改数据，另一个页面不知道</td></tr>
+<tr><td>4</td><td>15 个 HTML + 15 个 JS + 15 个 CSS 独立文件</td><td>公共逻辑复制粘贴（stock_card.js、nav.js 每个页面单独引用）</td></tr>
+</table>
+
+<h2>2. 目标架构</h2>
+
+<pre><code>frontend/
+├── src/
+│   ├── App.tsx              # 路由入口
+│   ├── pages/
+│   │   ├── Monitor.tsx      # 盯盘（首期迁移）
+│   │   ├── Workbench.tsx    # 工作台
+│   │   ├── Review.tsx       # 复盘
+│   │   └── ...              # 逐步迁移
+│   ├── components/
+│   │   ├── StockCard.tsx    # 个股卡片（复用最广）
+│   │   ├── Nav.tsx          # 导航栏
+│   │   ├── KLineChart.tsx   # K 线图
+│   │   └── ...
+│   ├── hooks/
+│   │   ├── useApi.ts        # 通用 API 请求
+│   │   └── useReviewData.ts # 复盘数据
+│   ├── api/
+│   │   └── index.ts         # 所有 API 封装
+│   └── types/
+│       └── index.ts         # 类型定义
+├── index.html               # 唯一入口（SPA 模式）
+├── vite.config.ts           # Vite + React 配置
+├── tsconfig.json
+└── package.json             # React + TypeScript + Vite</code></pre>
+
+<h3>架构决策</h3>
+
+<table>
+<tr><th>决策</th><th>选择</th><th>理由</th></tr>
+<tr><td>框架</td><td>React + TypeScript</td><td>用户需求：数据变 → 组件自动重绘</td></tr>
+<tr><td>构建</td><td>Vite（已有，升级配置）</td><td>Vite 已在用，加 React 插件即可</td></tr>
+<tr><td>路由</td><td>React Router（单页应用）</td><td>多页模式下组件无法共享状态</td></tr>
+<tr><td>样式</td><td>CSS Modules</td><td>避免全局类名冲突，逐个迁移</td></tr>
+<tr><td>状态管理</td><td>React Context + useApi hooks</td><td>目前不需要 Redux，数据量小</td></tr>
+<tr><td>图表</td><td>SVG React 组件</td><td>后端生成的 SVG 直接内嵌，无需额外库</td></tr>
+</table>
+
+<h2>3. 迁移策略：渐进式替换</h2>
+
+<h3>核心原则：一次迁一页，两边共存</h3>
+
+<p>新（React）和旧（静态 HTML）同时在线，<strong>不走 big bang</strong>。</p>
+
+<pre><code>后端 server.py:
+  /monitor          →  React 版 monitor.html  <span class="tag tag-green">新</span>
+  /review           →  旧 review.html         <span class="tag tag-gray">逐步替换</span>
+  /watchlist        →  旧 watchlist.html      <span class="tag tag-gray">逐步替换</span>
+  ...</code></pre>
+
+<h3>迁移顺序</h3>
+
+<table>
+<tr><th>阶段</th><th>页面</th><th>原因</th><th>复杂度</th></tr>
+<tr><td>Phase 1</td><td>监控(monitor) + 个股卡片(stock_card)</td><td>复用最广，组件化收益最大</td><td>⭐⭐</td></tr>
+<tr><td>Phase 2</td><td>复盘(review) + 工作台(journal)</td><td>核心流程页，数据流复杂</td><td>⭐⭐⭐</td></tr>
+<tr><td>Phase 3</td><td>自选股(watchlist) + 趋势(trend_candidates)</td><td>交互复杂（搜索/排序/勾选）</td><td>⭐⭐⭐</td></tr>
+<tr><td>Phase 4</td><td>其余页面（涨幅/宏观/行业/tips/模拟/技巧）</td><td>数据展示为主，迁移快</td><td>⭐</td></tr>
+</table>
+
+<h2>4. 数据流设计</h2>
+
+<pre><code>React 组件
+  ↓
+useApi hook
+  ↓
+fetch('/api/...')    ← 后端 REST API <strong>完全不变</strong>
+  ↓
+JSON response
+  ↓
+组件 setState → 自动重绘 ✅</code></pre>
+
+<p><strong>关键：后端 API 一条不改。</strong> 所有改进在前端层面。</p>
+
+<p>当前所有 API 端点：</p>
+<table>
+<tr><th>API</th><th>用途</th><th>迁移后</th></tr>
+<tr><td><code>/api/review/get</code></td><td>复盘数据</td><td>React 组件 fetch</td></tr>
+<tr><td><code>/api/review/dates</code></td><td>复盘日期列表</td><td>React 组件 fetch</td></tr>
+<tr><td><code>/api/review/{date}</code></td><td>历史复盘</td><td>React 组件 fetch</td></tr>
+<tr><td><code>/api/trend/candidates</code></td><td>趋势候选</td><td>React 组件 fetch</td></tr>
+<tr><td><code>/api/trend/tracked</code></td><td>已跟踪趋势</td><td>React 组件 fetch</td></tr>
+<tr><td><code>/api/watchlist/...</code></td><td>自选股操作</td><td>React 组件 fetch</td></tr>
+<tr><td><code>/api/monitor/...</code></td><td>盯盘数据</td><td>React 组件 fetch</td></tr>
+<tr><td><code>/api/stock/...</code></td><td>个股分析</td><td>React 组件 fetch</td></tr>
+</table>
+
+<h2>5. 构建与部署</h2>
+
+<table>
+<tr><th>项目</th><th>说明</th></tr>
+<tr><td>开发</td><td><code>npm run dev</code> → Vite dev server (port 5173) → proxy API 到 8080</td></tr>
+<tr><td>构建</td><td><code>npm run build</code> → Vite 编译 TypeScript + 打包 → dist/</td></tr>
+<tr><td>部署</td><td><code>python3 build.py</code> → 复制 dist/ 到前端目录 → <code>systemctl restart 3l-server</code></td></tr>
+<tr><td>共存</td><td>旧 HTML 文件仍保留，server.py 通过路由前缀分发新旧版本</td></tr>
+</table>
+
+<p><strong>build.py 变更：</strong> 简化。不再需要 inject_stock_card_css 等补丁，因为 React 的 CSS Modules 自带作用域隔离。</p>
+
+<h2>6. 风险与注意事项</h2>
+
+<ol>
+<li><strong>后端不动</strong> — 这是规则。迁移期间不改后端 API，确保新旧前端都能用</li>
+<li><strong>不重写逻辑</strong> — 从现有 JS 直接翻译成 React，不做功能改进。改进是另一个话题</li>
+<li><strong>SVG 图表</strong> — 后端生成的 SVG 用 <code>dangerouslySetInnerHTML</code> 内嵌，不需要重写</li>
+<li><strong>旧页面保留</strong> — 出问题时快速回退：改 server.py 路由指向旧 HTML 即可</li>
+<li><strong>TypeScript 严格度</strong> — 先 loose（<code>strict: false</code>），稳定后再收严</li>
+</ol>
+
+<h2>7. 执行计划</h2>
+
+<h3>Phase 0：基建搭建（1 次提交）</h3>
+
+<pre><code>步骤 1: 安装依赖
+  npm install react react-dom react-router-dom
+  npm install -D @types/react @types/react-dom @vitejs/plugin-react typescript
+
+步骤 2: Vite 配置 + TypeScript 配置
+  vite.config.ts → 加入 @vitejs/plugin-react
+  tsconfig.json  → 基础配置（strict: false）
+  src/main.tsx   → React 入口
+  src/App.tsx    → 路由定义
+
+步骤 3: 验证
+  npm run dev → 能打开 React 空页面
+  npm run build → 构建成功
+  python3 build.py → 部署正常
+
+测试:
+  tests/test_frontend_build.py → 验证构建不报错
+  手动打开浏览器确认首页渲染</code></pre>
+
+<h3>Phase 1：Monitor 页面 + StockCard 组件（首期迁移）</h3>
+
+<pre><code>步骤 1: 类型定义
+  src/types/index.ts → API 返回数据接口
+  
+步骤 2: API 封装
+  src/api/index.ts → fetch 封装（所有 API 端点）
+  src/hooks/useApi.ts → useData / useMutate hook
+
+步骤 3: StockCard 组件
+  src/components/StockCard.tsx → 从 stock_card.js 翻译
+  src/components/StockCard.css → CSS Modules
+
+步骤 4: Monitor 页面
+  src/pages/Monitor.tsx → 从 monitor.html + monitor.js 翻译
+  server.py 新增 /monitor 路由 → React 版 HTML
+  
+步骤 5: 验证
+  旧 /monitor.html（旧版）和 /monitor（React 版）同时可访问
+  数据一致
+
+测试:
+  tests/test_monitor_page.py → API 响应结构验证
+  手动对比新旧两个版本的数据一致性</code></pre>
+
+<p>...后续 Phase 2-4 逐步推进，每页独立提交。</p>
+
+<h2>8. 待讨论的问题</h2>
+
+<table>
+<tr><th>#</th><th>问题</th><th>状态</th></tr>
+<tr><td>1</td><td>首期从 Monitor（盯盘）页面开始迁移，可以吗？</td><td>⏳ 待聊</td></tr>
+<tr><td>2</td><td>SPA（单页）还是保留多页但每页独立 React 实例？</td><td>⏳ 待聊</td></tr>
+<tr><td>3</td><td>旧页面的 URL 路径怎么处理？/monitor 给新版，/monitor-old.html 保留旧版？</td><td>⏳ 待聊</td></tr>
+<tr><td>4</td><td>CSS 是全部重写还是渐进迁移（先用 CSS Modules 包裹现有样式）？</td><td>⏳ 待聊</td></tr>
+<tr><td>5</td><td>后端生成的 SVG 图表保持现状（服务器端生成），还是逐步转成前端可交互的 ECharts/Canvas？</td><td>⏳ 待聊</td></tr>
+</table>
+
+<hr>
+
+<p style="color:#888;font-size:12px">3L Trading System · Frontend Migration Plan v1.0 · 2026-05-26</p>
+
+</body></html>
