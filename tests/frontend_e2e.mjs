@@ -110,10 +110,10 @@ async function main() {
         '自选股列表': minCount('.cards-area > *, .stock-card, .signal-stock-card, .dir-tab', 1),
     });
 
-    // 5. 趋势候选（分页只有多页时才渲染）
+    // 5. 趋势候选（2个主Tab + 搜索框）
     await testPage(browser, 'trend_candidates', '/trend_candidates.html', {
-        '主Tab': exists('.main-tabs, .main-tab'),
-        '行业子Tab': exists('.ind-tabs-wrap, .ind-tab'),
+        '搜索框': exists('input[type="text"]'),
+        '自动候选Tab': exists('.main-tab'),
         '个股卡片区域': exists('.cards-area'),
     });
 

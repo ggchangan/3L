@@ -213,6 +213,17 @@ class TestTrendAPI:
         d = api('/api/trend-tracked')
         must_have(d, 'count', 'candidates')
 
+    def test_trend_search_watchlist(self):
+        """趋势候选：从自选股搜索"""
+        path = '/api/trend-candidates/search-watchlist?' + \
+               urllib.parse.urlencode({'q': '300'})
+        d = api(path)
+        must_have(d, 'results')
+        assert isinstance(d['results'], list)
+        if d['results']:
+            r = d['results'][0]
+            must_have(r, 'code', 'name', 'direction', 'in_trend')
+
 
 # =====================================================
 # 个股分析 API
