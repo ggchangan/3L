@@ -463,7 +463,7 @@ async function toggleDir(name, active) {
 }
 
 async function removeDir(name) {
-    if (!confirm(`确认删除方向 "${name}"？该方向股票将归入"其他"`)) return;
+    if (!confirm(`确认删除方向 "${name}"？该方向的 ${countByDir(name)} 只股票将同时从自选股删除`)) return;
     try {
         const r = await fetch('/api/directions/remove', {
             method: 'POST', headers: {'Content-Type': 'application/json'},

@@ -217,8 +217,27 @@ def _handle_remove(h, path, body):
         if name == '其他':
             h.send_json({'success': False, 'error': '不能删除"其他"方向'})
             return
-        r = remove(name)
-        h.send_json(r)
+        # 1. 从 directions.json 删除该方向
+        from services.direction_service import remove as _remove_dir
+        r = _remove_dir(name)
+        if not r.get('success'):
+            h.send_json(r)
+            return
+        # 2. 从 watchlist 删除该方向的所有股票
+        removed = 0
+        wl_path = '/home/ubuntu/data/3l/watchlist.json'
+        if os.path.isfile(wl_path):
+            with open(wl_path, 'r', encoding='utf-8') as f:
+                wl = json.load(f)
+            before = len(wl.get('stocks', []))
+            wl['stocks'] = [s for s in wl.get('stocks', []) if s.get('direction') != name]
+            removed = before - len(wl['stocks'])
+            if removed > 0:
+                from services.watchlist_service import save_watchlist
+                save_watchlist(wl)
+                from scripts.cache_layer import cache
+                cache.invalidate('watchlist')
+        h.send_json({'success': True, 'removed_stocks': removed})
     except Exception as e:
         h.send_json({'success': False, 'error': str(e)})
 
