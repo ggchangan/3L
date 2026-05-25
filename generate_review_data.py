@@ -12,7 +12,7 @@
 """
 import json, os, sys, requests, math
 from scripts.data_layer import (
-    ALL_STOCKS_PATH, INDUSTRY_MAP_PATH, LATEST_SCAN_PATH, REVIEW_ARCHIVE_DIR,
+    ALL_STOCKS_PATH, INDUSTRY_MAP_PATH, REVIEW_ARCHIVE_DIR,
     WWW_DIR, DATA_DIR, get_all_stocks, get_latest_scan, save_review_archive,
     get_review_archive, load_cache, save_cache, get_cache_path, get_watchlist
 )
@@ -581,10 +581,10 @@ from scripts.scan_buy_signals import get_main_lines
 
 # ====== ③ 加载复盘数据（Phase 3 提取） ======
 
-def load_review_data(date_str, existing, ww_dir, latest_scan_path):
+def load_review_data(date_str, existing, ww_dir):
     """加载持仓数据、扫描结果，检查盈利模式和趋势股
-    
-    从 generate_daily_review 的③加载数据部分提取。
+
+    所有数据统一从 all_stocks_60d.json 读取，不依赖外部扫描缓存。
     Returns: (holdings, buy_signals, all_stocks)
     """
     # 从 holdings.json 读取最新持仓数据
@@ -598,50 +598,8 @@ def load_review_data(date_str, existing, ww_dir, latest_scan_path):
         except Exception:
             pass
     holdings = live_holdings or existing.get('holdings', []) or existing.get('stocks', {}).get('stocks', [])
-    buy_signals = existing.get('buy_signals', [])
-    
-    # 优先从最新扫描结果读取
-    if os.path.isfile(latest_scan_path):
-        try:
-            with open(latest_scan_path) as _f:
-                _scan = json.load(_f)
-            _scan_results = _scan.get('results', [])
-            if _scan_results:
-                _scan_date = _scan.get('scan_date', '')
-                print(f"[3L复盘] 📡 使用最新扫描结果: {_scan_date} ({len(_scan_results)}条)")
-                buy_signals = []
-                for r in _scan_results:
-                    tsys = r.get('trading_system', '')
-                    buy_signals.append({
-                        'name': r.get('name', r['code']),
-                        'code': r['code'],
-                        'sector': r['sector'],
-                        'buy_point': r['buy_type'],
-                        'price': r.get('close', 0),
-                        'change': r.get('gain', 0),
-                        'score': r['score'],
-                        'flags': r['flags'],
-                        'profit_model1': False,
-                        'trend_stock': tsys == 'trend',
-                        'trading_system': tsys,
-                        'trading_reason': r.get('trading_reason', ''),
-                        'trend_bias': r.get('trend_bias', ''),
-                        'trend_buy_type': r.get('trend_buy_type', ''),
-                    })
-                # 只保留启用方向的自选股
-                try:
-                    wl = get_watchlist()
-                    active_dirs = get_active_dirs()
-                    enabled_codes = {s['code'] for s in wl if s.get('direction', '其他') in active_dirs}
-                    if enabled_codes:
-                        before = len(buy_signals)
-                        buy_signals = [s for s in buy_signals if s['code'] in enabled_codes]
-                        print(f"[3L复盘] 🎯 方向过滤: {before}→{len(buy_signals)}条 (启用方向股票)")
-                except Exception as ef:
-                    print(f"[3L复盘] ⚠️ 方向过滤失败: {ef}")
-        except Exception as e:
-            print(f"[3L复盘] ⚠️ 读取最新扫描结果失败: {e}")
-    
+    buy_signals = []  # 不读历史存档，由 scan_buy_signals_if_needed 实时扫描
+
     # 盈利模式1检查
     all_stocks = load_market_data_for_profit_check()
     buy_signals = check_profit_model1_on_signals(buy_signals, all_stocks, date_str)
@@ -855,7 +813,7 @@ def generate_daily_review(date_str=None):
     # ③ 加载数据（持仓+扫描结果）
     print("[3L复盘] ③ 加载数据...")
     holdings, buy_signals, all_stocks = load_review_data(
-        date_str, existing, WWW_DIR, LATEST_SCAN_PATH
+        date_str, existing, WWW_DIR
     )
 
     # ③ 量价择时
