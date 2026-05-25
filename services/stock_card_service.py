@@ -258,6 +258,20 @@ def get_stock_card(code, date_str, market_position='波中',
     # 3. 结构分析
     struct_info = _analyze_structure(klines, idx)
 
+    # 通用 EMA 数值、偏离率、量比
+    closes_all = [k['close'] for k in klines[:idx + 1]]
+    ema5_val = float(ema_list(closes_all, 5)[-1]) if len(closes_all) >= 5 and ema_list(closes_all, 5)[-1] else None
+    ema10_val = float(ema_list(closes_all, 10)[-1]) if len(closes_all) >= 10 and ema_list(closes_all, 10)[-1] else None
+    ema20_val = float(ema_list(closes_all, 20)[-1]) if len(closes_all) >= 20 and ema_list(closes_all, 20)[-1] else None
+    ema30_val = float(ema_list(closes_all, 30)[-1]) if len(closes_all) >= 30 and ema_list(closes_all, 30)[-1] else None
+    deviation_pct = round((close - ema5_val) / ema5_val * 100, 2) if ema5_val and ema5_val > 0 else 0
+    vol_ratio = 0
+    if idx >= 5:
+        vols = [k.get('volume', k.get('vol', 0)) for k in klines[idx-4:idx+1]]
+        vma5 = sum(vols) / 5 if all(v > 0 for v in vols) else 0
+        cur_vol = klines[idx].get('volume', klines[idx].get('vol', 0))
+        vol_ratio = round(cur_vol / vma5, 2) if vma5 > 0 else 0
+
     # 4. 交易系统判定
     trading_system = _decide_trading_system(code)
     sys_detail = {'system': trading_system,
@@ -342,9 +356,16 @@ def get_stock_card(code, date_str, market_position='波中',
         'direction': direction or '',
         'price': close,
         'change': change,
+        'date': date_clean,
         'structure': struct_info.get('structure', '--'),
         'stage': struct_info.get('stage', '--'),
         'ema': struct_info.get('ema', '--'),
+        'ema5': ema5_val,
+        'ema10': ema10_val,
+        'ema20': ema20_val,
+        'ema30': ema30_val,
+        'deviation_pct': deviation_pct,
+        'vol_ratio': vol_ratio,
         'vol_analysis': vol_analysis,
         'signal': signal,
         'signal_text': signal_text,
@@ -379,9 +400,16 @@ def _empty_card(code, name, sector, direction, reason):
         'direction': direction or '',
         'price': 0,
         'change': 0,
+        'date': '',
         'structure': '--',
         'stage': '--',
         'ema': '--',
+        'ema5': None,
+        'ema10': None,
+        'ema20': None,
+        'ema30': None,
+        'deviation_pct': 0,
+        'vol_ratio': 0,
         'vol_analysis': '--',
         'signal': 'hold',
         'signal_text': '',

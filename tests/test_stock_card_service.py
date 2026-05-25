@@ -230,6 +230,16 @@ class TestGetStockCardIntegration:
         assert 'change' in card
         assert 'conclusion' in card
 
+    def test_new_fields_added(self):
+        """卡片包含新增的通用字段：date/ema5/ema10/vol_ratio/deviation_pct"""
+        from services.stock_card_service import get_stock_card
+        card = get_stock_card(code='000001', date_str='20260920')
+        assert card['date'] == '20260920'
+        assert card['ema5'] is not None
+        assert card['ema10'] is not None
+        assert card['vol_ratio'] >= 0
+        assert isinstance(card['deviation_pct'], (int, float))
+
     def test_trend_stock_uses_trend_system(self):
         """手动指定趋势股 → trading_system='trend', signal=buy"""
         import services.stock_card_service as scs

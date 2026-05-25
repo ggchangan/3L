@@ -278,11 +278,10 @@ class TestGetHoldingsWithPrices:
         with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
             with patch('services.holdings_service.requests.get',
                        return_value=MockResponse(mock_text)):
-                with patch('backend.core.data_layer.get_industry_map',
-                           return_value={}):
-                    with patch('backend.core.data_layer.get_all_stocks',
-                               return_value={}):
-                        result = get_holdings_with_prices()
+                with patch('services.stock_card_service.get_stock_card',
+                           return_value={'sector': '', 'structure': '--',
+                                         'stage': '--'}):
+                    result = get_holdings_with_prices()
 
         assert len(result['holdings']) == 2
         assert result['holdings'][0]['price'] == 51.20
@@ -330,17 +329,16 @@ class TestGetHoldingsWithAnalysis:
         with open(holdings_path, 'w') as f:
             json.dump(data, f)
 
-        mock_map = {'603259': {'ths_industry': '化学制药'}}
         text = self._tencent('603259', '药明康德', 51.20, -1.54)
 
         with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
             with patch('services.holdings_service.requests.get',
                        return_value=self.MockResponse(text)):
-                with patch('backend.core.data_layer.get_industry_map',
-                           return_value=mock_map):
-                    with patch('backend.core.data_layer.get_all_stocks',
-                               return_value={}):
-                        result = get_holdings_with_prices()
+                with patch('services.stock_card_service.get_stock_card',
+                           return_value={'sector': '化学制药',
+                                         'structure': '上涨趋势',
+                                         'stage': '上行'}):
+                    result = get_holdings_with_prices()
 
         assert result['holdings'][0]['sector'] == '化学制药'
 
@@ -359,23 +357,21 @@ class TestGetHoldingsWithAnalysis:
         with open(holdings_path, 'w') as f:
             json.dump(data, f)
 
-        mock_stocks = {'创新药': {'603259': self.MOCK_KLINES_60D}}
-        mock_map = {'603259': {'ths_industry': '化学制药'}}
         text = self._tencent('603259', '药明康德', 51.20, -1.54)
 
         with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
             with patch('services.holdings_service.requests.get',
                        return_value=self.MockResponse(text)):
-                with patch('backend.core.data_layer.get_industry_map',
-                           return_value=mock_map):
-                    with patch('backend.core.data_layer.get_all_stocks',
-                               return_value=mock_stocks):
-                        result = get_holdings_with_prices()
+                with patch('services.stock_card_service.get_stock_card',
+                           return_value={'sector': '化学制药',
+                                         'structure': '上涨趋势',
+                                         'stage': '上行'}):
+                    result = get_holdings_with_prices()
 
         h = result['holdings'][0]
         assert h['sector'] == '化学制药'
-        assert h['structure'] != '--'
-        assert h['stage'] != '--'
+        assert h['structure'] == '上涨趋势'
+        assert h['stage'] == '上行'
 
     def test_graceful_when_no_klines(self, tmp_path):
         """K线数据不足时 gracefully fallback 到 '--'"""
@@ -392,17 +388,14 @@ class TestGetHoldingsWithAnalysis:
         with open(holdings_path, 'w') as f:
             json.dump(data, f)
 
-        mock_stocks = {'创新药': {'603259': []}}
         text = self._tencent('603259', '药明康德', 51.20, -1.54)
 
         with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
             with patch('services.holdings_service.requests.get',
                        return_value=self.MockResponse(text)):
-                with patch('backend.core.data_layer.get_industry_map',
-                           return_value={}):
-                    with patch('backend.core.data_layer.get_all_stocks',
-                               return_value=mock_stocks):
-                        result = get_holdings_with_prices()
+                with patch('services.stock_card_service.get_stock_card',
+                           side_effect=Exception('数据不足')):
+                    result = get_holdings_with_prices()
 
         h = result['holdings'][0]
         assert h['sector'] == ''
@@ -429,11 +422,9 @@ class TestGetHoldingsWithAnalysis:
         with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
             with patch('services.holdings_service.requests.get',
                        return_value=self.MockResponse(text)):
-                with patch('backend.core.data_layer.get_industry_map',
+                with patch('services.stock_card_service.get_stock_card',
                            side_effect=Exception('map error')):
-                    with patch('backend.core.data_layer.get_all_stocks',
-                               return_value={}):
-                        result = get_holdings_with_prices()
+                    result = get_holdings_with_prices()
 
         h = result['holdings'][0]
         assert h['sector'] == ''

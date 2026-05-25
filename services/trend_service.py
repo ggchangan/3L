@@ -70,9 +70,6 @@ def get_watchlist_analysis(stocks=None, wl=None):
     stocks/wl 可选参数，用于测试注入；生产不传走缓存。
     """
     from scripts.data_layer import get_all_stocks, get_watchlist, INDUSTRY_MAP_PATH, _load_json
-    from scripts.ema_utils import get_structure, get_stage
-    from scripts.buy_point_detection import check_trend_stock, check_profit_model1, _ema_list
-    from scripts.trend_trading import decide_system_with_detail
     from scripts.scan_buy_signals import get_main_lines
 
     if stocks is None:
@@ -109,29 +106,34 @@ def get_watchlist_analysis(stocks=None, wl=None):
             })
             continue
 
-        closes = [k['close'] for k in kls]
-        highs = [k['high'] for k in kls]
-        lows = [k['low'] for k in kls]
-        vols = [k.get('volume', k.get('vol', 0)) for k in kls]
-        cur_close = kls[-1]['close']
-        change = round((cur_close - kls[-2]['close']) / kls[-2]['close'] * 100, 2) if len(kls) >= 2 else 0
-
-        structure = get_structure(closes)
-        stage = get_stage(closes, structure, highs, lows, volumes=vols)
-        sector = imap.get(code, {}).get('ths_industry', '')
-
-        ema5 = _ema_list(closes, 5)
-        cur_ema5 = ema5[-1] if ema5 and ema5[-1] else 0
-        trend_bias = round((cur_close - cur_ema5) / cur_ema5 * 100, 2) if cur_ema5 > 0 else 0
-
         today_str = kls[-1]['date']
-        today_fmt = today_str[:4] + '-' + today_str[4:6] + '-' + today_str[6:8]
+        today_fmt = f'{today_str[:4]}-{today_str[4:6]}-{today_str[6:8]}'
 
-        _sys = decide_system_with_detail(code, today_fmt, stocks, _main_lines)
-        _trading_system = _sys['system']
-        _trend_stock = bool(check_trend_stock(code, today_fmt, stocks))
-        _pm1 = check_profit_model1(code, today_fmt, stocks)
-        _profit_model1 = bool(_pm1 and _pm1.get('match', False)) if _pm1 else False
+        # 通过 StockCardService 统一获取卡片数据
+        try:
+            from services.stock_card_service import get_stock_card
+            card = get_stock_card(
+                code=code,
+                date_str=today_fmt,
+                market_position='波中',
+                main_lines=list(_main_lines) if _main_lines else [],
+                klines=kls,
+            )
+        except Exception as e:
+            results.append({
+                **s,
+                'price': round(kls[-1]['close'], 2),
+                'change': round((kls[-1]['close'] - kls[-2]['close']) / kls[-2]['close'] * 100, 2) if len(kls) >= 2 else 0,
+                'structure': '--',
+                'stage': '--',
+                'sector': imap.get(code, {}).get('ths_industry', ''),
+                'trading_system': '3l',
+                'trend_bias': None,
+                'signal': 'hold',
+                'trend_stock': False,
+                'profit_model1': False,
+            })
+            continue
 
         # 生成 K 线 SVG 图（若缺失）
         svg_abs = config.review_chart_svg(code)
@@ -141,9 +143,9 @@ def get_watchlist_analysis(stocks=None, wl=None):
                 from scripts.buy_point_detection import _find_support_levels, find_idx
 
                 kps = []
-                idx = find_idx(today_fmt, kls)
-                if idx >= 10:
-                    support = _find_support_levels(kls, idx)
+                idx_ = find_idx(today_fmt, kls)
+                if idx_ >= 10:
+                    support = _find_support_levels(kls, idx_)
                     if isinstance(support, (int, float)):
                         kps = [{'label': '突', 'y': support}]
                 name = s.get('name', code)
@@ -151,29 +153,18 @@ def get_watchlist_analysis(stocks=None, wl=None):
             except Exception:
                 pass
 
-        # signal：简单推断
-        signal = 'hold'
-        if structure == '上涨趋势' and stage in ('上行', '缩量整理'):
-            signal = 'hold'
-        elif structure == '上涨趋势' and stage in ('加速',):
-            signal = 'buy'
-        elif structure == '下降趋势' or stage in ('转弱', '滞涨', '下行'):
-            signal = 'sell'
-        elif structure == '区间震荡' and stage == '区间底部':
-            signal = 'buy'
-
         results.append({
             **s,
-            'price': round(cur_close, 2),
-            'change': change,
-            'structure': structure,
-            'stage': stage,
-            'sector': sector,
-            'trading_system': _trading_system,
-            'trend_bias': trend_bias,
-            'signal': signal,
-            'trend_stock': _trend_stock,
-            'profit_model1': _profit_model1,
+            'price': card.get('price'),
+            'change': card.get('change'),
+            'structure': card.get('structure', '--'),
+            'stage': card.get('stage', '--'),
+            'sector': card.get('sector', ''),
+            'trading_system': card.get('trading_system', '3l'),
+            'trend_bias': card.get('trend_bias', None) or card.get('deviation_pct'),
+            'signal': card.get('signal', 'hold'),
+            'trend_stock': card.get('trend_stock', False),
+            'profit_model1': card.get('profit_model1', False),
         })
 
     return {'stocks': results, 'count': len(results)}
