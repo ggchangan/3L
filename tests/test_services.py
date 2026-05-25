@@ -373,24 +373,15 @@ class TestSaveWatchlist(unittest.TestCase):
     Exposes the missing 'config' import bug.
     """
 
-    def _patch_config(self, module):
-        """Inject missing 'config' reference into module namespace.
-        Note: module now uses 'import config as cfg' at top level."""
-        module.cfg = MagicMock()
-        return module.cfg
-
+    @patch('services.watchlist_service._save_watchlist_data')
     @patch('scripts.data_layer.ensure_stock_data')
-    @patch('scripts.data_layer.WATCHLIST_PATH', '/fake/watchlist.json')
     @patch('builtins.open', new_callable=mock_open)
-    def test_saves_new_watchlist(self, mock_open_file, mock_ensure_stock_data):
-        """Happy path: saves data, calls ensure_stock_data for new codes.
-        @patch order for params (top→bottom): ensure_stock_data(nonew) → WATCHLIST_PATH(new) → open(new_callable)
-        But decorator application is bottom-up: open's mock is 1st injected, ensure_stock_data's mock is 2nd.
-        So params are: (open_mock, ensure_stock_data_mock) = (mock_open_file, mock_ensure_stock_data)
-        """
+    def test_saves_new_watchlist(self, mock_open_file, mock_ensure_stock_data,
+                                  mock_save_data):
+        """Happy path: saves data, calls ensure_stock_data for new codes."""
         from services import watchlist_service
-        mock_config = self._patch_config(watchlist_service)
-
+        # 用 wl_path 隔离测试路径，避免写入生产文件
+        fake_path = '/tmp/test_wl.json'
         # Existing old watchlist has code '000001'
         old_data = json.dumps({'stocks': [{'code': '000001', 'name': '平安银行'}]})
         mock_open_file.return_value.__enter__.return_value.read.return_value = old_data
@@ -402,24 +393,22 @@ class TestSaveWatchlist(unittest.TestCase):
             ]
         }
 
-        result = watchlist_service.save_watchlist(new_data)
+        result = watchlist_service.save_watchlist(new_data, wl_path=fake_path)
 
         self.assertEqual(result, {'success': True, 'count': 2})
         # ensure_stock_data should only be called for the new code
         mock_ensure_stock_data.assert_called_once_with('300750')
-        # Note: uses real WATCHLIST_PATH (module-level import), not the patched one
-        mock_config.atomic_json_dump.assert_called_once()
+        # _save_watchlist_data should be called with the fake path
+        mock_save_data.assert_called_once_with(new_data, fake_path)
 
+    @patch('services.watchlist_service._save_watchlist_data')
     @patch('scripts.data_layer.ensure_stock_data')
-    @patch('scripts.data_layer.WATCHLIST_PATH', '/fake/watchlist.json')
     @patch('builtins.open', new_callable=mock_open)
     def test_does_not_call_ensure_for_existing_stocks(
-            self, mock_open_file, mock_ensure_stock_data):
-        """Only new (previously unseen) stocks trigger ensure_stock_data.
-        @patch bottom→top: ensure_stock_data → WATCHLIST_PATH → builtins.open
-        """
+            self, mock_open_file, mock_ensure_stock_data, mock_save_data):
+        """Only new (previously unseen) stocks trigger ensure_stock_data."""
         from services import watchlist_service
-        mock_config = self._patch_config(watchlist_service)
+        fake_path = '/tmp/test_wl.json'
 
         old_data = json.dumps({'stocks': [{'code': '000001', 'name': '平安银行'},
                                           {'code': '002594', 'name': '比亚迪'}]})
@@ -431,19 +420,17 @@ class TestSaveWatchlist(unittest.TestCase):
             ]
         }
 
-        watchlist_service.save_watchlist(new_data)
+        watchlist_service.save_watchlist(new_data, wl_path=fake_path)
         mock_ensure_stock_data.assert_not_called()
 
+    @patch('services.watchlist_service._save_watchlist_data')
     @patch('scripts.data_layer.ensure_stock_data')
-    @patch('scripts.data_layer.WATCHLIST_PATH', '/fake/watchlist.json')
     @patch('builtins.open', new_callable=mock_open)
     def test_handles_empty_old_watchlist(
-            self, mock_open_file, mock_ensure_stock_data):
-        """Old watchlist with 'stocks' key but empty list is handled.
-        @patch bottom→top: ensure_stock_data → WATCHLIST_PATH → builtins.open
-        """
+            self, mock_open_file, mock_ensure_stock_data, mock_save_data):
+        """Old watchlist with 'stocks' key but empty list is handled."""
         from services import watchlist_service
-        mock_config = self._patch_config(watchlist_service)
+        fake_path = '/tmp/test_wl.json'
 
         old_data = json.dumps({'stocks': []})
         mock_open_file.return_value.__enter__.return_value.read.return_value = old_data
@@ -454,19 +441,18 @@ class TestSaveWatchlist(unittest.TestCase):
             ]
         }
 
-        result = watchlist_service.save_watchlist(new_data)
+        result = watchlist_service.save_watchlist(new_data, wl_path=fake_path)
         self.assertEqual(result, {'success': True, 'count': 1})
         mock_ensure_stock_data.assert_called_once_with('300750')
 
+    @patch('services.watchlist_service._save_watchlist_data')
     @patch('scripts.data_layer.ensure_stock_data')
-    @patch('scripts.data_layer.WATCHLIST_PATH', '/fake/watchlist.json')
     @patch('builtins.open', new_callable=mock_open)
     def test_exposes_missing_config_import(
-            self, mock_open_file, mock_ensure_stock_data):
-        """Config is now properly imported at module level — no longer a bug.
-        @patch bottom→top: ensure_stock_data → WATCHLIST_PATH → builtins.open
-        """
+            self, mock_open_file, mock_ensure_stock_data, mock_save_data):
+        """Config is now properly imported at module level — no longer a bug."""
         from services import watchlist_service
+        fake_path = '/tmp/test_wl.json'
         # config is imported at module level, so this should work fine
         assert hasattr(watchlist_service, 'cfg')
 
@@ -475,7 +461,7 @@ class TestSaveWatchlist(unittest.TestCase):
 
         new_data = {'stocks': [{'code': '000001'}, {'code': '300750'}]}
 
-        result = watchlist_service.save_watchlist(new_data)
+        result = watchlist_service.save_watchlist(new_data, wl_path=fake_path)
         assert result == {'success': True, 'count': 2}
 
 
