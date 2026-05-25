@@ -132,12 +132,31 @@ let industryMapCache = {};
 function toggleIndexChart() {
     const panel = document.getElementById('indexChartPanel');
     const obj = document.getElementById('indexChartObj');
-    if (panel.style.display === 'none') {
-        panel.style.display = 'block';
-        // 防缓存：每次展开加时间戳
-        obj.data = '/pub/charts/zzqz_v2.svg?t=' + Date.now();
+    if (panel) {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        if (obj && panel.style.display === 'block') {
+            obj.data = '/pub/charts/zzqz_v2.svg?t=' + Date.now();
+        }
+    }
+}
+
+function toggleEventPlaceholder() {
+    const panel = document.getElementById('eventPlaceholderPanel');
+    if (panel) {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+function toggleExternal() {
+    const body = document.getElementById('externalBody');
+    const toggle = document.getElementById('externalToggle');
+    if (!body || !toggle) return;
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        toggle.textContent = '▼';
     } else {
-        panel.style.display = 'none';
+        body.style.display = 'none';
+        toggle.textContent = '▶';
     }
 }
 
