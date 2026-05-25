@@ -62,11 +62,11 @@ def _parse_tencent_response(text):
 
             price = float(fields[3]) if fields[3] else 0
 
-            # 涨跌幅在 fields[31]
+            # 涨跌幅在 fields[32]（涨跌额在 fields[31]）
             change = 0.0
-            if len(fields) > 31:
+            if len(fields) > 32:
                 try:
-                    change = float(fields[31])
+                    change = float(fields[32])
                 except (ValueError, IndexError):
                     change = 0.0
 
@@ -176,7 +176,7 @@ def get_holdings_with_prices():
 
         enriched.append(item)
 
-    return {'holdings': enriched, 'cash_ratio': cash_ratio}
+    return {'holdings': enriched, 'cash_ratio': cash_ratio, 'update_date': data.get('update_date')}
 
 
 def save_holdings(data):

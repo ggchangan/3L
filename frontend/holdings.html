@@ -376,21 +376,21 @@ function renderPie(holdings, assessmentData) {
 
     // 1. 总仓位
     if (totalRatio > 80) {
-        assessItems.push({ text: `总仓位 ${totalRatio.toFixed(1)}%`, cls: 'high' });
+        assessItems.push({ text: `总仓位 ${totalRatio.toFixed(1)}% 偏高`, cls: 'high' });
     } else if (totalRatio < 50) {
-        assessItems.push({ text: `总仓位 ${totalRatio.toFixed(1)}%`, cls: 'medium' });
+        assessItems.push({ text: `总仓位 ${totalRatio.toFixed(1)}% 偏低`, cls: 'medium' });
     } else {
-        assessItems.push({ text: `总仓位 ${totalRatio.toFixed(1)}%`, cls: 'low' });
+        assessItems.push({ text: `总仓位 ${totalRatio.toFixed(1)}% 合理`, cls: 'low' });
     }
 
-    // 2. 最大单只集中
-    let maxR = 0, maxName = '';
-    holdings.forEach(h => { if (h.ratio > maxR) { maxR = h.ratio; maxName = h.name; } });
-    if (maxR >= 15) {
-        assessItems.push({ text: `${maxName} ${maxR}%`, cls: 'high' });
-    } else if (maxR >= 10) {
-        assessItems.push({ text: `${maxName} ${maxR}%`, cls: 'medium' });
-    }
+    // 2. 单只集中度
+    holdings.forEach(h => {
+        if (h.ratio >= 15) {
+            assessItems.push({ text: `${h.name} ${h.ratio}% 严重集中`, cls: 'high' });
+        } else if (h.ratio >= 10) {
+            assessItems.push({ text: `${h.name} ${h.ratio}% 偏集中`, cls: 'medium' });
+        }
+    });
 
     // 3. 方向集中度
     const assessDirMap = {};
@@ -400,22 +400,22 @@ function renderPie(holdings, assessmentData) {
     });
     Object.entries(assessDirMap).forEach(([dir, ratio]) => {
         if (ratio >= 40) {
-            assessItems.push({ text: `${dir} ${ratio.toFixed(1)}% 集中`, cls: 'high' });
+            assessItems.push({ text: `${dir} ${ratio.toFixed(1)}% 严重集中`, cls: 'high' });
         } else if (ratio >= 30) {
-            assessItems.push({ text: `${dir} ${ratio.toFixed(1)}% 集中`, cls: 'medium' });
+            assessItems.push({ text: `${dir} ${ratio.toFixed(1)}% 偏集中`, cls: 'medium' });
         }
     });
 
     // 4. 现金
     if (cashRatio < 5) {
-        assessItems.push({ text: `现金 ${cashRatio.toFixed(1)}%`, cls: 'high' });
+        assessItems.push({ text: `现金 ${cashRatio.toFixed(1)}% 极低`, cls: 'high' });
     } else if (cashRatio > 40) {
-        assessItems.push({ text: `现金 ${cashRatio.toFixed(1)}%`, cls: 'medium' });
+        assessItems.push({ text: `现金 ${cashRatio.toFixed(1)}% 充裕`, cls: 'medium' });
     } else {
-        assessItems.push({ text: `现金 ${cashRatio.toFixed(1)}%`, cls: 'low' });
+        assessItems.push({ text: `现金 ${cashRatio.toFixed(1)}% 适中`, cls: 'low' });
     }
 
-    // 去重：方向集中和总仓位只显示最严重的前2条
+    // 去重排序：优先展示最严重的
     const critical = assessItems.filter(x => x.cls === 'high').slice(0, 2);
     const warnings = assessItems.filter(x => x.cls === 'medium').slice(0, 2);
     const ok = assessItems.filter(x => x.cls === 'low').slice(0, 2);

@@ -179,7 +179,7 @@ class TestGetHoldingsWithPrices:
 
         # 模拟腾讯接口返回（88-field ~分隔格式）
         f = ['0'] * 88
-        f[1] = '药明康德'; f[2] = '603259'; f[3] = '51.20'; f[31] = '-1.54'
+        f[1] = '药明康德'; f[2] = '603259'; f[3] = '51.20'; f[32] = '-1.54'
         mock_tencent_text = 'v_sh603259="' + '~'.join(f) + '"\n'
 
         with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
@@ -214,7 +214,7 @@ class TestGetHoldingsWithPrices:
         fields_88[1] = '药明康德'
         fields_88[2] = '603259'
         fields_88[3] = '51.20'
-        fields_88[31] = '2.30'
+        fields_88[32] = '2.30'
         mock_text = 'v_sh603259="' + '~'.join(fields_88) + '"\n'
         with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
             with patch('services.holdings_service.requests.get',
@@ -268,9 +268,9 @@ class TestGetHoldingsWithPrices:
 
         # 模拟腾讯接口返回（88-field ~分隔格式）
         f1 = ['0'] * 88
-        f1[1] = '药明康德'; f1[2] = '603259'; f1[3] = '51.20'; f1[31] = '-1.54'
+        f1[1] = '药明康德'; f1[2] = '603259'; f1[3] = '51.20'; f1[32] = '-1.54'
         f2 = ['0'] * 88
-        f2[1] = '大族数控'; f2[2] = '301200'; f2[3] = '274.00'; f2[31] = '9.84'
+        f2[1] = '大族数控'; f2[2] = '301200'; f2[3] = '274.00'; f2[32] = '9.84'
         mock_text = (
             'v_sh603259="' + '~'.join(f1) + '"\n'
             'v_sz301200="' + '~'.join(f2) + '"\n'
@@ -311,7 +311,7 @@ class TestGetHoldingsWithAnalysis:
 
     def _tencent(self, code, name, price, change):
         f = ['0'] * 88
-        f[1] = name; f[2] = code; f[3] = str(price); f[31] = str(change)
+        f[1] = name; f[2] = code; f[3] = str(price); f[32] = str(change)
         p = 'sh' if code.startswith(('6', '5')) else 'sz'
         return 'v_' + p + code + '="' + '~'.join(f) + '"\n'
 
