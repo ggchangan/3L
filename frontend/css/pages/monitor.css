@@ -126,8 +126,16 @@
         .down { color: #44aa44; }
 
         /* 图表 */
-        .chart-container { position: relative; height: 160px; margin-top: 4px; }
+        /* ⚠️ .chart-container 被 stock_card.js 的K线图容器共用
+             成交量曲线（Chart.js）需要固定 height:160px，
+             但K线图SVG（800x400）需要自适应高度。
+             用 .volume-chart-wrap 区分两类图表容器。
+        */
+        .chart-container { position: relative; margin-top: 4px; }
+        .volume-chart-wrap { height: 160px; }
         .chart-container canvas { width: 100% !important; height: 160px !important; }
+        /* K线图SVG容器不设固定高度，由object的宽高比自动撑开 */
+        .stock-item .chart-container { height: auto; min-height: 200px; }
         .chart-footer { text-align: center; font-size: 10px; color: #666; margin-top: 4px; margin-bottom: 8px; }
         .action-link { display: inline-block; font-size: 11px; color: #2196f3; cursor: pointer; margin-right: 12px; padding: 4px 10px; border-radius: 6px; background: rgba(33,150,243,0.1); }
         .action-link:hover { background: rgba(33,150,243,0.2); }
