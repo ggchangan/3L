@@ -283,7 +283,7 @@ def generate_stock_chart(code):
     # 支撑线（最近的突破点且低于现价）— 仅区间震荡画
     cur_close = closes[-1] if closes else 0
     bk_pts = []
-    hi_15 = mx
+    hi_15 = None
     if stock_structure == '区间震荡':
         bk_pts = sorted(
             [kp for kp in kps if kp['label'] == '突' and kp['y'] < cur_close],
