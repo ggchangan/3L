@@ -118,7 +118,6 @@ def resolve_stock(query, stocks=None):
     market_results = search_stock_full_market(q, max_results=1)
     if market_results:
         m = market_results[0]
-        ensure_stock_data(m['code'])
         stocks = get_all_stocks()
         for sec, ss in stocks.items():
             if m['code'] in ss:
@@ -252,27 +251,8 @@ def ensure_stock_data(code):
         else:
             direction = imap.get(local_code, {}).get('direction', '')
         
-        # 写入all_stocks_60d.json
-        if ths_industry not in stocks_data:
-            stocks_data[ths_industry] = {}
-        stocks_data[ths_industry][local_code] = klines
-        _save_json(ALL_STOCKS_PATH, {
-            'last_updated': klines[-1]['date'],
-            'stocks': stocks_data,
-        })
-        cache.invalidate('all_stocks')
-        
-        # 写入行业映射（如果没有）
-        if local_code not in imap:
-            imap[local_code] = {
-                'name': klines[0].get('name', local_code) if klines else local_code,
-                'ths_industry': ths_industry,
-                'direction': direction,
-            }
-            _save_json(INDUSTRY_MAP_PATH, imap)
-            cache.invalidate('industry_map')
-        
-        return (True, f'已拉取{len(klines)}天数据，行业={ths_industry}')
+        # findBy: K线数据已由 update_stock_data.py 统一更新
+        return (True, f'已拉取{len(klines)}天数据')
     except Exception as e:
         return (False, f'拉取失败: {e}')
 
