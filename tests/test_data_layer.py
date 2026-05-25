@@ -195,3 +195,62 @@ class TestAtomicSave:
         loaded = dl.load_all_stocks_uncached()
         assert isinstance(loaded, dict)
         assert '测试方向' in loaded
+
+
+class TestIndexData:
+    """Verify index data read/write through data_layer."""
+
+    def test_save_and_uncached_load(self, monkeypatch, tmp_path):
+        from backend.core import data_layer as dl
+        test_path = os.path.join(tmp_path, 'index_data.json')
+        monkeypatch.setattr(dl, 'INDEX_DATA_PATH', test_path)
+        data = {'last_updated': '20260525', 'klines': [{'date': '20260525', 'close': 5000.0}]}
+        dl.save_index_data(data)
+        loaded = dl.load_index_data_uncached()
+        assert loaded['last_updated'] == '20260525'
+        assert len(loaded['klines']) == 1
+
+    def test_get_index_klines(self, monkeypatch, tmp_path):
+        from backend.core import data_layer as dl
+        test_path = os.path.join(tmp_path, 'index_data.json')
+        monkeypatch.setattr(dl, 'INDEX_DATA_PATH', test_path)
+        data = {'last_updated': '20260525', 'klines': [{'date': '20260525', 'close': 5000.0}]}
+        dl.save_index_data(data)
+        klines = dl.get_index_klines()
+        assert len(klines) == 1
+        assert klines[0]['close'] == 5000.0
+
+    def test_index_code_constant(self):
+        from backend.core.data_layer import INDEX_CODE
+        assert INDEX_CODE == '000985'
+
+
+class TestSectorDaily:
+    """Verify sector daily data read/write through data_layer."""
+
+    def test_save_and_uncached_load(self, monkeypatch, tmp_path):
+        from backend.core import data_layer as dl
+        test_path = os.path.join(tmp_path, 'sector_daily.json')
+        monkeypatch.setattr(dl, 'SECTOR_DAILY_PATH', test_path)
+        data = {
+            'last_updated': '20260525',
+            'industries': {'半导体': [{'date': '20260525', 'close': 1000.0}]},
+            'concepts': {'AI芯片': [{'date': '20260525', 'close': 2000.0}]},
+        }
+        dl.save_sector_daily(data)
+        loaded = dl.load_sector_daily_uncached()
+        assert loaded['last_updated'] == '20260525'
+        assert '半导体' in loaded['industries']
+        assert 'AI芯片' in loaded['concepts']
+
+    def test_save_all_sectors_atomic(self, monkeypatch, tmp_path):
+        from backend.core import data_layer as dl
+        test_path = os.path.join(tmp_path, 'sector_daily.json')
+        monkeypatch.setattr(dl, 'SECTOR_DAILY_PATH', test_path)
+        dl.save_sector_daily({
+            'last_updated': '20260525',
+            'industries': {'测试行业': []},
+            'concepts': {},
+        })
+        assert os.path.isfile(test_path)
+        assert not os.path.exists(test_path + '.tmp')

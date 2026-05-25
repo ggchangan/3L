@@ -10,7 +10,8 @@ from config import (
     DATA_DIR, WWW_DIR, CACHE_DIR, PRIVATE_DIR,
     ALL_STOCKS_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH,
     SUB_SECTOR_CLUSTERS_PATH, FINANCIAL_CACHE_PATH,
-    PROFIT_QUALITY_PATH, INDEX_DATA_PATH, INDUSTRY_LEADERS_PATH,
+    PROFIT_QUALITY_PATH, INDEX_DATA_PATH, SECTOR_DAILY_PATH,
+    INDUSTRY_LEADERS_PATH,
     LATEST_SCAN_PATH, ALL_CODES_PATH, KEY_POINTS_DIR,
     HOLDINGS_PATH, TRADES_PATH, REVIEW_ARCHIVE_DIR,
     REVIEW_CHARTS_DIR, SCRIPTS_DIR, SIMULATION_DIR,
@@ -77,6 +78,54 @@ def get_stock_klines(code, direction=None, stocks=None):
         if code in codes:
             return codes[code]
     return []
+
+
+# ====== 指数数据（中证全指 000985）======
+INDEX_CODE = '000985'
+
+def get_index_data():
+    """返回 {last_updated, klines: [{date, open, close, high, low, volume}]}（走缓存，TTL=60s）"""
+    return cache.get('index_data', lambda: _load_json(INDEX_DATA_PATH, {}), ttl=60)
+
+def save_index_data(data):
+    """原子保存指数数据"""
+    _atomic_save_json(INDEX_DATA_PATH, data)
+    cache.invalidate('index_data')
+
+def load_index_data_uncached():
+    """强制从磁盘读取指数数据（不走缓存），供更新脚本使用
+    兼容旧格式：纯 [{date, ...}] → 自动转换为 {last_updated, klines}
+    """
+    raw = _load_json(INDEX_DATA_PATH, {})
+    if isinstance(raw, list):
+        # 旧格式迁移：纯K线列表 → 新格式
+        klines = raw
+        latest = klines[-1]['date'] if klines else ''
+        data = {'last_updated': latest, 'klines': klines}
+        _atomic_save_json(INDEX_DATA_PATH, data)
+        return data
+    return raw
+
+def get_index_klines():
+    """返回指数K线列表 [{date, open, close, high, low, volume}]"""
+    data = get_index_data()
+    return data.get('klines', [])
+
+
+# ====== 板块日K线数据（行业+概念）======
+def get_sector_daily():
+    """返回 {last_updated, industries: {板块名: [klines]}, concepts: {板块名: [klines]}}（走缓存，TTL=60s）"""
+    return cache.get('sector_daily', lambda: _load_json(SECTOR_DAILY_PATH, {}), ttl=60)
+
+def save_sector_daily(data):
+    """原子保存板块日K线数据"""
+    _atomic_save_json(SECTOR_DAILY_PATH, data)
+    cache.invalidate('sector_daily')
+
+def load_sector_daily_uncached():
+    """强制从磁盘读取板块日K线数据（不走缓存），供更新脚本使用"""
+    return _load_json(SECTOR_DAILY_PATH, {})
+
 
 # ====== 自选股 ======
 def _load_watchlist_from_disk():
