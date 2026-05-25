@@ -20,10 +20,19 @@
     <!-- ① 规则层 -->
     <div class="layer rule-layer">
         <div class="layer-title"><span class="badge-layer">①</span> ⚠️ 今日纪律</div>
-        <div class="rules">
-            <div class="rule-item highlight" id="dailyRule">🔴 按计划执行，达到条件才操作</div>
-            <div class="rule-item">🟡 不看分时图，只看日K线</div>
-            <div class="rule-item">🟡 不做T+0，盘中不临时起意</div>
+        <div class="warnings">
+            <div class="warn-item" id="dailyRule">
+                <div class="num">🔴</div>
+                <div class="text">按计划执行，达到条件才操作</div>
+            </div>
+            <div class="warn-item">
+                <span class="dot">🟡</span>
+                <span class="t">不看分时图，只看日K线</span>
+            </div>
+            <div class="warn-item">
+                <span class="dot">🟡</span>
+                <span class="t">不做T+0，盘中不临时起意</span>
+            </div>
         </div>
     </div>
 
@@ -38,11 +47,10 @@
     <!-- ②.5 外围参考 -->
     <div class="layer external-layer" id="externalLayer">
         <div class="layer-title" onclick="toggleExternal()" style="cursor:pointer;">
-            <span class="badge-layer">②.5</span> 🌍 外围关联 <span class="collapse-indicator" id="externalToggle">▼</span>
+            <span class="badge-layer">②.5</span> 🌍 外围关联 <span class="badge" id="externalUpdateBadge">加载中</span><span class="collapse-indicator" id="externalToggle">▼</span>
         </div>
         <div id="externalBody">
-            <div class="empty" style="padding:12px;">美股映射数据待配置 · 提供清单后自动显示</div>
-            <div style="font-size:10px;color:#444;text-align:right;margin-top:4px;">※ 映射关系可自定义</div>
+            <div class="empty">正在加载美股映射数据…</div>
         </div>
     </div>
 

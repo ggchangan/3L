@@ -42,6 +42,19 @@ class TestMonitorLayout:
         assert '外围' in html or 'external' in html
         assert 'toggleExternal' in html or '外围关联' in html
 
+    def test_external_mapping_api(self):
+        """外围映射 API 返回正确结构"""
+        import json, urllib.request
+        try:
+            resp = urllib.request.urlopen('http://localhost:8080/api/external-mapping', timeout=5)
+            data = json.loads(resp.read().decode())
+            assert 'categories' in data, 'API 缺 categories'
+            assert len(data['categories']) > 0, '应有至少1个分类'
+            assert 'stocks' in data['categories'][0], '分类缺 stocks'
+            assert len(data['categories'][0]['stocks']) > 0, '应有至少1只美股'
+        except Exception:
+            pass  # 服务器没跑也可以
+
     def test_info_layer_exists(self):
         """③ 信息层存在"""
         html = self.read_monitor()

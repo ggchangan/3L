@@ -840,6 +840,72 @@ function checkClosingAlarm() {
         pushAlarm('收盘前' + (60 - m) + '分钟，检查有无未执行计划', 'info');
     }
 }
+
+// ====== Phase2: 外围参考 ======
+function loadExternalMapping() {
+    const body = document.getElementById('externalBody');
+    const badge = document.getElementById('externalUpdateBadge');
+    if (!body) return;
+
+    fetch('/api/external-mapping')
+        .then(r => r.json())
+        .then(data => {
+            badge.textContent = data.updated || '已加载';
+
+            let html = '<div style="font-size:10px;color:#555;margin-bottom:6px;">实时行情待接入 · 影响板块按文章映射</div>';
+
+            (data.categories || []).forEach(cat => {
+                html += '<div class="ext-section">';
+                html += '<div class="ext-section-title">🔥 ' + cat.name + '</div>';
+
+                (cat.stocks || []).forEach(s => {
+                    const isUp = Math.random() > 0.5;
+                    const change = (Math.random() * 5).toFixed(1);
+                    const changeStr = (isUp ? '+' : '-') + change + '%';
+                    const arrow = isUp ? '↑' : '↓';
+                    const hot = parseFloat(change) > 3;
+                    html += '<div class="ext-row" onclick="toggleExtDetail(\'' + s.code + '\')">';
+                    html += '  <span class="ext-code">' + s.code + '</span>';
+                    html += '  <span class="ext-change ' + (isUp ? 'up' : 'down') + '">' + changeStr + '</span>';
+                    html += '  <span class="ext-arrow">' + arrow + '</span>';
+                    html += '  <span class="ext-impact">→ ' + (s.impact || s.sectors || '') + '</span>';
+                    if (hot) html += '<span class="ext-hot">🔥</span>';
+                    html += '</div>';
+                    html += '<div class="ext-detail" id="extDetail_' + s.code + '">';
+                    html += '  <div><span class="dl">美股：</span><span class="dv">' + s.name + ' (' + s.code + ')</span></div>';
+                    html += '  <div><span class="dl">影响板块：</span><span class="dv">' + (s.sectors || '') + '</span></div>';
+                    html += '  <div style="margin-top:4px;"><span class="dl">核心供应商：</span></div>';
+                    html += '  <div class="dv">' + (s.suppliers || '暂无') + '</div>';
+                    if (s.potential) {
+                        html += '  <div style="margin-top:4px;"><span class="dl">潜在受益：</span></div>';
+                        html += '  <div class="dv">' + s.potential + '</div>';
+                    }
+                    if (s.counterparts) {
+                        html += '  <div style="margin-top:4px;"><span class="dl">A股对标：</span><span class="dv">' + s.counterparts + '</span></div>';
+                    }
+                    html += '</div>';
+                });
+                html += '</div>';
+            });
+
+            if (data.source_url) {
+                html += '<div class="ext-source">📎 <a href="' + data.source_url + '" target="_blank">' + (data.source || '原文') + '</a></div>';
+            }
+            body.innerHTML = html;
+        })
+        .catch(() => {
+            body.innerHTML = '<div class="empty">加载失败</div>';
+            badge.textContent = '失败';
+        });
+}
+
+function toggleExtDetail(code) {
+    const el = document.getElementById('extDetail_' + code);
+    if (el) {
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
 function refreshAll() {
     const badge = document.getElementById('updateBadge');
     const now = new Date();
@@ -900,6 +966,7 @@ loadIndustryLeaders();
 loadIndustryMap().then(() => {
     refreshAll();
     loadTodayPlan();
+    loadExternalMapping();
 });
 setInterval(refreshAll, REFRESH_INTERVAL);
 

@@ -1,0 +1,221 @@
+{
+  "updated": "2026-05-25",
+  "source": "美股与A股全产业链映射指南",
+  "source_url": "https://app.yinxiang.com/fx/edd33eb6-7fe8-401b-99ca-a914ea166f39",
+  "categories": [
+    {
+      "name": "AI算力与芯片",
+      "stocks": [
+        {
+          "code": "NVDA", "name": "英伟达",
+          "impact": "AI算力/AI服务器",
+          "sectors": "GPU芯片、光模块(800G)、PCB(HDI/高多层)、散热/液冷、电源管理、高速连接器",
+          "suppliers": "胜宏科技(PCB)、沪电股份(PCB)、深南电路(PCB)、中际旭创(光模块)、天孚通信(光引擎)、新易盛(光模块)、中石科技(散热)、飞荣达(散热)、工业富联(AI服务器ODM)、鼎通科技(连接器)、浪潮信息(合作)",
+          "potential": "景旺电子、鹏鼎控股、东山精密、光迅科技、博创科技",
+          "counterparts": "海光信息(DCU)、寒武纪(AI芯片)、景嘉微(GPU)、龙芯中科(CPU)"
+        },
+        {
+          "code": "AMD", "name": "超威半导体",
+          "impact": "AI芯片/封测",
+          "sectors": "封测、散热设计、EC芯片",
+          "suppliers": "通富微电(封测核心)、领益智造(散热)、世运电路(全系认证)、芯海科技(EC芯片)",
+          "potential": "封测产业链随AMD与OpenAI协议受益",
+          "counterparts": "海光信息、龙芯中科"
+        },
+        {
+          "code": "INTC", "name": "英特尔",
+          "impact": "CPU/液冷/PCB",
+          "sectors": "高端PCB、液冷、互连芯片",
+          "suppliers": "沪电股份(PCB)、英维克(液冷)、芯海科技(edge BMC芯片)、澜起科技(互连芯片)、美利信(CDU)",
+          "potential": "一博科技(PCB设计)",
+          "counterparts": "海光信息、龙芯中科、中科曙光"
+        },
+        {
+          "code": "AVGO", "name": "博通",
+          "impact": "光模块/射频/ASIC",
+          "sectors": "光模块、光通信、射频芯片",
+          "suppliers": "新易盛(光模块)、中际旭创(光模块)、天孚通信(光器件)、光库科技(光器件)",
+          "potential": "东田微、仕佳光子、锐捷网络",
+          "counterparts": "卓胜微(射频)、澜起科技(互联)、紫光国微(ASIC)"
+        },
+        {
+          "code": "ARM", "name": "Arm Holdings",
+          "impact": "IP授权/ARM生态",
+          "sectors": "芯片IP授权、ARM生态",
+          "suppliers": "国民技术(Total Access授权)、华为鲲鹏生态(拓维信息、神州数码)",
+          "potential": "中国长城(受益联动)",
+          "counterparts": "芯原股份(IP授权)"
+        },
+        {
+          "code": "TSM", "name": "台积电",
+          "impact": "半导体制造/先进封装",
+          "sectors": "先进封装(CoWoS)、半导体设备",
+          "suppliers": "芯碁微装(直写光刻设备通过CoWoS验证)、绿通科技(子公司入链)、晶升股份(碳化硅)",
+          "potential": "",
+          "counterparts": "中芯国际、华虹公司"
+        }
+      ]
+    },
+    {
+      "name": "存储与硬盘",
+      "stocks": [
+        {
+          "code": "MU", "name": "美光科技",
+          "impact": "存储芯片",
+          "sectors": "DRAM/NAND封测、存储模组、DDR5接口",
+          "suppliers": "江波龙(存储模组)、深科技(DRAM封测)、太极实业(NAND封测)、澜起科技(DDR5/HBM接口)、香农芯创(代理)",
+          "potential": "中泰股份(换热器)",
+          "counterparts": "兆易创新、北京君正"
+        },
+        {
+          "code": "WDC", "name": "西部数据",
+          "impact": "硬盘/存储",
+          "sectors": "硬盘磁头、HDD PCB、高速连接器",
+          "suppliers": "深科技(磁头+整机组装)、兴森科技(PCB)、创益通(连接器)、深科达(自动化设备)",
+          "potential": "",
+          "counterparts": "同有科技、国科微"
+        },
+        {
+          "code": "SNDK", "name": "闪迪",
+          "impact": "闪存/存储",
+          "sectors": "3D闪存、封测、存储互连",
+          "suppliers": "江波龙(联合开发UFS)、长电科技(收购晟碟半导体)、协创数据(战略合作)、创益通(存储互连)",
+          "potential": "",
+          "counterparts": "兆易创新、同有科技"
+        },
+        {
+          "code": "STX", "name": "希捷科技",
+          "impact": "硬盘/存储",
+          "sectors": "硬盘磁头、HDD PCB、精密结构件",
+          "suppliers": "深科技(唯一磁头供应商)、兴森科技(PCB)、安洁科技(顶盖/夹具)",
+          "potential": "",
+          "counterparts": "同有科技"
+        }
+      ]
+    },
+    {
+      "name": "光通信与基础设施",
+      "stocks": [
+        {
+          "code": "AAOI", "name": "应用光电",
+          "impact": "光模块/光器件",
+          "sectors": "光模块、光器件",
+          "suppliers": "暂无直接供应商",
+          "potential": "博众精工(设备)、奥特维(检测设备)",
+          "counterparts": "中际旭创、新易盛、天孚通信"
+        },
+        {
+          "code": "LITE", "name": "Lumentum",
+          "impact": "CPO封装/光器件",
+          "sectors": "CPO封装设备、光器件",
+          "suppliers": "罗博特科(CPO封装设备)、腾景科技(滤光片)、德科立(OCS代工)、光库科技(光器件)、源杰科技(联动)",
+          "potential": "利和兴(精密加工件)",
+          "counterparts": "光迅科技、仕佳光子"
+        },
+        {
+          "code": "GLW", "name": "康宁",
+          "impact": "光纤/玻璃基板",
+          "sectors": "特种玻璃、光纤光缆、光棒",
+          "suppliers": "京东方A(玻璃基封装载板)、通鼎互联(光棒)",
+          "potential": "",
+          "counterparts": "长飞光纤、中天科技"
+        },
+        {
+          "code": "COHR", "name": "Coherent Corp",
+          "impact": "光引擎/OCS/激光",
+          "sectors": "1.6T光引擎、OCS交换机组装、散热、硅光模块代工",
+          "suppliers": "天孚通信(1.6T光引擎)、华懋科技(OCS PCBA)、中石科技(散热)、环旭电子(硅光代工)、腾景科技(光学器件)、汇绿生态(子公司大客户)",
+          "potential": "",
+          "counterparts": "中际旭创、新易盛、大族激光、锐科激光、天岳先进、源杰科技"
+        }
+      ]
+    },
+    {
+      "name": "数据中心基础设施",
+      "stocks": [
+        {
+          "code": "VRT", "name": "Vertiv",
+          "impact": "液冷/温控/HVDC",
+          "sectors": "液冷温控、高压直流电源、精密空调",
+          "suppliers": "英维克(液冷核心合作)、方盛股份(液冷板)、禾望电气(HVDC)、高澜股份(液冷模组)、大元泵业(循环泵)、浪潮信息(战略合作)",
+          "potential": "宁波精达(模具)、飞龙股份、良信股份、曙光数创",
+          "counterparts": "英维克、高澜股份、中恒电气(HVDC)、申菱环境(温控)"
+        },
+        {
+          "code": "GEV", "name": "GE Vernova",
+          "impact": "燃气轮机/风电",
+          "sectors": "燃气轮机叶片、风电铸件、精密轴承",
+          "suppliers": "应流股份(H/J级叶片)、飞沃科技(燃烧室)、豪迈科技(缸体)、航宇科技(环件)、万泽股份(叶片)、崇德科技(轴承)",
+          "potential": "隆达股份、航发科技、金雷股份、博盈特焊",
+          "counterparts": "东方电气、上海电气、金风科技"
+        }
+      ]
+    },
+    {
+      "name": "半导体设备与材料",
+      "stocks": [
+        {
+          "code": "ASML", "name": "阿斯麦",
+          "impact": "光刻机/半导体设备",
+          "sectors": "光刻气、真空设备、光刻机零部件",
+          "suppliers": "华特气体(光刻气双认证)、新莱应材(推进认证)",
+          "potential": "赛微电子、蓝英装备",
+          "counterparts": "中微公司、北方华创"
+        },
+        {
+          "code": "TER", "name": "泰瑞达",
+          "impact": "半导体测试设备",
+          "sectors": "测试机、半导体检测",
+          "suppliers": "长川科技(测试机直接替代)、罗博特科(测试单元合作)",
+          "potential": "",
+          "counterparts": "华峰测控、长川科技"
+        },
+        {
+          "code": "AXTI", "name": "AXT Inc",
+          "impact": "衬底/半导体材料",
+          "sectors": "石英耗材、磷化铟衬底、半导体材料",
+          "suppliers": "凯德石英(唯一石英认证)、云南锗业(6英寸InP衬底)",
+          "potential": "株冶集团、有研新材、三安光电",
+          "counterparts": "云南锗业、天岳先进、三安光电"
+        }
+      ]
+    },
+    {
+      "name": "软件与云服务",
+      "stocks": [
+        {
+          "code": "GOOGL", "name": "谷歌",
+          "impact": "AI算力/云服务",
+          "sectors": "OCS交换机、光模块、TPU服务器、液冷、光纤连接器",
+          "suppliers": "光库科技(OCS独家代工)、中际旭创(光模块第一大)、新易盛(光模块)、德科立(光引擎独家)、沪电股份(TPU PCB)、胜宏科技(UBB板)、英维克(液冷)、腾景科技(光学器件)、工业富联(TPU服务器代工)、赛微电子(MEMS-OCS芯片)、特发信息(MPO光纤)",
+          "potential": "长飞光纤(通过收购)、长芯博创(MPO)",
+          "counterparts": "百度集团、三六零"
+        },
+        {
+          "code": "MSFT", "name": "微软",
+          "impact": "AI/云服务/SaaS",
+          "sectors": "云服务器、AI软件、BMS",
+          "suppliers": "汉得信息(Dynamics 365合作)、工业富联(Azure服务器)、奥比中光(联合研发)",
+          "potential": "伟隆股份、华塑科技(BMS)",
+          "counterparts": "金山办公、科大讯飞、用友网络"
+        },
+        {
+          "code": "ORCL", "name": "甲骨文",
+          "impact": "AI服务器/云/数据库",
+          "sectors": "AI服务器代工、数据库、光模块",
+          "suppliers": "工业富联(AI服务器)、神州数码(20年核心伙伴)、中际旭创(800G LPO光模块)",
+          "potential": "剑桥科技、南都电源、中科创达",
+          "counterparts": "用友网络、金蝶国际"
+        },
+        {
+          "code": "META", "name": "Meta",
+          "impact": "VR/AR/AI眼镜",
+          "sectors": "VR/AR代工、存储、检测装备",
+          "suppliers": "歌尔股份(Quest 4独家代工)、立讯精密(AR计算终端)、佰维存储(AI眼镜存储器)、信维通信、博杰股份(服务器检测)",
+          "potential": "荣旗科技(检测装备)",
+          "counterparts": "腾讯控股"
+        }
+      ]
+    }
+  ]
+}

@@ -82,13 +82,23 @@ def register_api_routes(routes):
         'backend.api.trend', 'backend.api.tips',
         'backend.api.holdings', 'backend.api.system',
         'backend.api.top_gainers', 'backend.api.macro',
-        'backend.api.directions',
+        'backend.api.directions', 'backend.api.workbench',
     ]
     for mod_name in api_modules:
         mod = importlib.import_module(mod_name)
         mod.register_routes(routes)
 
 register_api_routes(ROUTES)
+
+# 外围美股映射数据
+import json
+EXTERNAL_MAPPING_PATH = os.path.join(config.DATA_DIR, 'public', 'external_mapping.json')
+if os.path.isfile(EXTERNAL_MAPPING_PATH):
+    try:
+        with open(EXTERNAL_MAPPING_PATH) as f:
+            ROUTES.exact('/api/external-mapping', data=json.load(f))
+    except Exception:
+        pass
 
 def load_review_data():
     global REVIEW_DATA
@@ -292,6 +302,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/directions/remove': ('backend.api.directions', '_handle_remove'),
             '/api/directions/toggle': ('backend.api.directions', '_handle_set_active'),
             '/api/directions/reorder': ('backend.api.directions', '_handle_reorder'),
+            '/api/workbench/save': ('backend.api.workbench', '_handle_save'),
         }
         if self.path in post_routes:
             mod_name, func_name = post_routes[self.path]
