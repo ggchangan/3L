@@ -1,0 +1,387 @@
+"""StockCardService — 统一个股卡片数据服务
+输入股票代码+上下文，输出完整的卡片数据，不再重复组装逻辑
+
+所有I/O通过 backend.core.data_layer，不直接读文件。
+
+用法:
+    from services.stock_card_service import get_stock_card
+    card = get_stock_card(code='002916', date_str='20260525',
+                          market_position='波中', main_lines=[])
+"""
+
+import os, sys
+from datetime import datetime
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from config import MANUAL_TREND_PATH as _MANUAL_TREND_PATH
+from backend.core.data_layer import (
+    get_stock_klines,
+    get_industry_map,
+)
+from backend.core.ema_utils import (
+    ema_list,
+    get_ema_arrangement,
+    get_structure,
+    get_stage,
+)
+from backend.core.buy_point_detection import (
+    detect_buy_point,
+    calc_stop_loss,
+)
+from backend.core.trend_trading import (
+    detect_trend_buy,
+    decide_system_with_detail,
+)
+
+
+# ── 手动趋势股缓存 ──
+MANUAL_TREND_PATH = _MANUAL_TREND_PATH
+_manual_trend_cache = None
+
+
+def _load_manual_trend():
+    """加载手动趋势股列表（带模块缓存）"""
+    global _manual_trend_cache
+    if _manual_trend_cache is not None:
+        return _manual_trend_cache
+    try:
+        import json
+        with open(MANUAL_TREND_PATH) as f:
+            _manual_trend_cache = set(json.load(f))
+    except Exception:
+        _manual_trend_cache = set()
+    return _manual_trend_cache
+
+
+# ═══════════════════════════════════════════
+# 内部函数
+# ═══════════════════════════════════════════
+
+def _find_idx(klines, date_str):
+    """在K线列表中找指定日期的索引"""
+    date_clean = date_str.replace('-', '')
+    for i, k in enumerate(klines):
+        if str(k.get('date', '')).replace('-', '') == date_clean:
+            return i
+    return len(klines) - 1
+
+
+def _analyze_structure(klines, idx):
+    """分析结构和阶段"""
+    if idx < 0 or idx >= len(klines):
+        return {'structure': '--', 'stage': '--', 'ema': '--'}
+
+    closes = [k['close'] for k in klines[:idx + 1]]
+    highs = [k['high'] for k in klines[:idx + 1]]
+    lows = [k['low'] for k in klines[:idx + 1]]
+    volumes = [k['volume'] for k in klines[:idx + 1]]
+
+    structure = get_structure(closes)
+    stage = get_stage(closes, structure=structure, highs=highs,
+                      lows=lows, volumes=volumes)
+    ema = get_ema_arrangement(closes)
+
+    return {
+        'structure': structure or '--',
+        'stage': stage or '--',
+        'ema': ema or '--',
+    }
+
+
+def _decide_trading_system(code):
+    """判定交易系统：'trend' 或 '3l'"""
+    manual = _load_manual_trend()
+    return 'trend' if code in manual else '3l'
+
+
+def _calc_sector_chg(code):
+    """计算板块今日涨幅（暂不可行，外部需要实时行情）"""
+    return None
+
+
+def _calc_stop_loss(klines, idx):
+    """计算止损价和百分比"""
+    try:
+        if idx < 10 or len(klines) <= idx:
+            return None, None
+        sl, sl_pct = calc_stop_loss(klines, idx)
+        return float(sl) if sl else None, float(sl_pct) if sl_pct else None
+    except Exception:
+        return None, None
+
+
+def _get_mainline_level(sector, mainlines):
+    """判断主线等级"""
+    if not mainlines or not sector:
+        return ''
+    main_names = [l['name'] for l in mainlines.get('lines', [])]
+    sub_names = [l['name'] for l in mainlines.get('secondary', [])]
+    if sector in main_names:
+        return '主线'
+    elif sector in sub_names:
+        return '次级主线'
+    return '非主线'
+
+
+def _build_conclusion(card):
+    """生成结论文字"""
+    s = card['signal']
+    ts = card['trading_system']
+    stage = card.get('stage', '')
+    structure = card.get('structure', '')
+    buy_point = card.get('buy_point', '')
+    stop_loss = card.get('stop_loss')
+    stop_loss_pct = card.get('stop_loss_pct')
+
+    sl_text = ''
+    if stop_loss and stop_loss_pct:
+        sl_text = f'，建议止损{stop_loss:.2f}（约{stop_loss_pct:.1f}%）'
+
+    if ts == 'trend':
+        bias = card.get('trend_bias')
+        if bias is not None and bias != '':
+            bias_f = float(bias)
+            if s == 'buy':
+                return f'BIAS5={bias_f:.2f}%，乖离率买入区{sl_text}'
+            elif bias_f < 0:
+                return f'BIAS5={bias_f:.2f}%，价格在EMA5下方，乖离率买入区，属于趋势交易乖离率买点'
+            elif bias_f <= 2:
+                return f'BIAS5={bias_f:.2f}%，价格靠近EMA5，乖离率买入区，可考虑逢低吸纳'
+            elif bias_f <= 8:
+                return f'BIAS5={bias_f:.2f}%，价格在EMA5上方，持有区，趋势健康继续持有'
+            else:
+                return f'⚠️ BIAS5={bias_f:.2f}%，价格远离EMA5，警戒区，关注回调风险'
+        return f'趋势交易，{stage}阶段，{structure}'
+
+    if s == 'buy':
+        return f'触发{buy_point}，{stage}阶段确认，可执行买入计划{sl_text}'
+
+    # hold/sell — 参考 review_analysis 的结论生成逻辑
+    if stage == '缩量整理':
+        return '量能卖压枯竭，价在EMA10之上，中继蓄力形态，可持股等待放量突破'
+    elif stage == '上行':
+        return '斜率正常，EMA10持续向上，上行趋势健康，继续持有不动'
+    elif stage == '加速':
+        return 'EMA10斜率加速变陡，拉升阶段，关注放量滞涨等左侧止盈信号'
+    elif stage == '滞涨':
+        return 'EMA10走平涨不动，警惕回调，考虑减仓'
+    elif stage == '转弱':
+        return 'EMA10已拐头向下，趋势转弱，关注关键支撑位是否破位'
+    elif stage == '区间底部':
+        return '价格在支撑位附近，区间底部企稳，可考虑加仓博反弹'
+    elif stage == '区间顶部':
+        return '价格接近压力位，区间顶部受阻，注意减仓回避'
+    elif stage == '区间中段':
+        return '区间中部无明确方向，等待价格靠近支撑或压力再做决定'
+    else:
+        return f'阶段{stage}，{structure}'
+
+
+def _build_tags(card):
+    """生成标签列表"""
+    tags = []
+    if card.get('profit_model1'):
+        tags.append('🏆 盈利1')
+    if card.get('trend_stock'):
+        tags.append('📈 趋势股')
+    return tags
+
+
+# ═══════════════════════════════════════════
+# 主入口
+# ═══════════════════════════════════════════
+
+def get_stock_card(code, date_str, market_position='波中',
+                   main_lines=None, direction=None):
+    """
+    获取个股卡片数据
+
+    Args:
+        code: 6位股票代码
+        date_str: 日期 'YYYYMMDD' 或 'YYYY-MM-DD'
+        market_position: 大盘位置
+        main_lines: 主线列表 [{'name': ...}]
+        direction: 方向组（可选）
+
+    Returns:
+        dict: 完整的卡片数据
+    """
+    if main_lines is None:
+        main_lines = []
+
+    # 1. 找索引
+    industry_map = get_industry_map()
+    stock_info = industry_map.get(code, {})
+    if isinstance(stock_info, dict):
+        sector = stock_info.get('ths_industry', '') or direction or ''
+        name = stock_info.get('name', code)
+    else:
+        sector = direction or ''
+        name = code
+
+    # 2. 获取K线（只读，通过 data_layer）
+    stocks_data = None  # detect_buy_point 需要全量 stores
+    # 用 get_stock_klines 取单只
+    klines = get_stock_klines(code, direction)
+    if not klines or len(klines) < 30:
+        return _empty_card(code, name, sector, direction, '数据不足')
+
+    idx = _find_idx(klines, date_str)
+    if idx < 10:
+        idx = len(klines) - 1
+
+    close = klines[idx]['close']
+    # 涨跌幅：拿最近2根算
+    change = 0.0
+    if idx > 0:
+        prev_close = klines[idx - 1]['close']
+        if prev_close > 0:
+            change = round((close - prev_close) / prev_close * 100, 2)
+
+    # 3. 结构分析
+    struct_info = _analyze_structure(klines, idx)
+
+    # 4. 交易系统判定
+    trading_system = _decide_trading_system(code)
+    sys_detail = {'system': trading_system,
+                  'reason': '手动指定为趋势交易' if trading_system == 'trend' else '默认3L交易'}
+
+    # 5. 买点判定（互斥：趋势/3L）
+    buy_point = ''
+    trend_buy_type = ''
+    trend_bias = ''
+    signal = 'hold'
+    signal_text = ''
+    score = 0
+    vol_analysis = '--'
+    profit_model1 = False
+    trend_stock = False
+    flags = ''
+    stop_loss = None
+    stop_loss_pct = None
+    _3l_detail = {}
+
+    date_clean = date_str.replace('-', '')
+
+    if trading_system == 'trend':
+        trend_stock = True
+        tb = detect_trend_buy(code, date_clean,
+                              {sector: {code: klines}}, main_lines)
+        if tb:
+            signal = 'buy'
+            signal_text = '趋势买入'
+            trend_buy_type = tb.get('buy_type', '')
+            trend_bias = tb.get('bias5', '')
+            buy_point = trend_buy_type
+            score = 5
+        else:
+            signal = 'hold'
+            # 即使没有买点也展示乖离率
+            from backend.core.trend_trading import check_trend_type
+            t = check_trend_type(klines, idx)
+            if t.get('trend_type'):
+                trend_bias = t.get('bias5', '')
+    else:
+        # 3L 买点检测（需要全量数据）
+        all_stocks = {}
+        try:
+            from backend.core.data_layer import get_all_stocks
+            all_stocks = get_all_stocks()
+        except Exception:
+            all_stocks = {sector: {code: klines}}
+
+        bt = detect_buy_point(code, date_clean, all_stocks,
+                              market_position=market_position,
+                              main_lines=[l['name'] for l in main_lines.get('lines', [])] if isinstance(main_lines, dict) else main_lines)
+        if bt:
+            signal = 'buy'
+            buy_point = bt.get('buy_type', '')
+            signal_text = bt.get('detail', {}).get('reason', '')
+            score = bt.get('score', 0)
+            vol_analysis_text = ''
+            vr = bt.get('vol_ratio', 0)
+            if vr < 0.7:
+                vol_analysis_text = f'缩量{vr:.0%}'
+            elif vr > 1.5:
+                vol_analysis_text = f'放量{vr:.0%}'
+            else:
+                vol_analysis_text = f'量能正常{vr:.0%}'
+            vol_analysis = vol_analysis_text
+            profit_model1 = bt.get('profit_model1', False) or bt.get('detail', {}).get('profit_model1', False)
+            flags = bt.get('flags', '')
+            _3l_detail = bt.get('detail', {})
+
+    # 6. 止损
+    stop_loss, stop_loss_pct = _calc_stop_loss(klines, idx)
+
+    # 7. 主线定位
+    mainline_level = _get_mainline_level(sector, main_lines)
+
+    # 8. 构建卡片
+    card = {
+        'code': code,
+        'name': name,
+        'sector': sector,
+        'direction': direction or '',
+        'price': close,
+        'change': change,
+        'structure': struct_info.get('structure', '--'),
+        'stage': struct_info.get('stage', '--'),
+        'ema': struct_info.get('ema', '--'),
+        'vol_analysis': vol_analysis,
+        'signal': signal,
+        'signal_text': signal_text,
+        'buy_point': buy_point,
+        'profit_model1': profit_model1,
+        'trend_stock': trend_stock,
+        'trading_system': trading_system,
+        'trading_reason': sys_detail.get('reason', ''),
+        'trend_buy_type': trend_buy_type,
+        'trend_bias': trend_bias,
+        'mainline_level': mainline_level,
+        'stop_loss': stop_loss,
+        'stop_loss_pct': stop_loss_pct,
+        'sector_chg': None,
+        'score': score,
+        'flags': flags,
+        'conclusion': '',
+        'tags': [],
+    }
+    card['conclusion'] = _build_conclusion(card)
+    card['tags'] = _build_tags(card)
+
+    return card
+
+
+def _empty_card(code, name, sector, direction, reason):
+    """返回空卡片（数据不足时）"""
+    return {
+        'code': code,
+        'name': name,
+        'sector': sector,
+        'direction': direction or '',
+        'price': 0,
+        'change': 0,
+        'structure': '--',
+        'stage': '--',
+        'ema': '--',
+        'vol_analysis': '--',
+        'signal': 'hold',
+        'signal_text': '',
+        'buy_point': '',
+        'profit_model1': False,
+        'trend_stock': False,
+        'trading_system': '3l',
+        'trading_reason': reason,
+        'trend_buy_type': '',
+        'trend_bias': '',
+        'mainline_level': '',
+        'stop_loss': None,
+        'stop_loss_pct': None,
+        'sector_chg': None,
+        'score': 0,
+        'flags': '',
+        'conclusion': reason,
+        'tags': [],
+    }
