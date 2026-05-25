@@ -232,7 +232,10 @@ class Handler(SimpleHTTPRequestHandler):
 
         # --- 静态文件（HTML/JS 不缓存）---
         if path.endswith('.html') or path.endswith('.js'):
-            fp = os.path.join(FE_DIR if FE_DIR != WWW_DIR else WWW_DIR, path.lstrip('/'))
+            # 优先 FE_DIR（构建输出），不存在则回退 WWW_DIR（项目根）
+            fp = os.path.join(FE_DIR, path.lstrip('/'))
+            if not os.path.isfile(fp) and FE_DIR != WWW_DIR:
+                fp = os.path.join(WWW_DIR, path.lstrip('/'))
             if os.path.isfile(fp):
                 ct, _ = mimetypes.guess_type(fp)
                 self._serve_file(fp, ct, no_cache=True)

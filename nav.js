@@ -18,7 +18,7 @@
     ];
 
     const FOOTER_LINKS = [
-        { label: '⚙ 项目管理',  href: '/index.html',             id: 'home' },
+        { label: '📋 每日成果',    href: '/index.html',             id: 'home' },
         { label: '📖 Skills',    href: '/skills.html',            id: 'skills' },
         { label: '📊 模拟交易',  href: '/simulation.html',       id: 'simulation' },
     ];

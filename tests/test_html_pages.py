@@ -118,7 +118,7 @@ class TestNavContent:
     def test_footer_links_present(self):
         """底部项目管理链接存在"""
         nav_js = read_page('nav.js')
-        assert '⚙ 项目管理' in nav_js
+        assert '📋 每日成果' in nav_js
         assert '📖 Skills' in nav_js
         assert '📊 模拟交易' in nav_js
 
