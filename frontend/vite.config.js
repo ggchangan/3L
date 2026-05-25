@@ -7,6 +7,7 @@ const htmlPages = [
   'simulation', 'watchlist', 'trend_candidates', 'tips',
   'tip-detail', 'industry', 'journal', 'top_gainers',
   'skills',
+  'holdings',
 ]
 
 export default defineConfig({

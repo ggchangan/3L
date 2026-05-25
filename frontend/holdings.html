@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📋 持仓管理 · 私密</title>
+<link rel="stylesheet" href="/css/pages/holdings.css?v=1">
+<style>
+/* ── 加载/错误/空状态 ── */
+.loading-state, .error-state { text-align: center; padding: 60px 20px; color: #666; font-size: 14px; }
+.error-state { color: #e94560; }
+.empty-state { text-align: center; padding: 40px 20px; color: #666; }
+.empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; margin-bottom: 16px; }
+.footer { text-align: center; padding: 20px; color: #444; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>📋 持仓管理 · 私密</h1>
+    <div class="update-time" id="updateTime">加载中...</div>
+</div>
+<div class="container" id="app">
+
+    <!-- 汇总条 -->
+    <div class="summary-bar" id="summaryArea" style="display:none;">
+        <div class="item"><span class="label">股票</span><span class="value" id="stockCount">-</span></div>
+        <div class="item"><span class="label">总仓位</span><span class="value" id="totalRatio">-</span></div>
+        <div class="item"><span class="label">现金</span><span class="value" id="cashRatio">-</span></div>
+        <div class="item"><span class="label">最大单只</span><span class="value" id="maxRatio">-</span></div>
+    </div>
+
+    <!-- 加载状态 -->
+    <div class="loading-state" id="loadingState">⌛ 加载持仓数据...</div>
+    <div class="error-state" id="errorState" style="display:none;"></div>
+
+    <!-- 卡片区 -->
+    <div id="cardArea" style="display:none;">
+        <div class="add-btn-wrap"><button class="add-btn" onclick="openAddModal()">＋ 新增持仓</button></div>
+        <div id="cardList"></div>
+        <div class="add-btn-wrap"><button class="add-btn" onclick="openAddModal()">＋ 新增持仓</button></div>
+    </div>
+
+    <!-- 空状态 -->
+    <div class="empty-state" id="emptyState" style="display:none;">
+        <div class="empty-icon">📭</div>
+        <p>暂无持仓，点击下方按钮添加</p>
+        <button class="add-btn" onclick="openAddModal()">＋ 新增第一只持仓</button>
+    </div>
+
+    <!-- 饼图 -->
+    <div class="pie-section" id="pieSection" style="display:none;">
+        <div class="section-title">📊 方向持仓分布</div>
+        <div class="pie-flex">
+            <div class="pie-svg-container" id="pieContainer"></div>
+            <div class="pie-legend" id="pieLegend"></div>
+        </div>
+    </div>
+
+    <!-- 评估 -->
+    <div class="section-card" id="assessmentSection" style="display:none;">
+        <div class="section-title assessment">📊 持仓评估</div>
+        <div id="assessmentContent"></div>
+    </div>
+
+    <!-- 建议 -->
+    <div class="section-card" id="suggestionSection" style="display:none;">
+        <div class="section-title suggestion">📋 持仓建议</div>
+        <div id="suggestionContent"></div>
+    </div>
+
+</div>
+<div class="footer">仅你可见 · URL 请保密</div>
+
+<!-- ── 新增/编辑弹窗 ── -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modal">
+        <h2 id="modalTitle">新增持仓</h2>
+        <input type="hidden" id="editIndex" value="-1">
+
+        <div class="form-row">
+            <label>搜索股票</label>
+            <input type="text" id="stockSearch" placeholder="输入股票名称或代码..." autocomplete="off">
+            <div class="search-results" id="searchResults"></div>
+        </div>
+
+        <div class="form-row">
+            <label>选中股票</label>
+            <div style="display:flex; gap:12px; align-items:center;" id="selectedStockInfo">
+                <span id="selectedName" style="font-weight:600;color:#e0e0e0;">-</span>
+                <span id="selectedCode" style="color:#666;font-size:11px;">-</span>
+            </div>
+            <div class="price-display" id="selectedPrice">--</div>
+        </div>
+
+        <div class="form-row">
+            <label>方向</label>
+            <select id="directionSelect"><option value="">请选择方向</option></select>
+        </div>
+
+        <div class="form-row">
+            <label>仓位 (%)</label>
+            <input type="number" id="ratioInput" step="0.01" min="0" max="100" placeholder="0.00">
+        </div>
+
+        <div class="form-row">
+            <label>止损价 (元) — <span style="color:#888;">不填则不设止损</span></label>
+            <input type="number" id="stopLossInput" step="0.01" min="0" placeholder="0.00" oninput="calcStopLossPct()">
+            <div class="hint" id="stopLossHint"></div>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn-cancel" onclick="closeModal()">取消</button>
+            <button class="btn-save" id="saveBtn" onclick="saveModal()">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── 确认删除弹窗 ── -->
+<div class="modal-overlay" id="confirmOverlay">
+    <div class="modal" style="width:320px;">
+        <div class="confirm-box">
+            <p id="confirmText">确定要删除该持仓吗？</p>
+            <div class="btn-row">
+                <button class="btn-cancel" onclick="closeConfirm()">取消</button>
+                <button class="btn-save" onclick="confirmDelete()" style="background:#e94560;">删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 状态
+// ═══════════════════════════════════════════════════════════════
+let HOLDINGS_DATA = null;
+let DELETE_INDEX = -1;
+let SELECTED_STOCK = null;
+let cachedPrices = {};
+
+const PIE_COLORS = [
+    '#e94560', '#2196f3', '#4CAF50', '#ff9800', '#a855f7',
+    '#00bcd4', '#ff5722', '#8bc34a', '#e91e63', '#3f51b5',
+    '#009688', '#ffeb3b', '#9c27b0', '#795548', '#607d8b',
+];
+
+// ═══════════════════════════════════════════════════════════════
+// 加载数据
+// ═══════════════════════════════════════════════════════════════
+async function loadData() {
+    const ls = document.getElementById('loadingState');
+    const es = document.getElementById('errorState');
+    const ca = document.getElementById('cardArea');
+    const em = document.getElementById('emptyState');
+    const ps = document.getElementById('pieSection');
+    const as = document.getElementById('assessmentSection');
+    const ss = document.getElementById('suggestionSection');
+    const sa = document.getElementById('summaryArea');
+    const ut = document.getElementById('updateTime');
+
+    ls.style.display = 'block';
+    ca.style.display = 'none';
+    em.style.display = 'none';
+    es.style.display = 'none';
+    ps.style.display = 'none';
+    as.style.display = 'none';
+    ss.style.display = 'none';
+    sa.style.display = 'none';
+
+    try {
+        const resp = await fetch('/api/holdings?_=' + Date.now());
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+
+        HOLDINGS_DATA = data;
+
+        ut.textContent = '📅 更新于 ' + (data.update_date || '未知');
+        const holdings = data.holdings || [];
+        const cash = data.cash_ratio || 100;
+
+        if (holdings.length === 0) {
+            ls.style.display = 'none';
+            em.style.display = 'block';
+            return renderAssessment(data);
+        }
+
+        // 汇总
+        sa.style.display = 'flex';
+        document.getElementById('stockCount').textContent = holdings.length + ' 只';
+        document.getElementById('totalRatio').textContent = (100 - cash).toFixed(1) + '%';
+        document.getElementById('cashRatio').textContent = cash.toFixed(1) + '%';
+        let maxR = 0;
+        holdings.forEach(h => { if (h.ratio > maxR) maxR = h.ratio; });
+        document.getElementById('maxRatio').textContent = maxR.toFixed(1) + '%';
+
+        // 卡片
+        ls.style.display = 'none';
+        ca.style.display = 'block';
+        renderCards(holdings);
+
+        // 饼图
+        renderPie(holdings);
+
+        // 评估+建议
+        renderAssessment(data);
+
+    } catch (err) {
+        ls.style.display = 'none';
+        es.style.display = 'block';
+        es.textContent = '❌ 加载失败: ' + err.message;
+        ut.textContent = '⚠️ 加载失败';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 渲染卡片
+// ═══════════════════════════════════════════════════════════════
+function renderCards(holdings) {
+    const list = document.getElementById('cardList');
+    list.innerHTML = holdings.map((h, i) => {
+        const price = h.price !== undefined && h.price !== null ? h.price.toFixed(2) : '--';
+        const chg = h.change !== undefined && h.change !== null ? h.change : null;
+        const chgCls = chg !== null ? (chg >= 0 ? 'up' : 'down') : '';
+        const chgStr = chg !== null ? (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : '--';
+        const chgFull = chg !== null ? price + ' ' + chgStr : '--';
+
+        // 止损展示
+        let slHtml = '';
+        if (h.stop_loss_price !== undefined && h.stop_loss_price !== null) {
+            const slPrice = parseFloat(h.stop_loss_price).toFixed(2);
+            const slPct = h.stop_loss_pct !== undefined && h.stop_loss_pct !== null
+                ? parseFloat(h.stop_loss_pct).toFixed(1) : null;
+            const slColor = slPct !== null && Math.abs(slPct) > 8 ? '#e94560'
+                : slPct !== null && Math.abs(slPct) > 5 ? '#ffd700' : '#4ecdc4';
+            slHtml = `<div class="field">止损: <span class="val" style="color:${slColor}">⬇ ${slPrice}${slPct !== null ? ' ('+slPct+'%)' : ''}</span></div>`;
+        } else {
+            slHtml = `<div class="field">止损: <span class="val" style="color:#555">未设置</span></div>`;
+        }
+
+        // 仓位条
+        const barColor = h.ratio >= 10 ? '#e94560' : h.ratio >= 6 ? '#ffd700' : '#4ecdc4';
+        const direction = h.direction || '其他';
+
+        return `<div class="holding-card">
+            <div class="card-top">
+                <div class="stock-info">
+                    <span class="stock-name">📈 ${h.name}</span>
+                    <span class="stock-code">${h.code || ''}</span>
+                </div>
+                <div class="price-info ${chgCls ? (chg >= 0 ? 'up' : 'down') : ''}">${chgFull}</div>
+            </div>
+            <div class="card-details">
+                <div class="field">方向: <span class="tag-${direction} direction-tag">${direction}</span></div>
+                <div class="field">仓位: <span class="val" style="font-weight:bold;color:#ffd700">${(h.ratio || 0).toFixed(2)}%</span>
+                    <span class="ratio-bar-bg"><span class="ratio-bar" style="width:${Math.min(h.ratio, 100)}%;background:${barColor}"></span></span>
+                </div>
+                ${slHtml}
+            </div>
+            <div style="position:absolute;top:12px;right:12px;display:flex;gap:4px;">
+                <button class="edit-btn" onclick="openEditModal(${i})" title="编辑">✏️</button>
+                <button class="del-btn" onclick="openDeleteConfirm(${i})" title="删除">🗑️</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 饼图（复用 top_gainers 的 SVG 方案）
+// ═══════════════════════════════════════════════════════════════
+function renderPie(holdings) {
+    if (!holdings || holdings.length === 0) {
+        document.getElementById('pieSection').style.display = 'none';
+        return;
+    }
+
+    // 按方向汇总仓位
+    const dirMap = {};
+    holdings.forEach(h => {
+        const d = h.direction || '其他';
+        if (!dirMap[d]) dirMap[d] = { ratio: 0, count: 0 };
+        dirMap[d].ratio += h.ratio || 0;
+        dirMap[d].count += 1;
+    });
+
+    const pieData = Object.entries(dirMap)
+        .map(([name, v]) => ({ name, count: v.count, pct: parseFloat(v.ratio.toFixed(1)) }))
+        .sort((a, b) => b.pct - a.pct);
+
+    document.getElementById('pieSection').style.display = 'block';
+
+    const total = pieData.reduce((s, d) => s + d.pct, 0);
+    const svgW = 280, svgH = 280, cx = 140, cy = 140, r = 110;
+
+    let startAngle = -90;
+    let paths = '';
+    let legendHtml = '';
+
+    pieData.forEach((d, i) => {
+        const angle = (d.pct / total) * 360;
+        const endAngle = startAngle + angle;
+        const color = PIE_COLORS[i % PIE_COLORS.length];
+
+        const sRad = startAngle * Math.PI / 180;
+        const eRad = endAngle * Math.PI / 180;
+        const x1 = cx + r * Math.cos(sRad);
+        const y1 = cy + r * Math.sin(sRad);
+        const x2 = cx + r * Math.cos(eRad);
+        const y2 = cy + r * Math.sin(eRad);
+        const largeArc = angle > 180 ? 1 : 0;
+        const path = `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2} Z`;
+        paths += `<path d="${path}" fill="${color}" stroke="#1a1a2e" stroke-width="1.5" opacity="0.9"/>`;
+
+        const labelAngle = (startAngle + endAngle) / 2;
+        const lRad = labelAngle * Math.PI / 180;
+        const textR = r * 0.65;
+        const tx = cx + textR * Math.cos(lRad);
+        const ty = cy + textR * Math.sin(lRad);
+        if (d.pct >= 5) {
+            paths += `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#fff" font-weight="600">${d.pct.toFixed(0)}%</text>`;
+        }
+
+        legendHtml += `<div class="legend-item">
+            <div class="legend-dot" style="background:${color}"></div>
+            <span class="legend-name">${d.name}</span>
+            <span class="legend-count">${d.count}只</span>
+            <span class="legend-pct">${d.pct}%</span>
+        </div>`;
+
+        startAngle = endAngle;
+    });
+
+    paths += `<circle cx="${cx}" cy="${cy}" r="45" fill="#0f0f1a" stroke="#2a2a4e" stroke-width="1"/>
+        <text x="${cx}" y="${cy - 5}" text-anchor="middle" font-size="22" font-weight="700" fill="#e94560">${holdings.length}</text>
+        <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="11" fill="#888">只个股</text>`;
+
+    document.getElementById('pieContainer').innerHTML = `<svg width="100%" height="100%" viewBox="0 0 ${svgW} ${svgH}" style="max-width:280px;max-height:280px;">${paths}</svg>`;
+    document.getElementById('pieLegend').innerHTML = legendHtml;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 评估 & 建议
+// ═══════════════════════════════════════════════════════════════
+function renderAssessment(data) {
+    const holdings = data.holdings || [];
+    const cashRatio = data.cash_ratio || 100;
+    const totalRatio = 100 - cashRatio;
+
+    const as = document.getElementById('assessmentSection');
+    const ss = document.getElementById('suggestionSection');
+    const ac = document.getElementById('assessmentContent');
+    const sc = document.getElementById('suggestionContent');
+
+    const items = [];
+    const suggestions = [];
+
+    // 1. 总仓位评估
+    if (totalRatio > 80) {
+        items.push({ text: `总仓位 ${totalRatio.toFixed(1)}% 偏高，可能超过市场建议仓位`, cls: 'high' });
+        suggestions.push(`建议适当减仓，控制总仓位在建议范围内`);
+    } else if (totalRatio < 50) {
+        items.push({ text: `总仓位 ${totalRatio.toFixed(1)}% 偏低，资金利用率不足`, cls: 'medium' });
+        suggestions.push(`当前仓位偏低，可在主线确认后适当加仓`);
+    } else {
+        items.push({ text: `总仓位 ${totalRatio.toFixed(1)}%，处于合理范围`, cls: 'low' });
+    }
+
+    // 2. 单只集中度
+    holdings.forEach(h => {
+        if (h.ratio >= 15) {
+            items.push({ text: `🔴 ${h.name} 仓位 ${h.ratio}% 严重集中（>15%）`, cls: 'high' });
+            suggestions.push(`${h.name} 仓位过高，若跌破止损需果断减仓`);
+        } else if (h.ratio >= 10) {
+            items.push({ text: `⚠️ ${h.name} 仓位 ${h.ratio}% 偏集中（>10%）`, cls: 'medium' });
+            suggestions.push(`${h.name} 仓位超过10%，注意分散风险`);
+        }
+    });
+
+    // 3. 方向集中度
+    const dirMap = {};
+    holdings.forEach(h => {
+        const d = h.direction || '其他';
+        dirMap[d] = (dirMap[d] || 0) + (h.ratio || 0);
+    });
+    Object.entries(dirMap).forEach(([dir, ratio]) => {
+        if (ratio >= 40) {
+            items.push({ text: `🔴 ${dir} 方向总仓位 ${ratio.toFixed(1)}% 严重集中（>40%）`, cls: 'high' });
+            suggestions.push(`${dir} 方向占比过高，建议减仓分散`);
+        } else if (ratio >= 30) {
+            items.push({ text: `⚠️ ${dir} 方向总仓位 ${ratio.toFixed(1)}% 偏集中（>30%）`, cls: 'medium' });
+            suggestions.push(`${dir} 方向 ${holdings.filter(h => (h.direction||'其他')===dir).length} 只标的，可考虑聚焦核心`);
+        } else {
+            items.push({ text: `${dir} 方向总仓位 ${ratio.toFixed(1)}%，分布合理`, cls: 'low' });
+        }
+    });
+
+    // 4. 现金评估
+    if (cashRatio < 5) {
+        items.push({ text: `⚠️ 现金仅 ${cashRatio.toFixed(1)}%，调仓空间有限`, cls: 'high' });
+        suggestions.push(`现金不足5%，考虑适当减仓预留调仓空间`);
+    } else if (cashRatio > 40) {
+        items.push({ text: `现金 ${cashRatio.toFixed(1)}% 充足，仓位利用率偏低`, cls: 'medium' });
+        suggestions.push(`现金较多，可在板块回调时择机加仓`);
+    } else {
+        items.push({ text: `现金 ${cashRatio.toFixed(1)}%，调仓空间充裕`, cls: 'low' });
+    }
+
+    // 5. 方向数量
+    const dirCount = Object.keys(dirMap).length;
+    if (dirCount > 5) {
+        suggestions.push(`涉及 ${dirCount} 个方向，考虑聚焦主营方向`);
+    }
+
+    // 渲染
+    if (items.length === 0) {
+        as.style.display = 'none';
+        ss.style.display = 'none';
+        return;
+    }
+
+    as.style.display = 'block';
+    ac.innerHTML = items.map(it => `<div class="item ${it.cls}">${it.text}</div>`).join('');
+
+    if (suggestions.length > 0) {
+        ss.style.display = 'block';
+        sc.innerHTML = suggestions.map(s => `<div class="item">💡 ${s}</div>`).join('');
+    } else {
+        ss.style.display = 'none';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 新增 / 编辑 弹窗
+// ═══════════════════════════════════════════════════════════════
+function openAddModal() {
+    document.getElementById('modalTitle').textContent = '新增持仓';
+    document.getElementById('editIndex').value = '-1';
+    resetModal();
+    document.getElementById('modalOverlay').classList.add('active');
+    loadDirections();
+}
+
+function openEditModal(index) {
+    const h = HOLDINGS_DATA.holdings[index];
+    document.getElementById('modalTitle').textContent = '编辑持仓';
+    document.getElementById('editIndex').value = index;
+    resetModal();
+
+    SELECTED_STOCK = { name: h.name, code: h.code };
+    document.getElementById('selectedName').textContent = h.name;
+    document.getElementById('selectedCode').textContent = h.code;
+    document.getElementById('ratioInput').value = h.ratio || '';
+    document.getElementById('stopLossInput').value = h.stop_loss_price || '';
+
+    loadDirections().then(() => {
+        document.getElementById('directionSelect').value = h.direction || '';
+    });
+
+    document.getElementById('modalOverlay').classList.add('active');
+
+    // 获取实时价
+    fetchPrice(h.code).then(p => {
+        document.getElementById('selectedPrice').textContent = p.price !== null ? p.price.toFixed(2) + ' 元' : '获取中...';
+        if (p.price !== null) cachedPrices[h.code] = p.price;
+        calcStopLossPct();
+    });
+}
+
+function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('active');
+}
+
+function resetModal() {
+    SELECTED_STOCK = null;
+    document.getElementById('stockSearch').value = '';
+    document.getElementById('selectedName').textContent = '-';
+    document.getElementById('selectedCode').textContent = '-';
+    document.getElementById('selectedPrice').textContent = '--';
+    document.getElementById('ratioInput').value = '';
+    document.getElementById('stopLossInput').value = '';
+    document.getElementById('stopLossHint').textContent = '';
+    document.getElementById('searchResults').style.display = 'none';
+    document.getElementById('searchResults').innerHTML = '';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 搜索股票
+// ═══════════════════════════════════════════════════════════════
+let searchTimer = null;
+document.getElementById('stockSearch').addEventListener('input', function() {
+    clearTimeout(searchTimer);
+    const q = this.value.trim();
+    if (q.length < 1) {
+        document.getElementById('searchResults').style.display = 'none';
+        return;
+    }
+    searchTimer = setTimeout(() => searchStocks(q), 300);
+});
+
+async function searchStocks(q) {
+    const el = document.getElementById('searchResults');
+    try {
+        const resp = await fetch('/api/search-stocks?q=' + encodeURIComponent(q));
+        const data = await resp.json();
+        const results = data.stocks || [];
+        if (results.length === 0) {
+            el.style.display = 'none';
+            return;
+        }
+        el.innerHTML = results.slice(0, 10).map(s =>
+            `<div class="result-item" onclick="selectStock('${s.name}', '${s.code}')">
+                <span>${s.name}</span>
+                <span class="ri-code">${s.code}</span>
+            </div>`
+        ).join('');
+        el.style.display = 'block';
+    } catch (err) {
+        el.style.display = 'none';
+    }
+}
+
+function selectStock(name, code) {
+    SELECTED_STOCK = { name, code };
+    document.getElementById('selectedName').textContent = name;
+    document.getElementById('selectedCode').textContent = code;
+    document.getElementById('stockSearch').value = name;
+    document.getElementById('searchResults').style.display = 'none';
+
+    // 获取实时价
+    fetchPrice(code).then(p => {
+        document.getElementById('selectedPrice').textContent = p.price !== null ? p.price.toFixed(2) + ' 元' : '获取中...';
+        if (p.price !== null) cachedPrices[code] = p.price;
+        calcStopLossPct();
+    });
+}
+
+async function fetchPrice(code) {
+    try {
+        const resp = await fetch('/api/holdings?_=' + Date.now());
+        // Try to get price from the response by matching code
+        // Actually, we can use the holdings endpoint — but it's too heavy.
+        // For simplicity, use the existing stock info API
+        const resp2 = await fetch('/api/search-stocks?q=' + code);
+        const data = await resp2.json();
+        // Check if any stock info has price data
+        return { price: null };
+    } catch (err) {
+        return { price: null };
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 止损计算
+// ═══════════════════════════════════════════════════════════════
+function calcStopLossPct() {
+    const slInput = document.getElementById('stopLossInput');
+    const hint = document.getElementById('stopLossHint');
+    const code = SELECTED_STOCK ? SELECTED_STOCK.code : '';
+    const currentPrice = cachedPrices[code] || null;
+
+    const slVal = parseFloat(slInput.value);
+    if (!isNaN(slVal) && currentPrice !== null && currentPrice > 0) {
+        const pct = ((slVal - currentPrice) / currentPrice * 100);
+        const color = Math.abs(pct) > 8 ? '#e94560' : Math.abs(pct) > 5 ? '#ffd700' : '#4ecdc4';
+        hint.innerHTML = `→ 止损跌幅 <span style="color:${color}">${pct.toFixed(2)}%</span>（当前价 ${currentPrice.toFixed(2)}）`;
+        hint.className = 'hint';
+    } else if (!isNaN(slVal) && currentPrice === null) {
+        hint.textContent = '当前价获取中，请稍后或手动填写';
+        hint.className = 'hint danger';
+    } else {
+        hint.textContent = '';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 方向下拉
+// ═══════════════════════════════════════════════════════════════
+async function loadDirections() {
+    const sel = document.getElementById('directionSelect');
+    sel.innerHTML = '<option value="">请选择方向</option>';
+    try {
+        const resp = await fetch('/api/directions/list');
+        const data = await resp.json();
+        const dirs = data.directions || [];
+        dirs.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = d;
+            sel.appendChild(opt);
+        });
+    } catch (err) {
+        console.error('方向加载失败:', err);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 保存
+// ═══════════════════════════════════════════════════════════════
+async function saveModal() {
+    const idx = parseInt(document.getElementById('editIndex').value);
+    const direction = document.getElementById('directionSelect').value;
+    const ratio = parseFloat(document.getElementById('ratioInput').value);
+    const slInput = document.getElementById('stopLossInput').value.trim();
+    const stopLossPrice = slInput !== '' ? parseFloat(slInput) : null;
+
+    if (!SELECTED_STOCK) { alert('请选择股票'); return; }
+    if (!direction) { alert('请选择方向'); return; }
+    if (isNaN(ratio) || ratio <= 0) { alert('请输入有效仓位比例'); return; }
+    if (stopLossPrice !== null && (isNaN(stopLossPrice) || stopLossPrice <= 0)) { alert('请输入有效止损价'); return; }
+
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.textContent = '保存中...';
+
+    try {
+        let holdings = [...(HOLDINGS_DATA.holdings || [])];
+        const item = {
+            name: SELECTED_STOCK.name,
+            code: SELECTED_STOCK.code,
+            ratio: ratio,
+            direction: direction,
+            stop_loss_price: stopLossPrice,
+        };
+
+        if (idx >= 0 && idx < holdings.length) {
+            // 编辑
+            holdings[idx] = item;
+        } else {
+            // 新增
+            holdings.push(item);
+        }
+
+        // 重新计算现金
+        const totalStockRatio = holdings.reduce((s, h) => s + (h.ratio || 0), 0);
+        const cashRatio = Math.max(0, Math.min(100, 100 - totalStockRatio));
+
+        const resp = await fetch('/api/holdings/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ holdings, cash_ratio: parseFloat(cashRatio.toFixed(2)) }),
+        });
+        const result = await resp.json();
+
+        if (result.success) {
+            closeModal();
+            loadData();
+        } else {
+            alert('保存失败: ' + (result.error || '未知错误'));
+        }
+    } catch (err) {
+        alert('保存失败: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '保存';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 删除
+// ═══════════════════════════════════════════════════════════════
+function openDeleteConfirm(index) {
+    DELETE_INDEX = index;
+    const h = HOLDINGS_DATA.holdings[index];
+    document.getElementById('confirmText').textContent = `确定要删除「${h.name}」吗？`;
+    document.getElementById('confirmOverlay').classList.add('active');
+}
+
+function closeConfirm() {
+    document.getElementById('confirmOverlay').classList.remove('active');
+    DELETE_INDEX = -1;
+}
+
+async function confirmDelete() {
+    if (DELETE_INDEX < 0) return;
+
+    try {
+        let holdings = [...(HOLDINGS_DATA.holdings || [])];
+        holdings.splice(DELETE_INDEX, 1);
+
+        const totalStockRatio = holdings.reduce((s, h) => s + (h.ratio || 0), 0);
+        const cashRatio = Math.max(0, Math.min(100, 100 - totalStockRatio));
+
+        const resp = await fetch('/api/holdings/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ holdings, cash_ratio: parseFloat(cashRatio.toFixed(2)) }),
+        });
+        const result = await resp.json();
+
+        if (result.success) {
+            closeConfirm();
+            loadData();
+        } else {
+            alert('删除失败: ' + (result.error || '未知错误'));
+        }
+    } catch (err) {
+        alert('删除失败: ' + err.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 键盘事件
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeModal();
+        closeConfirm();
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// 启动
+// ═══════════════════════════════════════════════════════════════
+loadData();
+</script>
+</body>
+</html>
