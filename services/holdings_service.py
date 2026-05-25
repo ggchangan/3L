@@ -136,7 +136,7 @@ def get_holdings_with_prices():
         item['price'] = price_info.get('price')
         item['change'] = price_info.get('change')
 
-        # 计算止损跌幅
+        # 计算止损跌幅（用实时价）
         stop_price = h.get('stop_loss_price')
         current_price = item['price']
         if stop_price is not None and current_price is not None and current_price > 0:
@@ -144,35 +144,18 @@ def get_holdings_with_prices():
         else:
             item['stop_loss_pct'] = None
 
-        # 板块（从行业分类映射读取）
+        # 板块/结构/阶段 — 通过 StockCardService 统一获取
         item['sector'] = ''
-        try:
-            from backend.core.data_layer import get_industry_map
-            imap = get_industry_map()
-            ind_info = imap.get(code, {})
-            if isinstance(ind_info, dict):
-                item['sector'] = ind_info.get('ths_industry', '') or ''
-        except Exception:
-            item['sector'] = ''
-
-        # 结构/阶段（从K线数据分析）
         item['structure'] = '--'
         item['stage'] = '--'
         try:
-            from backend.core.data_layer import get_all_stocks, get_stock_klines
-            from backend.core.ema_utils import get_structure, get_stage
-            stocks = get_all_stocks()
-            kls = get_stock_klines(code, stocks=stocks)
-            if kls and len(kls) >= 20:
-                closes = [k['close'] for k in kls]
-                highs_ = [k['high'] for k in kls]
-                lows_ = [k['low'] for k in kls]
-                vols = [k.get('volume', k.get('vol', 0)) for k in kls]
-                item['structure'] = get_structure(closes)
-                item['stage'] = get_stage(closes, item['structure'], highs_, lows_, volumes=vols)
+            from services.stock_card_service import get_stock_card
+            card = get_stock_card(code=code, date_str=datetime.now().strftime('%Y%m%d'))
+            item['sector'] = card.get('sector', '') or ''
+            item['structure'] = card.get('structure', '--')
+            item['stage'] = card.get('stage', '--')
         except Exception:
-            item['structure'] = '--'
-            item['stage'] = '--'
+            pass
 
         enriched.append(item)
 

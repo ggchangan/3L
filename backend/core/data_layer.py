@@ -10,7 +10,8 @@ from config import (
     DATA_DIR, WWW_DIR, CACHE_DIR, PRIVATE_DIR,
     ALL_STOCKS_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH,
     SUB_SECTOR_CLUSTERS_PATH, FINANCIAL_CACHE_PATH,
-    PROFIT_QUALITY_PATH, INDEX_DATA_PATH, INDUSTRY_LEADERS_PATH,
+    PROFIT_QUALITY_PATH, INDEX_DATA_PATH, SECTOR_DAILY_PATH,
+    INDUSTRY_LEADERS_PATH,
     LATEST_SCAN_PATH, ALL_CODES_PATH, KEY_POINTS_DIR,
     HOLDINGS_PATH, TRADES_PATH, REVIEW_ARCHIVE_DIR,
     REVIEW_CHARTS_DIR, SCRIPTS_DIR, SIMULATION_DIR,
@@ -33,6 +34,14 @@ def _save_json(path, data):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+def _atomic_save_json(path, data):
+    """原子写入：临时文件 → rename 覆盖，避免读到半成品"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.rename(tmp, path)
+
 # ====== K线数据 ======
 def _load_all_stocks_from_disk():
     raw = _load_json(ALL_STOCKS_PATH, {})
@@ -48,10 +57,15 @@ def get_last_updated():
     return raw.get('last_updated', '')
 
 def save_all_stocks(stocks, last_updated=None):
-    """保存K线数据"""
+    """原子保存K线数据"""
     data = {'last_updated': last_updated or datetime.now().strftime('%Y%m%d'), 'stocks': stocks}
-    _save_json(ALL_STOCKS_PATH, data)
+    _atomic_save_json(ALL_STOCKS_PATH, data)
     cache.invalidate('all_stocks')
+
+def load_all_stocks_uncached():
+    """强制从磁盘读取K线数据（不走缓存），供更新脚本使用"""
+    raw = _load_json(ALL_STOCKS_PATH, {})
+    return raw.get('stocks', raw)
 
 def get_stock_klines(code, direction=None, stocks=None):
     """获取单只股票K线列表，stocks 为 get_all_stocks() 返回值"""
@@ -64,6 +78,54 @@ def get_stock_klines(code, direction=None, stocks=None):
         if code in codes:
             return codes[code]
     return []
+
+
+# ====== 指数数据（中证全指 000985）======
+INDEX_CODE = '000985'
+
+def get_index_data():
+    """返回 {last_updated, klines: [{date, open, close, high, low, volume}]}（走缓存，TTL=60s）"""
+    return cache.get('index_data', lambda: _load_json(INDEX_DATA_PATH, {}), ttl=60)
+
+def save_index_data(data):
+    """原子保存指数数据"""
+    _atomic_save_json(INDEX_DATA_PATH, data)
+    cache.invalidate('index_data')
+
+def load_index_data_uncached():
+    """强制从磁盘读取指数数据（不走缓存），供更新脚本使用
+    兼容旧格式：纯 [{date, ...}] → 自动转换为 {last_updated, klines}
+    """
+    raw = _load_json(INDEX_DATA_PATH, {})
+    if isinstance(raw, list):
+        # 旧格式迁移：纯K线列表 → 新格式
+        klines = raw
+        latest = klines[-1]['date'] if klines else ''
+        data = {'last_updated': latest, 'klines': klines}
+        _atomic_save_json(INDEX_DATA_PATH, data)
+        return data
+    return raw
+
+def get_index_klines():
+    """返回指数K线列表 [{date, open, close, high, low, volume}]"""
+    data = get_index_data()
+    return data.get('klines', [])
+
+
+# ====== 板块日K线数据（行业+概念）======
+def get_sector_daily():
+    """返回 {last_updated, industries: {板块名: [klines]}, concepts: {板块名: [klines]}}（走缓存，TTL=60s）"""
+    return cache.get('sector_daily', lambda: _load_json(SECTOR_DAILY_PATH, {}), ttl=60)
+
+def save_sector_daily(data):
+    """原子保存板块日K线数据"""
+    _atomic_save_json(SECTOR_DAILY_PATH, data)
+    cache.invalidate('sector_daily')
+
+def load_sector_daily_uncached():
+    """强制从磁盘读取板块日K线数据（不走缓存），供更新脚本使用"""
+    return _load_json(SECTOR_DAILY_PATH, {})
+
 
 # ====== 自选股 ======
 def _load_watchlist_from_disk():
@@ -118,7 +180,6 @@ def resolve_stock(query, stocks=None):
     market_results = search_stock_full_market(q, max_results=1)
     if market_results:
         m = market_results[0]
-        ensure_stock_data(m['code'])
         stocks = get_all_stocks()
         for sec, ss in stocks.items():
             if m['code'] in ss:
@@ -252,27 +313,8 @@ def ensure_stock_data(code):
         else:
             direction = imap.get(local_code, {}).get('direction', '')
         
-        # 写入all_stocks_60d.json
-        if ths_industry not in stocks_data:
-            stocks_data[ths_industry] = {}
-        stocks_data[ths_industry][local_code] = klines
-        _save_json(ALL_STOCKS_PATH, {
-            'last_updated': klines[-1]['date'],
-            'stocks': stocks_data,
-        })
-        cache.invalidate('all_stocks')
-        
-        # 写入行业映射（如果没有）
-        if local_code not in imap:
-            imap[local_code] = {
-                'name': klines[0].get('name', local_code) if klines else local_code,
-                'ths_industry': ths_industry,
-                'direction': direction,
-            }
-            _save_json(INDUSTRY_MAP_PATH, imap)
-            cache.invalidate('industry_map')
-        
-        return (True, f'已拉取{len(klines)}天数据，行业={ths_industry}')
+        # findBy: K线数据已由 update_stock_data.py 统一更新
+        return (True, f'已拉取{len(klines)}天数据')
     except Exception as e:
         return (False, f'拉取失败: {e}')
 

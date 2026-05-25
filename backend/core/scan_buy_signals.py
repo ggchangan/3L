@@ -9,8 +9,7 @@ from datetime import datetime
 
 # 导入统一算法和数据获取函数
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from backend.core.buy_point_detection import detect_buy_point, get_realtime_kline
-from backend.core.trend_trading import detect_trend_buy
+from backend.core.buy_point_detection import get_realtime_kline
 from backend.core.data_layer import ALL_STOCKS_PATH, WATCHLIST_PATH, REVIEW_CHARTS_DIR, REVIEW_ARCHIVE_DIR
 
 # 自选股数据
@@ -270,78 +269,61 @@ def main():
                         last_k['volume'] = est_vol
                         vol_estimated = True
         
-        all_stocks = {direction: {code: klines}}
-        bt = detect_buy_point(code, today_str, all_stocks,
-                              market_position=market_position,
-                              main_lines=main_lines)
-        
-        if bt:
-            # 不再限制买点类型：突破/中继/回踩都输出
-            # 量能文本
-            vr = bt.get('vol_ratio', 0)
-            if vr < 0.7:
-                vol_text = f'缩量{vr:.0%}'
-            elif vr > 1.5:
-                vol_text = f'放量{vr:.0%}'
-            else:
-                vol_text = f'量能正常{vr:.0%}'
-            
-            gain_val = round(bt.get('gain', 0), 2)
-            signal = {
-                'code': code,
-                'name': name,
-                'direction': direction,
-                'price': bt.get('close', klines[-1]['close']),
-                'change': gain_val,
-                'change_pct': gain_val,
-                'signal': 'buy',
-                'buy_type': bt.get('buy_type', ''),
-                'buy_point': bt.get('buy_type', ''),
-                'structure': bt.get('structure', ''),
-                'stage': bt.get('stage', ''),
-                'vol_ratio': vr,
-                'vol_analysis': vol_text,
-                'score': bt.get('score', 0),
-                'detail': bt.get('detail', {}),
-                'ema_arrangement': bt.get('ema_arrangement', ''),
-            }
-            signals.append(signal)
-            
-            # SVG不预生成，由前端点📊时按需调用 /api/stock-chart 生成
-        
-        # 趋势买点检测
+        # 通过 StockCardService 获取完整卡片数据（含系统判定+买点判定+止损）
         try:
-            _all_stocks_full = {}
-            # 加载全量数据用于趋势判定
-            if os.path.isfile(STOCKS_FILE):
-                with open(STOCKS_FILE) as _f:
-                    _ad = json.load(_f)
-                _all_stocks_full = _ad.get('stocks', _ad)
-            _tb = detect_trend_buy(code, today_str, _all_stocks_full, main_lines)
-            if _tb:
-                _tb_gain = round(_tb.get('gain', 0), 2)
-                signals.append({
-                    'code': code,
-                    'name': name,
-                    'direction': direction,
-                    'price': _tb.get('price', klines[-1]['close']),
-                    'change': _tb_gain,
-                    'change_pct': _tb_gain,
-                    'signal': 'buy',
-                    'buy_type': _tb['buy_type'],
-                    'buy_point': _tb['buy_type'],
-                    'structure': _tb.get('bias5_zone', ''),
-                    'stage': _tb.get('buy_type', ''),
-                    'vol_ratio': 0,
-                    'vol_analysis': f"BIAS5={_tb.get('bias5',0)}%",
-                    'score': 5,
-                    'detail': {'reason': _tb.get('reason', '')},
-                    'trend_bias': _tb.get('bias5', 0),
-                    'trend_buy_reason': _tb.get('reason', ''),
-                    'trading_system': 'trend',
-                })
+            from services.stock_card_service import get_stock_card
+            card = get_stock_card(
+                code=code,
+                date_str=today_str,
+                market_position=market_position,
+                main_lines=[l.strip() for l in main_lines if l and isinstance(l, str)] if isinstance(main_lines, list) else main_lines,
+                direction=direction,
+                klines=klines,  # 传入实时K线
+            )
         except Exception as e:
-            print(f"  趋势买点失败 {code}: {e}", file=sys.stderr)
+            print(f"  卡片服务失败 {code}: {e}", file=sys.stderr)
+            continue
+        
+        if card['signal'] != 'buy':
+            continue
+        
+        # 从卡片数据构建买点信号
+        vol_ratio = 0
+        if card.get('vol_analysis') and '缩量' in card['vol_analysis']:
+            try:
+                pct_str = card['vol_analysis'].replace('缩量', '').replace('%', '')
+                vol_ratio = float(pct_str) / 100
+            except ValueError:
+                vol_ratio = 0
+        elif card.get('vol_analysis') and '放量' in card['vol_analysis']:
+            try:
+                pct_str = card['vol_analysis'].replace('放量', '').replace('%', '')
+                vol_ratio = float(pct_str) / 100
+            except ValueError:
+                vol_ratio = 1.5
+        
+        signal = {
+            'code': code,
+            'name': name,
+            'direction': direction,
+            'price': card['price'],
+            'change': card['change'],
+            'change_pct': card['change'],
+            'signal': 'buy',
+            'buy_type': card['buy_point'],
+            'buy_point': card['buy_point'],
+            'structure': card['structure'],
+            'stage': card['stage'],
+            'vol_ratio': vol_ratio,
+            'vol_analysis': card['vol_analysis'],
+            'score': card['score'],
+            'detail': {'reason': card.get('signal_text', '') or card.get('conclusion', '')},
+            'ema_arrangement': card['ema'],
+            'trading_system': card['trading_system'],
+            'trend_bias': card.get('trend_bias', 0),
+            'trend_buy_reason': card.get('trading_reason', ''),
+        }
+        signals.append(signal)
     
     signals.sort(key=lambda x: (0 if x.get('buy_type') == '突破买点' else 1, -(x.get('score', 0))))
     

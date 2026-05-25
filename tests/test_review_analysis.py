@@ -140,7 +140,7 @@ class TestGenerateHoldingsReview:
     def test_sector_field_is_preserved(self):
         """持仓复盘结果应有 sector 字段（真实THS行业而非用户方向）"""
         from unittest.mock import patch
-        with patch('backend.core.review_analysis.get_industry_map') as mock_imap:
+        with patch('services.stock_card_service.get_industry_map') as mock_imap:
             mock_imap.return_value = {
                 '688999': {'ths_industry': '半导体设备'},
                 '688111': {'ths_industry': '半导体材料'},
@@ -173,7 +173,7 @@ class TestGenerateHoldingsReview:
     def test_sector_is_ths_industry(self):
         """sector 字段应为 THS 真实行业板块，不是用户 direction"""
         from unittest.mock import patch
-        with patch('backend.core.review_analysis.get_industry_map') as mock_imap:
+        with patch('services.stock_card_service.get_industry_map') as mock_imap:
             mock_imap.return_value = {
                 '688999': {'ths_industry': '半导体设备'},
                 '688111': {'ths_industry': '半导体材料'},

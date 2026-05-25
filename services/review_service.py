@@ -89,9 +89,7 @@ def run_daily_review():
         fp = os.path.join(PRIVATE_DIR, f)
         if os.path.isfile(fp): os.remove(fp)
     run_script('Step1 更新数据+扫买点',
-        [sys.executable, f'{SCRIPTS}/daily_update_and_scan.py'], cwd=WWW_DIR)
-    run_script('Step2 补全名称',
-        [sys.executable, f'{SCRIPTS}/fill_stock_names.py'], cwd=WWW_DIR)
+        [sys.executable, f'{SCRIPTS}/update_stock_data.py'], cwd=WWW_DIR)
     run_script('Step3a 中证全指图',
         [sys.executable, os.path.join(WWW_DIR, 'gen_index_chart.py')])
     try:

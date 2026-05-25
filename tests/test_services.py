@@ -374,11 +374,9 @@ class TestSaveWatchlist(unittest.TestCase):
     """
 
     @patch('services.watchlist_service._save_watchlist_data')
-    @patch('scripts.data_layer.ensure_stock_data')
     @patch('builtins.open', new_callable=mock_open)
-    def test_saves_new_watchlist(self, mock_open_file, mock_ensure_stock_data,
-                                  mock_save_data):
-        """Happy path: saves data, calls ensure_stock_data for new codes."""
+    def test_saves_new_watchlist(self, mock_open_file, mock_save_data):
+        """Happy path: saves watchlist data."""
         from services import watchlist_service
         # 用 wl_path 隔离测试路径，避免写入生产文件
         fake_path = '/tmp/test_wl.json'
@@ -396,17 +394,15 @@ class TestSaveWatchlist(unittest.TestCase):
         result = watchlist_service.save_watchlist(new_data, wl_path=fake_path)
 
         self.assertEqual(result, {'success': True, 'count': 2})
-        # ensure_stock_data should only be called for the new code
-        mock_ensure_stock_data.assert_called_once_with('300750')
+        # 数据更新已交由 update_stock_data.py 统一处理
         # _save_watchlist_data should be called with the fake path
         mock_save_data.assert_called_once_with(new_data, fake_path)
 
     @patch('services.watchlist_service._save_watchlist_data')
-    @patch('scripts.data_layer.ensure_stock_data')
     @patch('builtins.open', new_callable=mock_open)
     def test_does_not_call_ensure_for_existing_stocks(
-            self, mock_open_file, mock_ensure_stock_data, mock_save_data):
-        """Only new (previously unseen) stocks trigger ensure_stock_data."""
+            self, mock_open_file, mock_save_data):
+        """Only new (previously unseen) stocks handled by daily update."""
         from services import watchlist_service
         fake_path = '/tmp/test_wl.json'
 
@@ -421,13 +417,11 @@ class TestSaveWatchlist(unittest.TestCase):
         }
 
         watchlist_service.save_watchlist(new_data, wl_path=fake_path)
-        mock_ensure_stock_data.assert_not_called()
 
     @patch('services.watchlist_service._save_watchlist_data')
-    @patch('scripts.data_layer.ensure_stock_data')
     @patch('builtins.open', new_callable=mock_open)
     def test_handles_empty_old_watchlist(
-            self, mock_open_file, mock_ensure_stock_data, mock_save_data):
+            self, mock_open_file, mock_save_data):
         """Old watchlist with 'stocks' key but empty list is handled."""
         from services import watchlist_service
         fake_path = '/tmp/test_wl.json'
@@ -443,13 +437,11 @@ class TestSaveWatchlist(unittest.TestCase):
 
         result = watchlist_service.save_watchlist(new_data, wl_path=fake_path)
         self.assertEqual(result, {'success': True, 'count': 1})
-        mock_ensure_stock_data.assert_called_once_with('300750')
 
     @patch('services.watchlist_service._save_watchlist_data')
-    @patch('scripts.data_layer.ensure_stock_data')
     @patch('builtins.open', new_callable=mock_open)
     def test_exposes_missing_config_import(
-            self, mock_open_file, mock_ensure_stock_data, mock_save_data):
+            self, mock_open_file, mock_save_data):
         """Config is now properly imported at module level — no longer a bug."""
         from services import watchlist_service
         fake_path = '/tmp/test_wl.json'

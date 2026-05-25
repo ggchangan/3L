@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 import requests
 import akshare as ak
 
-from backend.core.data_layer import get_all_stocks, ensure_stock_data, get_stock_klines
+from backend.core.data_layer import get_all_stocks, get_stock_klines
 
 # 中证全指K线图输出目录
 REVIEW_CHARTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'public', 'charts')
@@ -143,6 +143,13 @@ def _resolve_today_candle_state(now_hour, now_min, quote, last_date_str, today_s
             - estimate_volume: bool
     """
     has_today = quote and quote.get('close', 0) > 0 and last_date_str != today_str
+    if has_today:
+        # 今日K线仅限交易日 9:30 后才显示（避免凌晨/周末用前一日收盘数据冒充今日）
+        now_total_min = now_hour * 60 + now_min
+        today_dt = datetime.strptime(today_str, '%Y%m%d')
+        is_weekday = today_dt.weekday() < 5
+        if not is_weekday or now_total_min < 9 * 60 + 30:
+            has_today = False
     if not has_today:
         return {'type': 'none'}
 
@@ -196,15 +203,7 @@ def generate_stock_chart(code):
     klines = get_stock_klines(raw_code, stocks=stocks)
 
     if not klines or len(klines) < 10:
-        # 尝试拉取
-        ok, msg = ensure_stock_data(raw_code)
-        if not ok:
-            return None, f'获取数据失败: {msg}'
-        stocks = get_all_stocks()
-        klines = get_stock_klines(raw_code, stocks=stocks)
-
-    if not klines or len(klines) < 10:
-        return None, f'数据不足: {len(klines) if klines else 0} 根K线'
+        return None, f'数据不足: {len(klines) if klines else 0} 根K线（等待17:00数据更新）'
 
     # 股票名称
     name = klines[0].get('name', raw_code) if klines else raw_code
@@ -273,16 +272,25 @@ def generate_stock_chart(code):
     # 关键点
     kps = _find_breakthrough_points(closes, highs, lows, volumes)
 
-    # 支撑线（最近的突破点且低于现价）
-    cur_close = closes[-1] if closes else 0
-    bk_pts = sorted(
-        [kp for kp in kps if kp['label'] == '突' and kp['y'] < cur_close],
-        key=lambda x: x['y'], reverse=True
-    )
+    # 判断结构，只有区间震荡才画支撑/压力线
+    from backend.core.ema_utils import get_structure
+    try:
+        stock_structure = get_structure(closes)
+    except Exception:
+        stock_structure = '上涨趋势'
 
-    # 压力线（15 日内最高）
-    nd15 = min(15, len(closes))
-    hi_15 = max(highs[-nd15:]) if nd15 > 0 else mx
+    # 支撑线（最近的突破点且低于现价）— 仅区间震荡画
+    cur_close = closes[-1] if closes else 0
+    bk_pts = []
+    hi_15 = None
+    if stock_structure == '区间震荡':
+        bk_pts = sorted(
+            [kp for kp in kps if kp['label'] == '突' and kp['y'] < cur_close],
+            key=lambda x: x['y'], reverse=True
+        )
+        # 压力线（15 日内最高）
+        nd15 = min(15, len(closes))
+        hi_15 = max(highs[-nd15:]) if nd15 > 0 else mx
 
     # 今日蜡烛的 title label
     today_label = ''
