@@ -145,6 +145,7 @@ def generate_holdings_review(holdings, stocks, buy_signals,
             )
             card_price = card['price']
             card_change = card['change']
+            card_buy_point = card['buy_point']
             trading_system = card['trading_system']
             trading_reason = card['trading_reason']
             trend_buy_type = card.get('trend_buy_type', '')
@@ -156,6 +157,7 @@ def generate_holdings_review(holdings, stocks, buy_signals,
         except Exception:
             card_price = h.get('close', 0)
             card_change = h.get('change', 0)
+            card_buy_point = ''
             trading_system = '3l'
             trading_reason = '判定失败'
             trend_buy_type = ''
@@ -164,6 +166,10 @@ def generate_holdings_review(holdings, stocks, buy_signals,
             mainline_level = ''
             sl = None
             sl_pct = None
+
+        # 买点优先用卡片数据（比扫描缓存更新更准确）
+        if code_sig == 'buy' and card_buy_point:
+            buy_point = card_buy_point
 
         result.append({
             'code': code,
@@ -255,6 +261,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             )
             card_price = card["price"]
             card_change = card["change"]
+            card_buy_point = card["buy_point"]
             trading_system = card["trading_system"]
             trading_reason = card["trading_reason"]
             trend_buy_type = card.get("trend_buy_type", "")
@@ -266,6 +273,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
         except Exception:
             card_price = s.get("price", 0)
             card_change = s.get("change", 0)
+            card_buy_point = ""
             trading_system = "3l"
             trading_reason = "判定失败"
             trend_buy_type = ""
@@ -277,6 +285,9 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             sl_pct = None
 
         direction = s.get("sector", "")
+        # 买点优先用卡片数据
+        if card_buy_point:
+            buy_point_display = card_buy_point
 
         result.append({
             "name": s.get("name", "?"),
