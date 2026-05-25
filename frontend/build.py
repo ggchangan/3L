@@ -20,6 +20,26 @@ def run_npm_build():
     return True
 
 
+def inject_stock_card_css():
+    """补丁：Vite 不自动引入 stock_card.css，手动注入到 monitor.html"""
+    path = os.path.join(DIST_DIR, 'monitor.html')
+    if not os.path.isfile(path):
+        return True
+    with open(path) as f:
+        html = f.read()
+    if '/css/stock_card.css' in html:
+        return True
+    html = html.replace(
+        '<link rel="stylesheet" crossorigin href="/assets/monitor-',
+        '<link rel="stylesheet" href="/css/stock_card.css?v=1">\n  <link rel="stylesheet" crossorigin href="/assets/monitor-',
+        1
+    )
+    with open(path, 'w') as f:
+        f.write(html)
+    print('  ✅ stock_card.css -> 注入 dist/monitor.html')
+    return True
+
+
 def copy_static_files():
     """Step 2: 复制 css/ js/ 到 dist（Vite 只处理 JS import 的 CSS，不处理 <link> 引用的独立 CSS）"""
     print('📦 复制静态文件...')
@@ -73,6 +93,8 @@ def main():
     if not run_npm_build():
         sys.exit(1)
     if not copy_static_files():
+        sys.exit(1)
+    if not inject_stock_card_css():
         sys.exit(1)
     if not validate_dist():
         sys.exit(1)

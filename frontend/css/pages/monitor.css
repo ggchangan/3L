@@ -48,41 +48,57 @@
 
         /* ②.5 外围参考 */
         .collapse-indicator { margin-left: auto; font-size: 11px; color: #888; }
-        .ext-section { margin-bottom: 10px; }
+        .ext-section { margin-bottom: 8px; }
         .ext-section-title { font-size: 11px; color: #888; margin-bottom: 6px; padding: 2px 6px; border-left: 2px solid #e94560; }
-        .ext-sub-title { font-size: 10px; color: #666; margin: 3px 0 2px 8px; }
+
+        /* 指数网格：两列并排 */
+        .ext-index-grid { display: flex; gap: 8px; }
+        .ext-index-col { flex: 1; min-width: 0; }
+        .ext-index-col-title { font-size: 10px; color: #666; margin-bottom: 4px; padding-left: 4px; }
 
         /* 指数行（无展开详情） */
         .idx-row {
-            display: flex; align-items: center; gap: 6px;
-            padding: 4px 8px; margin-bottom: 1px; border-radius: 4px;
-            background: rgba(255,255,255,0.008); font-size: 11px;
+            display: flex; align-items: center; gap: 4px;
+            padding: 3px 6px; margin-bottom: 1px; border-radius: 3px;
+            background: rgba(255,255,255,0.008); font-size: 10px;
             transition: background 0.15s;
         }
         .idx-row:hover { background: rgba(255,255,255,0.03); }
-        .idx-flag { font-size: 13px; min-width: 18px; text-align: center; }
-        .idx-name { color: #ccc; min-width: 80px; font-weight: 500; }
-        .idx-price { color: #999; min-width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
-        .idx-change { min-width: 60px; font-weight: 600; text-align: right; }
-        .idx-arrow { font-size: 10px; min-width: 12px; }
-        .idx-status { font-size: 9px; color: #666; margin-left: auto; white-space: nowrap; }
+        .idx-flag { font-size: 12px; min-width: 16px; text-align: center; }
+        .idx-name { color: #bbb; min-width: 60px; font-weight: 500; font-size: 10px; }
+        .idx-price { color: #999; min-width: 55px; text-align: right; font-variant-numeric: tabular-nums; font-size: 10px; }
+        .idx-change { min-width: 50px; font-weight: 600; text-align: right; font-size: 10px; }
+        .idx-arrow { font-size: 9px; min-width: 10px; }
+        .idx-status { font-size: 8px; color: #555; margin-left: auto; white-space: nowrap; }
+
+        /* 个股类别标题（可折叠） */
+        .ext-cat-header {
+            display: flex; align-items: center; gap: 4px;
+            font-size: 10px; color: #666; padding: 2px 6px; margin: 2px 0 1px 4px;
+            cursor: pointer; border-radius: 4px; user-select: none;
+            transition: background 0.15s;
+        }
+        .ext-cat-header:hover { background: rgba(255,255,255,0.04); }
+        .ext-cat-arrow { font-size: 8px; color: #555; min-width: 12px; }
 
         /* 个股行（可展开详情） */
         .ext-row {
-            display: flex; align-items: center; gap: 8px;
-            padding: 5px 8px; margin-bottom: 2px; border-radius: 6px;
-            background: rgba(255,255,255,0.015); cursor: pointer; font-size: 12px;
+            display: flex; align-items: center; gap: 6px;
+            padding: 3px 6px; margin-bottom: 1px; margin-left: 10px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.008); cursor: pointer; font-size: 10px;
             transition: background 0.15s;
         }
-        .ext-row:hover { background: rgba(255,255,255,0.06); }
-        .ext-code { color: #ffd700; font-weight: 600; min-width: 48px; }
-        .ext-change { min-width: 60px; font-weight: 600; }
-        .ext-arrow { font-size: 10px; }
-        .ext-impact { color: #aaa; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .ext-hot { color: #e94560; font-size: 10px; }
+        .ext-row:hover { background: rgba(255,255,255,0.04); }
+        .ext-code { width: 44px; flex-shrink: 0; font-weight: 600; font-size: 10px; color: #ffd700; }
+        .ext-name { width: 64px; flex-shrink: 0; font-size: 10px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ext-change { width: 50px; flex-shrink: 0; font-weight: 600; font-size: 10px; }
+        .ext-arrow { width: 14px; flex-shrink: 0; font-size: 9px; }
+        .ext-impact { color: #777; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 9px; }
+        .ext-hot { color: #e94560; font-size: 9px; }
         .ext-detail {
-            display: none; padding: 10px 12px; margin: 2px 0 6px;
-            background: rgba(255,255,255,0.03); border-radius: 8px; font-size: 11px; line-height: 1.7;
+            display: none; padding: 6px 10px; margin: 1px 0 4px 10px;
+            background: rgba(255,255,255,0.02); border-radius: 6px; font-size: 10px; line-height: 1.5;
         }
         .ext-detail .dl { color: #888; }
         .ext-detail .dv { color: #e0e0e0; }

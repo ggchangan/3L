@@ -785,7 +785,7 @@ function pushAlarm(msg, type) {
 }
 
 // ====== Phase2: 报警检测 ======
-function checkPlanAlarms(data) {
+function checkPlanAlarms() {
     // Load plan from workbench and compare with current market data
     // Placeholder: for now, basic price checks against plan conditions
     const yesterday = new Date();
@@ -886,38 +886,49 @@ function renderIndexRow(idx, isUs) {
 }
 
 function loadExternalMapping() {
+    console.log('[外围参考] loadExternalMapping 被调用');
     const body = document.getElementById('externalBody');
     const badge = document.getElementById('externalUpdateBadge');
-    if (!body) return;
+    if (!body) {
+        console.warn('[外围参考] externalBody 不存在！');
+        return;
+    }
 
     fetch('/api/external-mapping')
         .then(r => r.json())
         .then(data => {
             badge.textContent = data.updated || '已加载';
 
-            let html = '<div style="font-size:10px;color:#555;margin-bottom:6px;">实时行情待接入 · 涨跌幅为参考值</div>';
+            let html = '<div style="font-size:9px;color:#555;margin-bottom:4px;">实时行情待接入 · 涨跌幅为参考值</div>';
 
-            // ── ① 亚洲指数 ──
-            html += '<div class="ext-section">';
-            html += '<div class="ext-section-title">🌏 亚洲重要指数</div>';
+            // ── 指数：两列并排 ──
+            html += '<div class="ext-index-grid">';
+            // 左列：亚洲
+            html += '<div class="ext-index-col">';
+            html += '<div class="ext-index-col-title">🌏 亚洲</div>';
             (data.asia_indices || []).forEach(idx => {
                 html += renderIndexRow(idx, false);
             });
             html += '</div>';
-
-            // ── ② 美股指数 ──
-            html += '<div class="ext-section">';
-            html += '<div class="ext-section-title">🇺🇸 美股重要指数</div>';
+            // 右列：美股
+            html += '<div class="ext-index-col">';
+            html += '<div class="ext-index-col-title">🇺🇸 美股指数</div>';
             (data.us_indices || []).forEach(idx => {
                 html += renderIndexRow(idx, true);
             });
             html += '</div>';
+            html += '</div>';
 
-            // ── ③ 美股关注个股 ──
+            // ── 美股关注个股 ──
             html += '<div class="ext-section">';
             html += '<div class="ext-section-title">📊 美股关注个股</div>';
-            (data.categories || []).forEach(cat => {
-                html += '<div class="ext-sub-title">' + cat.name + '</div>';
+            (data.categories || []).forEach((cat, ci) => {
+                const catId = 'cat_' + ci;
+                html += '<div class="ext-cat-header" onclick="toggleCatStocks(\'' + catId + '\', this)">';
+                html += '<span class="ext-cat-arrow" id="catArrow_' + catId + '">▼</span>';
+                html += cat.name + ' <span style="color:#555;font-size:9px;">(' + (cat.stocks || []).length + ')</span>';
+                html += '</div>';
+                html += '<div id="' + catId + '">';
                 (cat.stocks || []).forEach(s => {
                     const isUp = Math.random() > 0.5;
                     const change = (Math.random() * 5).toFixed(1);
@@ -926,25 +937,27 @@ function loadExternalMapping() {
                     const hot = parseFloat(change) > 3;
                     html += '<div class="ext-row" onclick="toggleExtDetail(\'' + s.code + '\')">';
                     html += '  <span class="ext-code">' + s.code + '</span>';
+                    html += '  <span class="ext-name">' + s.name + '</span>';
                     html += '  <span class="ext-change ' + (isUp ? 'up' : 'down') + '">' + changeStr + '</span>';
                     html += '  <span class="ext-arrow">' + arrow + '</span>';
-                    html += '  <span class="ext-impact">→ ' + (s.impact || s.sectors || '') + '</span>';
+                    html += '  <span class="ext-impact">→ ' + (s.impact || s.sectors || '').split('、')[0] + '</span>';
                     if (hot) html += '<span class="ext-hot">🔥</span>';
                     html += '</div>';
                     html += '<div class="ext-detail" id="extDetail_' + s.code + '">';
                     html += '  <div><span class="dl">美股：</span><span class="dv">' + s.name + ' (' + s.code + ')</span></div>';
                     html += '  <div><span class="dl">影响板块：</span><span class="dv">' + (s.sectors || '') + '</span></div>';
-                    html += '  <div style="margin-top:4px;"><span class="dl">核心供应商：</span></div>';
+                    html += '  <div style="margin-top:3px;"><span class="dl">核心供应商：</span></div>';
                     html += '  <div class="dv">' + (s.suppliers || '暂无') + '</div>';
                     if (s.potential) {
-                        html += '  <div style="margin-top:4px;"><span class="dl">潜在受益：</span></div>';
+                        html += '  <div style="margin-top:3px;"><span class="dl">潜在受益：</span></div>';
                         html += '  <div class="dv">' + s.potential + '</div>';
                     }
                     if (s.counterparts) {
-                        html += '  <div style="margin-top:4px;"><span class="dl">A股对标：</span><span class="dv">' + s.counterparts + '</span></div>';
+                        html += '  <div style="margin-top:3px;"><span class="dl">A股对标：</span><span class="dv">' + s.counterparts + '</span></div>';
                     }
                     html += '</div>';
                 });
+                html += '</div>';
             });
             html += '</div>';
 
@@ -952,8 +965,10 @@ function loadExternalMapping() {
                 html += '<div class="ext-source">📎 <a href="' + data.source_url + '" target="_blank">' + (data.source || '原文') + '</a></div>';
             }
             body.innerHTML = html;
+            console.log('[外围参考] 渲染完成，条目数: asia=' + (data.asia_indices||[]).length + ' us=' + (data.us_indices||[]).length + ' stocks=' + (data.categories||[]).reduce((a,c) => a+(c.stocks||[]).length, 0));
         })
-        .catch(() => {
+        .catch(e => {
+            console.error('[外围参考] 加载失败:', e);
             body.innerHTML = '<div class="empty">加载失败</div>';
             badge.textContent = '失败';
         });
@@ -964,6 +979,15 @@ function toggleExtDetail(code) {
     if (el) {
         el.style.display = el.style.display === 'none' ? 'block' : 'none';
     }
+}
+
+function toggleCatStocks(catId, headerEl) {
+    const body = document.getElementById(catId);
+    const arrow = document.getElementById('catArrow_' + catId);
+    if (!body) return;
+    const isHidden = body.style.display === 'none';
+    body.style.display = isHidden ? 'block' : 'none';
+    if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
 }
 
 function refreshAll() {
@@ -1002,7 +1026,7 @@ function refreshAll() {
     const nowMs = Date.now();
     if (!window._lastAlarmCheck || nowMs - window._lastAlarmCheck > 60000) {
         window._lastAlarmCheck = nowMs;
-        checkPlanAlarms(data);
+        checkPlanAlarms();
         checkClosingAlarm();
     }
 

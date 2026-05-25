@@ -10,7 +10,7 @@ from datetime import datetime
 
 import requests
 
-from config import CACHE_DIR, INDUSTRY_LEADERS_PATH, WWW_DIR
+from config import CACHE_DIR, INDUSTRY_LEADERS_PATH, WWW_DIR, atomic_json_dump
 from services.logger import get_logger
 
 log = get_logger(__name__)
@@ -49,7 +49,7 @@ def get_buy_signals():
         )
         if r.returncode == 0:
             data = json.loads(r.stdout)
-            config.atomic_json_dump(data, cache_file)
+            atomic_json_dump(data, cache_file)
             log.info('买点信号扫描完成 (%d条)', len(data.get('signals', [])))
             return data
         else:
@@ -62,7 +62,7 @@ def get_buy_signals():
 
 def get_stop_loss_triggered():
     """检查持仓个股是否触发止损"""
-    from scripts.monitor_data import get_existing_holdings
+    from backend.core.monitor_data import get_existing_holdings
     holdings = get_existing_holdings()
     triggered = []
     headers = {
