@@ -135,7 +135,7 @@ class TestCoreAPI:
     def test_static_pages_serve_clean_html(self):
         """所有前端页面通过 HTTP 访问应以 <!DOCTYPE html> 开头"""
         pages = [
-            'index.html', 'review.html', 'monitor.html', 'macro.html',
+            'react.html', 'review.html', 'macro.html',
             'top_gainers.html', 'simulation.html', 'industry.html',
             'watchlist.html', 'journal.html', 'tips.html',
             'tip-detail.html', 'trend_candidates.html', 'stock_analysis.html',

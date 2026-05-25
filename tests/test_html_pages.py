@@ -137,10 +137,10 @@ class TestServerRedirect:
     def test_home_redirects_to_monitor(self):
         """首页 / 应重定向到 monitor.html"""
         server_code = open(os.path.join(WWW_DIR, 'server.py'), 'r', encoding='utf-8').read()
-        assert "'/': '/monitor.html'" in server_code, \
-            'server.py 中 / 应跳转到 monitor.html'
-        assert "'/': '/index.html'" not in server_code, \
-            'server.py 中 / 不应再跳转到 index.html'
+        assert "': '/react.html'" in server_code, \
+            'server.py 中 / 应跳转到 react.html（React 版）'
+        assert "': '/monitor.html'" not in server_code, \
+            'server.py 中 / 不再跳转到 monitor.html（已迁移到 React）'
 
 
 class TestPageSpecific:

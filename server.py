@@ -232,9 +232,9 @@ class Handler(SimpleHTTPRequestHandler):
         aliases = {
             '/review': '/review.html',
             '/review.html': None,
-            '/monitor': '/monitor.html',
+            '/monitor': '/react.html',
             '/monitor.html': None,
-            '/': '/monitor.html',
+            '/': '/react.html',
         }
         if path in aliases and aliases[path]:
             self.path = aliases[path]

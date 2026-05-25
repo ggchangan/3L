@@ -35,7 +35,7 @@ class TestCleanupComplete:
     def test_dist_has_all_html(self):
         """frontend/dist/ 仍有全部 HTML"""
         pages = [
-            'index.html', 'review.html', 'monitor.html', 'journal.html',
+            'react.html', 'review.html', 'journal.html',
             'watchlist.html', 'trend_candidates.html', 'holdings.html',
             'industry.html', 'macro.html', 'simulation.html',
             'stock_analysis.html', 'tip-detail.html', 'tips.html',
