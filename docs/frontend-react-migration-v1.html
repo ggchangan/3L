@@ -161,6 +161,30 @@ JSON response
 
 <h2>7. 执行计划</h2>
 
+<h3>Phase 0.5：清理冗余文件（1 次提交）</h3>
+
+<p>React 迁移前先把项目根的无用旧文件清理掉，避免混淆。</p>
+
+<pre><code>步骤 1: 确认哪些文件是活的
+  server.py 的 FE_DIR = frontend/dist/（优先）
+  回退路径 = 项目根目录（只有 dist 里没有时才用）
+
+步骤 2: 检查项目根 14 个 .html 是否被任何地方引用
+  grep -r "\.html" server.py backend/ 确认引用关系
+
+步骤 3: 删除确认无用的旧文件
+  项目根目录的 *.html（确认无引用后）
+  项目根目录的 CSS/JS（如果存在）
+  旧 build.py 中的 inject_stock_card_css 等补丁（迁移后不再需要）
+
+步骤 4: 验证
+  systemctl restart 3l-server → 页面正常打开
+  所有 API 端点正常返回
+
+测试:
+  手动打开 monitor/review/workbench 等页面，确认正常渲染
+  pytest tests/ 全回归</code></pre>
+
 <h3>Phase 0：基建搭建（1 次提交）</h3>
 
 <pre><code>步骤 1: 安装依赖
