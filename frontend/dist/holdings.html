@@ -436,6 +436,8 @@ function openAddModal() {
     document.getElementById('modalTitle').textContent = '新增持仓';
     document.getElementById('editIndex').value = '-1';
     resetModal();
+    document.getElementById('stockSearch').style.display = 'block';
+    document.getElementById('searchResults').style.display = 'none';
     document.getElementById('modalOverlay').classList.add('active');
     loadDirections();
 }
@@ -446,24 +448,31 @@ function openEditModal(index) {
     document.getElementById('editIndex').value = index;
     resetModal();
 
+    // 编辑时直接填充已知的股票信息，不需要搜索
+    const searchRow = document.getElementById('stockSearch').parentElement;
+    searchRow.style.display = 'none';
+
     SELECTED_STOCK = { name: h.name, code: h.code };
     document.getElementById('selectedName').textContent = h.name;
     document.getElementById('selectedCode').textContent = h.code;
     document.getElementById('ratioInput').value = h.ratio || '';
     document.getElementById('stopLossInput').value = h.stop_loss_price || '';
 
+    // 获取实时价并显示
+    const p = h.price;
+    if (p && p > 0) {
+        cachedPrices[h.code] = p;
+        document.getElementById('selectedPrice').textContent = p.toFixed(2) + ' 元';
+    } else {
+        document.getElementById('selectedPrice').textContent = '价格获取中...';
+    }
+    calcStopLossPct();
+
     loadDirections().then(() => {
         document.getElementById('directionSelect').value = h.direction || '';
     });
 
     document.getElementById('modalOverlay').classList.add('active');
-
-    // 获取实时价
-    fetchPrice(h.code).then(p => {
-        document.getElementById('selectedPrice').textContent = p.price !== null ? p.price.toFixed(2) + ' 元' : '获取中...';
-        if (p.price !== null) cachedPrices[h.code] = p.price;
-        calcStopLossPct();
-    });
 }
 
 function closeModal() {
@@ -568,14 +577,12 @@ async function loadDirections() {
         const resp = await fetch('/api/directions/get');
         const data = await resp.json();
         const dirs = data.directions || {};
-        // dirs is {name: active_bool}, filter active ones
+        // 显示所有方向（不论是否已启用）
         Object.entries(dirs).forEach(([name, active]) => {
-            if (active) {
-                const opt = document.createElement('option');
-                opt.value = name;
-                opt.textContent = name;
-                sel.appendChild(opt);
-            }
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name + (active ? '' : ' (未追踪)');
+            sel.appendChild(opt);
         });
     } catch (err) {
         console.error('方向加载失败:', err);
