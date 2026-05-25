@@ -420,16 +420,21 @@ def generate_stock_chart(code):
         )
 
         # 成交量虚线柱（预估：用实时成交量/收盘估算今日总量）
-        # 预估全日成交量 = 实时成交量 / 当前时间占比（假设 09:30~15:00 = 330分钟）
+        # 预估全日成交量 = 实时成交量 / 当前时间占比（A股 09:30~15:00 共 240分钟）
         r_vol_est = r_vol
         try:
             hh = now.hour
             mm = now.minute
-            total_min = 330  # 09:30 ~ 15:00
-            elapsed_min = max(0, min(total_min,
-                (hh - 9) * 60 + mm - 30 if hh >= 9 else 0
-            ))
-            if elapsed_min > 0:
+            # 收盘后（15:00+）直接用实际量，不再预估
+            if hh < 15:
+                total_min = 240  # A股全天交易240分钟
+                if hh < 12:
+                    elapsed_min = (hh - 9) * 60 + mm - 30 if hh >= 9 else 0
+                elif hh < 13:
+                    elapsed_min = 120  # 午休
+                else:
+                    elapsed_min = 120 + (hh - 13) * 60 + mm
+                elapsed_min = max(1, min(elapsed_min, total_min))
                 r_vol_est = int(r_vol * total_min / elapsed_min)
         except Exception:
             pass
