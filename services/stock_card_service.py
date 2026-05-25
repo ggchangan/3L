@@ -111,15 +111,13 @@ def _calc_stop_loss(klines, idx):
         return None, None
 
 
-def _get_mainline_level(sector, mainlines):
+def _get_mainline_level(sector, main_line_names, sub_main_names):
     """判断主线等级"""
-    if not mainlines or not sector:
+    if not sector:
         return ''
-    main_names = [l['name'] for l in mainlines.get('lines', [])]
-    sub_names = [l['name'] for l in mainlines.get('secondary', [])]
-    if sector in main_names:
+    if sector in main_line_names:
         return '主线'
-    elif sector in sub_names:
+    elif sector in sub_main_names:
         return '次级主线'
     return '非主线'
 
@@ -193,7 +191,7 @@ def _build_tags(card):
 # ═══════════════════════════════════════════
 
 def get_stock_card(code, date_str, market_position='波中',
-                   main_lines=None, direction=None):
+                   main_lines=None, direction=None, klines=None):
     """
     获取个股卡片数据
 
@@ -203,6 +201,8 @@ def get_stock_card(code, date_str, market_position='波中',
         market_position: 大盘位置
         main_lines: 主线列表 [{'name': ...}]
         direction: 方向组（可选）
+        klines: 可选，预加载的K线数据（如盘中实时数据），
+                不传则从 data_layer 自动加载
 
     Returns:
         dict: 完整的卡片数据
@@ -210,7 +210,16 @@ def get_stock_card(code, date_str, market_position='波中',
     if main_lines is None:
         main_lines = []
 
-    # 1. 找索引
+    # 统一 main_lines 格式：dict → 内部 dict，list → dict
+    if isinstance(main_lines, list):
+        _mainlines = {'lines': [{'name': m} for m in main_lines if isinstance(m, str)],
+                      'secondary': []}
+    else:
+        _mainlines = main_lines
+    main_line_names = [l['name'] for l in _mainlines.get('lines', [])]
+    sub_main_names = [l['name'] for l in _mainlines.get('secondary', [])]
+
+    # 1. 获取基础信息
     industry_map = get_industry_map()
     stock_info = industry_map.get(code, {})
     if isinstance(stock_info, dict):
@@ -220,9 +229,11 @@ def get_stock_card(code, date_str, market_position='波中',
         sector = direction or ''
         name = code
 
-    # 2. 获取K线（只读，通过 data_layer）
-    stocks_data = None
-    klines = get_stock_klines(code, direction)
+    # 2. 获取K线：优先外部传入，否则从 data_layer 加载
+    if klines is not None:
+        pass  # 用传入的
+    else:
+        klines = get_stock_klines(code, direction)
     if not klines or len(klines) < 30:
         return _empty_card(code, name, sector, direction, '数据不足')
 
@@ -272,7 +283,7 @@ def get_stock_card(code, date_str, market_position='波中',
     if trading_system == 'trend':
         trend_stock = True
         tb = detect_trend_buy(code, date_clean,
-                              {sector: {code: klines}}, main_lines)
+                              {sector: {code: klines}}, main_line_names)
         if tb:
             signal = 'buy'
             signal_text = '趋势买入'
@@ -298,7 +309,7 @@ def get_stock_card(code, date_str, market_position='波中',
 
         bt = detect_buy_point(code, date_clean, all_stocks,
                               market_position=market_position,
-                              main_lines=[l['name'] for l in main_lines.get('lines', [])] if isinstance(main_lines, dict) else main_lines)
+                              main_lines=main_line_names)
         if bt:
             signal = 'buy'
             buy_point = bt.get('buy_type', '')
@@ -321,7 +332,7 @@ def get_stock_card(code, date_str, market_position='波中',
     stop_loss, stop_loss_pct = _calc_stop_loss(klines, idx)
 
     # 7. 主线定位
-    mainline_level = _get_mainline_level(sector, main_lines)
+    mainline_level = _get_mainline_level(sector, main_line_names, sub_main_names)
 
     # 8. 构建卡片
     card = {
