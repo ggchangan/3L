@@ -333,10 +333,10 @@
             '机器人': '#9C27B0', '新能源': '#FF9800', '资源股': '#8B4513',
             'AI应用': '#00BCD4', '商业航天': '#FF5722',
         };
-        // 按方向分组
+        // 按方向分组（优先用 direction，fallback sector）
         const groups = {};
         stocks.forEach(s => {
-            const sec = s.sector || '其他';
+            const sec = s.direction || s.sector || '其他';
             if (!groups[sec]) groups[sec] = [];
             groups[sec].push(s);
         });
@@ -375,10 +375,10 @@
             container.innerHTML = '<div class="empty">暂无买点信号</div>';
             return;
         }
-        // 按方向分组（sector 已为用户方向）
+        // 按方向分组（优先用 direction，fallback sector）
         const groups = {};
         signals.forEach(s => {
-            const sec = s.sector || '其他';
+            const sec = s.direction || s.sector || '其他';
             if (!groups[sec]) groups[sec] = [];
             groups[sec].push(s);
         });
