@@ -254,7 +254,7 @@ function renderCards(holdings) {
 
     document.getElementById('cardCount').textContent = '(' + holdings.length + '只)';
 
-    list.innerHTML = indexed.map(({ idx: origIdx, item: h }) => {
+    list.innerHTML = indexed.map(({ idx: origIdx, item: h }, i) => {
         const cardData = {
             name: h.name, code: h.code, price: h.price, change: h.change,
             signal: 'hold',

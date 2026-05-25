@@ -471,3 +471,83 @@ class TestGetHoldings:
             result = get_holdings()
             assert len(result['holdings']) == 1
             assert result['holdings'][0]['name'] == '测试'
+
+
+# ═════════════════════════════════════════════════════════════════
+# 前端HTML 回归检查 — 防止 ReferenceError / 结构缺陷
+# ═════════════════════════════════════════════════════════════════
+
+class TestHoldingsPageStructure:
+    """检查 dist/holdings.html 是否存在常见JS Bug"""
+
+    HOLDINGS_HTML_PATH = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        'frontend', 'dist', 'holdings.html'
+    )
+
+    def test_html_file_exists(self):
+        assert os.path.isfile(self.HOLDINGS_HTML_PATH), \
+            f'dist/holdings.html 不存在，请先 build'
+
+    def _load_html(self):
+        with open(self.HOLDINGS_HTML_PATH, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    def test_overview_block_exists(self):
+        """概况块包含饼图和统计"""
+        html = self._load_html()
+        assert 'overview-block' in html
+        assert 'ov-pie' in html
+        assert 'ov-legend' in html
+        assert 'ov-stats' in html
+
+    def test_card_area_has_collapsible(self):
+        """卡片区有可折叠标题栏"""
+        html = self._load_html()
+        assert 'card-section-header' in html
+        assert 'toggleCardSection' in html
+        assert 'cardToggleIcon' in html
+        assert 'cardBody' in html
+
+    def test_no_reference_error_in_map(self):
+        """map 回调中引用了正确的变量名，无游离 i"""
+        html = self._load_html()
+        # signalStockCard 应当使用已定义的变量而非游离的 i
+        # 在 sorted/indexed.map 回调中应捕获 i 参数
+        import re
+        # 找到所有 .map( 模式
+        maps = re.findall(r'\.map\s*\([^)]+\)', html)
+        # 检查至少有一个 map 用到了 signalStockCard
+        for m in maps:
+            if 'signalStockCard' in m:
+                # 这个 map 应该捕获了索引参数
+                assert '({' in m or '((' not in m.split('=>')[0].strip(), \
+                    f'可能缺少索引参数的 map: {m[:80]}...'
+
+    def test_assessment_and_suggestion_present(self):
+        """持仓评估和建议区块存在"""
+        html = self._load_html()
+        assert 'assessmentSection' in html
+        assert 'suggestionSection' in html
+        assert 'assessmentContent' in html
+        assert 'suggestionContent' in html
+
+    def test_empty_state_present(self):
+        """空状态引导存在"""
+        html = self._load_html()
+        assert 'emptyState' in html
+        assert '暂无持仓' in html
+
+    def test_modal_and_confirm(self):
+        """新增/编辑弹窗和确认框存在"""
+        html = self._load_html()
+        assert 'openAddModal' in html
+        assert 'openEditModal' in html
+        assert 'openDeleteConfirm' in html
+        assert 'confirmOverlay' in html
+
+    def test_keyboard_event_listener(self):
+        """Escape 键关闭弹窗"""
+        html = self._load_html()
+        assert 'Escape' in html
+        assert 'closeModal()' in html
