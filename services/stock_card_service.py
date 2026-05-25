@@ -221,11 +221,16 @@ def get_stock_card(code, date_str, market_position='波中',
         name = code
 
     # 2. 获取K线（只读，通过 data_layer）
-    stocks_data = None  # detect_buy_point 需要全量 stores
-    # 用 get_stock_klines 取单只
+    stocks_data = None
     klines = get_stock_klines(code, direction)
     if not klines or len(klines) < 30:
         return _empty_card(code, name, sector, direction, '数据不足')
+
+    # 从K线数据取名字（比行业映射更可靠）
+    for k in klines:
+        if k.get('name'):
+            name = k['name']
+            break
 
     idx = _find_idx(klines, date_str)
     if idx < 10:
