@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>📋 持仓管理 · 私密</title>
 <link rel="stylesheet" href="/css/pages/holdings.css?v=1">
+<link rel="stylesheet" href="/css/stock_card.css?v=1">
 <style>
 /* ── 加载/错误/空状态 ── */
 .loading-state, .error-state { text-align: center; padding: 60px 20px; color: #666; font-size: 14px; }
@@ -13,6 +14,30 @@
 .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; }
 .empty-state p { font-size: 14px; margin-bottom: 16px; }
 .footer { text-align: center; padding: 20px; color: #444; font-size: 11px; }
+
+/* ── 卡片外框（仿自选股风格）── */
+.watchlist-card-wrapper {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 0 solid #2a2a4e;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+.watchlist-card-wrapper .stock-item {
+    background: transparent !important;
+    border-left: none !important;
+    border-bottom: 1px solid #2a2a4e;
+    border-radius: 0 !important;
+    padding: 12px 14px 10px;
+}
+.watchlist-card-actions {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 14px;
+    background: rgba(0,0,0,0.15);
+}
+.watchlist-card-actions .wca-left {
+    display: flex; align-items: center; gap: 8px;
+}
 </style>
 </head>
 <body>
@@ -73,6 +98,7 @@
 </div>
 <div class="footer">仅你可见 · URL 请保密</div>
 
+<script src="/js/stock_card.js"></script>
 <!-- ── 新增/编辑弹窗 ── -->
 <div class="modal-overlay" id="modalOverlay">
     <div class="modal" id="modal">
@@ -218,48 +244,39 @@ async function loadData() {
 // ═══════════════════════════════════════════════════════════════
 function renderCards(holdings) {
     const list = document.getElementById('cardList');
+    const stageColors = {
+        '上行': '#4ecdc4', '加速': '#e94560', '缩量整理': '#ffd700', '滞涨': '#ff6b6b',
+        '转弱': '#ff6b6b', '下行': '#666', '加速跌': '#e94560', '转强': '#4ecdc4',
+        '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560'
+    };
+
     list.innerHTML = holdings.map((h, i) => {
-        const price = h.price !== undefined && h.price !== null ? h.price.toFixed(2) : '--';
-        const chg = h.change !== undefined && h.change !== null ? h.change : null;
-        const chgCls = chg !== null ? (chg >= 0 ? 'up' : 'down') : '';
-        const chgStr = chg !== null ? (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : '--';
-        const chgFull = chg !== null ? price + ' ' + chgStr : '--';
+        const cardData = {
+            name: h.name, code: h.code, price: h.price, change: h.change,
+            signal: 'hold', stage: '--', structure: '--',
+            sector: '--', direction: h.direction || '',
+            stop_loss: h.stop_loss_price, stop_loss_pct: h.stop_loss_pct,
+            buy_point: '', trading_system: '3l', trading_reason: '持仓管理',
+            profit_model1: false, trend_stock: false,
+        };
 
-        // 止损展示
-        let slHtml = '';
-        if (h.stop_loss_price !== undefined && h.stop_loss_price !== null) {
-            const slPrice = parseFloat(h.stop_loss_price).toFixed(2);
-            const slPct = h.stop_loss_pct !== undefined && h.stop_loss_pct !== null
-                ? parseFloat(h.stop_loss_pct).toFixed(1) : null;
-            const slColor = slPct !== null && Math.abs(slPct) > 8 ? '#e94560'
-                : slPct !== null && Math.abs(slPct) > 5 ? '#ffd700' : '#4ecdc4';
-            slHtml = `<div class="field">止损: <span class="val" style="color:${slColor}">⬇ ${slPrice}${slPct !== null ? ' ('+slPct+'%)' : ''}</span></div>`;
-        } else {
-            slHtml = `<div class="field">止损: <span class="val" style="color:#555">未设置</span></div>`;
-        }
-
-        // 仓位条
+        const cardHtml = signalStockCard(cardData, i);
+        const leftColor = stageColors[cardData.stage] || '#888';
         const barColor = h.ratio >= 10 ? '#e94560' : h.ratio >= 6 ? '#ffd700' : '#4ecdc4';
-        const direction = h.direction || '其他';
 
-        return `<div class="holding-card">
-            <div class="card-top">
-                <div class="stock-info">
-                    <span class="stock-name">📈 ${h.name}</span>
-                    <span class="stock-code">${h.code || ''}</span>
+        return `<div class="watchlist-card-wrapper" style="border-left:3px solid ${leftColor};border-radius:12px 0 0 12px;">
+            ${cardHtml}
+            <div class="watchlist-card-actions">
+                <div class="wca-left">
+                    <span style="color:#ffd700;font-weight:600;font-size:12px;">仓位: ${(h.ratio || 0).toFixed(2)}%</span>
+                    <span style="background:#2a2a4e;border-radius:6px;height:6px;width:60px;display:inline-block;vertical-align:middle;">
+                        <span style="display:inline-block;height:6px;border-radius:6px;width:${Math.min(h.ratio, 100)}%;background:${barColor};vertical-align:middle;"></span>
+                    </span>
                 </div>
-                <div class="price-info ${chgCls ? (chg >= 0 ? 'up' : 'down') : ''}">${chgFull}</div>
-            </div>
-            <div class="card-details">
-                <div class="field">方向: <span class="tag-${direction} direction-tag">${direction}</span></div>
-                <div class="field">仓位: <span class="val" style="font-weight:bold;color:#ffd700">${(h.ratio || 0).toFixed(2)}%</span>
-                    <span class="ratio-bar-bg"><span class="ratio-bar" style="width:${Math.min(h.ratio, 100)}%;background:${barColor}"></span></span>
+                <div style="display:flex;gap:4px;">
+                    <button onclick="openEditModal(${i})" style="background:rgba(233,69,96,0.15);border:1px solid #e94560;border-radius:6px;color:#e94560;cursor:pointer;padding:3px 10px;font-size:12px;">✏️ 编辑</button>
+                    <button onclick="openDeleteConfirm(${i})" style="background:rgba(233,69,96,0.15);border:1px solid #e94560;border-radius:6px;color:#e94560;cursor:pointer;padding:3px 10px;font-size:12px;">🗑️ 删除</button>
                 </div>
-                ${slHtml}
-            </div>
-            <div style="position:absolute;top:12px;right:12px;display:flex;gap:4px;">
-                <button class="edit-btn" onclick="openEditModal(${i})" title="编辑">✏️</button>
-                <button class="del-btn" onclick="openDeleteConfirm(${i})" title="删除">🗑️</button>
             </div>
         </div>`;
     }).join('');
@@ -274,6 +291,8 @@ function renderPie(holdings) {
         return;
     }
 
+    const cashRatio = (HOLDINGS_DATA && HOLDINGS_DATA.cash_ratio) || 0;
+
     // 按方向汇总仓位
     const dirMap = {};
     holdings.forEach(h => {
@@ -282,6 +301,11 @@ function renderPie(holdings) {
         dirMap[d].ratio += h.ratio || 0;
         dirMap[d].count += 1;
     });
+
+    // 追加现金
+    if (cashRatio > 0) {
+        dirMap['现金'] = { ratio: cashRatio, count: 0 };
+    }
 
     const pieData = Object.entries(dirMap)
         .map(([name, v]) => ({ name, count: v.count, pct: parseFloat(v.ratio.toFixed(1)) }))
@@ -299,7 +323,7 @@ function renderPie(holdings) {
     pieData.forEach((d, i) => {
         const angle = (d.pct / total) * 360;
         const endAngle = startAngle + angle;
-        const color = PIE_COLORS[i % PIE_COLORS.length];
+        const color = d.name === '现金' ? '#666' : PIE_COLORS[i % PIE_COLORS.length];
 
         const sRad = startAngle * Math.PI / 180;
         const eRad = endAngle * Math.PI / 180;
@@ -320,10 +344,11 @@ function renderPie(holdings) {
             paths += `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#fff" font-weight="600">${d.pct.toFixed(0)}%</text>`;
         }
 
+        const countDisplay = d.count > 0 ? d.count + '只' : '';
         legendHtml += `<div class="legend-item">
             <div class="legend-dot" style="background:${color}"></div>
             <span class="legend-name">${d.name}</span>
-            <span class="legend-count">${d.count}只</span>
+            ${countDisplay ? `<span class="legend-count">${countDisplay}</span>` : '<span class="legend-count"></span>'}
             <span class="legend-pct">${d.pct}%</span>
         </div>`;
 
