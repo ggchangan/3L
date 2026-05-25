@@ -12,17 +12,39 @@ body {
 .header .update-time { color: #4ecdc4; font-size: 12px; margin-top: 6px; }
 .container { max-width: 900px; margin: 0 auto; padding: 20px; }
 
-/* ── 汇总条 ── */
-.summary-bar {
-    display: flex; justify-content: center; gap: 24px;
+/* ── 股票概况（合并统计+方向分布）── */
+.overview-block {
     background: linear-gradient(135deg, #1a1a2e, #16213e);
-    border: 1px solid #2a2a4e; border-radius: 10px;
-    padding: 14px 20px; margin-bottom: 16px;
-    text-align: center; flex-wrap: wrap;
+    border: 1px solid #2a2a4e; border-radius: 12px;
+    padding: 18px 20px 14px; margin-bottom: 16px;
 }
-.summary-bar .item { font-size: 13px; }
-.summary-bar .label { color: #888; display: block; }
-.summary-bar .value { color: #4ecdc4; font-weight: bold; font-size: 16px; display: block; margin-top: 2px; }
+.overview-block .ov-title {
+    font-size: 15px; color: #4ecdc4; margin-bottom: 14px;
+    font-weight: 600;
+}
+.overview-block .ov-body {
+    display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;
+}
+.overview-block .ov-pie svg { max-width: 240px; max-height: 240px; }
+.overview-block .ov-legend {
+    display: flex; flex-direction: column; gap: 5px; min-width: 160px;
+    padding-top: 4px;
+}
+.overview-block .ov-legend .legend-item {
+    display: flex; align-items: center; gap: 8px; font-size: 12px;
+}
+.overview-block .ov-legend .legend-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.overview-block .ov-legend .legend-name { color: #e0e0e0; min-width: 52px; }
+.overview-block .ov-legend .legend-count { color: #888; min-width: 32px; }
+.overview-block .ov-legend .legend-pct { color: #4ecdc4; font-weight: 600; }
+.overview-block .ov-stats {
+    margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid #2a2a4e;
+    display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: #aaa;
+}
+.overview-block .ov-stats b { color: #e0e0e0; }
 
 /* ── 新增按钮 ── */
 .add-btn-wrap { text-align: center; margin: 12px 0; }
@@ -81,26 +103,6 @@ body {
     background: #2a2a4e; border-radius: 6px; height: 6px;
     width: 80px; display: inline-block; vertical-align: middle;
 }
-
-/* ── 饼图区 ── */
-.pie-section {
-    background: linear-gradient(135deg, #1a1a2e, #16213e);
-    border: 1px solid #2a2a4e; border-radius: 12px;
-    padding: 20px; margin-top: 16px;
-}
-.pie-section .section-title { font-size: 15px; color: #4ecdc4; margin-bottom: 14px; }
-.pie-section .pie-flex { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
-.pie-svg-container svg { max-width: 280px; max-height: 280px; }
-.pie-legend { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
-.pie-legend .legend-item {
-    display: flex; align-items: center; gap: 8px; font-size: 12px;
-}
-.pie-legend .legend-dot {
-    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-}
-.pie-legend .legend-name { color: #e0e0e0; min-width: 56px; }
-.pie-legend .legend-count { color: #888; min-width: 36px; }
-.pie-legend .legend-pct { color: #4ecdc4; font-weight: 600; }
 
 /* ── 评估 & 建议 ── */
 .section-card {
@@ -185,12 +187,10 @@ body {
 /* ── 响应式 ── */
 @media (max-width: 600px) {
     .container { padding: 12px; }
-    .summary-bar { gap: 12px; padding: 10px; }
-    .summary-bar .item { font-size: 11px; }
-    .summary-bar .value { font-size: 14px; }
+    .overview-block .ov-body { flex-direction: column; align-items: center; }
+    .overview-block .ov-stats { justify-content: center; }
     .modal { width: 100%; margin: 10px; padding: 16px; }
     .holding-card .card-details { gap: 10px; }
-    .pie-section .pie-flex { flex-direction: column; align-items: center; }
 }
 
 /* ── 方向标签配色 ── */

@@ -278,13 +278,166 @@ class TestGetHoldingsWithPrices:
         with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
             with patch('services.holdings_service.requests.get',
                        return_value=MockResponse(mock_text)):
-                result = get_holdings_with_prices()
+                with patch('backend.core.data_layer.get_industry_map',
+                           return_value={}):
+                    with patch('backend.core.data_layer.get_all_stocks',
+                               return_value={}):
+                        result = get_holdings_with_prices()
 
         assert len(result['holdings']) == 2
         assert result['holdings'][0]['price'] == 51.20
         assert result['holdings'][0]['change'] == -1.54
         assert result['holdings'][1]['price'] == 274.00
         assert result['holdings'][1]['change'] == 9.84
+
+
+# ═════════════════════════════════════════════════════════════════
+# get_holdings_with_prices -- 板块/结构/阶段 测试
+# ═════════════════════════════════════════════════════════════════
+
+class TestGetHoldingsWithAnalysis:
+    """测试 get_holdings_with_prices() -- 板块/结构/阶段"""
+
+    MOCK_KLINES_60D = [
+        {'date': '20260301', 'open': 48.0, 'high': 49.5, 'low': 47.5, 'close': 49.0, 'volume': 1000000},
+        {'date': '20260302', 'open': 49.0, 'high': 50.0, 'low': 48.5, 'close': 49.5, 'volume': 1100000},
+    ] * 30
+
+    class MockResponse:
+        def __init__(self, text):
+            self.text = text
+        def raise_for_status(self):
+            pass
+
+    def _tencent(self, code, name, price, change):
+        f = ['0'] * 88
+        f[1] = name; f[2] = code; f[3] = str(price); f[31] = str(change)
+        p = 'sh' if code.startswith(('6', '5')) else 'sz'
+        return 'v_' + p + code + '="' + '~'.join(f) + '"\n'
+
+    def test_adds_sector_from_industry_map(self, tmp_path):
+        """板块信息从行业映射正确获取"""
+        from services.holdings_service import get_holdings_with_prices
+
+        holdings_path = str(tmp_path / 'holdings.json')
+        data = {
+            'holdings': [
+                {'name': '药明康德', 'code': '603259', 'ratio': 14.70,
+                 'direction': '创新药', 'stop_loss_price': None}
+            ],
+            'cash_ratio': 85.30
+        }
+        with open(holdings_path, 'w') as f:
+            json.dump(data, f)
+
+        mock_map = {'603259': {'ths_industry': '化学制药'}}
+        text = self._tencent('603259', '药明康德', 51.20, -1.54)
+
+        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('services.holdings_service.requests.get',
+                       return_value=self.MockResponse(text)):
+                with patch('backend.core.data_layer.get_industry_map',
+                           return_value=mock_map):
+                    with patch('backend.core.data_layer.get_all_stocks',
+                               return_value={}):
+                        result = get_holdings_with_prices()
+
+        assert result['holdings'][0]['sector'] == '化学制药'
+
+    def test_adds_structure_stage_from_klines(self, tmp_path):
+        """结构/阶段从K线数据正确计算"""
+        from services.holdings_service import get_holdings_with_prices
+
+        holdings_path = str(tmp_path / 'holdings.json')
+        data = {
+            'holdings': [
+                {'name': '药明康德', 'code': '603259', 'ratio': 14.70,
+                 'direction': '创新药', 'stop_loss_price': None}
+            ],
+            'cash_ratio': 85.30
+        }
+        with open(holdings_path, 'w') as f:
+            json.dump(data, f)
+
+        mock_stocks = {'创新药': {'603259': self.MOCK_KLINES_60D}}
+        mock_map = {'603259': {'ths_industry': '化学制药'}}
+        text = self._tencent('603259', '药明康德', 51.20, -1.54)
+
+        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('services.holdings_service.requests.get',
+                       return_value=self.MockResponse(text)):
+                with patch('backend.core.data_layer.get_industry_map',
+                           return_value=mock_map):
+                    with patch('backend.core.data_layer.get_all_stocks',
+                               return_value=mock_stocks):
+                        result = get_holdings_with_prices()
+
+        h = result['holdings'][0]
+        assert h['sector'] == '化学制药'
+        assert h['structure'] != '--'
+        assert h['stage'] != '--'
+
+    def test_graceful_when_no_klines(self, tmp_path):
+        """K线数据不足时 gracefully fallback 到 '--'"""
+        from services.holdings_service import get_holdings_with_prices
+
+        holdings_path = str(tmp_path / 'holdings.json')
+        data = {
+            'holdings': [
+                {'name': '药明康德', 'code': '603259', 'ratio': 14.70,
+                 'direction': '创新药', 'stop_loss_price': None}
+            ],
+            'cash_ratio': 85.30
+        }
+        with open(holdings_path, 'w') as f:
+            json.dump(data, f)
+
+        mock_stocks = {'创新药': {'603259': []}}
+        text = self._tencent('603259', '药明康德', 51.20, -1.54)
+
+        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('services.holdings_service.requests.get',
+                       return_value=self.MockResponse(text)):
+                with patch('backend.core.data_layer.get_industry_map',
+                           return_value={}):
+                    with patch('backend.core.data_layer.get_all_stocks',
+                               return_value=mock_stocks):
+                        result = get_holdings_with_prices()
+
+        h = result['holdings'][0]
+        assert h['sector'] == ''
+        assert h['structure'] == '--'
+        assert h['stage'] == '--'
+
+    def test_graceful_when_industry_map_missing(self, tmp_path):
+        """行业映射异常时 gracefully 返回空"""
+        from services.holdings_service import get_holdings_with_prices
+
+        holdings_path = str(tmp_path / 'holdings.json')
+        data = {
+            'holdings': [
+                {'name': '药明康德', 'code': '603259', 'ratio': 14.70,
+                 'direction': '创新药', 'stop_loss_price': None}
+            ],
+            'cash_ratio': 85.30
+        }
+        with open(holdings_path, 'w') as f:
+            json.dump(data, f)
+
+        text = self._tencent('603259', '药明康德', 51.20, -1.54)
+
+        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('services.holdings_service.requests.get',
+                       return_value=self.MockResponse(text)):
+                with patch('backend.core.data_layer.get_industry_map',
+                           side_effect=Exception('map error')):
+                    with patch('backend.core.data_layer.get_all_stocks',
+                               return_value={}):
+                        result = get_holdings_with_prices()
+
+        h = result['holdings'][0]
+        assert h['sector'] == ''
+        assert h['structure'] == '--'
 
 
 # ═════════════════════════════════════════════════════════════════

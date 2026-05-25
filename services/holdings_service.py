@@ -98,12 +98,15 @@ def get_trades():
 
 
 def get_holdings_with_prices():
-    """获取持仓数据（含实时行情叠加）
+    """获取持仓数据（含实时行情 + 板块/结构/阶段分析）
 
     返回格式同 get_holdings()，但每个持仓额外包含:
       - price: 当前价（float | None）
       - change: 涨跌幅%（float | None）
       - stop_loss_pct: 止损跌幅%（float | None，从 stop_loss_price 和 price 计算）
+      - sector: 同花顺行业板块（str）
+      - structure: K线结构（str，如'上涨趋势'/'区间震荡'）
+      - stage: 阶段（str，如'上行'/'加速'/'缩量整理'）
     """
     data = get_holdings()
     holdings = data.get('holdings', [])
@@ -140,6 +143,36 @@ def get_holdings_with_prices():
             item['stop_loss_pct'] = round((stop_price - current_price) / current_price * 100, 2)
         else:
             item['stop_loss_pct'] = None
+
+        # 板块（从行业分类映射读取）
+        item['sector'] = ''
+        try:
+            from backend.core.data_layer import get_industry_map
+            imap = get_industry_map()
+            ind_info = imap.get(code, {})
+            if isinstance(ind_info, dict):
+                item['sector'] = ind_info.get('ths_industry', '') or ''
+        except Exception:
+            item['sector'] = ''
+
+        # 结构/阶段（从K线数据分析）
+        item['structure'] = '--'
+        item['stage'] = '--'
+        try:
+            from backend.core.data_layer import get_all_stocks, get_stock_klines
+            from backend.core.ema_utils import get_structure, get_stage
+            stocks = get_all_stocks()
+            kls = get_stock_klines(code, stocks=stocks)
+            if kls and len(kls) >= 20:
+                closes = [k['close'] for k in kls]
+                highs_ = [k['high'] for k in kls]
+                lows_ = [k['low'] for k in kls]
+                vols = [k.get('volume', k.get('vol', 0)) for k in kls]
+                item['structure'] = get_structure(closes)
+                item['stage'] = get_stage(closes, item['structure'], highs_, lows_, volumes=vols)
+        except Exception:
+            item['structure'] = '--'
+            item['stage'] = '--'
 
         enriched.append(item)
 
