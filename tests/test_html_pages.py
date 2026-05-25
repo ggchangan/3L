@@ -156,9 +156,10 @@ class TestPageSpecific:
         assert 'review.js' in html
 
     def test_monitor_has_correct_js(self):
-        """盯盘页引用正确的 JS 文件"""
-        html = read_page('monitor.html')
-        assert 'monitor.js' in html
+        """盯盘页已迁移到 React 版"""
+        html = read_page('react.html')
+        assert 'id="root"' in html
+        assert 'main.tsx' in html or 'src=' in html
 
     # ── 工作台一致性测试 ──
 

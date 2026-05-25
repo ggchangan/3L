@@ -228,12 +228,21 @@ class Handler(SimpleHTTPRequestHandler):
         if ROUTES.dispatch(self, path):
             return
 
+        # --- URL 重定向（302 跳转） ---
+        redirects = {
+            '/monitor.html': '/monitor',
+        }
+        if path in redirects:
+            self.send_response(302)
+            self.send_header('Location', redirects[path])
+            self.end_headers()
+            return
+
         # --- URL 别名重定向 ---
         aliases = {
             '/review': '/review.html',
             '/review.html': None,
             '/monitor': '/react.html',
-            '/monitor.html': None,
             '/': '/react.html',
         }
         if path in aliases and aliases[path]:
