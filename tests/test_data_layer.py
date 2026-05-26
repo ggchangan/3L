@@ -2,7 +2,7 @@
 import os
 import pytest
 
-from scripts.data_layer import (
+from backend.core.data_layer import (
     ALL_STOCKS_PATH,
     WATCHLIST_PATH,
     INDUSTRY_MAP_PATH,
@@ -77,7 +77,7 @@ class TestGetAllStocks:
         from config import DATA_DIR
         dir_path = os.path.join(DATA_DIR, 'directions.json')
         if os.path.isfile(dir_path):
-            from services.direction_service import load_directions
+            from backend.services.direction_service import load_directions
             data = load_directions(dir_path)
             assert isinstance(data.get('all'), list)
         else:

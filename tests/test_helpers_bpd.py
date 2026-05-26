@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, '/home/ubuntu/3l-server')
 
 import pytest
-from scripts.buy_point_detection import (
+from backend.core.buy_point_detection import (
     _breakout_score, _check_pullback, _is_extreme_shrink,
     _volume_ratio, find_idx, calc_stop_loss,
     check_volume_stagnation, check_power_fading, check_reverse_yingbaoyang,

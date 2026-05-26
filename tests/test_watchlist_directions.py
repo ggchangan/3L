@@ -41,7 +41,7 @@ class TestDirectionCRUD:
         with open(wl_path, 'w', encoding='utf-8') as f:
             json.dump({"stocks": [], "count": 0}, f)
 
-        from services.watchlist_service import get_directions
+        from backend.services.watchlist_service import get_directions
         result = get_directions(str(wl_path))
         assert result == {}
 
@@ -51,7 +51,7 @@ class TestDirectionCRUD:
         with open(wl_path, 'w', encoding='utf-8') as f:
             json.dump(copy.deepcopy(SAMPLE_WL_NO_DIRECTIONS), f)
 
-        from services.watchlist_service import add_direction
+        from backend.services.watchlist_service import add_direction
         # 使用一个股票中不存在的方向名
         result = add_direction("低空经济", str(wl_path))
         assert result['success'] is True
@@ -73,7 +73,7 @@ class TestDirectionCRUD:
         with open(wl_path, 'w', encoding='utf-8') as f:
             json.dump(copy.deepcopy(SAMPLE_WL_NO_DIRECTIONS), f)
 
-        from services.watchlist_service import add_direction
+        from backend.services.watchlist_service import add_direction
         add_direction("半导体", str(wl_path))
         result = add_direction("半导体", str(wl_path))
         assert result['success'] is False
@@ -85,7 +85,7 @@ class TestDirectionCRUD:
         with open(wl_path, 'w', encoding='utf-8') as f:
             json.dump(copy.deepcopy(SAMPLE_WL), f)
 
-        from services.watchlist_service import suggest_directions
+        from backend.services.watchlist_service import suggest_directions
         suggestions = suggest_directions(str(wl_path))
         # 从已有股票名称/字面提供建议，不应为空
         assert isinstance(suggestions, list)
@@ -98,7 +98,7 @@ class TestDirectionCRUD:
         with open(wl_path, 'w', encoding='utf-8') as f:
             json.dump(data, f)
 
-        from services.watchlist_service import remove_direction
+        from backend.services.watchlist_service import remove_direction
         result = remove_direction("半导体", str(wl_path))
         assert result['success'] is True
 
@@ -120,7 +120,7 @@ class TestDirectionCRUD:
         with open(wl_path, 'w', encoding='utf-8') as f:
             json.dump(data, f)
 
-        from services.watchlist_service import set_direction_enabled
+        from backend.services.watchlist_service import set_direction_enabled
         # 启用
         result = set_direction_enabled("半导体", True, str(wl_path))
         assert result['success'] is True
@@ -143,7 +143,7 @@ class TestDirectionCRUD:
         with open(wl_path, 'w', encoding='utf-8') as f:
             json.dump({"stocks": [], "count": 0}, f)
 
-        from services.watchlist_service import remove_direction
+        from backend.services.watchlist_service import remove_direction
         result = remove_direction("不存在的方向", str(wl_path))
         assert result['success'] is False
 
@@ -159,7 +159,7 @@ class TestDirectionCRUD:
         with open(wl_path, 'w', encoding='utf-8') as f:
             json.dump(data, f)
 
-        from services.watchlist_service import get_enabled_directions
+        from backend.services.watchlist_service import get_enabled_directions
         enabled = get_enabled_directions(str(wl_path))
         assert enabled == ["半导体", "新能源"]
 
@@ -169,7 +169,7 @@ class TestDirectionCRUD:
         with open(wl_path, 'w', encoding='utf-8') as f:
             json.dump(copy.deepcopy(SAMPLE_WL), f)
 
-        from services.watchlist_service import get_enabled_directions
+        from backend.services.watchlist_service import get_enabled_directions
         enabled = get_enabled_directions(str(wl_path))
         # 兼容模式：返回所有现有方向
         assert sorted(enabled) == sorted(["半导体", "算力", "新能源", "机器人", "消费"])
@@ -185,7 +185,7 @@ class TestDirectionCRUD:
         with open(wl_path, 'w', encoding='utf-8') as f:
             json.dump(data, f)
 
-        from services.watchlist_service import get_all_directions
+        from backend.services.watchlist_service import get_all_directions
         all_dirs = get_all_directions(str(wl_path))
         assert '半导体' in all_dirs
         assert '算力' in all_dirs
@@ -201,7 +201,7 @@ class TestDirectionCRUD:
         with open(wl_path, 'w', encoding='utf-8') as f:
             json.dump(copy.deepcopy(SAMPLE_WL), f)
 
-        from services.watchlist_service import migrate_directions
+        from backend.services.watchlist_service import migrate_directions
         result = migrate_directions(str(wl_path))
         assert result['success'] is True
 

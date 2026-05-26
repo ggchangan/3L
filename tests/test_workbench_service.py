@@ -35,7 +35,7 @@ SAMPLE_LOG = {
 @pytest.fixture
 def svc(monkeypatch, tmp_path):
     """加载 workbench_service 并指向临时目录"""
-    import services.workbench_service as mod
+    from backend.services import workbench_service as mod
     wb_dir = tmp_path / 'workbench'
     wb_dir.mkdir()
     monkeypatch.setattr(mod, 'WORKBENCH_DIR', str(wb_dir))
@@ -45,7 +45,7 @@ def svc(monkeypatch, tmp_path):
 @pytest.fixture
 def svc_with_data(monkeypatch, tmp_path):
     """预填充一条日志"""
-    import services.workbench_service as mod
+    from backend.services import workbench_service as mod
     wb_dir = tmp_path / 'workbench'
     wb_dir.mkdir()
     monkeypatch.setattr(mod, 'WORKBENCH_DIR', str(wb_dir))
@@ -197,7 +197,7 @@ class TestListLogs:
         """只返回日期格式文件，忽略其他文件"""
         svc.save_log('2026-05-25', dict(SAMPLE_LOG))
         # 手动写入非日期文件
-        import services.workbench_service as mod
+        from backend.services import workbench_service as mod
         fp = os.path.join(mod.WORKBENCH_DIR, 'notes.txt')
         with open(fp, 'w') as f:
             f.write('not a log')

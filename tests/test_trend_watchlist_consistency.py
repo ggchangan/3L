@@ -6,8 +6,8 @@
 - 功能一致性：toggle趋势股时自动同步自选股
 """
 import pytest, json, os, copy
-from scripts.trend_trading import decide_system
-from scripts.trend_candidates import toggle_trend_stock
+from backend.core.trend_trading import decide_system
+from backend.core.trend_candidates import toggle_trend_stock
 from backend.core.trend_trading import _load_manual_trend as _load_manual
 
 from config import MANUAL_TREND_PATH as MANUAL_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH
@@ -114,23 +114,23 @@ class TestMainlineLevel:
     """主线/次级主线/非主线分类测试"""
 
     def test_main_line_returns_主线(self):
-        from scripts.ema_utils import get_mainline_level
+        from backend.core.ema_utils import get_mainline_level
         assert get_mainline_level('半导体', ['半导体', '元件'], ['电机']) == '主线'
 
     def test_sub_main_line_returns_次级主线(self):
-        from scripts.ema_utils import get_mainline_level
+        from backend.core.ema_utils import get_mainline_level
         assert get_mainline_level('电机', ['半导体', '元件'], ['电机']) == '次级主线'
 
     def test_non_main_line_returns_非主线(self):
-        from scripts.ema_utils import get_mainline_level
+        from backend.core.ema_utils import get_mainline_level
         assert get_mainline_level('医药', ['半导体', '元件'], ['电机']) == '非主线'
 
     def test_empty_sector_returns_empty(self):
-        from scripts.ema_utils import get_mainline_level
+        from backend.core.ema_utils import get_mainline_level
         assert get_mainline_level('', ['半导体'], ['电机']) == ''
 
     def test_empty_main_lines_returns_empty(self):
-        from scripts.ema_utils import get_mainline_level
+        from backend.core.ema_utils import get_mainline_level
         assert get_mainline_level('半导体', [], []) == ''
         assert get_mainline_level('半导体', None, []) == ''
 
@@ -139,7 +139,7 @@ class TestCalcStopLoss:
     """止损计算测试"""
 
     def test_calc_stop_loss_returns_tuple(self):
-        from scripts.buy_point_detection import calc_stop_loss, _find_support_levels
+        from backend.core.buy_point_detection import calc_stop_loss, _find_support_levels
         # 用简单的模拟数据
         klines = [{'close': 100 + i, 'high': 102 + i, 'low': 98 + i, 'open': 101 + i, 'volume': 1000}
                   for i in range(30)]
@@ -151,7 +151,7 @@ class TestCalcStopLoss:
         assert sl_pct > 0
 
     def test_calc_stop_loss_insufficient_data(self):
-        from scripts.buy_point_detection import calc_stop_loss
+        from backend.core.buy_point_detection import calc_stop_loss
         klines = [{'close': 100 + i, 'high': 102 + i, 'low': 98 + i, 'open': 101 + i, 'volume': 1000}
                   for i in range(5)]
         sl, sl_pct = calc_stop_loss(klines, 4)

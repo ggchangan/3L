@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 @pytest.fixture
 def ds(monkeypatch, tmp_path):
     """加载 direction_service 并指向临时文件"""
-    import services.direction_service as mod
+    from backend.services import direction_service as mod
     dir_path = tmp_path / "directions.json"
     monkeypatch.setattr(mod, 'DIRECTIONS_FILE', str(dir_path))
     # 初始化空数据
@@ -29,7 +29,7 @@ def ds(monkeypatch, tmp_path):
 @pytest.fixture
 def ds_sample(monkeypatch, tmp_path):
     """预填充 4 个方向（2 个启用）"""
-    import services.direction_service as mod
+    from backend.services import direction_service as mod
     dir_path = tmp_path / "directions.json"
     monkeypatch.setattr(mod, 'DIRECTIONS_FILE', str(dir_path))
     mod._save({

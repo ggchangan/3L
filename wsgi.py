@@ -3,7 +3,7 @@ Gunicorn WSGI 入口。
 用法: gunicorn -w 4 -b 0.0.0.0:8080 wsgi:app
 """
 from server import Handler
-from services.logger import setup_logging
+from backend.services.logger import setup_logging
 
 # Gunicorn 的 WSGI 应用
 # 需要一个 callable: environ, start_response -> iterable

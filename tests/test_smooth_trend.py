@@ -7,7 +7,7 @@
 3. 现有逻辑不被破坏
 """
 import pytest
-from scripts.trend_trading import (
+from backend.core.trend_trading import (
     decide_system, decide_system_with_detail,
 )
 
@@ -19,7 +19,7 @@ class TestIsSmoothTrend:
 
     def test_tuopu_is_smooth(self, stocks):
         """拓普集团(601689) 是平滑趋势"""
-        from scripts.trend_trading import is_smooth_trend
+        from backend.core.trend_trading import is_smooth_trend
         stocks_data = stocks.get('stocks', stocks)
         result = is_smooth_trend('601689', '2026-05-22', stocks_data)
         assert result['is_smooth'] is True, \
@@ -28,7 +28,7 @@ class TestIsSmoothTrend:
 
     def test_weichuang_is_smooth(self, stocks):
         """伟创电气(688698) 是平滑趋势"""
-        from scripts.trend_trading import is_smooth_trend
+        from backend.core.trend_trading import is_smooth_trend
         stocks_data = stocks.get('stocks', stocks)
         result = is_smooth_trend('688698', '2026-05-22', stocks_data)
         assert result['is_smooth'] is True, \
@@ -36,7 +36,7 @@ class TestIsSmoothTrend:
 
     def test_dashu_not_smooth(self, stocks):
         """大族数控(301200) 不是平滑趋势（有峰谷循环）"""
-        from scripts.trend_trading import is_smooth_trend
+        from backend.core.trend_trading import is_smooth_trend
         stocks_data = stocks.get('stocks', stocks)
         result = is_smooth_trend('301200', '2026-05-22', stocks_data)
         assert result['is_smooth'] is False, \
@@ -44,7 +44,7 @@ class TestIsSmoothTrend:
 
     def test_guangxun_not_smooth(self, stocks):
         """光迅科技(002281) 不是平滑趋势（有峰谷循环）"""
-        from scripts.trend_trading import is_smooth_trend
+        from backend.core.trend_trading import is_smooth_trend
         stocks_data = stocks.get('stocks', stocks)
         result = is_smooth_trend('002281', '2026-05-22', stocks_data)
         assert result['is_smooth'] is False, \
@@ -52,7 +52,7 @@ class TestIsSmoothTrend:
 
     def test_yaomingkangde_not_smooth(self, stocks):
         """药明康德(603259) 不是平滑趋势（非上涨趋势）"""
-        from scripts.trend_trading import is_smooth_trend
+        from backend.core.trend_trading import is_smooth_trend
         stocks_data = stocks.get('stocks', stocks)
         result = is_smooth_trend('603259', '2026-05-22', stocks_data)
         assert result['is_smooth'] is False, \
@@ -60,7 +60,7 @@ class TestIsSmoothTrend:
 
     def test_stock_not_found_returns_false(self, stocks):
         """不存在的股票返回 False"""
-        from scripts.trend_trading import is_smooth_trend
+        from backend.core.trend_trading import is_smooth_trend
         stocks_data = stocks.get('stocks', stocks)
         result = is_smooth_trend('000000', '2026-05-22', stocks_data)
         assert result['is_smooth'] is False

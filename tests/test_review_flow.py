@@ -19,7 +19,7 @@ class TestModuleImport:
 
     def test_import_data_layer(self):
         """data_layer 导入"""
-        from scripts.data_layer import (
+        from backend.core.data_layer import (
             ALL_STOCKS_PATH, REVIEW_ARCHIVE_DIR, get_all_stocks,
             get_review_archive, save_review_archive
         )
@@ -43,7 +43,7 @@ class TestModuleImport:
             import generate_review_data
             assert hasattr(generate_review_data, 'generate_daily_review')
             # 计算函数已迁移到 services.review_compute_service
-            from services.review_compute_service import is_trading_day
+            from backend.services.review_compute_service import is_trading_day
             assert callable(is_trading_day)
         finally:
             os.chdir(old_cwd)
@@ -55,7 +55,7 @@ class TestReviewArchiveStructure:
     @pytest.fixture(scope='class')
     def archive(self):
         """获取最近一份存档"""
-        from scripts.data_layer import REVIEW_ARCHIVE_DIR
+        from backend.core.data_layer import REVIEW_ARCHIVE_DIR
         if not os.path.isdir(REVIEW_ARCHIVE_DIR):
             return None, {}
         files = sorted([f for f in os.listdir(REVIEW_ARCHIVE_DIR) if f.endswith('.json')])
@@ -127,7 +127,7 @@ class TestGenerateCommandLine:
         import subprocess
         result = subprocess.run(
             [sys.executable, '-c',
-             'from services.review_compute_service import is_trading_day; '
+             'from backend.services.review_compute_service import is_trading_day; '
              'r = is_trading_day("2026-05-22"); '
              'print(r)'],
             capture_output=True, text=True, timeout=30,

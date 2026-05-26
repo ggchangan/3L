@@ -32,7 +32,7 @@ class TestAnalyzeStructure:
     """_analyze_structure — 只依赖 klines/ema_utils，不需要mock"""
 
     def test_uptrend(self):
-        from services.stock_card_service import _analyze_structure
+        from backend.services.stock_card_service import _analyze_structure
         klines = _make_klines(_UPTREND, _DATES)
         r = _analyze_structure(klines, len(klines) - 1)
         assert r['structure'] == '上涨趋势'
@@ -40,13 +40,13 @@ class TestAnalyzeStructure:
         assert 'ema' in r
 
     def test_downtrend(self):
-        from services.stock_card_service import _analyze_structure
+        from backend.services.stock_card_service import _analyze_structure
         klines = _make_klines(_DOWNTREND, _DATES)
         r = _analyze_structure(klines, len(klines) - 1)
         assert r['structure'] == '下降趋势'
 
     def test_range(self):
-        from services.stock_card_service import _analyze_structure
+        from backend.services.stock_card_service import _analyze_structure
         klines = _make_klines(_RANGE, _DATES)
         r = _analyze_structure(klines, len(klines) - 1)
         assert r['structure'] == '区间震荡'
@@ -57,7 +57,7 @@ class TestDecideTradingSystem:
 
     def _patch_manual(self, codes_set):
         """创建临时 manual_trend_stocks.json 并patch"""
-        import services.stock_card_service as scs
+        from backend.services import stock_card_service as scs
         # 保存原路径
         self._orig_path = scs.MANUAL_TREND_PATH
         # 创建临时文件
@@ -69,7 +69,7 @@ class TestDecideTradingSystem:
         scs._manual_trend_cache = None
 
     def _restore(self):
-        import services.stock_card_service as scs
+        from backend.services import stock_card_service as scs
         scs.MANUAL_TREND_PATH = self._orig_path
         scs._manual_trend_cache = None
         os.unlink(self._tmp.name)
@@ -77,7 +77,7 @@ class TestDecideTradingSystem:
     def test_trend_stock(self):
         self._patch_manual({'000001'})
         try:
-            from services.stock_card_service import _decide_trading_system
+            from backend.services.stock_card_service import _decide_trading_system
             result = _decide_trading_system('000001')
             assert result == 'trend'
         finally:
@@ -86,7 +86,7 @@ class TestDecideTradingSystem:
     def test_3l_stock(self):
         self._patch_manual({'000002'})
         try:
-            from services.stock_card_service import _decide_trading_system
+            from backend.services.stock_card_service import _decide_trading_system
             result = _decide_trading_system('000003')
             assert result == '3l'
         finally:
@@ -95,7 +95,7 @@ class TestDecideTradingSystem:
     def test_empty_manual_list(self):
         self._patch_manual(set())
         try:
-            from services.stock_card_service import _decide_trading_system
+            from backend.services.stock_card_service import _decide_trading_system
             result = _decide_trading_system('000001')
             assert result == '3l'
         finally:
@@ -106,7 +106,7 @@ class TestCalcStopLoss:
     """_calc_stop_loss — 只依赖 klines，不需要mock"""
 
     def test_uptrend_stop_loss(self):
-        from services.stock_card_service import _calc_stop_loss
+        from backend.services.stock_card_service import _calc_stop_loss
         klines = _make_klines(_UPTREND, _DATES)
         sl, pct = _calc_stop_loss(klines, len(klines) - 1)
         assert sl is not None
@@ -114,7 +114,7 @@ class TestCalcStopLoss:
         assert pct is not None and pct > 0
 
     def test_short_data_returns_none(self):
-        from services.stock_card_service import _calc_stop_loss
+        from backend.services.stock_card_service import _calc_stop_loss
         klines = _make_klines([100, 101, 102])
         sl, pct = _calc_stop_loss(klines, len(klines) - 1)
         assert sl is None
@@ -124,7 +124,7 @@ class TestBuildConclusion:
     """_build_conclusion — 纯逻辑，不需要mock"""
 
     def test_3l_buy_conclusion(self):
-        from services.stock_card_service import _build_conclusion
+        from backend.services.stock_card_service import _build_conclusion
         card = {
             'signal': 'buy',
             'trading_system': '3l',
@@ -138,7 +138,7 @@ class TestBuildConclusion:
         assert '止损' in c
 
     def test_trend_buy_conclusion(self):
-        from services.stock_card_service import _build_conclusion
+        from backend.services.stock_card_service import _build_conclusion
         card = {
             'signal': 'buy',
             'trading_system': 'trend',
@@ -153,7 +153,7 @@ class TestBuildConclusion:
         assert '买入区' in c
 
     def test_hold_conclusion(self):
-        from services.stock_card_service import _build_conclusion
+        from backend.services.stock_card_service import _build_conclusion
         card = {
             'signal': 'hold',
             'trading_system': '3l',
@@ -164,7 +164,7 @@ class TestBuildConclusion:
         assert '上行' in c
 
     def test_sell_conclusion(self):
-        from services.stock_card_service import _build_conclusion
+        from backend.services.stock_card_service import _build_conclusion
         card = {
             'signal': 'sell',
             'trading_system': '3l',
@@ -181,7 +181,7 @@ class TestGetStockCardIntegration:
     @pytest.fixture(autouse=True)
     def setup_mocks(self, monkeypatch, tmp_path):
         """mock data_layer + manual_trend_stocks.json + 外部服务"""
-        import services.stock_card_service as scs
+        from backend.services import stock_card_service as scs
 
         # mock manual_trend_stocks.json
         self._manual_file = tmp_path / 'manual_trend.json'
@@ -199,8 +199,8 @@ class TestGetStockCardIntegration:
         def mock_get_industry_map():
             return {'000001': {'name': '测试股', 'ths_industry': '半导体'}}
 
-        monkeypatch.setattr('services.stock_card_service.get_stock_klines', mock_get_stock_klines)
-        monkeypatch.setattr('services.stock_card_service.get_industry_map', mock_get_industry_map)
+        monkeypatch.setattr('backend.services.stock_card_service.get_stock_klines', mock_get_stock_klines)
+        monkeypatch.setattr('backend.services.stock_card_service.get_industry_map', mock_get_industry_map)
 
         yield
 
@@ -209,7 +209,7 @@ class TestGetStockCardIntegration:
 
     def test_basic_card_has_required_fields(self):
         """基本卡片包含所有前端必填字段"""
-        from services.stock_card_service import get_stock_card
+        from backend.services.stock_card_service import get_stock_card
 
         card = get_stock_card(
             code='000001',
@@ -232,7 +232,7 @@ class TestGetStockCardIntegration:
 
     def test_new_fields_added(self):
         """卡片包含新增的通用字段：date/ema5/ema10/vol_ratio/deviation_pct"""
-        from services.stock_card_service import get_stock_card
+        from backend.services.stock_card_service import get_stock_card
         card = get_stock_card(code='000001', date_str='20260920')
         assert card['date'] == '20260920'
         assert card['ema5'] is not None
@@ -242,7 +242,7 @@ class TestGetStockCardIntegration:
 
     def test_trend_stock_uses_trend_system(self):
         """手动指定趋势股 → trading_system='trend', signal=buy"""
-        import services.stock_card_service as scs
+        from backend.services import stock_card_service as scs
         json.dump(['000001'], open(self._manual_file, 'w'))
         scs._manual_trend_cache = None
 
@@ -255,7 +255,7 @@ class TestGetStockCardIntegration:
 
     def test_3l_stock_uses_3l_system(self):
         """非趋势股 → trading_system='3l'"""
-        import services.stock_card_service as scs
+        from backend.services import stock_card_service as scs
         json.dump([], open(self._manual_file, 'w'))
         scs._manual_trend_cache = None
 
@@ -267,7 +267,7 @@ class TestGetStockCardIntegration:
 
     def test_empty_card_all_fields(self):
         """_empty_card 包含所有卡片字段"""
-        from services.stock_card_service import _empty_card
+        from backend.services.stock_card_service import _empty_card
         card = _empty_card('000001', '测试', '半导体', 'AI', '数据不足')
         assert card['code'] == '000001'
         assert card['name'] == '测试'
@@ -286,14 +286,14 @@ class TestGetStockCardIntegration:
 
     def test_get_stock_card_insufficient_data(self):
         """K线不足30条 → 返回空卡片"""
-        from services.stock_card_service import get_stock_card
+        from backend.services.stock_card_service import get_stock_card
         # mock klines 返回不足30条
-        import services.stock_card_service as scs
+        from backend.services import stock_card_service as scs
         def mock_short_klines(code, direction=None, stocks=None):
             return [{'date': '20260920', 'close': 100, 'volume': 1000}]
         import pytest
         monkeypatch = pytest.MonkeyPatch()
-        monkeypatch.setattr('services.stock_card_service.get_stock_klines', mock_short_klines)
+        monkeypatch.setattr('backend.services.stock_card_service.get_stock_klines', mock_short_klines)
         try:
             card = get_stock_card(code='000001', date_str='20260920')
             assert card['code'] == '000001'
@@ -304,7 +304,7 @@ class TestGetStockCardIntegration:
 
     def test_get_stock_card_with_external_klines(self):
         """传入外部 klines → 优先使用，不走 data_layer"""
-        from services.stock_card_service import get_stock_card
+        from backend.services.stock_card_service import get_stock_card
         from tests.test_stock_card_service import _make_klines, _UPTREND, _DATES
 
         klines = _make_klines(_UPTREND, _DATES)
@@ -320,7 +320,7 @@ class TestGetStockCardIntegration:
 
     def test_get_stock_card_with_downtrend_klines(self):
         """下降趋势K线 → structure=下降趋势"""
-        from services.stock_card_service import get_stock_card
+        from backend.services.stock_card_service import get_stock_card
         from tests.test_stock_card_service import _make_klines, _DOWNTREND, _DATES
         klines = _make_klines(_DOWNTREND, _DATES)
         card = get_stock_card(code='999999', date_str='20260920', klines=klines)
@@ -329,7 +329,7 @@ class TestGetStockCardIntegration:
 
     def test_get_stock_card_with_range_klines(self):
         """区间震荡K线 → structure=区间震荡"""
-        from services.stock_card_service import get_stock_card
+        from backend.services.stock_card_service import get_stock_card
         from tests.test_stock_card_service import _make_klines, _RANGE, _DATES
         klines = _make_klines(_RANGE, _DATES)
         card = get_stock_card(code='999999', date_str='20260920', klines=klines)
@@ -337,7 +337,7 @@ class TestGetStockCardIntegration:
 
     def test_get_stock_card_with_direction(self):
         """传入 direction → card['direction'] 正确"""
-        from services.stock_card_service import get_stock_card
+        from backend.services.stock_card_service import get_stock_card
         from tests.test_stock_card_service import _make_klines, _UPTREND, _DATES
         klines = _make_klines(_UPTREND, _DATES)
         card = get_stock_card(
@@ -350,7 +350,7 @@ class TestGetStockCardIntegration:
 
     def test_get_stock_card_with_mainlines_struct(self):
         """main_lines 传 dict 格式（含 lines/secondary）"""
-        from services.stock_card_service import get_stock_card
+        from backend.services.stock_card_service import get_stock_card
         from tests.test_stock_card_service import _make_klines, _UPTREND, _DATES
         klines = _make_klines(_UPTREND, _DATES)
         card = get_stock_card(
@@ -362,7 +362,7 @@ class TestGetStockCardIntegration:
 
     def test_get_stock_card_with_mainlines_list(self):
         """main_lines 传 list 格式（字符串列表）"""
-        from services.stock_card_service import get_stock_card
+        from backend.services.stock_card_service import get_stock_card
         from tests.test_stock_card_service import _make_klines, _UPTREND, _DATES
         klines = _make_klines(_UPTREND, _DATES)
         # 带 sector=半导体 则 klines 需要传给 card，但卡片的 sector 来自 klines
@@ -376,7 +376,7 @@ class TestGetStockCardIntegration:
 
     def test_build_tags(self):
         """_build_tags 正确生成标签"""
-        from services.stock_card_service import _build_tags
+        from backend.services.stock_card_service import _build_tags
         tags = _build_tags({'profit_model1': True, 'trend_stock': False})
         assert '盈利1' in tags[0] if tags else True
 
@@ -390,7 +390,7 @@ class TestGetStockCardIntegration:
 
     def test_get_stock_card_ema_fields(self):
         """卡片 ema5/10/20/30 数值合理"""
-        from services.stock_card_service import get_stock_card
+        from backend.services.stock_card_service import get_stock_card
         from tests.test_stock_card_service import _make_klines, _UPTREND, _DATES
         klines = _make_klines(_UPTREND, _DATES)
         card = get_stock_card(code='999999', date_str='20260920', klines=klines)

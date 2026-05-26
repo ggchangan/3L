@@ -17,10 +17,10 @@ from unittest.mock import MagicMock
 
 def test_basic_get_and_cache_hit():
     """基本存取：首次调 loader，后续走缓存"""
-    from scripts.cache_layer import cache as _real_cache
+    from backend.core.cache_layer import cache as _real_cache
 
     # 用独立实例避免污染全局缓存
-    from scripts.cache_layer import TTLCache
+    from backend.core.cache_layer import TTLCache
     c = TTLCache()
 
     loader = MagicMock(return_value={'data': [1, 2, 3]})
@@ -38,7 +38,7 @@ def test_basic_get_and_cache_hit():
 
 def test_loader_called_on_expiry():
     """TTL 过期后重新调 loader"""
-    from scripts.cache_layer import TTLCache
+    from backend.core.cache_layer import TTLCache
     c = TTLCache()
 
     call_count = [0]
@@ -62,7 +62,7 @@ def test_loader_called_on_expiry():
 
 def test_invalidate_clears_cache():
     """主动失效后再次调 loader"""
-    from scripts.cache_layer import TTLCache
+    from backend.core.cache_layer import TTLCache
     c = TTLCache()
 
     loader = MagicMock(return_value='fresh')
@@ -80,14 +80,14 @@ def test_invalidate_clears_cache():
 
 def test_invalidate_non_existent_key():
     """invalidate 不存在的 key 不报错"""
-    from scripts.cache_layer import TTLCache
+    from backend.core.cache_layer import TTLCache
     c = TTLCache()
     c.invalidate('nope')  # 不应抛异常
 
 
 def test_set_mock_and_get():
     """set_mock 注入的数据永不过期"""
-    from scripts.cache_layer import TTLCache
+    from backend.core.cache_layer import TTLCache
     c = TTLCache()
 
     c.set_mock('mock_key', {'mocked': True})
@@ -101,7 +101,7 @@ def test_set_mock_and_get():
 
 def test_clear_mocks():
     """clear_mocks 只清除 mock 条目，保留普通缓存"""
-    from scripts.cache_layer import TTLCache
+    from backend.core.cache_layer import TTLCache
     c = TTLCache()
 
     c.set_mock('m1', 'mock_data')
@@ -122,7 +122,7 @@ def test_clear_mocks():
 
 def test_clear_removes_all():
     """clear 清除所有缓存"""
-    from scripts.cache_layer import TTLCache
+    from backend.core.cache_layer import TTLCache
     c = TTLCache()
 
     c.get('a', lambda: 1, ttl=60)
@@ -140,7 +140,7 @@ def test_clear_removes_all():
 
 def test_double_check_locking():
     """并发时 double-check 只调一次 loader"""
-    from scripts.cache_layer import TTLCache
+    from backend.core.cache_layer import TTLCache
     c = TTLCache()
 
     call_count = [0]
@@ -184,7 +184,7 @@ def test_double_check_locking():
 
 def test_stats_structure():
     """stats() 返回正确结构"""
-    from scripts.cache_layer import TTLCache
+    from backend.core.cache_layer import TTLCache
     c = TTLCache()
 
     c.get('a', lambda: 1, ttl=60)
@@ -205,7 +205,7 @@ def test_stats_structure():
 
 def test_loader_error_propagates():
     """loader 抛异常时应该传播，不静默吞掉"""
-    from scripts.cache_layer import TTLCache
+    from backend.core.cache_layer import TTLCache
     c = TTLCache()
 
     def broken_loader():

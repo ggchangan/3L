@@ -9,7 +9,7 @@ TDD: 个股/大盘K线图 今日蜡烛三态决策逻辑
   - {'type': 'settled', ...}    → 收盘实心 + 涨跌标签 + 实际量
 """
 import unittest
-from services.stock_chart_service import _resolve_today_candle_state
+from backend.services.stock_chart_service import _resolve_today_candle_state
 
 
 def _q(close=10.0, open_=10.0, high=10.5, low=9.8, change_pct=1.0, volume_hand=1000):

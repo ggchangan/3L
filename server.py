@@ -6,8 +6,8 @@ import os, json, signal, sys, base64, mimetypes, urllib.parse, time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from urllib.parse import quote
-import config
-from services.logger import get_logger
+from backend import config
+from backend.services.logger import get_logger
 
 log = get_logger('server')
 
@@ -202,28 +202,35 @@ class Handler(SimpleHTTPRequestHandler):
         if ROUTES.dispatch(self, path):
             return
 
-        # --- 页面路由（302 跳转到 React SPA） ---
-        page_routes = {
-            # 旧 .html 页面
-            '/monitor.html': '/', '/review.html': '/',
-            '/stock_analysis.html': '/', '/holdings.html': '/',
-            '/industry.html': '/', '/macro.html': '/',
-            '/top_gainers.html': '/', '/tips.html': '/',
-            '/simulation.html': '/', '/skills.html': '/',
-            # 短路径别名
-            '/monitor': '/', '/review': '/',
-            '/stock_analysis': '/', '/holdings': '/',
-            '/industry': '/', '/macro': '/',
-            '/top_gainers': '/', '/tips': '/',
-            '/simulation': '/', '/skills': '/',
-            '/journal': '/', '/workbench': '/',
-            '/watchlist': '/', '/trend_candidates': '/',
+        # --- 旧 .html 路由（302 跳转到短路径） ---
+        html_redirects = {
+            '/monitor.html': '/monitor', '/review.html': '/review',
+            '/stock_analysis.html': '/stock_analysis',
+            '/holdings.html': '/holdings', '/industry.html': '/industry',
+            '/macro.html': '/macro', '/top_gainers.html': '/top_gainers',
+            '/tips.html': '/tips', '/simulation.html': '/simulation',
+            '/skills.html': '/skills', '/journal.html': '/workbench',
+            '/watchlist.html': '/watchlist',
+            '/trend_candidates.html': '/trend_candidates',
+            '/workbench.html': '/workbench',
         }
-        if path in page_routes:
+        if path in html_redirects:
             self.send_response(302)
-            self.send_header('Location', page_routes[path])
+            self.send_header('Location', html_redirects[path])
             self.end_headers()
             return
+
+        # --- SPA 内部别名（直接返回 react.html，让 BrowserRouter 处理路由）---
+        spa_routes = {
+            '/monitor', '/review', '/stock_analysis',
+            '/holdings', '/industry', '/macro',
+            '/top_gainers', '/tips', '/simulation',
+            '/skills', '/journal', '/workbench',
+            '/watchlist', '/trend_candidates',
+        }
+        if path in spa_routes:
+            self.path = '/react.html'
+            path = self.path
 
         # --- 首页别名 ---
         if path == '/':

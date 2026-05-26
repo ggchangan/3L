@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, '/home/ubuntu/3l-server')
 
 import pytest
-from scripts.buy_point_detection import (
+from backend.core.buy_point_detection import (
     _layer2_factor, _shrink_threshold, _surge_threshold,
     _is_trend_with_ema5, check_panic,
 )

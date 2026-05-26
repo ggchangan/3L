@@ -14,8 +14,8 @@ class TestLoadReviewData:
     def test_empty_holdings_file_returns_empty(self):
         """holdings.json 不存在时返回空列表"""
         from unittest.mock import patch
-        from services.review_service import load_review_data
-        with patch('services.review_service.os.path.isfile', return_value=False):
+        from backend.services.review_service import load_review_data
+        with patch('backend.services.review_service.os.path.isfile', return_value=False):
             holdings, buy_signals, _ = load_review_data(
                 date_str='2026-05-22',
                 existing={'holdings': [], 'buy_signals': []},
@@ -26,7 +26,7 @@ class TestLoadReviewData:
 
     def test_uses_existing_as_fallback(self):
         """holdings.json 有问题时用 existing 数据"""
-        from services.review_service import load_review_data
+        from backend.services.review_service import load_review_data
         holdings, buy_signals, _ = load_review_data(
             date_str='2026-05-22',
             existing={'holdings': [{'code': '000001', 'name': '平安'}], 'buy_signals': [{'code': '000001'}]},
@@ -45,7 +45,7 @@ class TestScanBuySignalsIfNeeded:
 
     def test_returns_existing_if_not_empty(self):
         """buy_signals 非空 → 不扫描，直接返回"""
-        from services.review_service import scan_buy_signals_if_needed
+        from backend.services.review_service import scan_buy_signals_if_needed
         result, stocks = scan_buy_signals_if_needed(
             buy_signals=[{'code': '000001', 'name': '平安'}],
             all_stocks_60d={},
@@ -60,7 +60,7 @@ class TestScanBuySignalsIfNeeded:
 
     def test_empty_signals_stays_empty(self):
         """buy_signals 为空且无数据源 → 空列表"""
-        from services.review_service import scan_buy_signals_if_needed
+        from backend.services.review_service import scan_buy_signals_if_needed
         result, stocks = scan_buy_signals_if_needed(
             buy_signals=[],
             all_stocks_60d=None,

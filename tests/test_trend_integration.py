@@ -9,7 +9,7 @@
 """
 import json
 import pytest
-from scripts.data_layer import get_all_stocks
+from backend.core.data_layer import get_all_stocks
 
 
 # ==================== 数据层集成测试 ====================
@@ -26,7 +26,7 @@ class TestReviewDataField:
 
     def test_decide_system_returns_valid(self, stocks):
         """decide_system 返回值可写入 review 字段"""
-        from scripts.trend_trading import decide_system_with_detail
+        from backend.core.trend_trading import decide_system_with_detail
         
         stocks_data = stocks.get('stocks', stocks)
         main_lines = ['半导体', '算力', '新能源']
@@ -60,7 +60,7 @@ class TestReviewDataField:
 
     def test_trend_stock_has_buy_info(self, stocks):
         """趋势股应有乖离率买点信息"""
-        from scripts.trend_trading import decide_system_with_detail, detect_trend_buy
+        from backend.core.trend_trading import decide_system_with_detail, detect_trend_buy
         
         stocks_data = stocks.get('stocks', stocks)
         main_lines = ['半导体', '算力', '新能源']
@@ -93,7 +93,7 @@ class TestReviewDataField:
 
     def test_3l_stock_has_no_trend_buy(self, stocks):
         """3L股不应有趋势买点信息"""
-        from scripts.trend_trading import decide_system_with_detail, detect_trend_buy
+        from backend.core.trend_trading import decide_system_with_detail, detect_trend_buy
         
         stocks_data = stocks.get('stocks', stocks)
         main_lines = ['半导体', '算力', '新能源']
@@ -113,7 +113,7 @@ class TestReviewDataField:
 
     def test_signal_stock_card_fields_complete(self, stocks):
         """验证 signalStockCard 所需字段都齐全"""
-        from scripts.trend_trading import decide_system_with_detail, detect_trend_buy
+        from backend.core.trend_trading import decide_system_with_detail, detect_trend_buy
         
         stocks_data = stocks.get('stocks', stocks)
         main_lines = ['半导体', '算力', '新能源']
@@ -147,7 +147,7 @@ class TestReviewDataField:
 
     def test_trading_reason_format(self, stocks):
         """trading_reason 格式适合前端展示"""
-        from scripts.trend_trading import decide_system_with_detail
+        from backend.core.trend_trading import decide_system_with_detail
         
         stocks_data = stocks.get('stocks', stocks)
         
@@ -177,7 +177,7 @@ class TestStockAnalysisAPI:
     
     def test_api_response_has_trading_system(self, stocks):
         """API响应应包含 trading_system"""
-        from scripts.trend_trading import decide_system_with_detail, detect_trend_buy
+        from backend.core.trend_trading import decide_system_with_detail, detect_trend_buy
         
         stocks_data = stocks.get('stocks', stocks)
         
@@ -212,7 +212,7 @@ class TestStockAnalysisAPI:
 
     def test_api_3l_stock_no_trend_buy(self, stocks):
         """3L股票API响应中 trend_buy 为 None"""
-        from scripts.trend_trading import decide_system_with_detail, detect_trend_buy
+        from backend.core.trend_trading import decide_system_with_detail, detect_trend_buy
         
         stocks_data = stocks.get('stocks', stocks)
         
@@ -232,7 +232,7 @@ class TestStockAnalysisAPI:
 
     def test_api_response_has_detail_fields(self, stocks):
         """API响应包含三层决策的详情字段"""
-        from scripts.trend_trading import decide_system_with_detail
+        from backend.core.trend_trading import decide_system_with_detail
         
         stocks_data = stocks.get('stocks', stocks)
         
@@ -363,7 +363,7 @@ class TestMonitorIntegration:
 
     def test_trend_buy_in_scan_output(self, stocks):
         """扫描输出中趋势股应有趋势买点"""
-        from scripts.trend_trading import scan_trend_buys
+        from backend.core.trend_trading import scan_trend_buys
         
         stocks_data = stocks.get('stocks', stocks)
         main_lines = ['半导体', '算力', '新能源']
@@ -380,7 +380,7 @@ class TestMonitorIntegration:
 
     def test_scan_grouped_by_direction(self, stocks):
         """扫描结果可被按方向分组（monitor.html的Tab需求）"""
-        from scripts.trend_trading import scan_trend_buys
+        from backend.core.trend_trading import scan_trend_buys
         
         stocks_data = stocks.get('stocks', stocks)
         main_lines = ['半导体', '算力', '新能源']
@@ -403,13 +403,13 @@ class TestMonitorIntegration:
         
         # 趋势买点
         trend_codes = set()
-        from scripts.trend_trading import scan_trend_buys
+        from backend.core.trend_trading import scan_trend_buys
         for r in scan_trend_buys('2026-05-22', stocks_data, main_lines):
             trend_codes.add(r['code'])
         
         # 3L买点（模拟）
-        from scripts.buy_point_detection import scan_all_stocks
-        wl = __import__('scripts.data_layer', fromlist=['get_watchlist']).get_watchlist()
+        from backend.core.buy_point_detection import scan_all_stocks
+        wl = __import__('backend.core.data_layer', fromlist=['get_watchlist']).get_watchlist()
         wl_codes = set(s['code'] for s in wl)
         try:
             three_l_results = scan_all_stocks('2026-05-22', stocks_data, market_position='波中', main_lines=main_lines, watchlist_codes=wl_codes)
@@ -419,7 +419,7 @@ class TestMonitorIntegration:
             # 可以在监测页用不同样式区分，但不排除重叠
             # 如果有重叠，确保趋势系统判断正确
             for code in overlap:
-                from scripts.trend_trading import decide_system
+                from backend.core.trend_trading import decide_system
                 for sec, ss in stocks_data.items():
                     if code in ss:
                         sys_choice = decide_system(code, '2026-05-22', stocks_data, main_lines)
