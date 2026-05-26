@@ -202,46 +202,32 @@ class Handler(SimpleHTTPRequestHandler):
         if ROUTES.dispatch(self, path):
             return
 
-        # --- URL 重定向（302 跳转） ---
-        redirects = {
-            '/monitor.html': '/monitor',
-            '/review.html': '/review',
-            '/stock_analysis.html': '/stock_analysis',
-            '/holdings.html': '/holdings',
-            '/industry.html': '/industry',
-            '/macro.html': '/macro',
-            '/top_gainers.html': '/top_gainers',
-            '/tips.html': '/tips',
-            '/simulation.html': '/simulation',
-            '/skills.html': '/skills',
+        # --- 页面路由（302 跳转到 React SPA） ---
+        page_routes = {
+            # 旧 .html 页面
+            '/monitor.html': '/', '/review.html': '/',
+            '/stock_analysis.html': '/', '/holdings.html': '/',
+            '/industry.html': '/', '/macro.html': '/',
+            '/top_gainers.html': '/', '/tips.html': '/',
+            '/simulation.html': '/', '/skills.html': '/',
+            # 短路径别名
+            '/monitor': '/', '/review': '/',
+            '/stock_analysis': '/', '/holdings': '/',
+            '/industry': '/', '/macro': '/',
+            '/top_gainers': '/', '/tips': '/',
+            '/simulation': '/', '/skills': '/',
+            '/journal': '/', '/workbench': '/',
+            '/watchlist': '/', '/trend_candidates': '/',
         }
-        if path in redirects:
+        if path in page_routes:
             self.send_response(302)
-            self.send_header('Location', redirects[path])
+            self.send_header('Location', page_routes[path])
             self.end_headers()
             return
 
-        # --- URL 别名重定向 ---
-        aliases = {
-            '/review': '/react.html',
-            '/review.html': None,
-            '/monitor': '/react.html',
-            '/journal': '/react.html',
-            '/workbench': '/react.html',
-            '/watchlist': '/react.html',
-            '/trend_candidates': '/react.html',
-            '/holdings': '/react.html',
-            '/industry': '/react.html',
-            '/macro': '/react.html',
-            '/top_gainers': '/react.html',
-            '/stock_analysis': '/react.html',
-            '/tips': '/react.html',
-            '/simulation': '/react.html',
-            '/skills': '/react.html',
-            '/': '/react.html',
-        }
-        if path in aliases and aliases[path]:
-            self.path = aliases[path]
+        # --- 首页别名 ---
+        if path == '/':
+            self.path = '/react.html'
             path = self.path
 
         # --- 静态文件（HTML/JS 不缓存）---
