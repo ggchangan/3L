@@ -6,6 +6,7 @@ import Watchlist from './pages/Watchlist'
 import TrendCandidates from './pages/TrendCandidates'
 import Holdings from './pages/Holdings'
 import Industry from './pages/Industry'
+import Macro from './pages/Macro'
 
 export default function App() {
   return (
@@ -18,14 +19,17 @@ export default function App() {
         <Route path="/workbench" element={<Workbench />} />
         <Route path="/watchlist" element={<Watchlist />} />
         <Route path="/trend_candidates" element={<TrendCandidates />} />
+        <Route path="/holdings" element={<Holdings />} />
+        <Route path="/industry" element={<Industry />} />
+        <Route path="/macro" element={<Macro />} />
         <Route path="/" element={<Monitor />} />
 
-        <Route path="/industry" element={<Industry />} />
-        <Route path="/holdings" element={<Holdings />} />
-        {/* 未迁移的旧页面：通过 window.location 跳转 */}
-        <Route path="/industry.html" element={<LegacyRedirect to="/industry" />} />
+        {/* 旧 HTML 重定向到 React 路由 */}
         <Route path="/holdings.html" element={<LegacyRedirect to="/holdings" />} />
-        <Route path="/macro" element={<LegacyRedirect to="/macro.html" />} />
+        <Route path="/industry.html" element={<LegacyRedirect to="/industry" />} />
+        <Route path="/macro.html" element={<LegacyRedirect to="/macro" />} />
+
+        {/* 未迁移的旧页面：通过 window.location 跳转 */}
         <Route path="/stock_analysis" element={<LegacyRedirect to="/stock_analysis.html" />} />
         <Route path="/simulation" element={<LegacyRedirect to="/simulation.html" />} />
         <Route path="/top_gainers" element={<LegacyRedirect to="/top_gainers.html" />} />
