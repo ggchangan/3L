@@ -5,12 +5,12 @@ import type { BuySignalItem } from '../lib/types'
 const DIR_COLORS: Record<string, string> = {
   '半导体': '#e94560', '算力': '#2196f3', '创新药': '#4CAF50',
   '机器人': '#9C27B0', '新能源': '#FF9800', '资源股': '#8B4513',
-  'AI应用': '#00BCD4', '商业航天': '#FF5722',
+  'AI应用': '#00BCD4', '商业航天': '#FF5722', '先进封装': '#FF6B6B',
+  'PCB概念': '#FFD93D',
 }
-const DIR_ORDER = ['算力', '半导体', '机器人', '新能源', '商业航天', 'AI应用', '资源股', '创新药']
 const PER_PAGE = 10
 
-export default function BuySignalsReview({ signals }: { signals: BuySignalItem[] }) {
+export default function BuySignalsReview({ signals, directionOrder: dirOrder }: { signals: BuySignalItem[]; directionOrder?: string[] }) {
   const [activeDir, setActiveDir] = useState('')
   const [page, setPage] = useState(1)
 
@@ -24,7 +24,8 @@ export default function BuySignalsReview({ signals }: { signals: BuySignalItem[]
   })
 
   const dirs = Object.keys(groups)
-  const sortedDirs = DIR_ORDER.filter(d => dirs.includes(d)).concat(dirs.filter(d => !DIR_ORDER.includes(d)))
+  const order = dirOrder && dirOrder.length > 0 ? dirOrder : Object.keys(groups)
+  const sortedDirs = order.filter(d => dirs.includes(d)).concat(dirs.filter(d => !order.includes(d)))
   if (!activeDir || !groups[activeDir]) {
     if (sortedDirs[0] && activeDir !== sortedDirs[0]) setActiveDir(sortedDirs[0])
   }

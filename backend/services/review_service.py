@@ -607,6 +607,10 @@ def compute_review_real_time(date_str=None):
     }
     save_json(MAINLINES_CACHE_PATH, _mainlines_cache)
 
+    # 获取方向顺序（用户自定义排序）
+    from backend.services.direction_service import get_all_ordered as _get_dir_order
+    direction_order = _get_dir_order()
+
     review = {
         'date': date_str,
         'market': {**market_cycle, 'date': date_str},
@@ -617,6 +621,7 @@ def compute_review_real_time(date_str=None):
         'buy_signals': buy_signals,
         'holdings_review': holdings_review,
         'buy_signals_review': buy_signals_review,
+        'direction_order': direction_order,
     }
 
     return review
