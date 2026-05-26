@@ -226,7 +226,13 @@ def generate_stock_chart(code, mode='review'):
             except Exception:
                 pass
 
-    # 股票名称
+    # 股票名称（从K线取）
+    name = ''
+    for k in klines:
+        if k.get('name'):
+            name = k['name']
+            break
+    name = name or raw_code
 
     # ── 2. 获取实时行情（仅 monitor 模式） ──────────────────
     rt = None
