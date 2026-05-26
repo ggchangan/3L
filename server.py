@@ -254,6 +254,17 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_error(404)
             return
 
+        # --- 图表静态文件（/charts/ → project_root/charts/）---
+        if path.startswith('/charts/'):
+            rel = urllib.parse.unquote(path.lstrip('/'))
+            fp = os.path.join(config.WWW_DIR, rel)
+            if os.path.isfile(fp):
+                ct, _ = mimetypes.guess_type(fp)
+                self._serve_file(fp, ct)
+                return
+            self.send_error(404)
+            return
+
         super().do_GET()
 
     def _authenticate(self):

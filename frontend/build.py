@@ -61,22 +61,6 @@ def copy_static_files():
     return True
 
 
-def ensure_charts_symlink():
-    """创建 dist/charts -> project_root/charts 软链"""
-    link_path = os.path.join(DIST_DIR, 'charts')
-    target = os.path.join(ROOT, 'charts')
-    if os.path.islink(link_path):
-        cur = os.readlink(link_path)
-        if cur == target:
-            return True
-        os.unlink(link_path)
-    elif os.path.exists(link_path):
-        return True
-    os.symlink(target, link_path)
-    print('  ✅ charts/ symlink -> dist/charts/')
-    return True
-
-
 def validate_dist():
     """Step 3: 验证所有 HTML 引用的 css/js 文件在 dist 中存在"""
     print('🔍 验证 dist 完整性...')
@@ -111,8 +95,6 @@ def main():
     if not copy_static_files():
         sys.exit(1)
     if not inject_stock_card_css():
-        sys.exit(1)
-    if not ensure_charts_symlink():
         sys.exit(1)
     if not validate_dist():
         sys.exit(1)
