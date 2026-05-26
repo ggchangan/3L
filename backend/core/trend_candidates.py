@@ -82,13 +82,18 @@ def _scan_industries(industry_names, imap, all_s, manual):
             vols = [k.get('volume', k.get('vol', 0)) for k in kls]
             stage = get_stage(closes, structure, highs, lows, volumes=vols)
 
-            # 信号（趋势交易判定）
-            if cur_b5 < 0 or cur_b5 <= 2:
-                signal = 'buy'
-            elif cur_b5 > 10:
-                signal = 'sell'
-            else:
-                signal = 'hold'
+            # 信号（使用统一的 bias5 区域判定，与复盘页 get_bias5_zone 一致）
+            signal = 'hold'
+            try:
+                from backend.core.trend_trading import get_bias5_zone
+                _idx = len(klines) - 1
+                _zone, _ = get_bias5_zone(klines, _idx)
+                if _zone == '买入':
+                    signal = 'buy'
+                elif _zone == '卖出':
+                    signal = 'sell'
+            except Exception:
+                pass
 
             in_manual = code in manual
             trading_system = 'trend' if in_manual else '3l'
@@ -247,12 +252,23 @@ def get_tracked_stocks():
 
         name = kls[0].get('name', code) if kls else code
 
-        if cur_b5 < 0 or cur_b5 <= 2:
-            signal = 'buy'
-        elif cur_b5 > 10:
-            signal = 'sell'
-        else:
-            signal = 'hold'
+        # 信号（使用统一的趋势交易信号判定，与复盘页一致）
+        signal = 'hold'
+        try:
+            from backend.core.trend_trading import check_trend_type, get_bias5_zone, get_bias10_zone
+            _idx = len(klines) - 1
+            _tt = check_trend_type(klines, _idx)
+            if _tt.get('trend_type'):
+                if _tt.get('trend_5d'):
+                    _zone, _ = get_bias5_zone(klines, _idx)
+                else:
+                    _zone, _ = get_bias10_zone(klines, _idx)
+                if _zone == '买入':
+                    signal = 'buy'
+                elif _zone == '卖出':
+                    signal = 'sell'
+        except Exception:
+            pass
 
         # 更新SVG
         _gen_chart(name, code, kls, cur_b5)
