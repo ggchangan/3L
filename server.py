@@ -206,6 +206,14 @@ class Handler(SimpleHTTPRequestHandler):
         redirects = {
             '/monitor.html': '/monitor',
             '/review.html': '/review',
+            '/stock_analysis.html': '/stock_analysis',
+            '/holdings.html': '/holdings',
+            '/industry.html': '/industry',
+            '/macro.html': '/macro',
+            '/top_gainers.html': '/top_gainers',
+            '/tips.html': '/tips',
+            '/simulation.html': '/simulation',
+            '/skills.html': '/skills',
         }
         if path in redirects:
             self.send_response(302)
@@ -222,6 +230,14 @@ class Handler(SimpleHTTPRequestHandler):
             '/workbench': '/react.html',
             '/watchlist': '/react.html',
             '/trend_candidates': '/react.html',
+            '/holdings': '/react.html',
+            '/industry': '/react.html',
+            '/macro': '/react.html',
+            '/top_gainers': '/react.html',
+            '/stock_analysis': '/react.html',
+            '/tips': '/react.html',
+            '/simulation': '/react.html',
+            '/skills': '/react.html',
             '/': '/react.html',
         }
         if path in aliases and aliases[path]:

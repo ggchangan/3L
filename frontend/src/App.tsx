@@ -4,6 +4,14 @@ import Review from './pages/Review'
 import Workbench from './pages/Workbench'
 import Watchlist from './pages/Watchlist'
 import TrendCandidates from './pages/TrendCandidates'
+import Holdings from './pages/Holdings'
+import Industry from './pages/Industry'
+import Macro from './pages/Macro'
+import TopGainers from './pages/TopGainers'
+import StockAnalysis from './pages/StockAnalysis'
+import Tips from './pages/Tips'
+import Simulation from './pages/Simulation'
+import Skills from './pages/Skills'
 
 export default function App() {
   return (
@@ -16,18 +24,28 @@ export default function App() {
         <Route path="/workbench" element={<Workbench />} />
         <Route path="/watchlist" element={<Watchlist />} />
         <Route path="/trend_candidates" element={<TrendCandidates />} />
+        <Route path="/holdings" element={<Holdings />} />
+        <Route path="/industry" element={<Industry />} />
+        <Route path="/macro" element={<Macro />} />
+        <Route path="/top_gainers" element={<TopGainers />} />
+        <Route path="/stock_analysis" element={<StockAnalysis />} />
+        <Route path="/tips" element={<Tips />} />
+        <Route path="/simulation" element={<Simulation />} />
+        <Route path="/skills" element={<Skills />} />
         <Route path="/" element={<Monitor />} />
 
+        {/* 旧 HTML 重定向到 React 路由 */}
+        <Route path="/holdings.html" element={<LegacyRedirect to="/holdings" />} />
+        <Route path="/industry.html" element={<LegacyRedirect to="/industry" />} />
+        <Route path="/macro.html" element={<LegacyRedirect to="/macro" />} />
+        <Route path="/top_gainers.html" element={<LegacyRedirect to="/top_gainers" />} />
+        <Route path="/stock_analysis.html" element={<LegacyRedirect to="/stock_analysis" />} />
+        <Route path="/tips.html" element={<LegacyRedirect to="/tips" />} />
+        <Route path="/simulation.html" element={<LegacyRedirect to="/simulation" />} />
+        <Route path="/skills.html" element={<LegacyRedirect to="/skills" />} />
+
         {/* 未迁移的旧页面：通过 window.location 跳转 */}
-        <Route path="/holdings" element={<LegacyRedirect to="/holdings.html" />} />
-        <Route path="/industry" element={<LegacyRedirect to="/industry.html" />} />
-        <Route path="/macro" element={<LegacyRedirect to="/macro.html" />} />
-        <Route path="/stock_analysis" element={<LegacyRedirect to="/stock_analysis.html" />} />
-        <Route path="/simulation" element={<LegacyRedirect to="/simulation.html" />} />
-        <Route path="/top_gainers" element={<LegacyRedirect to="/top_gainers.html" />} />
-        <Route path="/tips" element={<LegacyRedirect to="/tips.html" />} />
         <Route path="/tip-detail" element={<LegacyRedirect to="/tip-detail.html" />} />
-        <Route path="/skills" element={<LegacyRedirect to="/skills.html" />} />
         <Route path="*" element={<Navigate to="/monitor" replace />} />
       </Routes>
     </BrowserRouter>
