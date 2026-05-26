@@ -8,6 +8,7 @@ import Holdings from './pages/Holdings'
 import Industry from './pages/Industry'
 import Macro from './pages/Macro'
 import TopGainers from './pages/TopGainers'
+import StockAnalysis from './pages/StockAnalysis'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/industry" element={<Industry />} />
         <Route path="/macro" element={<Macro />} />
         <Route path="/top_gainers" element={<TopGainers />} />
+        <Route path="/stock_analysis" element={<StockAnalysis />} />
         <Route path="/" element={<Monitor />} />
 
         {/* 旧 HTML 重定向到 React 路由 */}
@@ -31,9 +33,9 @@ export default function App() {
         <Route path="/industry.html" element={<LegacyRedirect to="/industry" />} />
         <Route path="/macro.html" element={<LegacyRedirect to="/macro" />} />
         <Route path="/top_gainers.html" element={<LegacyRedirect to="/top_gainers" />} />
+        <Route path="/stock_analysis.html" element={<LegacyRedirect to="/stock_analysis" />} />
 
         {/* 未迁移的旧页面：通过 window.location 跳转 */}
-        <Route path="/stock_analysis" element={<LegacyRedirect to="/stock_analysis.html" />} />
         <Route path="/simulation" element={<LegacyRedirect to="/simulation.html" />} />
         <Route path="/tips" element={<LegacyRedirect to="/tips.html" />} />
         <Route path="/tip-detail" element={<LegacyRedirect to="/tip-detail.html" />} />
