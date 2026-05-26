@@ -65,6 +65,10 @@ export function fetchStockSummary(code: string): Promise<Record<string, unknown>
 }
 
 /** 复盘相关 API */
+export function fetchReviewToday(): Promise<ReviewData> {
+  return fetchJson<ReviewData>('/api/review/today')
+}
+
 export function fetchReviewDates(): Promise<{ dates: string[] }> {
   return fetchJson('/api/review/dates')
 }

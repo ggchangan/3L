@@ -190,7 +190,6 @@ function renderCards() {
                 <select class="dir-select" onchange="changeDir('${s.code}', this.value)" style="width:68px;">
                     ${dirOpts}
                 </select>
-                <span class="trend-toggle ${s.trend_stock ? 'active' : ''}" onclick="toggleTrend('${s.code}', ${!s.trend_stock})" style="cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;${s.trend_stock ? 'background:#2196f3;color:#fff;' : 'background:rgba(255,255,255,0.08);color:#888;'}">${s.trend_stock ? '📈 趋势' : '3L'}</span>
             </div>
             <button class="btn btn-red btn-sm" onclick="removeStock('${s.code}')" style="cursor:pointer;">✕ 删除</button>
         </div>`;
@@ -616,17 +615,6 @@ async function changeDir(code, newDir) {
         await saveWatchlist();
         showToast(`✅ ${s.name||code} → ${newDir}`);
         render();
-    }
-}
-async function toggleTrend(code, enable) {
-    try {
-        const r = await fetch('/api/trend-candidates/toggle?code=' + code + '&enable=' + enable);
-        const d = await r.json();
-        if (d.success === false && d.error) { showToast('❌ ' + d.error); return; }
-        showToast(enable ? '📈 已标记为趋势股' : '🔄 已切换为3L交易');
-        await loadData();
-    } catch(e) {
-        showToast('❌ 切换失败: ' + e.message);
     }
 }
 

@@ -112,19 +112,6 @@ def load_review_data():
             return
         except Exception as e:
             log.error('加载复盘缓存失败: %s', e)
-    # fallback: 加载最新复盘存档
-    if os.path.isdir(ARCHIVE_DIR):
-        archives = sorted([f for f in os.listdir(ARCHIVE_DIR) if f.endswith('.json')])
-        if archives:
-            latest = archives[-1]
-            try:
-                with open(os.path.join(ARCHIVE_DIR, latest)) as f:
-                    loaded = json.load(f)
-                    REVIEW_DATA.clear()
-                    REVIEW_DATA.update(loaded)
-                log.info('load_review: loaded from archive %s, keys=%s', latest, list(REVIEW_DATA.keys())[:5])
-            except Exception as e:
-                log.error('加载复盘存档失败: %s', e)
 def save_review_data():
     global REVIEW_DATA
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
@@ -209,19 +196,6 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_error(404)
                 return
             self._serve_file(fp, as_attachment=True)
-            return
-
-        # --- 复盘按日期读取（返回 JSON 而非 REVIEW_DATA）---
-        if path.startswith('/api/review/') and len(path) > 12:
-            date_str = path[12:]
-            if date_str == 'dates':
-                # 已有专门路由 /api/review/dates
-                return ROUTES.dispatch(self, path)
-            fp = os.path.join(ARCHIVE_DIR, f'{date_str}.json')
-            if os.path.isfile(fp):
-                self._serve_file(fp, 'application/json; charset=utf-8')
-            else:
-                self.send_json({'error': 'not found', 'date': date_str})
             return
 
         # --- API 路由表分发 ---

@@ -1,6 +1,16 @@
 """复盘相关路由（生成、保存、日期列表）"""
 from . import parse_query
-from services.review_service import run_daily_review, generate_review, save_review
+from services.review_service import run_daily_review, generate_review, save_review, compute_review_real_time
+
+
+def _handle_review_today(h, path):
+    """纯实时计算复盘数据（不读存档）"""
+    import json
+    try:
+        data = compute_review_real_time()
+        h.send_json(data)
+    except Exception as e:
+        h.send_json({'error': str(e), 'market': {}, 'mainline': {}, 'holdings_review': [], 'buy_signals_review': []})
 
 
 def _handle_review_generate(h, path):
@@ -53,6 +63,7 @@ def _handle_review_get(h, path):
 
 def register_routes(routes):
     routes.exact('/api/cron/daily-review', func=_handle_cron_daily_review)
+    routes.exact('/api/review/today', func=_handle_review_today)
     routes.exact('/api/review/generate', func=_handle_review_generate)
     routes.exact('/api/review/get', func=_handle_review_get)
     routes.exact('/api/review/dates', func=_handle_review_dates)

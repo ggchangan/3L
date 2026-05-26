@@ -290,7 +290,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             sl = None
             sl_pct = None
 
-        direction = s.get("sector", "")
+        direction = s.get("direction", s.get("sector", ""))
         # 买点优先用卡片数据
         if card_buy_point:
             buy_point_display = card_buy_point

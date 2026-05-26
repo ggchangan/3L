@@ -33,12 +33,24 @@ def get_buy_signals():
         CACHE_DIR,
         f'buy_signals_{datetime.now().strftime("%Y-%m-%d_%H")}.json'
     )
-    # 1小时内已有缓存，直接读取返回
+    # 1小时内已有缓存，且数据有效（至少2条信号且有完整字段），直接读取返回
     if os.path.isfile(cache_file):
-        with open(cache_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            log.info('买点信号缓存命中 (%d条)', len(data.get('signals', [])))
-            return data
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            sigs = data.get('signals', [])
+            # 校验：有效数据至少1条，且第1条有 name 字段（区分脏数据如 [{"code":"300750"}]）
+            if len(sigs) >= 1 and sigs[0].get('name') is not None:
+                log.info('买点信号缓存命中 (%d条)', len(sigs))
+                return data
+            elif data.get('error'):
+                # 错误字典直接返回
+                log.info('买点信号缓存命中（错误）')
+                return data
+            else:
+                log.warning('买点信号缓存无效（仅%d条或缺少字段），重新扫描', len(sigs))
+        except Exception:
+            log.warning('买点信号缓存读取失败，重新扫描')
     # 超过1小时重新扫描
     scan_file = os.path.join(WWW_DIR, 'scripts', 'scan_buy_signals.py')
     log.info('买点信号缓存过期，启动扫描...')

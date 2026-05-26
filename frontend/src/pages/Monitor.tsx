@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import './Monitor.css'
+import NavBar, { BottomNav } from '../components/NavBar'
 import RuleLayer from '../components/RuleLayer'
 import PlanLayer from '../components/PlanLayer'
 import ExternalLayer from '../components/ExternalLayer'
@@ -28,7 +29,7 @@ export default function Monitor() {
 
   return (
     <>
-      <div style={{ marginTop: 10 }} id="nav-top"></div>
+      <NavBar />
       <div className="header">
         <h1>📡 3L 盘中盯盘</h1>
         <div className="update-badge" id="updateBadge">{updateTime}</div>
@@ -99,7 +100,7 @@ export default function Monitor() {
         <AlarmLayer />
       </div>
 
-      <div id="nav-bottom" style={{ textAlign: 'center', marginTop: 24, paddingTop: 14, borderTop: '1px solid #2a2a4a' }}></div>
+      <BottomNav />
     </>
   )
 }

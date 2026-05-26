@@ -78,8 +78,8 @@ body {
 
 /* ===== 个股卡片（通用） ===== */
 .stock-item {
-  background: #0f0f23;
-  border: 1px solid #2a2a4a;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #2a2a4e;
   border-radius: 10px;
   padding: 10px 14px;
   margin-bottom: 8px;

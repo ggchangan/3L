@@ -145,11 +145,27 @@ def load_review_data(date_str, existing, ww_dir):
 def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
                                 ww_dir, all_stocks_path, mainline_data,
                                 market_cycle, wl_func):
-    """如果 buy_signals 为空，从全量自选股扫描买点信号
+    """扫描/过滤买点信号
+
+    始终按当前已启用方向过滤 buy_signals，
+    必要时才执行全量扫描（buy_signals 为空时）。
 
     Returns: (buy_signals, all_stocks_60d)
     """
+    # ── 始终加载 watchlist 并按已启用方向过滤 ──────────────
+    from services.direction_service import get_active as get_active_dirs
+    active_dirs = get_active_dirs()
+    wl = wl_func() if callable(wl_func) else []
+    wl = [s for s in wl if s.get('direction', '其他') in active_dirs]
+    wl_codes = set(s['code'] for s in wl)
+
+    # 已有信号 → 按当前启用方向过滤后返回（排除禁用方向的历史数据）
     if buy_signals:
+        if wl_codes:
+            before = len(buy_signals)
+            buy_signals = [s for s in buy_signals if s.get('code', '') in wl_codes]
+            if len(buy_signals) < before:
+                print(f"[3L复盘] 方向过滤: 移除 {before - len(buy_signals)} 个禁用方向信号")
         return buy_signals, all_stocks_60d
 
     try:
@@ -219,25 +235,29 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
 
         scan_date = latest_date if latest_date else today_yyyymmdd
         ml_names = [l['name'] for l in mainline_data.get('lines', [])]
-        wl = wl_func() if callable(wl_func) else []
-        from services.direction_service import get_active as get_active_dirs
-        active_dirs = get_active_dirs()
-        wl = [s for s in wl if s.get('direction', '其他') in active_dirs]
-        wl_codes = set(s['code'] for s in wl)
+        # wl/wl_codes 已在函数顶部按方向过滤过，直接使用
         scan_result = format_buy_signals(scan_date, all_stocks_60d, ml_names,
                                           top_n=20,
                                           market_position=market_cycle.get('position', ''),
                                           watchlist_codes=wl_codes)
 
         seen = set()
+        # 建立 code → watchlist 方向映射（用已过滤的 wl）
+        wl_dir_map = {}
+        for w in wl:
+            code = w.get('code', '')
+            if code:
+                wl_dir_map[code] = w.get('direction', '')
         for key in ['zhongji_main', 'zhongji_nonmain', 'tupo_main', 'tupo_nonmain']:
             for s in scan_result.get(key, []):
                 if s['code'] not in seen:
                     seen.add(s['code'])
+                    wl_dir = wl_dir_map.get(s['code'], '')
                     buy_signals.append({
                         'name': s.get('name', s['code']),
                         'code': s['code'],
                         'sector': s['sector'],
+                        'direction': wl_dir,  # 从 watchlist 取方向，不用 scan 的 sector
                         'buy_point': '中继买点' if key.startswith('zhongji') else '突破买点',
                         'price': s.get('close', 0), 'change': s['gain'],
                         'score': s['score'],
@@ -496,6 +516,132 @@ def generate_daily_review(date_str=None):
         generate_daily_achievements_pdf(date_str)
     except Exception as e:
         print(f"[3L复盘] 📄 生成每日成果PDF失败: {e}")
+
+    return review
+
+
+def compute_review_real_time(date_str=None):
+    """纯实时计算复盘数据，不读写存档、不生成文档/图表
+
+    返回完整的 review dict，供 /api/review/today 实时调用。
+    """
+    if not date_str:
+        date_str = datetime.now().strftime('%Y-%m-%d')
+
+    from services.review_compute_service import (
+        is_trading_day, fetch_index_klines, fetch_market_quote,
+        judge_peak_valley, get_mainline_data, track_mainline_persistence,
+        generate_trading_plan, get_buy_sell_signals, load_market_data_for_profit_check,
+    )
+    from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
+    from scripts.scan_buy_signals import get_main_lines
+    from backend.core.data_layer import get_watchlist, get_all_stocks
+
+    print(f"[3L复盘实时] 计算 {date_str} 复盘数据...")
+
+    # 获取大盘K线数据
+    index_klines = fetch_index_klines(120)
+    index_klines = [k for k in index_klines if k['date'] <= date_str]
+    if not index_klines:
+        index_klines = fetch_index_klines(120)
+        index_klines = [k for k in index_klines if k['date'] <= date_str]
+    today_quote = fetch_market_quote()
+
+    # ① 大盘周期判定
+    market_cycle = judge_peak_valley(index_klines)
+    if index_klines:
+        last = index_klines[-1]
+        prev = index_klines[-2] if len(index_klines) >= 2 else None
+        market_cycle['price'] = f"{last['close']:.2f}"
+        if prev:
+            chg_pct = (last['close'] - prev['close']) / prev['close'] * 100
+            market_cycle['change'] = round(chg_pct, 2)
+        else:
+            market_cycle['change'] = 0
+        market_cycle['data_date'] = last.get('date', date_str)
+
+    # ② 动量主线
+    mainline_data = get_mainline_data(date_str)
+    if mainline_data.get('lines'):
+        persistence = track_mainline_persistence(date_str, mainline_data['lines'])
+        mainline_data['persistence'] = persistence
+
+    # ③ 实时扫描买点信号（传空列表强制全量扫描 + 方向过滤）
+    all_stocks = get_all_stocks()
+    all_stocks_60d = all_stocks.get('stocks', {}) if isinstance(all_stocks, dict) else {}
+    if not all_stocks_60d:
+        if os.path.isfile(ALL_STOCKS_PATH):
+            with open(ALL_STOCKS_PATH) as _f:
+                all_stocks_60d = json.load(_f).get('stocks', {})
+
+    buy_signals, all_stocks_60d = scan_buy_signals_if_needed(
+        [], all_stocks_60d,
+        date_str, WWW_DIR, ALL_STOCKS_PATH,
+        mainline_data, market_cycle, get_watchlist,
+    )
+
+    # 从实时 buy_signals 生成持仓信号
+    holdings_file = os.path.join(DATA_DIR, 'private', 'holdings.json')
+    holdings = []
+    if os.path.isfile(holdings_file):
+        try:
+            with open(holdings_file) as f:
+                hdata = json.load(f)
+            holdings = hdata.get('holdings', [])
+        except Exception:
+            pass
+
+    timing_signals, stock_cache, bs_by_code = get_buy_sell_signals(
+        holdings, buy_signals, date_str, all_stocks_data=all_stocks_60d
+    )
+
+    # 趋势主线列表
+    _trend_mainlines = get_main_lines()
+    if not _trend_mainlines:
+        try:
+            _trend_mainlines = [l['name'] for l in (mainline_data.get('lines', []) + mainline_data.get('secondary', []))]
+        except:
+            _trend_mainlines = None
+
+    # 持仓复盘 + 买点信号复盘
+    holdings_review = generate_holdings_review(
+        holdings=holdings, stocks=all_stocks_60d,
+        buy_signals=buy_signals,
+        timing_signals_holdings=timing_signals.get('holdings', []),
+        bs_by_code=bs_by_code,
+        date_str=date_str, mainlines=mainline_data,
+        trend_mainlines=_trend_mainlines,
+    )
+
+    buy_signals_review = generate_buy_signals_review(
+        buy_signals=buy_signals, stocks=all_stocks_60d,
+        stock_cache=stock_cache,
+        date_str=date_str, mainlines=mainline_data,
+        trend_mainlines=_trend_mainlines,
+    )
+
+    # ④ 交易计划
+    trading_plan = generate_trading_plan(market_cycle, mainline_data, timing_signals, holdings,
+                                         holdings_review=holdings_review, buy_signals_review=buy_signals_review)
+
+    # 写入主线缓存（供趋势候选页读）
+    _mainlines_cache = {
+        'lines': [l['name'] for l in mainline_data.get('lines', [])],
+        'secondary': [l['name'] for l in mainline_data.get('secondary', [])],
+    }
+    save_json(MAINLINES_CACHE_PATH, _mainlines_cache)
+
+    review = {
+        'date': date_str,
+        'market': {**market_cycle, 'date': date_str},
+        'mainline': mainline_data,
+        'timing_signals': timing_signals,
+        'trading_plan': trading_plan,
+        'holdings': holdings,
+        'buy_signals': buy_signals,
+        'holdings_review': holdings_review,
+        'buy_signals_review': buy_signals_review,
+    }
 
     return review
 

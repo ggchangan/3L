@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchReviewByDate, fetchMarket } from '../lib/api'
+import { fetchMarket } from '../lib/api'
 
 interface MarketData {
   price?: number | string
@@ -15,29 +15,19 @@ interface MarketData {
   bias20_chg_3d?: number
 }
 
-export default function MarketCycle({ date }: { date?: string }) {
+export default function MarketCycle({ date: _date }: { date?: string }) {
   const [data, setData] = useState<MarketData | null>(null)
   const [showScore, setShowScore] = useState(false)
   const [showChart, setShowChart] = useState(false)
   const [showFlow, setShowFlow] = useState(false)
 
   useEffect(() => {
-    if (date) {
-      fetchReviewByDate(date).then(d => {
-        if (d.market) setData(d.market)
-        else refreshFallback()
-      }).catch(() => refreshFallback())
-    } else {
-      refreshFallback()
-    }
-  }, [date])
-
-  function refreshFallback() {
+    // 直接调 /api/market，不读存档
     fetchMarket().then(setData).catch(() => setData({
       price: '--', position: '波中', position_pct: '半仓',
       strategy: '中等仓位·精选个股',
     }))
-  }
+  }, [])
 
   if (!data) return <div className="empty">加载中...</div>
 

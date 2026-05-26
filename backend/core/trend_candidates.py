@@ -144,13 +144,35 @@ def toggle_trend_stock(code, enable):
         changed = True
         # 标记为趋势股时，自动加入自选股（如不在）
         _ensure_in_watchlist(code)
+        # 同步更新 watchlist 里的 trading_system 字段
+        _set_watchlist_trading_system(code, 'trend')
     elif not enable and code in manual:
         manual.discard(code)
         changed = True
+        # 取消趋势时恢复 watchlist 里的 trading_system 字段
+        _set_watchlist_trading_system(code, '3l')
     if changed:
         with open(MANUAL_TREND_PATH, 'w') as f:
             json.dump(sorted(manual), f)
     return {'success': True, 'in_manual': code in manual}
+
+
+def _set_watchlist_trading_system(code, system):
+    """同步 watchlist 中个股的 trading_system 字段"""
+    try:
+        wl = _load_json(WATCHLIST_PATH, {'stocks': []})
+        for s in wl.get('stocks', []):
+            if s['code'] == code:
+                s['trading_system'] = system
+                if system == 'trend':
+                    s['trend_stock'] = True
+                else:
+                    s.pop('trend_stock', None)
+                with open(WATCHLIST_PATH, 'w') as f:
+                    json.dump(wl, f, ensure_ascii=False, indent=2)
+                return
+    except Exception:
+        pass
 
 
 def _ensure_in_watchlist(code):

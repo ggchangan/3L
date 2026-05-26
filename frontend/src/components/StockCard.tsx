@@ -1,4 +1,5 @@
 /** 换算阶段图标 */
+import { useState } from 'react'
 const STAGE_ICONS: Record<string, string> = {
   '上行': '↑', '加速': '🚀', '缩量整理': '🔄', '滞涨': '⚠️',
   '转弱': '📉', '下行': '↓', '加速跌': '📉', '转强': '📈',
@@ -20,6 +21,7 @@ interface StockCardProps {
 }
 
 export default function StockCard({ s, idx, chartPrefix = '' }: StockCardProps) {
+  const [showChart, setShowChart] = useState(false)
   const cls = s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold'
   const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--'
 
@@ -131,8 +133,14 @@ export default function StockCard({ s, idx, chartPrefix = '' }: StockCardProps) 
             <span className="v" style={{ color: s.mainline_level === '主线' ? '#e94560' : s.mainline_level === '次级主线' ? '#ffd700' : '#666', fontSize: 11 }}>{s.mainline_level}</span>
           </div>
         ) : null}
+        <div className="field">
+          <span className="l" style={{ cursor: 'pointer', color: '#4ecdc4' }} onClick={() => setShowChart(v => !v)}>📊</span>
+        </div>
       </div>
       <div style={{ marginTop: 2, fontSize: 11, color: conclusionColor, padding: '2px 0' }}>💡 {conclusion}</div>
+      <div id={chartId} className="chart-container" style={{ display: showChart ? 'block' : 'none', marginTop: 6 }}>
+        <object data={chartUrl} type="image/svg+xml" style={{ width: '100%', maxWidth: 700, borderRadius: 8 }} />
+      </div>
     </div>
   )
 }

@@ -1048,3 +1048,32 @@ def generate_index_chart():
         f.write(content)
 
     return svg_file, None
+
+
+def generate_trend_stock_chart(code):
+    """生成趋势交易 K 线 SVG（使用 gen_trend_chart 的绘制逻辑）"""
+    raw_code = str(code).strip()
+    for pfx in ['SH', 'SZ', 'sh', 'sz']:
+        if raw_code.startswith(pfx):
+            raw_code = raw_code[len(pfx):]
+            break
+    raw_code = raw_code[-6:] if len(raw_code) >= 6 else raw_code
+
+    stocks = get_all_stocks()
+    klines = get_stock_klines(raw_code, stocks=stocks)
+    if not klines or len(klines) < 10:
+        return None, f'数据不足: {len(klines) if klines else 0} 根K线'
+
+    name = klines[0].get('name', raw_code) if klines else raw_code
+
+    from backend.core.gen_trend_chart import gen_trend_svg
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.svg', delete=False) as tmpf:
+        out_path = tmpf.name
+
+    gen_trend_svg(name, raw_code, klines, out_path, trend_bias=None)
+
+    with open(out_path, 'r') as f:
+        svg_str = f.read()
+    os.unlink(out_path)
+    return svg_str, None

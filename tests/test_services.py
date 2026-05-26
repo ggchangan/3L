@@ -183,45 +183,35 @@ class TestGetConceptBoards:
 # 3. monitor_service.get_buy_signals()
 # ═══════════════════════════════════════════════════════════════════
 #
-# ⚠️ BUG KNOWN: monitor_service.py uses config.atomic_json_dump() at line 46
-#    but does NOT import `config` (only `from config import CACHE_DIR, ...`).
-#    This test catches that bug: without mocking 'config' into the module,
-#    calling the subprocess-success path would raise NameError.
-#    We inject `monitor_service.config = MagicMock()` to bypass it and test
-#    the remaining logic.
+# NOTE: monitor_service imports atomic_json_dump directly via
+#   `from config import ... atomic_json_dump`
+# Subprocess-success tests must patch services.monitor_service.atomic_json_dump
+# (not config.atomic_json_dump) to avoid writing to production cache.
 
 class TestGetBuySignals:
     """Tests for monitor_service.get_buy_signals().
 
     Returns error dict on subprocess failure. Has 1-hour cache TTL.
-    Exposes the missing 'config' import bug when subprocess succeeds.
     """
-
-    def _patch_config(self, module):
-        """Inject missing 'config' reference into module namespace."""
-        module.config = MagicMock()
-        return module.config
 
     @patch('services.monitor_service.os.path.isfile', return_value=True)
     @patch('builtins.open', new_callable=mock_open,
-           read_data='{"signals": [{"code": "000001"}]}')
+           read_data='{"signals": [{"code": "000001", "name": "平安银行", "trading_system": "3l"}]}')
     def test_returns_cached_data(self, mock_file, mock_isfile):
         """Happy path: existing cache file returns its contents."""
         from services import monitor_service
         result = monitor_service.get_buy_signals()
-        assert result == {"signals": [{"code": "000001"}]}
+        assert result == {"signals": [{"code": "000001", "name": "平安银行", "trading_system": "3l"}]}
 
     @patch('services.monitor_service.os.path.isfile', return_value=False)
     @patch('services.monitor_service.subprocess.run')
     @patch('services.monitor_service.os.makedirs')
-    def test_subprocess_success_returns_data(self, mock_mkdir,
+    @patch('services.monitor_service.atomic_json_dump')
+    def test_subprocess_success_returns_data(self, mock_dump,
+                                             mock_mkdir,
                                              mock_subp, mock_isfile):
-        """Subprocess success: returns parsed JSON, writes cache.
-
-        This path reveals the missing 'config' import bug if not mocked.
-        """
+        """Subprocess success: returns parsed JSON, writes cache."""
         from services import monitor_service
-        mock_config = self._patch_config(monitor_service)
 
         mock_subp.return_value = MagicMock(
             returncode=0,
@@ -232,7 +222,7 @@ class TestGetBuySignals:
         result = monitor_service.get_buy_signals()
 
         assert result == {"signals": [{"code": "300750"}]}
-        mock_config.atomic_json_dump.assert_called_once()
+        mock_dump.assert_called_once()
 
     @patch('services.monitor_service.os.path.isfile', return_value=False)
     @patch('services.monitor_service.subprocess.run')
@@ -270,15 +260,17 @@ class TestGetBuySignals:
     @patch('services.monitor_service.os.path.isfile', return_value=False)
     @patch('services.monitor_service.subprocess.run')
     @patch('services.monitor_service.os.makedirs')
-    def test_exposes_missing_config_import(self, mock_mkdir,
+    @patch('services.monitor_service.atomic_json_dump')
+    def test_exposes_missing_config_import(self, mock_dump,
+                                           mock_mkdir,
                                            mock_subp, mock_isfile):
-        """Without injecting 'config', subprocess success hits NameError
-        but it's caught by the generic except Exception handler and
-        returned as an error dict. This test proves the P0 bug exists
-        by checking the return value instead of expecting an exception.
+        """Subprocess success writes cache via direct import (NOT config.atomic_json_dump).
+
+        The function imports atomic_json_dump directly, so removing
+        module.config has no effect — verify it works without it.
         """
         from services import monitor_service
-        # Remove our patch if it exists from a previous test
+        # Remove any injected config mock
         if hasattr(monitor_service, 'config') and not isinstance(
                 monitor_service.config, type(monitor_service)):
             del monitor_service.config
@@ -291,8 +283,9 @@ class TestGetBuySignals:
 
         result = monitor_service.get_buy_signals()
 
-        assert 'error' in result
-        assert 'config' in result['error'] or 'atomic_json_dump' in result['error']
+        # atomic_json_dump is imported directly, not via config
+        assert result == {"signals": [{"code": "300750"}]}
+        mock_dump.assert_called_once()
 
     @patch('services.monitor_service.os.path.isfile', return_value=True)
     @patch('builtins.open', new_callable=mock_open,

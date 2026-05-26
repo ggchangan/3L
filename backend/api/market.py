@@ -8,8 +8,28 @@ log = get_logger('api.market')
 
 
 def _handle_market(h, path):
-    _srv = get_server()
-    h.send_json(_srv.REVIEW_DATA.get('market', {}))
+    """实时计算大盘周期数据（不读存档）"""
+    from services.review_compute_service import fetch_index_klines, judge_peak_valley, fetch_market_quote
+    try:
+        index_klines = fetch_index_klines(120)
+        if not index_klines:
+            index_klines = fetch_index_klines(120)
+        today_quote = fetch_market_quote()
+        market_cycle = judge_peak_valley(index_klines)
+        if index_klines:
+            last = index_klines[-1]
+            prev = index_klines[-2] if len(index_klines) >= 2 else None
+            market_cycle['price'] = f"{last['close']:.2f}"
+            if prev:
+                chg_pct = (last['close'] - prev['close']) / prev['close'] * 100
+                market_cycle['change'] = round(chg_pct, 2)
+            else:
+                market_cycle['change'] = 0
+            market_cycle['data_date'] = last.get('date', '')
+        h.send_json(market_cycle)
+    except Exception as e:
+        log.error(f'实时计算大盘数据失败: {e}')
+        h.send_json({'price': '--', 'position': '波中', 'score': 0})
 
 
 def _handle_mainlines(h, path):
