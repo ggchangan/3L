@@ -84,7 +84,19 @@ mkdir -p ~/3l-server/logs
 
 ## 第3步：运行
 
-方式A — 用 docker run（简单）：
+**推荐方式** — 使用项目自带的 docker-compose.yml：
+
+```bash
+cd ~/3l-server
+# 如果之前用了 deploy.sh，compose 文件已经生成好了
+# 如果手动部署，先下载仓库里的 docker-compose.yml：
+curl -O https://raw.githubusercontent.com/ggchangan/3L/feature/deploy-docker/deploy/docker-compose.yml
+
+# 通过环境变量传入密码启动
+AUTH_PASS=你的密码 sudo docker compose up -d
+```
+
+或者用 `docker run`（更简单，适合不熟悉 compose 的同学）：
 
 ```bash
 sudo docker run -d \
@@ -95,36 +107,7 @@ sudo docker run -d \
   -e AUTH_USER=admin \
   -e AUTH_PASS=你的密码 \
   --restart unless-stopped \
-  3l-server:latest
-```
-
-方式B — 用 docker-compose（推荐，容易管理）：
-
-先创建 `~/3l-server/docker-compose.yml`：
-
-```yaml
-version: '3.8'
-
-services:
-  server:
-    image: 3l-server:latest
-    container_name: 3l-server
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./data:/data
-      - ./logs:/app/logs
-    environment:
-      - AUTH_USER=admin
-      - AUTH_PASS=你的密码
-    restart: unless-stopped
-```
-
-然后启动：
-
-```bash
-cd ~/3l-server
-sudo docker compose up -d
+  ccr.ccs.tencentyun.com/ygys30ds/lll:latest
 ```
 
 ---
