@@ -27,7 +27,7 @@ def _handle_stock_backtest(h, path):
 
 
 def _get_stock_trading_system(code):
-    """从 watchlist 查交易系统类型（后端自决，不依赖前端传参）"""
+    """从 manual_trend_stocks.json 查交易系统类型"""
     raw_code = str(code).strip()
     for pfx in ['SH', 'SZ', 'sh', 'sz']:
         if raw_code.startswith(pfx):
@@ -35,16 +35,12 @@ def _get_stock_trading_system(code):
             break
     raw_code = raw_code[-6:] if len(raw_code) >= 6 else raw_code
     try:
-        from config import WATCHLIST_PATH
+        from config import MANUAL_TREND_PATH
         import json
-        with open(WATCHLIST_PATH, 'r', encoding='utf-8') as f:
-            wl = json.load(f)
-        for stock in wl.get('stocks', []):
-            sc = str(stock.get('code', '')).strip()
-            if sc == raw_code:
-                if stock.get('trend_stock') or stock.get('trading_system') == 'trend':
-                    return 'trend'
-                return '3l'
+        with open(MANUAL_TREND_PATH, 'r', encoding='utf-8') as f:
+            manual = json.load(f)
+        if raw_code in manual:
+            return 'trend'
     except Exception:
         pass
     return '3l'

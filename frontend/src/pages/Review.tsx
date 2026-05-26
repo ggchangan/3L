@@ -11,31 +11,6 @@ import './Review.css'
 
 const WDS = ['日', '一', '二', '三', '四', '五', '六']
 
-/** 从 watchlist 读 trend_stock 标记，覆盖存档中的 trading_system */
-function overlayTrendFromWatchlist(
-  items: any[],
-  wlByCode: Record<string, any>
-): any[] {
-  return items.map(item => {
-    const code = (item.code || '').replace(/^sh|^sz|^SH|^SZ/, '')
-    const wl = wlByCode[code]
-    if (!wl) return item
-    if (wl.trend_stock || wl.trading_system === 'trend') {
-      return { ...item, trading_system: 'trend', trend_stock: true }
-    }
-    return item
-  })
-}
-
-function indexBy<T extends { code?: string }>(items: T[]): Record<string, T> {
-  const m: Record<string, T> = {}
-  items.forEach(s => {
-    const code = (s.code || '').replace(/^sh|^sz|^SH|^SZ/, '')
-    m[code] = s
-  })
-  return m
-}
-
 export default function Review() {
   const [data, setData] = useState<ReviewData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -48,18 +23,12 @@ export default function Review() {
   useEffect(() => {
     setLoading(true)
     setError('')
-    Promise.all([
-      fetchReviewToday(),
-      fetch('/api/watchlist').then(r => r.json()).catch(() => ({ stocks: [] })),
-    ]).then(([reviewData, wl]) => {
-      const wlByCode = indexBy(wl.stocks || [])
-      const holdings = reviewData.holdings_review || reviewData.holdings || []
-      const buySignals = reviewData.buy_signals_review || []
+    fetchReviewToday().then(reviewData => {
       setData({
         mainline: reviewData.mainline,
         trading_plan: reviewData.trading_plan,
-        holdings_review: overlayTrendFromWatchlist(holdings, wlByCode),
-        buy_signals_review: overlayTrendFromWatchlist(buySignals, wlByCode),
+        holdings_review: reviewData.holdings_review || reviewData.holdings || [],
+        buy_signals_review: reviewData.buy_signals_review || [],
       })
       setLoading(false)
     }).catch(err => {

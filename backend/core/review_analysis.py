@@ -239,13 +239,6 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
         # 区间震荡：重算stage
         stage = _recalc_stage_for_range(structure, stage, code, stocks)
 
-        code_sig, _, _ = judge_signal(
-            structure=structure, stage=stage,
-            buy_point=s.get("buy_point", ""),
-        )
-        if code_sig != "buy":
-            continue
-
         buy_point_display = s.get("buy_point", "")
         actual_date = _get_actual_date(code, stocks, date_str)
 
@@ -268,6 +261,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             card_price = card["price"]
             card_change = card["change"]
             card_buy_point = card["buy_point"]
+            card_signal = card.get("signal", "hold")
             trading_system = card["trading_system"]
             trading_reason = card["trading_reason"]
             trend_buy_type = card.get("trend_buy_type", "")
@@ -280,6 +274,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             card_price = s.get("price", 0)
             card_change = s.get("change", 0)
             card_buy_point = ""
+            card_signal = "hold"
             trading_system = "3l"
             trading_reason = "判定失败"
             trend_buy_type = ""
@@ -289,6 +284,10 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             mainline_level = ""
             sl = None
             sl_pct = None
+
+        # 信号只看最新K线（用卡片的判定结果）
+        if card_signal != "buy":
+            continue
 
         direction = s.get("direction", s.get("sector", ""))
         # 买点优先用卡片数据
@@ -315,7 +314,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             "stop_loss_pct": sl_pct,
             "structure": structure,
             "stage": stage,
-            "signal": code_sig,
+            "signal": card_signal,
             "ema": sc_info.get("ema", "--"),
             "vol_analysis": sc_info.get("vol_analysis", "--"),
             "flags": s.get("flags", ""),
