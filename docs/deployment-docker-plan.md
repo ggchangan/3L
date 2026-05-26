@@ -64,7 +64,10 @@
 | D-05 | 验证容器内前端页面正常加载（JS/CSS/API调用） | 0.3h | D-04 |
 | D-06 | 配置数据目录挂载：`-v /path/to/data:/home/ubuntu/data` | 0.3h | D-05 |
 | D-07 | 配置 config 挂载：密钥/端口/env 分离 | 0.5h | D-05 |
-| D-08 | 容器内数据更新：写一个 container-cron.sh，运行时自动跑 update 任务 | 0.5h | D-06 |
+| D-08 | 容器内数据更新：entrypoint 启动 crond + crontab | 0.5h | D-06 | ✅ |
+| D-09 | 注册腾讯云容器镜像服务 | 0.3h | — | ✅ |
+| D-10 | docker tag + push 到腾讯云 | 0.3h | D-08,D-09 | ✅ |
+| D-11 | 部署文档 + 数据目录修正 | 0.5h | D-10 | ✅ |
 
 **验证标准：** ✅ 你在自己机器上 `docker run` 后打开浏览器能正常使用，数据更新正常
 

@@ -30,7 +30,7 @@ RUN python3 -m pip install --no-cache-dir -r requirements.txt -i https://pypi.tu
 COPY . .
 
 # ====== 运行时目录 ======
-RUN mkdir -p /data/private /data/cache /data/knowledge_base /app/logs
+RUN mkdir -p /data/private /data/cache /data/charts /app/logs
 
 # ====== 环境变量 ======
 ENV WWW_DIR=/app

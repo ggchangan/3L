@@ -51,23 +51,37 @@ sudo docker load -i 3l-server.tar
 
 ## 第3步：准备数据目录
 
+创建数据目录（挂载到容器 `/data`）：
+
 ```bash
 mkdir -p ~/3l-server/data
 mkdir -p ~/3l-server/logs
 ```
 
-把数据包解压到 `~/3l-server/data/`，目录结构应该是：
+**数据目录无需手动准备任何文件。** 容器的入口脚本会自动创建初始配置（空的 watchlist/holdings 等），17:00 定时任务会下载全量行情数据。
+
+启动后的目录结构会自动变为：
+
 ```
 ~/3l-server/data/
-├── stock_data/         个股K线数据
-├── index_data/         指数数据
-├── sector_data/        板块数据
-├── private/            私有数据（复盘存档、工作台等）
-├── knowledge_base/     知识库
-├── all_stocks_60d.json 全量股票数据
-├── watchlist.json      自选股列表
-└── ...
+├── all_a_stocks.json          ← 预置（股票代码→名称映射）
+├── pinyin_initials.json       ← 预置（拼音首字母搜索）
+├── all_stocks_60d.json        ← 17:00 自动生成
+├── index_sh_data.json         ← 17:00 自动生成
+├── sector_daily.json          ← 17:00 自动生成
+├── board_constituents.json    ← 17:00 自动生成
+├── directions.json            ← 空配置（首次启动自动创建）
+├── private/                   ← 用户数据
+│   ├── watchlist.json         ← 首次空数组，用户自行添加
+│   ├── holdings.json          ← 持仓
+│   ├── trades.json            ← 交易记录
+│   ├── workbench/             ← 工作台数据（自动生成）
+│   └── journal_entries.json   ← 工作日志
+├── cache/                     ← 运行时缓存（自动生成）
+└── charts/                    ← K线图缓存（自动生成）
 ```
+
+> **提示：** 如果同学想从你的数据迁移（比如从你这里拷贝自选股），可以直接把对应的 JSON 文件放到 `~/3l-server/data/private/` 目录下再启动容器。
 
 ---
 
