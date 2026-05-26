@@ -6,7 +6,7 @@ from backend.core.trend_trading import (
     decide_system, decide_system_with_detail, _load_manual_trend,
 )
 
-from config import MANUAL_TREND_PATH as MANUAL_PATH
+from backend.config import MANUAL_TREND_PATH as MANUAL_PATH
 
 
 class TestManualTrendList:

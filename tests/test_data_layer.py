@@ -74,7 +74,7 @@ class TestGetAllStocks:
     def test_has_eight_directions(self):
         """Directions are now managed via direction_service, not hardcoded."""
         import os
-        from config import DATA_DIR
+        from backend.config import DATA_DIR
         dir_path = os.path.join(DATA_DIR, 'directions.json')
         if os.path.isfile(dir_path):
             from backend.services.direction_service import load_directions
@@ -141,7 +141,7 @@ class TestAtomicSave:
     def _save_via_temp_path(self, stocks, last_updated, tmp_dir):
         """Helper: save data using _atomic_save_json to a temp path."""
         from backend.core.data_layer import _atomic_save_json
-        from config import ALL_STOCKS_PATH as REAL_PATH
+        from backend.config import ALL_STOCKS_PATH as REAL_PATH
         test_path = os.path.join(tmp_dir, 'test_stocks.json')
         data = {'last_updated': last_updated, 'stocks': stocks}
         _atomic_save_json(test_path, data)

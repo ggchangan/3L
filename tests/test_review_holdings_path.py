@@ -46,7 +46,7 @@ class TestHoldingsPath(unittest.TestCase):
     def test_fix_should_use_DATA_DIR(self):
         """修复后，路径应使用 DATA_DIR 而非 ww_dir"""
         # 验证 DATA_DIR 路径与 config.HOLDINGS_PATH 一致
-        from config import HOLDINGS_PATH, DATA_DIR
+        from backend.config import HOLDINGS_PATH, DATA_DIR
         expected = os.path.join(DATA_DIR, 'private', 'holdings.json')
         self.assertEqual(expected, HOLDINGS_PATH)
 

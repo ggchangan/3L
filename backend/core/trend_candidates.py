@@ -5,7 +5,7 @@
 """
 import json, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-
+from backend.config import DATA_DIR
 from backend.core.data_layer import _load_json
 from backend.core.ema_utils import ema_list, get_structure, get_stage
 from backend.core.gen_trend_chart import gen_trend_svg

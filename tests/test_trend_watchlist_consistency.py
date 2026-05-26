@@ -10,7 +10,7 @@ from backend.core.trend_trading import decide_system
 from backend.core.trend_candidates import toggle_trend_stock
 from backend.core.trend_trading import _load_manual_trend as _load_manual
 
-from config import MANUAL_TREND_PATH as MANUAL_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH
+from backend.config import MANUAL_TREND_PATH as MANUAL_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH
 
 
 class TestTrendWatchlistConsistency:
