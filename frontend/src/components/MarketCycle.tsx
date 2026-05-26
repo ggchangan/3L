@@ -134,7 +134,7 @@ export default function MarketCycle({ date: _date }: { date?: string }) {
       )}
       {showFlow && (
         <div style={{ marginTop: 8 }}>
-          <img src="/charts/fund_flow_chart.png" alt="资金流向"
+          <img src="/pub/charts/fund_flow_chart.png" alt="资金流向"
             style={{ width: '100%', maxWidth: 700, borderRadius: 8, display: 'block', margin: '0 auto' }} />
         </div>
       )}

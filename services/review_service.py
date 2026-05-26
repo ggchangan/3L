@@ -491,7 +491,8 @@ def generate_daily_review(date_str=None):
     try:
         ff_script = os.path.join(WWW_DIR, 'gen_fund_flow_chart.py')
         if os.path.isfile(ff_script):
-            subprocess.run([sys.executable, ff_script, date_str], timeout=120, capture_output=True)
+            subprocess.run([sys.executable, ff_script, date_str],
+                           timeout=120, capture_output=True, cwd=WWW_DIR)
             print("[3L复盘] 💰 资金流向图已生成")
     except Exception as e:
         print(f"[3L复盘] 💰 生成资金流向图跳过: {e}")
@@ -502,7 +503,7 @@ def generate_daily_review(date_str=None):
         os.makedirs(chart_archive_dir, exist_ok=True)
         src_charts = [
             (os.path.join(CHARTS_DIR, 'zzqz_v2.svg'), 'zzqz_v2.svg'),
-            (os.path.join(WWW_DIR, 'charts', 'fund_flow_chart.png'), 'fund_flow_chart.png'),
+            (os.path.join(CHARTS_DIR, 'fund_flow_chart.png'), 'fund_flow_chart.png'),
         ]
         for src, basename in src_charts:
             if os.path.isfile(src):
