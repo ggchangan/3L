@@ -47,7 +47,7 @@ export default function StockAnalysis() {
     if (!q.trim()) return
     setLoading(true); setError(''); setAnalysis(null)
     try {
-      const r = await fetch(`http://43.136.177.133:8080/api/stock-analysis?q=${encodeURIComponent(q.trim())}`)
+      const r = await fetch(`/api/stock-analysis?q=${encodeURIComponent(q.trim())}`)
       const d = await r.json()
       if (d.error) { setError(d.error); return }
       lastCode.current = d.code
@@ -62,7 +62,7 @@ export default function StockAnalysis() {
     if (!code) return
     setBtLoading(true); setBtError(''); setBtData(null)
     try {
-      const r = await fetch(`http://43.136.177.133:8080/api/stock-backtest?code=${encodeURIComponent(code)}&days=60`)
+      const r = await fetch(`/api/stock-backtest?code=${encodeURIComponent(code)}&days=60`)
       const d = await r.json()
       if (d.error) { setBtError(d.error); return }
       setBtData(d)
