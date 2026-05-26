@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
 import StockCard from '../components/StockCard'
 import type { BuySignalItem } from '../lib/types'
+import { pinyin } from 'pinyin-pro'
 import './Watchlist.css'
 
 interface WatchlistStock {
@@ -105,9 +106,9 @@ export default function Watchlist() {
         if (s.code.includes(f)) return true
         const name = (s.name || '').toLowerCase()
         if (name.includes(f)) return true
-        // 简单拼音首字母匹配（简化版）
-        const initials = name.split(/\s+/).map(w => w[0]).join('').toLowerCase()
-        if (initials.includes(f)) return true
+        // 拼音首字母匹配（招金黄金 → ZJHG）
+        const pyInitials = pinyin(name, { pattern: 'first', toneType: 'none' }).replace(/\s+/g, '')
+        if (pyInitials.includes(f)) return true
         return false
       }
       return true
