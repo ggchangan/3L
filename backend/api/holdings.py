@@ -1,6 +1,6 @@
 """持仓/交易记录路由"""
 import json
-from services.holdings_service import get_holdings_with_prices, get_trades, save_holdings
+from backend.services.holdings_service import get_holdings_with_prices, get_trades, save_holdings
 
 
 def _handle_holdings(h, path):

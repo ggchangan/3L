@@ -1,12 +1,12 @@
 """自选股相关路由"""
 import json
 from . import parse_query
-from services.watchlist_service import (
+from backend.services.watchlist_service import (
     get_watchlist, search_stocks, save_watchlist,
     get_all_directions, add_direction, remove_direction,
     set_direction_enabled, suggest_directions, migrate_directions,
 )
-from services.trend_service import get_watchlist_analysis
+from backend.services.trend_service import get_watchlist_analysis
 
 
 def _handle_watchlist(h, path):

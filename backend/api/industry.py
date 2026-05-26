@@ -1,10 +1,10 @@
 """行业板块路由"""
 from . import parse_query
-from services.market_service import (
+from backend.services.market_service import (
     get_industry_boards, get_concept_boards, get_industry_map,
     get_sector_chart,
 )
-from services.knowledge_service import get_kb_list, get_kb_content
+from backend.services.knowledge_service import get_kb_list, get_kb_content
 
 
 def _handle_industry_boards(h, path):

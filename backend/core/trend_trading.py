@@ -287,7 +287,7 @@ def is_smooth_trend(code, date_str, data):
 
 # ==================== 手动指定趋势交易 ====================
 
-import config
+from backend import config
 MANUAL_TREND_PATH = config.MANUAL_TREND_PATH
 _manual_trend_cache = None
 

@@ -1,6 +1,6 @@
 """复盘相关路由（生成、保存、日期列表）"""
 from . import parse_query
-from services.review_service import run_daily_review, generate_review, save_review, compute_review_real_time
+from backend.services.review_service import run_daily_review, generate_review, save_review, compute_review_real_time
 
 
 def _handle_review_today(h, path):
@@ -38,7 +38,7 @@ def _handle_cron_daily_review(h, path):
 def _handle_review_dates(h, path):
     """返回历史复盘日期列表"""
     import os
-    import config
+    from backend import config
     archive_dir = config.REVIEW_ARCHIVE_DIR
     dates = []
     if os.path.isdir(archive_dir):
@@ -52,7 +52,7 @@ def _handle_review_dates(h, path):
 def _handle_review_get(h, path):
     """返回当前复盘数据"""
     import json
-    import config
+    from backend import config
     try:
         with open(config.REVIEW_DATA_PATH, 'r', encoding='utf-8') as f:
             data = json.load(f)

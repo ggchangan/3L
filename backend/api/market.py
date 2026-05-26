@@ -1,15 +1,15 @@
 """大盘市场数据路由"""
 from . import parse_query, get_server
-from services.market_service import get_momentum_data
-from services.stock_chart_service import generate_index_chart
-from services.logger import get_logger
+from backend.services.market_service import get_momentum_data
+from backend.services.stock_chart_service import generate_index_chart
+from backend.services.logger import get_logger
 
 log = get_logger('api.market')
 
 
 def _handle_market(h, path):
     """实时计算大盘周期数据（不读存档）"""
-    from services.review_compute_service import fetch_index_klines, judge_peak_valley, fetch_market_quote
+    from backend.services.review_compute_service import fetch_index_klines, judge_peak_valley, fetch_market_quote
     try:
         index_klines = fetch_index_klines(120)
         if not index_klines:
