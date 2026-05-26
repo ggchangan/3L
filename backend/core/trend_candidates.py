@@ -82,16 +82,15 @@ def _scan_industries(industry_names, imap, all_s, manual):
             vols = [k.get('volume', k.get('vol', 0)) for k in kls]
             stage = get_stage(closes, structure, highs, lows, volumes=vols)
 
-            # 信号（使用统一的 bias5 区域判定，与复盘页 get_bias5_zone 一致）
+            # 信号（用 get_stock_card 统一判定，已标记→趋势判定，未标记→3L判定）
             signal = 'hold'
             try:
-                from backend.core.trend_trading import get_bias5_zone
-                _idx = len(klines) - 1
-                _zone, _ = get_bias5_zone(klines, _idx)
-                if _zone == '买入':
-                    signal = 'buy'
-                elif _zone == '卖出':
-                    signal = 'sell'
+                from backend.services.stock_card_service import get_stock_card
+                _kls = kls
+                _today = _kls[-1]['date']
+                _today_fmt = f'{_today[:4]}-{_today[4:6]}-{_today[6:8]}'
+                _card = get_stock_card(code, _today_fmt, klines=_kls)
+                signal = _card.get('signal', 'hold')
             except Exception:
                 pass
 
@@ -252,21 +251,16 @@ def get_tracked_stocks():
 
         name = kls[0].get('name', code) if kls else code
 
-        # 信号（使用统一的趋势交易信号判定，与复盘页一致）
+        # 信号（已标记趋势股，用 detect_trend_buy 判定，与复盘页一致）
         signal = 'hold'
         try:
-            from backend.core.trend_trading import check_trend_type, get_bias5_zone, get_bias10_zone
-            _idx = len(klines) - 1
-            _tt = check_trend_type(klines, _idx)
-            if _tt.get('trend_type'):
-                if _tt.get('trend_5d'):
-                    _zone, _ = get_bias5_zone(klines, _idx)
-                else:
-                    _zone, _ = get_bias10_zone(klines, _idx)
-                if _zone == '买入':
-                    signal = 'buy'
-                elif _zone == '卖出':
-                    signal = 'sell'
+            from backend.core.trend_trading import detect_trend_buy
+            _sector = info.get('ths_industry', '') or ''
+            _data = {_sector: {code: kls}}
+            _date_clean = kls[-1]['date']
+            _tb = detect_trend_buy(code, _date_clean, _data)
+            if _tb and _tb.get('has_buy'):
+                signal = 'buy'
         except Exception:
             pass
 
