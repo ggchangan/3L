@@ -70,4 +70,5 @@ def _empty_log(dt: str) -> dict:
             'learned': '',
             'rating': '',
         },
+        'alerts': [],
     }
