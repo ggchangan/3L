@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { fetchBuySignals, fetchIndustryBoards, fetchIndustryMap } from '../lib/api'
 import StockCard from './StockCard'
+import { pinyin } from 'pinyin-pro'
 import type { BuySignalItem, IndustryBoardItem, IndustryMap } from '../lib/types'
 
 const DIR_COLORS: Record<string, string> = {
@@ -15,6 +16,7 @@ export default function BuySignalsArea() {
   const [activeDir, setActiveDir] = useState('')
   const [page, setPage] = useState(1)
   const [scanMeta, setScanMeta] = useState<{ scan_time?: string; stocks_scanned?: number }>({})
+  const [searchQ, setSearchQ] = useState('')
   const [prevActiveDir, setPrevActiveDir] = useState('')
 
   useEffect(() => {
@@ -61,9 +63,17 @@ export default function BuySignalsArea() {
   if (dirs.length === 0) return <div className="empty">正在扫描…</div>
 
   const activeData = groups[activeDir] || []
-  const totalPages = Math.ceil(activeData.length / PER_PAGE)
+  // 搜索过滤（支持代码/名称/拼音首字母）
+  const filtered = searchQ ? activeData.filter(s => {
+    const q = searchQ.trim().toLowerCase()
+    const codeMatch = (s.code || '').toLowerCase().includes(q)
+    const nameMatch = (s.name || '').toLowerCase().includes(q)
+    const pyMatch = pinyin(s.name || '', { pattern: 'first', toneType: 'none' }).replace(/\s+/g, '').toLowerCase().includes(q)
+    return codeMatch || nameMatch || pyMatch
+  }) : activeData
+  const totalPages = Math.ceil(filtered.length / PER_PAGE)
   const pageStart = (page - 1) * PER_PAGE
-  const pageItems = activeData.slice(pageStart, pageStart + PER_PAGE)
+  const pageItems = filtered.slice(pageStart, pageStart + PER_PAGE)
 
   const pct = activeData.length > 0 ? scanMeta.stocks_scanned ? ` | ${scanMeta.stocks_scanned}只扫描` : '' : ''
   const signalCount = activeData.length > 0 ? ` | ${activeData.length}个信号` : ''
@@ -88,9 +98,20 @@ export default function BuySignalsArea() {
         })}
       </div>
 
-      {pageItems.map((s, idx) => (
-        <StockCard key={`${s.code}-${idx}`} s={s} idx={pageStart + idx + 1} chartPrefix={`ms_${activeDir}_`} mode="monitor" />
-      ))}
+      <div style={{ marginBottom: 8 }}>
+        <input className="search-input" placeholder="🔍 输入代码/名称/首字母搜索..."
+          value={searchQ}
+          onChange={e => { setSearchQ(e.target.value); setPage(1) }}
+          style={{ width: '100%', boxSizing: 'border-box' }} />
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="empty" style={{ padding: '20px 0', color: '#888', fontSize: 13 }}>{searchQ ? '无匹配结果' : '暂无买点信号'}</div>
+      ) : (
+        pageItems.map((s, idx) => (
+          <StockCard key={`${s.code}-${idx}`} s={s} idx={pageStart + idx + 1} chartPrefix={`ms_${activeDir}_`} mode="monitor" />
+        ))
+      )}
 
       {totalPages > 1 && (
         <div style={{ textAlign: 'center', marginTop: 8, fontSize: 12 }}>
