@@ -520,8 +520,8 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
     score = 0
     detail = {}
 
-    # 上涨趋势 + 滞涨/转弱 → 不产生买点（阶段→卖出优先于形态→买入）
-    if structure == '上涨趋势' and stage in ('滞涨', '转弱'):
+    # 上涨趋势 + 加速/滞涨/转弱 → 不产生买点（加速追高/滞涨转弱按卖出处理）
+    if structure == '上涨趋势' and stage in ('加速', '滞涨', '转弱'):
         return None
 
     if structure == '上涨趋势':
