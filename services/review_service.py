@@ -384,11 +384,17 @@ def generate_daily_review(date_str=None):
         trend_mainlines=_trend_mainlines,
     )
 
+    # 买点方向映射（从 watchlist 取）
+    _wl = get_watchlist()
+    _wl_stocks = _wl.get('stocks', _wl) if isinstance(_wl, dict) else _wl
+    _dir_map = {s['code']: s.get('direction', '') for s in _wl_stocks if isinstance(s, dict) and s.get('code')}
+
     buy_signals_review = generate_buy_signals_review(
         buy_signals=buy_signals, stocks=all_stocks_60d,
         stock_cache=stock_cache,
         date_str=date_str, mainlines=mainline_data,
         trend_mainlines=_trend_mainlines,
+        direction_map=_dir_map,
     )
 
     # ④ 每日交易计划
@@ -613,11 +619,17 @@ def compute_review_real_time(date_str=None):
         trend_mainlines=_trend_mainlines,
     )
 
+    # 买点方向映射（从 watchlist 取）
+    _wl = get_watchlist()
+    _wl_stocks = _wl.get('stocks', _wl) if isinstance(_wl, dict) else _wl
+    _dir_map = {s['code']: s.get('direction', '') for s in _wl_stocks if isinstance(s, dict) and s.get('code')}
+
     buy_signals_review = generate_buy_signals_review(
         buy_signals=buy_signals, stocks=all_stocks_60d,
         stock_cache=stock_cache,
         date_str=date_str, mainlines=mainline_data,
         trend_mainlines=_trend_mainlines,
+        direction_map=_dir_map,
     )
 
     # ④ 交易计划

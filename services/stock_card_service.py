@@ -35,23 +35,18 @@ from backend.core.trend_trading import (
 )
 
 
-# ── 手动趋势股缓存 ──
+# ── 手动趋势股（不缓存，文件很小直接读）──
 MANUAL_TREND_PATH = _MANUAL_TREND_PATH
-_manual_trend_cache = None
 
 
 def _load_manual_trend():
-    """加载手动趋势股列表（带模块缓存）"""
-    global _manual_trend_cache
-    if _manual_trend_cache is not None:
-        return _manual_trend_cache
+    """加载手动趋势股列表（每次读文件，不缓存）"""
     try:
         import json
         with open(MANUAL_TREND_PATH) as f:
-            _manual_trend_cache = set(json.load(f))
+            return set(json.load(f))
     except Exception:
-        _manual_trend_cache = set()
-    return _manual_trend_cache
+        return set()
 
 
 # ═══════════════════════════════════════════

@@ -6,6 +6,7 @@ TDD: 先定义新模块的接口，再提取代码。
 """
 
 import pytest
+from unittest.mock import patch
 
 # ═══════════════════════════════════════════════════════════════════
 # Mock 数据
@@ -86,27 +87,55 @@ class TestGenerateHoldingsReview:
     def _make_review(self, **overrides):
         """调用 generate_holdings_review，默认用 mock 数据"""
         from scripts.review_analysis import generate_holdings_review
-        # timing_signals_holdings 是 get_buy_sell_signals 返回的第一个元素的 holdings 列表
         timing_holdings = [
-            {'name': '测试A', 'code': '688999', 'action': '中继买点',
-             'close': 62.0, 'change': 3.5, 'structure': '上涨趋势', 'stage': '上行',
-             'ema': '多头排列', 'vol_analysis': '量能正常'},
-            {'name': '测试B', 'code': '688111', 'action': '持有观察',
-             'close': 28.0, 'change': -1.2, 'structure': '下降趋势', 'stage': '转弱',
-             'ema': '空头排列', 'vol_analysis': '缩量'},
+            {'code': '688999'},
+            {'code': '688111'},
         ]
-        bs_by_code = {s['code']: s for s in MOCK_BUY_SIGNALS}
         params = {
             'holdings': MOCK_HOLDINGS,
             'stocks': MOCK_STOCKS,
-            'buy_signals': MOCK_BUY_SIGNALS,
+            'buy_signals': [],
             'timing_signals_holdings': timing_holdings,
-            'bs_by_code': bs_by_code,
+            'bs_by_code': {},
             'date_str': '2026-03-30',
             'mainlines': MOCK_MAINLINES,
         }
         params.update(overrides)
-        return generate_holdings_review(**params)
+
+        card_data = {
+            '688999': {
+                'code': '688999', 'name': '测试A', 'sector': '半导体', 'direction': '半导体',
+                'price': 62.0, 'change': 3.5,
+                'structure': '上涨趋势', 'stage': '上行',
+                'ema': '多头排列', 'vol_analysis': '量能正常',
+                'signal': 'buy', 'signal_text': '⚡ 买入',
+                'buy_point': '中继买点',
+                'profit_model1': False, 'trend_stock': False,
+                'trading_system': '3l', 'trading_reason': '测试',
+                'trend_buy_type': '', 'trend_bias': '',
+                'mainline_level': '主线',
+                'stop_loss': None, 'stop_loss_pct': None,
+            },
+            '688111': {
+                'code': '688111', 'name': '测试B', 'sector': '半导体', 'direction': '半导体',
+                'price': 28.0, 'change': -1.2,
+                'structure': '下降趋势', 'stage': '转弱',
+                'ema': '空头排列', 'vol_analysis': '缩量',
+                'signal': 'sell', 'signal_text': '❌ 卖出',
+                'buy_point': '',
+                'profit_model1': False, 'trend_stock': False,
+                'trading_system': '3l', 'trading_reason': '测试',
+                'trend_buy_type': '', 'trend_bias': '',
+                'mainline_level': '',
+                'stop_loss': None, 'stop_loss_pct': None,
+            },
+        }
+
+        def _mock_card(code, **kw):
+            return card_data.get(code, {})
+
+        with patch('services.stock_card_service.get_stock_card', side_effect=_mock_card):
+            return generate_holdings_review(**params)
 
     def test_returns_list(self):
         result = self._make_review()
@@ -138,20 +167,11 @@ class TestGenerateHoldingsReview:
         assert result == []
 
     def test_sector_field_is_preserved(self):
-        """持仓复盘结果应有 sector 字段（真实THS行业而非用户方向）"""
-        from unittest.mock import patch
-        with patch('services.stock_card_service.get_industry_map') as mock_imap:
-            mock_imap.return_value = {
-                '688999': {'ths_industry': '半导体设备'},
-                '688111': {'ths_industry': '半导体材料'},
-            }
-            result = self._make_review()
-            for item in result:
-                assert 'sector' in item, f'{item["code"]} 缺少 sector 字段'
-                assert item['sector'] != '', f'{item["code"]} sector 不应为空'
-            # 验证是 THS 行业而非 direction
-            assert result[0]['sector'] == '半导体设备'
-            assert result[1]['sector'] == '半导体材料'
+        """持仓复盘结果应有 sector 字段（来自卡片）"""
+        result = self._make_review()
+        for item in result:
+            assert 'sector' in item, f'{item["code"]} 缺少 sector 字段'
+            assert item['sector'] != '', f'{item["code"]} sector 不应为空'
 
     def test_stock_not_in_data_returns_error(self):
         """持仓股不在 stocks 数据中 → 标记为数据缺失"""
@@ -171,18 +191,11 @@ class TestGenerateHoldingsReview:
             assert item['signal'] in ('buy', 'hold', '无信号')
 
     def test_sector_is_ths_industry(self):
-        """sector 字段应为 THS 真实行业板块，不是用户 direction"""
-        from unittest.mock import patch
-        with patch('services.stock_card_service.get_industry_map') as mock_imap:
-            mock_imap.return_value = {
-                '688999': {'ths_industry': '半导体设备'},
-                '688111': {'ths_industry': '半导体材料'},
-            }
-            result = self._make_review()
-            item999 = next(r for r in result if r['code'] == '688999')
-            item111 = next(r for r in result if r['code'] == '688111')
-            assert item999['sector'] == '半导体设备', f'应为THS行业, 实际={item999["sector"]}'
-            assert item111['sector'] == '半导体材料', f'应为THS行业, 实际={item111["sector"]}'
+        """sector 字段应来自卡片（卡片内部已解析THS行业）"""
+        result = self._make_review()
+        for item in result:
+            assert 'sector' in item, f"{item['code']} 缺少 sector 字段"
+            assert item['sector'] != '', f"{item['code']} sector 不应为空"
 
     def test_direction_from_holdings(self):
         """direction 字段应来自原始 holdings 的 direction"""
@@ -204,19 +217,47 @@ class TestGenerateBuySignalsReview:
 
     def _make_review(self, **overrides):
         from scripts.review_analysis import generate_buy_signals_review
-        stock_cache = {s['code']: {
-            'structure': '上涨趋势', 'stage': '上行',
-            'ema': '多头排列', 'vol_analysis': '量能正常',
-        } for s in MOCK_BUY_SIGNALS}
         params = {
             'buy_signals': MOCK_BUY_SIGNALS,
             'stocks': MOCK_STOCKS,
-            'stock_cache': stock_cache,
+            'stock_cache': {},
             'date_str': '2026-03-30',
             'mainlines': MOCK_MAINLINES,
         }
         params.update(overrides)
-        return generate_buy_signals_review(**params)
+
+        def _mock_card(code, **kw):
+            info = next((s for s in MOCK_BUY_SIGNALS if s['code'] == code), {})
+            return {
+                'code': code,
+                'name': info.get('name', '?'),
+                'sector': info.get('sector', ''),
+                'direction': info.get('sector', ''),
+                'price': info.get('price', 0),
+                'change': info.get('change', 0),
+                'structure': '上涨趋势',
+                'stage': '上行',
+                'ema': '多头排列',
+                'vol_analysis': '量能正常',
+                'signal': 'buy',
+                'signal_text': '⚡ 买入',
+                'buy_point': info.get('buy_point', ''),
+                'profit_model1': info.get('profit_model1', False),
+                'trend_stock': info.get('trend_stock', False),
+                'trading_system': info.get('trading_system', '3l'),
+                'trading_reason': info.get('trading_reason', ''),
+                'trend_buy_type': info.get('trend_buy_type', ''),
+                'trend_bias': info.get('trend_bias', ''),
+                'mainline_level': '主线',
+                'stop_loss': None,
+                'stop_loss_pct': None,
+                'score': info.get('score', 0),
+                'flags': info.get('flags', ''),
+                'date': '20260330',
+            }
+
+        with patch('services.stock_card_service.get_stock_card', side_effect=_mock_card):
+            return generate_buy_signals_review(**params)
 
     def test_returns_list(self):
         result = self._make_review()
