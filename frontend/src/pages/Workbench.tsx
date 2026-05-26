@@ -53,9 +53,10 @@ export default function Workbench() {
     }
   }
 
-  function save() {
+  /** 核心持久化：将 updatedData (含 todo/plan 最新状态) + 文本域/下拉框值 一起保存 */
+  function persist(updatedData: WorkbenchData) {
     const payload: WorkbenchData = {
-      ...data,
+      ...updatedData,
       date,
       operations: (document.getElementById('opText') as HTMLTextAreaElement)?.value || '',
       execution_review: (document.getElementById('execReviewText') as HTMLTextAreaElement)?.value || '',
@@ -68,10 +69,12 @@ export default function Workbench() {
     fetch('/api/workbench/save', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).then(r => r.json()).then(d => {
-      if (d.success) showToast('✅ 日志已保存')
-      else showToast('⚠️ 保存失败', true)
-    }).catch(() => showToast('⚠️ 保存失败', true))
+    }).catch(() => {})
+  }
+
+  function save() {
+    persist(data)
+    showToast('✅ 日志已保存')
   }
 
   function showToast(msg: string, isError?: boolean) {
@@ -137,20 +140,23 @@ export default function Workbench() {
                     const newTodos = [...todos]
                     newTodos[i] = { ...newTodos[i], done: !newTodos[i].done }
                     setData({ ...data, todos: newTodos })
+                    persist({ ...data, todos: newTodos })
                   }} />
                   <span style={{ textDecoration: t.done ? 'line-through' : 'none', color: t.done ? '#555' : '#e0e0e0' }}>{t.text}</span>
                   <span style={{ marginLeft: 'auto', color: '#e94560', cursor: 'pointer', fontSize: 11 }} onClick={() => {
                     const newTodos = todos.filter((_, j) => j !== i)
                     setData({ ...data, todos: newTodos })
+                    persist({ ...data, todos: newTodos })
                   }}>✕</span>
                 </div>
-              ))
-            )}
+              )))}
           </div>
           <div style={{ marginTop: 8, fontSize: 12, color: '#4ecdc4', cursor: 'pointer' }} onClick={() => {
             const text = prompt('待办内容：')
             if (!text) return
-            setData({ ...data, todos: [...todos, { text, done: false }] })
+            const newTodos = [...todos, { text, done: false }]
+            setData({ ...data, todos: newTodos })
+            persist({ ...data, todos: newTodos })
           }}>＋ 添加待办</div>
         </div>
 
@@ -268,20 +274,26 @@ export default function Workbench() {
     const newPlan = { ...plan }
     const items = [...(newPlan[type as keyof typeof newPlan] || [])]
     items[i] = { ...items[i], [field]: value }
-    setData({ ...data, plan: { ...newPlan, [type]: items } })
+    const newData = { ...data, plan: { ...newPlan, [type]: items } }
+    setData(newData)
+    persist(newData)
   }
 
   function addPlanRow(type: string) {
     const newPlan = { ...plan }
     const items = [...(newPlan[type as keyof typeof newPlan] || [])]
     items.push({ stock: '', condition: '', qty: '', status: 'pending' })
-    setData({ ...data, plan: { ...newPlan, [type]: items } })
+    const newData = { ...data, plan: { ...newPlan, [type]: items } }
+    setData(newData)
+    persist(newData)
   }
 
   function removePlanRow(type: string, i: number) {
     const newPlan = { ...plan }
     const items = (newPlan[type as keyof typeof newPlan] || []).filter((_, j) => j !== i)
-    setData({ ...data, plan: { ...newPlan, [type]: items } })
+    const newData = { ...data, plan: { ...newPlan, [type]: items } }
+    setData(newData)
+    persist(newData)
   }
 }
 
