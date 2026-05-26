@@ -36,6 +36,7 @@ export default function Watchlist() {
   const [selectedCode, setSelectedCode] = useState('')
   const [selectedName, setSelectedName] = useState('')
   const [boardDir, setBoardDir] = useState('')
+  const [boardSelectedCodes, setBoardSelectedCodes] = useState<Set<string>>(new Set())
   const [boardAllChecked, setBoardAllChecked] = useState(true)
   const searchTimer = useRef<ReturnType<typeof setTimeout>>()
   const boardTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -146,7 +147,10 @@ export default function Watchlist() {
       try {
         const r = await fetch(`/api/directions/stocks?q=${encodeURIComponent(boardQ)}`)
         const data = await r.json()
-        setBoardResults(data.stocks || [])
+        const results = data.stocks || []
+        setBoardResults(results)
+        setBoardSelectedCodes(new Set(results.map(s => s.code)))
+        setBoardAllChecked(true)
       } catch { setBoardResults([]) }
     }, 400)
     return () => clearTimeout(boardTimer.current)
@@ -317,15 +321,32 @@ export default function Watchlist() {
                   <div className="dir-sr-info">共 {boardResults.length} 只匹配</div>
                   <label className="dir-sr-row" style={{ fontWeight: 'bold', borderBottom: '1px solid #2a2a4e' }}>
                     <input type="checkbox" checked={boardAllChecked}
-                      onChange={e => setBoardAllChecked(e.target.checked)} />
+                      onChange={e => {
+                        const newVal = e.target.checked
+                        setBoardAllChecked(newVal)
+                        if (newVal) setBoardSelectedCodes(new Set(boardResults.map(s => s.code)))
+                        else setBoardSelectedCodes(new Set())
+                      }} />
                     <span>全选（全部添加到方向「{boardDir || activeDirs[0] || '待选'}」）</span>
                   </label>
                   {boardResults.map((s: any, i: number) => {
                     const pct = s.change_pct || 0
+                    const isChecked = boardAllChecked || boardSelectedCodes.has(s.code)
                     return (
                       <label key={i} className="dir-sr-row">
                         <input type="checkbox" className="dir-sr-cb"
-                          checked={boardAllChecked} data-code={s.code} data-name={s.name} />
+                          checked={isChecked}
+                          data-code={s.code} data-name={s.name}
+                          onChange={e => {
+                            const checked = e.target.checked
+                            const next = new Set(boardSelectedCodes)
+                            if (checked) next.add(s.code)
+                            else next.delete(s.code)
+                            setBoardSelectedCodes(next)
+                            const allCodes = new Set(boardResults.map(x => x.code))
+                            const selectedAll = boardResults.every(x => next.has(x.code))
+                            setBoardAllChecked(selectedAll)
+                          }} />
                         <span className="dir-sr-code">{s.code}</span>
                         <span className="dir-sr-name">{s.name}</span>
                         <span className="dir-sr-ind">{s.industry || ''}</span>
