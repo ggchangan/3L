@@ -228,6 +228,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/top_gainers': '/react.html',
             '/stock_analysis': '/react.html',
             '/tips': '/react.html',
+            '/simulation': '/react.html',
             '/': '/react.html',
         }
         if path in aliases and aliases[path]:
