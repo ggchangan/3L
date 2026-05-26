@@ -188,44 +188,6 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
                     latest_date = kls[-1]['date']
 
         today_yyyymmdd = date_str.replace('-', '')
-        if latest_date and latest_date < today_yyyymmdd:
-            try:
-                import requests as req
-                hdrs = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'}
-                hf = os.path.join(DATA_DIR, 'private', 'holdings.json')
-                if os.path.isfile(hf):
-                    with open(hf) as f:
-                        hdata = json.load(f)
-                    for h in hdata.get('holdings', []):
-                        code = h.get('code', '')
-                        if not code:
-                            continue
-                        mkt = 'sz' if code.startswith(('0', '3')) else 'sh'
-                        url = f'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={mkt}{code},day,,,5,qfq'
-                        r = req.get(url, headers=hdrs, timeout=5)
-                        d = r.json()
-                        day_data = d.get('data', {}).get(f'{mkt}{code}', {}).get('day', [])
-                        if not day_data:
-                            day_data = d.get('data', {}).get(f'{mkt}{code}', {}).get('qfqday', [])
-                        if day_data:
-                            latest_k = day_data[-1]
-                            if len(latest_k) >= 6:
-                                new_rec = {
-                                    'date': latest_k[0].replace('-', ''),
-                                    'open': float(latest_k[1]),
-                                    'close': float(latest_k[2]),
-                                    'high': float(latest_k[3]),
-                                    'low': float(latest_k[4]),
-                                    'volume': int(float(latest_k[5]) * 100),
-                                }
-                                for sec_name2, stocks2 in all_stocks_60d.items():
-                                    if code in stocks2:
-                                        existing_dates = {k['date'] for k in stocks2[code]}
-                                        if new_rec['date'] not in existing_dates:
-                                            stocks2[code].append(new_rec)
-                                        break
-            except Exception as e:
-                print(f"[3L复盘] 补拉持仓数据失败: {e}")
 
         latest_date = ''
         for sec, stocks in all_stocks_60d.items():
@@ -502,7 +464,8 @@ def generate_daily_review(date_str=None):
         chart_archive_dir = os.path.join(CHARTS_DIR, 'archive', date_str)
         os.makedirs(chart_archive_dir, exist_ok=True)
         src_charts = [
-            (os.path.join(CHARTS_DIR, 'zzqz_v2.svg'), 'zzqz_v2.svg'),
+            (os.path.join(CHARTS_DIR, 'sz000985.svg'), 'sz000985.svg'),
+            (os.path.join(CHARTS_DIR, 'zzqz_key_points.svg'), 'zzqz_key_points.svg'),
             (os.path.join(CHARTS_DIR, 'fund_flow_chart.png'), 'fund_flow_chart.png'),
         ]
         for src, basename in src_charts:
@@ -511,7 +474,7 @@ def generate_daily_review(date_str=None):
                 shutil.copy2(src, dst)
                 print(f"[3L复盘] 📊 图表已归档: archive/{date_str}/{basename}")
         review['charts'] = {
-            'index_chart': f'/pub/charts/archive/{date_str}/zzqz_v2.svg',
+            'index_chart': f'/pub/charts/archive/{date_str}/zzqz_key_points.svg',
             'fund_flow': f'/pub/charts/archive/{date_str}/fund_flow_chart.png',
         }
         save_json(os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'), review)

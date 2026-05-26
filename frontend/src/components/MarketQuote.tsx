@@ -137,7 +137,7 @@ export default function MarketQuote() {
         <div style={{ marginTop: 8 }}>
           <div style={{ width: '100%', height: 550, overflow: 'hidden', borderRadius: 8 }}>
             <img
-              src={`/api/index-chart?t=${chartTs.current}`}
+              src={`/api/index-chart?mode=monitor&t=${chartTs.current}`}
               alt="中证全指关键点图"
               style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
             />

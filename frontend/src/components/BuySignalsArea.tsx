@@ -89,7 +89,7 @@ export default function BuySignalsArea() {
       </div>
 
       {pageItems.map((s, idx) => (
-        <StockCard key={`${s.code}-${idx}`} s={s} idx={pageStart + idx + 1} chartPrefix={`ms_${activeDir}_`} />
+        <StockCard key={`${s.code}-${idx}`} s={s} idx={pageStart + idx + 1} chartPrefix={`ms_${activeDir}_`} mode="monitor" />
       ))}
 
       {totalPages > 1 && (

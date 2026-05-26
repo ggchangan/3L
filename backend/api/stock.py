@@ -55,15 +55,17 @@ def _handle_stock_chart(h, path):
     if code in ('undefined', 'null', 'None', ''):
         h.send_json({'error': f'invalid code: {code}'})
         return
+    # 图表模式：monitor=含实时，其他=不实时（只用日K线）
+    mode = (params.get('mode') or ['review'])[0]
     # 后端自决交易系统类型，不依赖前端传 sys 参数
     trading_system = _get_stock_trading_system(code)
     if trading_system == 'trend':
-        svg_str, err = generate_trend_stock_chart(code)
+        svg_str, err = generate_trend_stock_chart(code, mode=mode)
         if err:
             h.send_json({'error': err})
             return
     else:
-        svg_str, err = generate_stock_chart(code)
+        svg_str, err = generate_stock_chart(code, mode=mode)
         if err:
             h.send_json({'error': err})
             return

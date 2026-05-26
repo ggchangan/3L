@@ -178,9 +178,11 @@ def _resolve_today_candle_state(now_hour, now_min, quote, last_date_str, today_s
         }
 
 
-def generate_stock_chart(code):
+def generate_stock_chart(code, mode='review'):
     """
-    生成个股 K 线 SVG（60 日 K 线 + 今日实时虚线蜡烛 + 成交量预估）
+    生成个股 K 线 SVG（60 日 K 线）
+    mode=monitor: 含今日实时虚线蜡烛，不缓存；
+    其他mode: 仅日K线，不含实时数据，按18:00规则缓存。
 
     Args:
         code: 股票代码（如 688428、sh688428、SZ000001 等）
@@ -198,6 +200,32 @@ def generate_stock_chart(code):
             break
     raw_code = raw_code[-6:] if len(raw_code) >= 6 else raw_code
 
+    # ── 0.5. 缓存检查（review 模式：按 18:00 规则判定缓存有效） ──
+    now = datetime.now()
+    today_str = now.strftime('%Y%m%d')
+    is_weekday = now.weekday() < 5
+    if mode != 'monitor':
+        # 根据18:00规则确定"应该使用的交易日"
+        if now.hour >= 18 and is_weekday:
+            cache_date = today_str
+        else:
+            if now.weekday() == 0:       # 周一→上周五
+                cache_date = (now - timedelta(days=3)).strftime('%Y%m%d')
+            elif now.weekday() == 6:      # 周日→上周五
+                cache_date = (now - timedelta(days=2)).strftime('%Y%m%d')
+            else:
+                cache_date = (now - timedelta(days=1)).strftime('%Y%m%d')
+        cache_file = os.path.join(
+            REVIEW_CHARTS_DIR,
+            f'zzqz_stock_chart_{raw_code}_{cache_date}.svg'
+        )
+        if os.path.isfile(cache_file):
+            try:
+                with open(cache_file, 'r') as f:
+                    return f.read(), None
+            except Exception:
+                pass  # 读失败就重新生成
+
     # ── 1. 获取 60 日 K 线数据 ──────────────────────────────
     stocks = get_all_stocks()
     klines = get_stock_klines(raw_code, stocks=stocks)
@@ -208,38 +236,60 @@ def generate_stock_chart(code):
     # 股票名称
     name = klines[0].get('name', raw_code) if klines else raw_code
 
-    # ── 2. 获取实时行情 ─────────────────────────────────────
-    rt = _fetch_realtime_quote(raw_code)
-    now = datetime.now()
+    # ── 2. 获取实时行情（仅 monitor 模式） ──────────────────
+    rt = None
+    if mode == 'monitor':
+        rt = _fetch_realtime_quote(raw_code)
 
     # ── 3. 准备绘图数据（取最近 60 根）────────────────────
     data_60 = klines[-60:]
     n = len(data_60)
 
-    closes  = [float(k['close']) for k in data_60]
-    highs   = [float(k['high']) for k in data_60]
-    lows    = [float(k['low']) for k in data_60]
-    opens_p = [float(k['open']) for k in data_60]
-    volumes = [int(k.get('volume', 0)) for k in data_60]
+    # monitor模式才叠加今日蜡烛
+    if mode == 'monitor':
+        closes  = [float(k['close']) for k in data_60]
+        highs   = [float(k['high']) for k in data_60]
+        lows    = [float(k['low']) for k in data_60]
+        opens_p = [float(k['open']) for k in data_60]
+        volumes = [int(k.get('volume', 0)) for k in data_60]
 
-    # 判断今天数据是否已有（如果最后一天的日期就是今天，说明已收盘）
-    last_date = str(data_60[-1].get('date', '')).replace('-', '')
-    today_str = now.strftime('%Y%m%d')
-    st = _resolve_today_candle_state(now.hour, now.minute, rt, last_date, today_str)
-    has_today = st['type'] != 'none'
+        last_date = str(data_60[-1].get('date', '')).replace('-', '')
+        st = _resolve_today_candle_state(now.hour, now.minute, rt, last_date, today_str)
+        has_today = st['type'] != 'none'
 
-    # 汇总最高最低
-    all_highs = list(highs)
-    all_lows = list(lows)
-    if has_today:
-        all_highs.append(rt['high'])
-        all_lows.append(rt['low'])
+        all_highs = list(highs)
+        all_lows = list(lows)
+        if has_today:
+            all_highs.append(rt['high'])
+            all_lows.append(rt['low'])
+        mx = max(all_highs[-60:])
+        mn = min(all_lows[-60:])
+        rg = mx - mn if mx != mn else 1
+        total_bars = n + (1 if has_today else 0)
 
-    mx = max(all_highs[-60:])
-    mn = min(all_lows[-60:])
-    rg = mx - mn if mx != mn else 1
-
-    total_bars = n + (1 if has_today else 0)
+        # Today label
+        if has_today:
+            pct = rt.get('change_pct', 0)
+            sign = '+' if pct >= 0 else ''
+        else:
+            pct = 0
+            sign = ''
+        today_label = f'{st["label_prefix"]} {sign}{pct:.2f}%' if has_today else ''
+    else:
+        closes  = [float(k['close']) for k in data_60]
+        highs   = [float(k['high']) for k in data_60]
+        lows    = [float(k['low']) for k in data_60]
+        opens_p = [float(k['open']) for k in data_60]
+        volumes = [int(k.get('volume', 0)) for k in data_60]
+        has_today = False
+        mx = max(highs[-60:])
+        mn = min(lows[-60:])
+        rg = mx - mn if mx != mn else 1
+        total_bars = n
+        today_label = ''
+        last_date = str(data_60[-1].get('date', '')).replace('-', '')
+        date_label = ''
+        info_vol_prefix = ''
 
     # ── 4. SVG 画布参数 ────────────────────────────────────
     W, H = 800, 400
@@ -291,13 +341,6 @@ def generate_stock_chart(code):
         # 压力线（15 日内最高）
         nd15 = min(15, len(closes))
         hi_15 = max(highs[-nd15:]) if nd15 > 0 else mx
-
-    # 今日蜡烛的 title label
-    today_label = ''
-    if has_today:
-        pct = rt.get('change_pct', 0)
-        sign = '+' if pct >= 0 else ''
-        today_label = f'{st["label_prefix"]} {sign}{pct:.2f}%'
 
     # ── 5. 组装 SVG ────────────────────────────────────────
     sv = []
@@ -589,8 +632,18 @@ def generate_stock_chart(code):
         )
 
     sv.append('</svg>')
+    svg_content = '\n'.join(sv)
 
-    return '\n'.join(sv), None
+    # ── 5o. 写入缓存（review 模式） ──
+    if mode != 'monitor':
+        try:
+            os.makedirs(REVIEW_CHARTS_DIR, exist_ok=True)
+            with open(cache_file, 'w') as f:
+                f.write(svg_content)
+        except Exception:
+            pass  # 缓存写失败不影响返回
+
+    return svg_content, None
 
 
 def _ema_index(values, period):
@@ -637,33 +690,51 @@ def _find_index_keypoints(data):
     return kps
 
 
-def generate_index_chart():
-    """生成中证全指K线SVG（含今日实时叠加）
+def generate_index_chart(mode='review'):
+    """生成中证全指K线SVG
+    mode=monitor: 总是最新数据（含实时）；mode=review: 18:00前不包含当天数据。
+    缓存: 文件名带最后一个K线日期(zzqz_index_chart_YYYYMMDD.svg)。
     Returns: (svg_absolute_path, error_or_none)
     """
-    svg_file = os.path.join(REVIEW_CHARTS_DIR, 'zzqz_v2.svg')
-    svg_file2 = os.path.join(REVIEW_CHARTS_DIR, 'sz000985.svg')
-
+    today = datetime.now().date()
     now = datetime.now()
-    is_trading = 9 * 60 + 30 <= now.hour * 60 + now.minute <= 15 * 60  # 9:30-15:00
+    today_str = now.strftime('%Y%m%d')
     is_weekday = now.weekday() < 5
+    use_today = (mode == 'monitor') or (now.hour >= 18 and is_weekday)
 
-    # 10-min cache during trading; 1h outside
-    if os.path.isfile(svg_file):
-        age = now.timestamp() - os.path.getmtime(svg_file)
-        if age < 600:  # 10 min
-            return svg_file, None
-        if not is_weekday or not is_trading:
-            if age < 3600:  # 1 hour
-                return svg_file, None
+    # ── 快速缓存检查（避免每次调 akshare） ──
+    if mode == 'monitor':
+        cache_file = os.path.join(REVIEW_CHARTS_DIR, 'zzqz_index_chart_monitor.svg')
+        if os.path.isfile(cache_file):
+            age = now.timestamp() - os.path.getmtime(cache_file)
+            if age < 300:  # 5分钟缓存
+                return cache_file, None
+    else:
+        from datetime import timedelta
+        if use_today:
+            cache_date = today_str
+        else:
+            if today.weekday() == 0:    # 周一→上周五
+                cache_date = (today - timedelta(days=3)).strftime('%Y%m%d')
+            elif today.weekday() == 6:   # 周日→上周五
+                cache_date = (today - timedelta(days=2)).strftime('%Y%m%d')
+            else:
+                cache_date = (today - timedelta(days=1)).strftime('%Y%m%d')
+        cache_file = os.path.join(REVIEW_CHARTS_DIR, f'zzqz_index_chart_{cache_date}.svg')
+        if os.path.isfile(cache_file):
+            return cache_file, None
 
     # ── Fetch 60-day kline data ──────────────────────────
     try:
         ak_data = ak.stock_zh_index_daily_tx(symbol='sh000985')
         ak_data = ak_data.tail(60).reset_index(drop=True)
     except Exception as e:
-        if os.path.isfile(svg_file):
-            return svg_file, None
+        # fallback: check any cached file
+        for fname in sorted(os.listdir(REVIEW_CHARTS_DIR), reverse=True):
+            if fname.startswith('zzqz_index_chart_') and fname.endswith('.svg'):
+                fp = os.path.join(REVIEW_CHARTS_DIR, fname)
+                if os.path.isfile(fp):
+                    return fp, None
         return None, f'failed to fetch index data: {e}'
 
     data = []
@@ -674,56 +745,81 @@ def generate_index_chart():
             'high': float(row['high']),
             'low': float(row['low']),
             'close': float(row['close']),
-            'volume': float(row['amount']) / 1e4,  # scale amount for volume bars
+            'volume': float(row['amount']) / 1e4,
         })
 
-    # ── Fetch real-time quote (直连腾讯，index 不走 _fetch_realtime_quote) ──
-    rt = None
-    try:
-        r = requests.get(
-            'https://qt.gtimg.cn/q=sh000985',
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://finance.qq.com',
-            },
-            timeout=5,
-        )
-        text = r.text
-        try:
-            text = text.decode('gbk')
-        except (UnicodeDecodeError, AttributeError):
-            pass
-        fields = text.split('"')[1].split('~') if '"' in text else []
-        if len(fields) >= 40:
-            def _f(idx, default=0):
-                try:
-                    return float(fields[idx]) if fields[idx] else default
-                except (ValueError, IndexError):
-                    return default
-            def _fi(idx, default=0):
-                v = fields[idx] if idx < len(fields) else ''
-                try:
-                    return int(v) if v.strip().isdigit() else default
-                except (ValueError, IndexError):
-                    return default
-            rt = {
-                'open': _f(5),
-                'close': _f(3),
-                'high': _f(33),
-                'low': _f(34),
-                'volume_hand': _fi(6),
-                'prev_close': _f(4),
-                'change_pct': _f(32),
-                'amount': _f(37),
-                'name': fields[1] if len(fields) > 1 else '',
-            }
-    except Exception:
-        pass
+    # ── 确定缓存日期 ──
+    if not use_today:
+        # 过滤掉今天的K线（如有）
+        data = [d for d in data if d['day'] != today.isoformat()]
+        if not data:
+            # 全被过滤了（数据只有今天），回退到全量
+            data = [{'day': str(row['date']), 'open': float(row['open']),
+                     'high': float(row['high']), 'low': float(row['low']),
+                     'close': float(row['close']), 'volume': float(row['amount']) / 1e4}
+                    for _, row in ak_data.iterrows()]
 
-    today_str = now.strftime('%Y%m%d')
+    last_date = str(data[-1]['day']).replace('-', '')
+
+    # ── 缓存文件名：review=日期缓存，monitor=独立缓存（实时刷新） ──
+    if mode == 'monitor':
+        cache_file = os.path.join(REVIEW_CHARTS_DIR, 'zzqz_index_chart_monitor.svg')
+        # monitor 缓存有效期5分钟
+        if os.path.isfile(cache_file):
+            age = now.timestamp() - os.path.getmtime(cache_file)
+            if age < 300:  # 5分钟
+                return cache_file, None
+    else:
+        cache_file = os.path.join(REVIEW_CHARTS_DIR, f'zzqz_index_chart_{last_date}.svg')
+        if os.path.isfile(cache_file):
+            return cache_file, None
+
+    # ── 旧文件路径（仍保留兼容） ──
+    svg_file = os.path.join(REVIEW_CHARTS_DIR, 'zzqz_v2.svg')
+    svg_file2 = os.path.join(REVIEW_CHARTS_DIR, 'sz000985.svg')
+
+    # ── Fetch real-time quote (only after 18:00) ──
+    rt = None
+    if use_today:
+        try:
+            r = requests.get(
+                'https://qt.gtimg.cn/q=sh000985',
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Referer': 'https://finance.qq.com',
+                },
+                timeout=5,
+            )
+            text = r.text
+            try:
+                text = text.decode('gbk')
+            except (UnicodeDecodeError, AttributeError):
+                pass
+            fields = text.split('"')[1].split('~') if '"' in text else []
+            if len(fields) >= 40:
+                def _f(idx, default=0):
+                    try:
+                        return float(fields[idx]) if fields[idx] else default
+                    except (ValueError, IndexError):
+                        return default
+                def _fi(idx, default=0):
+                    v = fields[idx] if idx < len(fields) else ''
+                    try:
+                        return int(v) if v.strip().isdigit() else default
+                    except (ValueError, IndexError):
+                        return default
+                rt = {
+                    'open': _f(5), 'close': _f(3), 'high': _f(33), 'low': _f(34),
+                    'volume_hand': _fi(6), 'prev_close': _f(4),
+                    'change_pct': _f(32), 'amount': _f(37),
+                    'name': fields[1] if len(fields) > 1 else '',
+                }
+        except Exception:
+            pass
+
     last_date_str = str(data[-1]['day']).replace('-', '')
-    st = _resolve_today_candle_state(now.hour, now.minute, rt, last_date_str, today_str)
-    has_today = st['type'] != 'none'
+    st = _resolve_today_candle_state(now.hour, now.minute, rt, last_date_str, today_str) if use_today else {'type': 'none'}
+    has_today = use_today and st['type'] != 'none'
 
     closes = [k['close'] for k in data]
     highs = [k['high'] for k in data]
@@ -1046,12 +1142,29 @@ def generate_index_chart():
         f.write(content)
     with open(svg_file2, 'w') as f:
         f.write(content)
+    with open(cache_file, 'w') as f:
+        f.write(content)
 
-    return svg_file, None
+    # 清理旧缓存文件（只保留最新3个，不清理 monitor 独立缓存）
+    _all_chart_files = sorted([
+        os.path.join(REVIEW_CHARTS_DIR, fn)
+        for fn in os.listdir(REVIEW_CHARTS_DIR)
+        if fn.startswith('zzqz_index_chart_') and fn != 'zzqz_index_chart_monitor.svg' and fn.endswith('.svg')
+    ], key=os.path.getmtime)
+    for _old_f in _all_chart_files[:-3]:
+        try:
+            os.remove(_old_f)
+        except OSError:
+            pass
+
+    return cache_file, None
 
 
-def generate_trend_stock_chart(code):
-    """生成趋势交易 K 线 SVG（使用 gen_trend_chart 的绘制逻辑）"""
+def generate_trend_stock_chart(code, mode='review'):
+    """生成趋势交易 K 线 SVG（使用 gen_trend_chart 的绘制逻辑）
+    mode=monitor: 含今日实时数据叠加到K线，不缓存；
+    其他mode: 仅日K线，按18:00规则缓存。
+    """
     raw_code = str(code).strip()
     for pfx in ['SH', 'SZ', 'sh', 'sz']:
         if raw_code.startswith(pfx):
@@ -1059,12 +1172,53 @@ def generate_trend_stock_chart(code):
             break
     raw_code = raw_code[-6:] if len(raw_code) >= 6 else raw_code
 
+    # ── 缓存检查（review 模式：按 18:00 规则判定缓存有效） ──
+    now = datetime.now()
+    today_str = now.strftime('%Y%m%d')
+    is_weekday = now.weekday() < 5
+    if mode != 'monitor':
+        if now.hour >= 18 and is_weekday:
+            cache_date = today_str
+        else:
+            if now.weekday() == 0:
+                cache_date = (now - timedelta(days=3)).strftime('%Y%m%d')
+            elif now.weekday() == 6:
+                cache_date = (now - timedelta(days=2)).strftime('%Y%m%d')
+            else:
+                cache_date = (now - timedelta(days=1)).strftime('%Y%m%d')
+        cache_file = os.path.join(
+            REVIEW_CHARTS_DIR,
+            f'zzqz_trend_stock_chart_{raw_code}_{cache_date}.svg'
+        )
+        if os.path.isfile(cache_file):
+            try:
+                with open(cache_file, 'r') as f:
+                    return f.read(), None
+            except Exception:
+                pass
+
     stocks = get_all_stocks()
     klines = get_stock_klines(raw_code, stocks=stocks)
     if not klines or len(klines) < 10:
         return None, f'数据不足: {len(klines) if klines else 0} 根K线'
 
     name = klines[0].get('name', raw_code) if klines else raw_code
+
+    # ── monitor 模式：获取实时行情，作为今日K线叠加 ──
+    if mode == 'monitor':
+        rt = _fetch_realtime_quote(raw_code)
+        if rt and rt.get('close', 0) > 0:
+            today_dt = datetime.strptime(today_str, '%Y%m%d')
+            if today_dt.weekday() < 5:
+                klines.append({
+                    'date': today_str,
+                    'open': float(rt.get('open', 0)),
+                    'high': float(rt.get('high', 0)),
+                    'low': float(rt.get('low', 0)),
+                    'close': float(rt.get('close', 0)),
+                    'volume': int(rt.get('volume_hand', 0)) * 100,
+                    'name': name,
+                })
 
     from backend.core.gen_trend_chart import gen_trend_svg
     import tempfile
@@ -1076,4 +1230,14 @@ def generate_trend_stock_chart(code):
     with open(out_path, 'r') as f:
         svg_str = f.read()
     os.unlink(out_path)
+
+    # ── 写入缓存（review 模式） ──
+    if mode != 'monitor':
+        try:
+            os.makedirs(REVIEW_CHARTS_DIR, exist_ok=True)
+            with open(cache_file, 'w') as f:
+                f.write(svg_str)
+        except Exception:
+            pass
+
     return svg_str, None

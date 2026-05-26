@@ -53,8 +53,14 @@ def _handle_review_full(h, path):
 
 
 def _handle_index_chart(h, path):
-    """返回中证全指K线SVG（含实时叠加）"""
-    svg_path, err = generate_index_chart()
+    """返回中证全指K线SVG
+    ?mode=monitor → 总是最新数据（含实时）
+    ?mode=review → 按时间控制（18:00前不包含今天）
+    """
+    from urllib.parse import parse_qs, urlparse
+    qs = parse_qs(urlparse(path).query)
+    mode = (qs.get('mode') or ['review'])[0]
+    svg_path, err = generate_index_chart(mode=mode)
     if err:
         h.send_json({'error': err})
         return

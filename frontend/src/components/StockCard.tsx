@@ -18,9 +18,10 @@ interface StockCardProps {
   s: BuySignalItem
   idx: number
   chartPrefix?: string
+  mode?: 'review' | 'monitor'
 }
 
-export default function StockCard({ s, idx, chartPrefix = '' }: StockCardProps) {
+export default function StockCard({ s, idx, chartPrefix = '', mode }: StockCardProps) {
   const [showChart, setShowChart] = useState(false)
   const cls = s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold'
   const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--'
@@ -35,7 +36,8 @@ export default function StockCard({ s, idx, chartPrefix = '' }: StockCardProps) 
 
   const isBuy = s.signal === 'buy'
   const chartId = `${chartPrefix}chart_${idx}`
-  const chartUrl = `/api/stock-chart?code=${s.code}&t=${Date.now()}`
+  const modeParam = mode ? `&mode=${mode}` : ''
+  const chartUrl = `/api/stock-chart?code=${s.code}${modeParam}&t=${Date.now()}`
 
   // 止损
   let slContent: React.ReactNode = null

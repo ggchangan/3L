@@ -46,7 +46,7 @@ export default function HoldingsReview({ stocks }: { stocks: BuySignalItem[] }) 
         })}
       </div>
       {(groups[activeDir] || []).map((s, i) => (
-        <StockCard key={s.code + '-' + i} s={s} idx={i + 1} chartPrefix="hr_" />
+        <StockCard key={s.code + '-' + i} s={s} idx={i + 1} chartPrefix="hr_" mode="review" />
       ))}
       <div style={{ marginTop: 6, textAlign: 'right', color: '#555', fontSize: 11 }}>
         共{stocks.length}只持仓
