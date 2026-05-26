@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
 import StockCard from '../components/StockCard'
+import { pinyin } from 'pinyin-pro'
 import type { BuySignalItem } from '../lib/types'
 import './TrendCandidates.css'
 
@@ -107,8 +108,8 @@ export default function TrendCandidates() {
       const results = wl.filter((s: any) => {
         const code = (s.code || '').toLowerCase()
         const name = (s.name || '').toLowerCase()
-        const py = (s.name || '').split(/\s+/).map((w: string) => w[0]).join('').toLowerCase()
-        return code.includes(q) || name.includes(q) || py.includes(q)
+        const pyInitials = pinyin(s.name || '', { pattern: 'first', toneType: 'none' }).replace(/\s+/g, '').toLowerCase()
+        return code.includes(q) || name.includes(q) || pyInitials.includes(q)
       })
       setSearchResults(results.slice(0, 20))
     }, 300)
