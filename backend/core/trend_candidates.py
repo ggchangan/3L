@@ -251,16 +251,14 @@ def get_tracked_stocks():
 
         name = kls[0].get('name', code) if kls else code
 
-        # 信号（已标记趋势股，用 detect_trend_buy 判定，与复盘页一致）
+        # 信号（全部用 get_stock_card 统一判定，内部已处理趋势/3L分支）
         signal = 'hold'
         try:
-            from backend.core.trend_trading import detect_trend_buy
-            _sector = info.get('ths_industry', '') or ''
-            _data = {_sector: {code: kls}}
-            _date_clean = kls[-1]['date']
-            _tb = detect_trend_buy(code, _date_clean, _data)
-            if _tb and _tb.get('has_buy'):
-                signal = 'buy'
+            from backend.services.stock_card_service import get_stock_card
+            _today = kls[-1]['date']
+            _today_fmt = f'{_today[:4]}-{_today[4:6]}-{_today[6:8]}'
+            _card = get_stock_card(code, _today_fmt, klines=kls)
+            signal = _card.get('signal', 'hold')
         except Exception:
             pass
 
