@@ -3,15 +3,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
-// 多页 + React SPA 混合模式
-// 旧 HTML 页面走多页入口，React 页面走 react.html 入口
-const htmlPages = [
-  'react',       // React SPA 入口（Monitor 首期迁移）
-  'review', 'macro', 'stock_analysis',
-  'simulation', 'watchlist', 'trend_candidates', 'tips',
-  'tip-detail', 'industry', 'journal', 'top_gainers',
-  'skills', 'holdings',
-]
+// 单页 React SPA 入口
+const htmlPages = ['react']
 
 export default defineConfig({
   root: '.',
