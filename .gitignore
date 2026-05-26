@@ -44,3 +44,4 @@ files/
 # Hidden config files that shouldn't be tracked
 .ssh/
 .config/
+3l-server.tar.gz

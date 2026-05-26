@@ -2,11 +2,12 @@ version: '3.8'
 
 services:
   server:
-    build: .
+    image: 3l-server:latest
     container_name: 3l-server
     ports:
       - "8080:8080"
     volumes:
+      # 数据目录（必须挂载，否则没有行情数据）
       - /home/ubuntu/data/3l:/data
       - ./logs:/app/logs
     environment:
@@ -15,4 +16,7 @@ services:
       - PORT=8080
       - LOG_LEVEL=INFO
       - LOG_DIR=/app/logs
+      # 登录账号密码（必须设置，否则容器启动失败）
+      - AUTH_USER=admin
+      - AUTH_PASS=你的密码
     restart: unless-stopped
