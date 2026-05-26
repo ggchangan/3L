@@ -32,7 +32,7 @@ sudo systemctl start docker
 ### 方式A：从镜像仓库拉取（推荐）
 
 ```bash
-sudo docker pull <镜像仓库地址>/3l-server:latest
+sudo docker pull ccr.ccs.tencentyun.com/ygys30ds/lll:latest
 ```
 
 ### 方式B：从文件加载（离线传输）

@@ -42,12 +42,12 @@
 - **数据更新**：他那边没有 cron，需要在 Docker 内或宿主机写定时任务跑 update_stock_data.py
 - **镜像大小**：依赖多，镜像可能比较大，考虑 alpine 基础镜像或多阶段构建
 
-## 4. 待讨论
+## 4. 已定事项
 
-- [ ] 镜像放哪？Docker Hub（国内可能慢）还是阿里云/腾讯云容器镜像服务？
-- [ ] 他服务器上要不要装 python/node？还是全依赖都在镜像里？
-- [ ] 数据更新怎么搞——容器内 crond 还是外置 systemd timer？
-- [ ] 多用户隔离？他一个人用一个容器就行，还是需要支持多人同时用？
+- ✅ 镜像放腾讯云容器镜像服务 `ccr.ccs.tencentyun.com/ygys30ds/lll:latest`
+- ✅ 全依赖在镜像里（Python + wkhtmltopdf + librsvg + cron）
+- ✅ 容器内 crond 执行数据更新（交易日17:00）
+- ✅ 单用户单容器
 
 ---
 
