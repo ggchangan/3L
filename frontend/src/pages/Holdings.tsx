@@ -9,6 +9,7 @@ interface HoldingItem {
   stop_loss_price: number | null; price: number | null
   change: number | null; stop_loss_pct: number | null
   sector: string; structure: string; stage: string
+  signal?: string
 }
 
 interface HoldingsData {
@@ -35,6 +36,7 @@ export default function Holdings() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [collapsed, setCollapsed] = useState(false)
+  const [activeDir, setActiveDir] = useState('')
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
@@ -400,12 +402,38 @@ export default function Holdings() {
             {!collapsed && (
               <div id="cardBody">
                 <div id="cardList">
-                  {sortedHoldings.map(({ idx: origIdx, item: h }, i) => {
-                    // ── 构造 StockCard 数据 ──
-                    const s: BuySignalItem = {
+                    {(() => {
+                      const dirMap: Record<string, { items: typeof sortedHoldings; totalRatio: number }> = {}
+                      sortedHoldings.forEach(sh => {
+                        const d = sh.item.direction || '其他'
+                        if (!dirMap[d]) dirMap[d] = { items: [], totalRatio: 0 }
+                        dirMap[d].items.push(sh)
+                        dirMap[d].totalRatio += sh.item.ratio || 0
+                      })
+                      const dirs = Object.keys(dirMap).sort((a, b) => dirMap[b].totalRatio - dirMap[a].totalRatio)
+                      const curDir = activeDir && dirMap[activeDir] ? activeDir : (dirs[0] || '')
+                      if (!activeDir && dirs.length > 0) { setTimeout(() => setActiveDir(dirs[0]), 0) }
+                      const filtered = curDir ? (dirMap[curDir]?.items || []) : sortedHoldings
+                      return (
+                        <>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10, borderBottom: '1px solid #333', paddingBottom: 6 }}>
+                            {dirs.map(dir => {
+                              const isActive = dir === curDir
+                              return (
+                                <span key={dir} onClick={() => setActiveDir(dir)}
+                                  style={{ cursor: 'pointer', padding: '4px 12px', fontSize: 12, borderRadius: 12, display: 'inline-block',
+                                    background: isActive ? '#4ecdc4' : 'rgba(255,255,255,0.05)',
+                                    color: isActive ? '#fff' : '#999',
+                                  }}
+                                >{dir} ({dirMap[dir].items.length}只 · {dirMap[dir].totalRatio.toFixed(1)}%)</span>
+                              )
+                            })}
+                          </div>
+                          {filtered.map(({ idx: origIdx, item: h }, i) => {
+                            const s: BuySignalItem = {
                       code: h.code,
                       name: h.name,
-                      signal: inferSignal(h),
+                      signal: h.signal || inferSignal(h),
                       stage: h.stage || '--',
                       structure: h.structure || '--',
                       trading_system: '3l',
@@ -444,7 +472,10 @@ export default function Holdings() {
                         </div>
                       </div>
                     )
-                  })}
+                          })}
+                        </>
+                      )
+                    })()}
                 </div>
               </div>
             )}

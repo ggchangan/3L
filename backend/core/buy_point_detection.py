@@ -12,7 +12,7 @@ from backend.core.data_layer import get_industry_map, PROFIT_QUALITY_PATH, ALL_S
 
 # 导入系统B：EMA10趋势分析
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from ema_utils import get_ema_arrangement, get_structure, get_stage, ema_list
 
 def find_idx(date_str, klines):
@@ -519,7 +519,11 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
     buy_type = None
     score = 0
     detail = {}
-    
+
+    # 上涨趋势 + 加速/滞涨/转弱 → 不产生买点（加速追高/滞涨转弱按卖出处理）
+    if structure == '上涨趋势' and stage in ('加速', '滞涨', '转弱'):
+        return None
+
     if structure == '上涨趋势':
         # ====== 中继买点（新规则） ======
         # 计算涨跌幅（从昨收）

@@ -182,6 +182,7 @@ export interface ReviewData {
   holdings_review?: BuySignalItem[]
   holdings?: BuySignalItem[]
   buy_signals_review?: BuySignalItem[]
+  direction_order?: string[]
   trading_plan?: {
     overall_strategy?: string
     position_level?: string

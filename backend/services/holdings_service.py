@@ -129,6 +129,16 @@ def get_holdings_with_prices():
 
     # 叠加行情字段
     enriched = []
+    # 加载自选股方向映射（方向管理优先于holdings.json的静态方向）
+    wl_dirs = {}
+    try:
+        from backend.services.watchlist_service import get_watchlist
+        wl = get_watchlist()
+        for s in wl.get('stocks', []):
+            if s.get('direction'):
+                wl_dirs[s['code']] = s['direction']
+    except Exception:
+        pass
     for h in holdings:
         item = dict(h)
         code = h.get('code', '')
@@ -144,6 +154,10 @@ def get_holdings_with_prices():
         else:
             item['stop_loss_pct'] = None
 
+        # 方向：方向管理优先于holdings.json静态数据
+        if code in wl_dirs:
+            item['direction'] = wl_dirs[code]
+
         # 板块/结构/阶段 — 通过 StockCardService 统一获取
         item['sector'] = ''
         item['structure'] = '--'
@@ -154,6 +168,7 @@ def get_holdings_with_prices():
             item['sector'] = card.get('sector', '') or ''
             item['structure'] = card.get('structure', '--')
             item['stage'] = card.get('stage', '--')
+            item['signal'] = card.get('signal', '--')
         except Exception:
             pass
 
@@ -218,5 +233,24 @@ def save_holdings(data):
         if os.path.isfile(tmp_path):
             os.unlink(tmp_path)
         return {'success': False, 'error': f'写入失败: {e}'}
+
+    # 同步方向到自选股（方向管理是权威源，但持仓编辑也需同步）
+    try:
+        from backend.services.watchlist_service import get_watchlist, save_watchlist
+        wl = get_watchlist()
+        changed = False
+        for h in holdings:
+            code = h.get('code', '')
+            dir_val = h.get('direction', '')
+            if code and dir_val:
+                for s in wl.get('stocks', []):
+                    if s['code'] == code and s.get('direction') != dir_val:
+                        s['direction'] = dir_val
+                        changed = True
+                        break
+        if changed:
+            save_watchlist({'stocks': wl['stocks'], 'count': len(wl['stocks'])})
+    except Exception:
+        pass
 
     return {'success': True, 'count': len(holdings)}

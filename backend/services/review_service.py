@@ -230,6 +230,50 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
     except Exception as e:
         print(f"[3L复盘] 全量扫描跳过: {e}")
 
+    # ── 趋势股乖离率买点扫描 ──
+    try:
+        from backend.core.trend_trading import detect_trend_buy
+        from backend.core.data_layer import _load_json
+        from backend.config import MANUAL_TREND_PATH
+        manual = _load_json(MANUAL_TREND_PATH, [])
+        trend_codes = set(manual)
+        if trend_codes and wl_codes:
+            trend_wl_codes = trend_codes & wl_codes
+            for code in trend_wl_codes:
+                if code in seen:
+                    continue
+                kls = None
+                for sec, ss in all_stocks_60d.items():
+                    if code in ss:
+                        kls = ss[code]
+                        break
+                if not kls or len(kls) < 30:
+                    continue
+                date_clean = date_str.replace('-', '')
+                wl_dir = wl_dir_map.get(code, '')
+                sec_name = kls[0].get('ths_industry', kls[0].get('sector', '')) if kls else ''
+                data = {sec_name or '': {code: kls}}
+                tb = detect_trend_buy(code, date_clean, data, ml_names)
+                if tb and tb.get('has_buy'):
+                    seen.add(code)
+                    cur_close = kls[-1]['close']
+                    cur_change = round((kls[-1]['close'] - kls[-2]['close']) / kls[-2]['close'] * 100, 2) if len(kls) >= 2 else 0
+                    name = kls[0].get('name', code) if kls else code
+                    buy_signals.append({
+                        'name': name, 'code': code, 'sector': sec_name,
+                        'direction': wl_dir,
+                        'buy_point': tb.get('buy_type', 'BIAS5乖离率买入'),
+                        'price': cur_close, 'change': cur_change,
+                        'score': 5, 'flags': '', 'profit_model1': False,
+                    })
+                    print(f'[3L复盘] 趋势股买点: {name}({code}) - {tb.get("buy_type", "乖离率买入")}')
+        if manual:
+            added = len([s for s in buy_signals if s.get('code') in trend_codes])
+            if added:
+                print(f'[3L复盘] 趋势股扫描: 新增 {added} 个乖离率买点')
+    except Exception as e:
+        print(f'[3L复盘] 趋势股扫描跳过: {e}')
+
     return buy_signals, all_stocks_60d
 
 
@@ -430,7 +474,7 @@ def generate_daily_review(date_str=None):
 
     # 保存存档
     save_json(os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'), review)
-    save_json(os.path.join(WWW_DIR, 'private', 'review_data.json'), review)
+    save_json(REVIEW_DATA_PATH, review)
     print(f"[3L复盘] ✅ 已保存 {date_str} 复盘数据")
 
     # 写入主线缓存
@@ -607,6 +651,10 @@ def compute_review_real_time(date_str=None):
     }
     save_json(MAINLINES_CACHE_PATH, _mainlines_cache)
 
+    # 获取方向顺序（用户自定义排序）
+    from backend.services.direction_service import get_all_ordered as _get_dir_order
+    direction_order = _get_dir_order()
+
     review = {
         'date': date_str,
         'market': {**market_cycle, 'date': date_str},
@@ -617,6 +665,7 @@ def compute_review_real_time(date_str=None):
         'buy_signals': buy_signals,
         'holdings_review': holdings_review,
         'buy_signals_review': buy_signals_review,
+        'direction_order': direction_order,
     }
 
     return review

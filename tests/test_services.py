@@ -964,6 +964,17 @@ class TestStockChartDefensive(unittest.TestCase):
         self.assertIsNotNone(svg, f'应在缓存中: {err}')
         self.assertIn('<svg', svg)
 
+    @patch('backend.services.stock_chart_service.get_stock_klines')
+    def test_klines_without_name_field_no_crash(self, mock_klines):
+        """K线数据不含name字段时不因NameError崩溃（回归: 标题渲染用name未初始化）"""
+        fake = [{'date': '20260520', 'open': 10, 'close': 11, 'high': 12, 'low': 9, 'volume': 1000}] * 60
+        fake[-1]['name'] = '测试股票'
+        mock_klines.return_value = fake
+        from backend.services.stock_chart_service import generate_stock_chart
+        svg, err = generate_stock_chart('000999')
+        self.assertIsNotNone(svg, f'不应崩溃: {err}')
+        self.assertIn('<svg', svg)
+
 
 # ── 复盘数据源一致性回归测试 ──────────────────────────
 # 唯一写K线数据的入口是 update_stock_data.py（17:00 cron），

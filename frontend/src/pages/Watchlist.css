@@ -102,13 +102,21 @@
 }
 .search-input:focus { border-color: #4ecdc4; }
 
+.add-tab-content {
+    position: relative;
+}
 .search-results {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 100;
     background: #1a1a30;
     border: 1px solid #2a2a4e;
     border-radius: 6px;
-    margin-top: 4px;
     max-height: 300px;
     overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
 .search-result-item {
     padding: 6px 10px;

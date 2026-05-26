@@ -510,3 +510,30 @@ class TestComputeTradeStats:
         assert stats['win_rate'] == 100.0
         assert stats['avg_win'] == 5.5
         assert stats['cumulative_return'] == 5.5
+
+
+class TestBuyPointStageMutualExclusion:
+    """买点与阶段互斥测试 — 上涨趋势+加速/滞涨/转弱 不应产生买点"""
+
+    def test_stagnation_returns_none(self, stocks):
+        """上涨趋势+滞涨 → detect_buy_point 返回 None"""
+        # 688478 晶升股份：当前stage=滞涨
+        raw = stocks.get('stocks', stocks)
+        bt = detect_buy_point('688478', '20260526', raw, market_position='波中', main_lines={'半导体'})
+        assert bt is None, f'滞涨不应产生买点，实际: {bt}'
+
+    def test_acceleration_returns_none(self, stocks):
+        """上涨趋势+加速 → detect_buy_point 返回 None"""
+        # 000657 中钨高新：当前stage=加速
+        raw = stocks.get('stocks', stocks)
+        bt = detect_buy_point('000657', '20260526', raw, market_position='波中', main_lines={'资源股'})
+        assert bt is None, f'加速不应产生买点，实际: {bt}'
+
+    def test_uptrend_normal_stage_still_buyable(self, stocks):
+        """上涨趋势+正常阶段（上行）仍可产生买点"""
+        raw = stocks.get('stocks', stocks)
+        # 300502 新易盛：stage=上行，有突破买点
+        bt = detect_buy_point('300502', '20260526', raw, market_position='波中', main_lines={'算力'})
+        assert bt is not None, '上行阶段应可产生买点'
+        assert bt.get('buy_type') in ('突破买点', '中继买点'), f'买点类型不符: {bt}'
+

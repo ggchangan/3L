@@ -5,7 +5,7 @@
 """
 import json, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-
+from backend.config import DATA_DIR
 from backend.core.data_layer import _load_json
 from backend.core.ema_utils import ema_list, get_structure, get_stage
 from backend.core.gen_trend_chart import gen_trend_svg
@@ -82,13 +82,17 @@ def _scan_industries(industry_names, imap, all_s, manual):
             vols = [k.get('volume', k.get('vol', 0)) for k in kls]
             stage = get_stage(closes, structure, highs, lows, volumes=vols)
 
-            # 信号（趋势交易判定）
-            if cur_b5 < 0 or cur_b5 <= 2:
-                signal = 'buy'
-            elif cur_b5 > 10:
-                signal = 'sell'
-            else:
-                signal = 'hold'
+            # 信号（用 get_stock_card 统一判定，已标记→趋势判定，未标记→3L判定）
+            signal = 'hold'
+            try:
+                from backend.services.stock_card_service import get_stock_card
+                _kls = kls
+                _today = _kls[-1]['date']
+                _today_fmt = f'{_today[:4]}-{_today[4:6]}-{_today[6:8]}'
+                _card = get_stock_card(code, _today_fmt, klines=_kls)
+                signal = _card.get('signal', 'hold')
+            except Exception:
+                pass
 
             in_manual = code in manual
             trading_system = 'trend' if in_manual else '3l'
@@ -247,12 +251,16 @@ def get_tracked_stocks():
 
         name = kls[0].get('name', code) if kls else code
 
-        if cur_b5 < 0 or cur_b5 <= 2:
-            signal = 'buy'
-        elif cur_b5 > 10:
-            signal = 'sell'
-        else:
-            signal = 'hold'
+        # 信号（全部用 get_stock_card 统一判定，内部已处理趋势/3L分支）
+        signal = 'hold'
+        try:
+            from backend.services.stock_card_service import get_stock_card
+            _today = kls[-1]['date']
+            _today_fmt = f'{_today[:4]}-{_today[4:6]}-{_today[6:8]}'
+            _card = get_stock_card(code, _today_fmt, klines=kls)
+            signal = _card.get('signal', 'hold')
+        except Exception:
+            pass
 
         # 更新SVG
         _gen_chart(name, code, kls, cur_b5)
