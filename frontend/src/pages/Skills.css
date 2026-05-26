@@ -1,0 +1,58 @@
+/* Skills 追踪 — React 版 */
+
+.header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  border-bottom: 2px solid #e94560;
+  padding: 24px 20px; text-align: center;
+}
+.header h1 { font-size: 24px; color: #fff; letter-spacing: 3px; }
+.header .sub { color: #a0a0b0; font-size: 13px; margin-top: 6px; }
+.container { max-width: 960px; margin: 0 auto; padding: 20px; }
+.footer { text-align: center; padding: 20px; color: #444; font-size: 11px; border-top: 1px solid #1a1a2e; margin-top: 20px; }
+
+/* Section */
+.section {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #2a2a4e; border-radius: 14px;
+  padding: 20px 24px; margin-bottom: 20px;
+}
+.section-title {
+  font-size: 18px; color: #4ecdc4; margin-bottom: 14px;
+  padding-bottom: 8px; border-bottom: 1px solid #2a2a4e;
+}
+
+/* Skill Items */
+.skill-item {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid #2a2a4e; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 6px;
+}
+.skill-item .name { font-size: 13px; font-weight: 600; color: #4ecdc4; }
+.skill-item .desc { font-size: 12px; color: #888; margin-top: 2px; }
+.tag {
+  display: inline-block; font-size: 10px; padding: 1px 8px;
+  border-radius: 8px; margin-left: 6px; vertical-align: middle;
+}
+.tag.created { background: #e94560; color: #fff; }
+.tag.updated { background: #ffd700; color: #000; }
+
+/* Day Cards */
+.day-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid #2a2a4e; border-radius: 12px;
+  padding: 18px; margin-bottom: 14px;
+}
+.day-card .date-badge {
+  display: inline-block; background: #e94560; color: #fff;
+  padding: 4px 16px; border-radius: 16px;
+  font-size: 14px; font-weight: 600; margin-bottom: 12px;
+}
+.day-card .change-item {
+  padding: 8px 12px; border-left: 3px solid #2a2a4e;
+  margin-bottom: 8px; background: rgba(255,255,255,0.02);
+  border-radius: 0 6px 6px 0;
+}
+.day-card .change-item .sname { font-size: 13px; font-weight: 600; }
+.day-card .change-item .sdesc { font-size: 12px; color: #888; margin-top: 2px; }
+.day-card .change-item .spoints { font-size: 11px; color: #666; margin-top: 3px; padding-left: 12px; }
+.day-card .change-item .spoints li { margin-bottom: 1px; }

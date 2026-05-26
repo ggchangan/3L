@@ -11,6 +11,7 @@ import TopGainers from './pages/TopGainers'
 import StockAnalysis from './pages/StockAnalysis'
 import Tips from './pages/Tips'
 import Simulation from './pages/Simulation'
+import Skills from './pages/Skills'
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/stock_analysis" element={<StockAnalysis />} />
         <Route path="/tips" element={<Tips />} />
         <Route path="/simulation" element={<Simulation />} />
+        <Route path="/skills" element={<Skills />} />
         <Route path="/" element={<Monitor />} />
 
         {/* 旧 HTML 重定向到 React 路由 */}
@@ -40,10 +42,10 @@ export default function App() {
         <Route path="/stock_analysis.html" element={<LegacyRedirect to="/stock_analysis" />} />
         <Route path="/tips.html" element={<LegacyRedirect to="/tips" />} />
         <Route path="/simulation.html" element={<LegacyRedirect to="/simulation" />} />
+        <Route path="/skills.html" element={<LegacyRedirect to="/skills" />} />
 
         {/* 未迁移的旧页面：通过 window.location 跳转 */}
         <Route path="/tip-detail" element={<LegacyRedirect to="/tip-detail.html" />} />
-        <Route path="/skills" element={<LegacyRedirect to="/skills.html" />} />
         <Route path="*" element={<Navigate to="/monitor" replace />} />
       </Routes>
     </BrowserRouter>

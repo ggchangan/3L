@@ -229,6 +229,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/stock_analysis': '/react.html',
             '/tips': '/react.html',
             '/simulation': '/react.html',
+            '/skills': '/react.html',
             '/': '/react.html',
         }
         if path in aliases and aliases[path]:
