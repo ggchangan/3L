@@ -2,16 +2,18 @@ version: '3.8'
 
 services:
   server:
-    build: .
+    image: ccr.ccs.tencentyun.com/ygys30ds/lll:latest
     container_name: 3l-server
     ports:
       - "8080:8080"
     volumes:
-      - /home/ubuntu/data/3l:/data
+      # 数据目录（挂载空目录即可，首次启动自动填充种子数据）
+      - ./data:/data
       - ./logs:/app/logs
     environment:
-      - WWW_DIR=/app
-      - DATA_DIR=/data
+      - AUTH_USER=admin
+      # 密码通过 .env 文件或 AUTH_PASS 环境变量传入
+      - AUTH_PASS=${AUTH_PASS}
       - PORT=8080
       - LOG_LEVEL=INFO
       - LOG_DIR=/app/logs
