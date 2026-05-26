@@ -200,31 +200,9 @@ def generate_stock_chart(code, mode='review'):
             break
     raw_code = raw_code[-6:] if len(raw_code) >= 6 else raw_code
 
-    # ── 0.5. 缓存检查（review 模式：按 18:00 规则判定缓存有效） ──
     now = datetime.now()
     today_str = now.strftime('%Y%m%d')
     is_weekday = now.weekday() < 5
-    if mode != 'monitor':
-        # 根据18:00规则确定"应该使用的交易日"
-        if now.hour >= 18 and is_weekday:
-            cache_date = today_str
-        else:
-            if now.weekday() == 0:       # 周一→上周五
-                cache_date = (now - timedelta(days=3)).strftime('%Y%m%d')
-            elif now.weekday() == 6:      # 周日→上周五
-                cache_date = (now - timedelta(days=2)).strftime('%Y%m%d')
-            else:
-                cache_date = (now - timedelta(days=1)).strftime('%Y%m%d')
-        cache_file = os.path.join(
-            REVIEW_CHARTS_DIR,
-            f'zzqz_stock_chart_{raw_code}_{cache_date}.svg'
-        )
-        if os.path.isfile(cache_file):
-            try:
-                with open(cache_file, 'r') as f:
-                    return f.read(), None
-            except Exception:
-                pass  # 读失败就重新生成
 
     # ── 1. 获取 60 日 K 线数据 ──────────────────────────────
     stocks = get_all_stocks()
@@ -233,8 +211,22 @@ def generate_stock_chart(code, mode='review'):
     if not klines or len(klines) < 10:
         return None, f'数据不足: {len(klines) if klines else 0} 根K线（等待17:00数据更新）'
 
+        # ── 缓存检查（用最后K线日期作缓存键） ──
+    cache_file = None
+    if mode != 'monitor':
+        last_date = str(klines[-1].get('date', '')).replace('-', '')
+        cache_file = os.path.join(
+            REVIEW_CHARTS_DIR,
+            f'zzqz_stock_chart_{raw_code}_{last_date}.svg'
+        )
+        if os.path.isfile(cache_file):
+            try:
+                with open(cache_file, 'r') as f:
+                    return f.read(), None
+            except Exception:
+                pass
+
     # 股票名称
-    name = klines[0].get('name', raw_code) if klines else raw_code
 
     # ── 2. 获取实时行情（仅 monitor 模式） ──────────────────
     rt = None
@@ -1201,6 +1193,21 @@ def generate_trend_stock_chart(code, mode='review'):
     klines = get_stock_klines(raw_code, stocks=stocks)
     if not klines or len(klines) < 10:
         return None, f'数据不足: {len(klines) if klines else 0} 根K线'
+
+    # ── 缓存检查（用最后K线日期作缓存键） ──
+    cache_file = None
+    if mode != 'monitor':
+        last_date = str(klines[-1].get('date', '')).replace('-', '')
+        cache_file = os.path.join(
+            REVIEW_CHARTS_DIR,
+            f'zzqz_trend_stock_chart_{raw_code}_{last_date}.svg'
+        )
+        if os.path.isfile(cache_file):
+            try:
+                with open(cache_file, 'r') as f:
+                    return f.read(), None
+            except Exception:
+                pass
 
     name = klines[0].get('name', raw_code) if klines else raw_code
 
