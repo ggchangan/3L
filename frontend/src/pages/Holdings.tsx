@@ -9,6 +9,7 @@ interface HoldingItem {
   stop_loss_price: number | null; price: number | null
   change: number | null; stop_loss_pct: number | null
   sector: string; structure: string; stage: string
+  signal?: string
 }
 
 interface HoldingsData {
@@ -432,7 +433,7 @@ export default function Holdings() {
                             const s: BuySignalItem = {
                       code: h.code,
                       name: h.name,
-                      signal: inferSignal(h),
+                      signal: h.signal || inferSignal(h),
                       stage: h.stage || '--',
                       structure: h.structure || '--',
                       trading_system: '3l',

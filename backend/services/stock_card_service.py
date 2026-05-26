@@ -343,8 +343,15 @@ def get_stock_card(code, date_str, market_position='波中',
             flags = bt.get('flags', '')
             _3l_detail = bt.get('detail', {})
 
+    # 5b. 卖出判定（当无买点信号时，基于结构+阶段判定）
+    if signal == 'hold':
+        struct = struct_info.get('structure', '')
+        stage = struct_info.get('stage', '')
+        if struct == '下降趋势' or stage in ('转弱', '滞涨', '下行'):
+            signal = 'sell'
+            signal_text = signal_text or f'{stage}·建议减仓'
+
     # 6. 止损
-    stop_loss, stop_loss_pct = _calc_stop_loss(klines, idx)
 
     # 7. 主线定位
     mainline_level = _get_mainline_level(sector, main_line_names, sub_main_names)

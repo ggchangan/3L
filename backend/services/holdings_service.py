@@ -168,6 +168,7 @@ def get_holdings_with_prices():
             item['sector'] = card.get('sector', '') or ''
             item['structure'] = card.get('structure', '--')
             item['stage'] = card.get('stage', '--')
+            item['signal'] = card.get('signal', '--')
         except Exception:
             pass
 
