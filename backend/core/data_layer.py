@@ -177,6 +177,27 @@ def resolve_stock(query, stocks=None):
             name = kls[0].get('name', '') if kls else ''
             if q in name:
                 return code, sec, name
+    # 3.5 拼音首字母匹配
+    try:
+        from pypinyin import lazy_pinyin, Style
+        _py_cache = {}
+        q_lower = q.lower()
+        # 只检查字母查询（纯中文不进入此分支）
+        if q_lower.isascii() and q_lower.isalpha():
+            for sec, ss in stocks.items():
+                for code, kls in ss.items():
+                    if code in _py_cache:
+                        initials = _py_cache[code]
+                    else:
+                        name = kls[0].get('name', '') if kls else ''
+                        if not name:
+                            continue
+                        initials = ''.join(p[0] for p in lazy_pinyin(name, style=Style.FIRST_LETTER)).lower()
+                        _py_cache[code] = initials
+                    if q_lower in initials:
+                        return code, sec, kls[0].get('name', code) if kls else code
+    except ImportError:
+        pass
     # 4. 全市场搜索
     market_results = search_stock_full_market(q, max_results=1)
     if market_results:

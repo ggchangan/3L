@@ -206,6 +206,14 @@ class Handler(SimpleHTTPRequestHandler):
         redirects = {
             '/monitor.html': '/monitor',
             '/review.html': '/review',
+            '/stock_analysis.html': '/stock_analysis',
+            '/holdings.html': '/holdings',
+            '/industry.html': '/industry',
+            '/macro.html': '/macro',
+            '/top_gainers.html': '/top_gainers',
+            '/tips.html': '/tips',
+            '/simulation.html': '/simulation',
+            '/skills.html': '/skills',
         }
         if path in redirects:
             self.send_response(302)

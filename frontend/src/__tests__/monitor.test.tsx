@@ -133,4 +133,53 @@ describe('StockCard', () => {
     render(<StockCard s={mainlineSignal} idx={1} />)
     expect(screen.getByText('主线')).toBeTruthy()
   })
+
+  it('null sector_chg 不崩溃', () => {
+    const s: BuySignalItem = {
+      ...buySignal,
+      sector_chg: null as any,
+    }
+    render(<StockCard s={s} idx={1} />)
+    // 板块文字应该显示，不崩溃
+    expect(document.querySelector('.stock-item')).toBeTruthy()
+  })
+
+  it('sector_chg 显示板块涨跌幅', () => {
+    const s: BuySignalItem = {
+      ...buySignal,
+      sector: '半导体',
+      sector_chg: 3.25,
+    }
+    render(<StockCard s={s} idx={1} />)
+    const fieldEls = document.querySelectorAll('.field')
+    const sectorEl = Array.from(fieldEls).find(el => el.textContent?.includes('板块'))
+    expect(sectorEl).toBeTruthy()
+    expect(sectorEl?.textContent).toContain('半导体')
+    expect(sectorEl?.textContent).toContain('+3.25%')
+  })
+
+  it('direction 单独显示', () => {
+    const s: BuySignalItem = {
+      ...buySignal,
+      sector: '银行',
+      direction: '银行方向',
+      sector_chg: 1.0,
+    }
+    render(<StockCard s={s} idx={1} />)
+    const fieldEls = document.querySelectorAll('.field')
+    const sectorEl = Array.from(fieldEls).find(el => el.textContent?.includes('方向'))
+    expect(sectorEl).toBeTruthy()
+    expect(sectorEl?.textContent).toContain('银行方向')
+  })
+
+  it('null trend_bias 不崩溃（非趋势系统）', () => {
+    const s: BuySignalItem = {
+      ...buySignal,
+      trading_system: 'trend',
+      trend_bias: null as any,
+    }
+    render(<StockCard s={s} idx={1} />)
+    // 不应该抛出异常
+    expect(document.querySelector('.stock-item')).toBeTruthy()
+  })
 })

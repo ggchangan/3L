@@ -93,6 +93,9 @@ def _analyze(code, direction, name, stocks, wl_codes):
         'stop_loss': card.get('stop_loss'),
         'stop_loss_pct': card.get('stop_loss_pct'),
         'mainline_level': card.get('mainline_level', ''),
+        'trend_bias': card.get('trend_bias'),
+        'sector': card.get('sector', ''),
+        'sector_chg': card.get('sector_chg'),
         'conclusion': card.get('conclusion', ''),
     }
 

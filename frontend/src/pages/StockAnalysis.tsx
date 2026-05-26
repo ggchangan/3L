@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
+import StockCard from '../components/StockCard'
+import type { BuySignalItem } from '../lib/types'
 import './StockAnalysis.css'
 
 interface BacktestSignal {
@@ -16,20 +18,14 @@ interface BacktestData {
 
 interface AnalysisData {
   code: string; name: string; price: number; change: number
-  direction: string; sector: string
+  direction: string; sector: string; sector_chg?: number
+  deviation_pct?: number
   structure: string; stage: string
   signal: string; buy_point: string
   profit_model1: boolean; trend_stock: boolean
   trading_system: string
   trend_buy?: { buy_type?: string; bias5?: number }
   [key: string]: any
-}
-
-const STAGE_COLORS: Record<string, string> = {
-  '上行': '#4ecdc4', '加速': '#e94560', '缩量整理': '#ffd700',
-  '滞涨': '#ff6b6b', '转弱': '#ff6b6b', '下行': '#666',
-  '加速跌': '#e94560', '转强': '#4ecdc4',
-  '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560',
 }
 
 export default function StockAnalysis() {
@@ -40,20 +36,25 @@ export default function StockAnalysis() {
   const [btLoading, setBtLoading] = useState(false)
   const [error, setError] = useState('')
   const [btError, setBtError] = useState('')
-  const [chartOpen, setChartOpen] = useState(true)
   const lastCode = useRef('')
 
   async function search() {
     if (!q.trim()) return
     setLoading(true); setError(''); setAnalysis(null)
     try {
-      const r = await fetch(`/api/stock-analysis?q=${encodeURIComponent(q.trim())}`)
-      const d = await r.json()
+      const url = `/api/stock-analysis?q=${encodeURIComponent(q.trim())}`
+      console.log('🔍 fetching:', url)
+      const r = await fetch(url, { method: 'GET', credentials: 'same-origin' })
+      console.log('🔍 response status:', r.status, r.statusText)
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`)
+      let d
+      try { d = await r.json() } catch (e) { throw new Error(`JSON解析失败: ${await r.text().catch(()=>'')}`) }
       if (d.error) { setError(d.error); return }
       lastCode.current = d.code
       setAnalysis(d)
     } catch (err: any) {
-      setError(err.message)
+      console.error('🔍 fetch error:', err)
+      setError(`请求失败: ${err.message}`)
     } finally { setLoading(false) }
   }
 
@@ -71,93 +72,28 @@ export default function StockAnalysis() {
     } finally { setBtLoading(false) }
   }
 
-  function renderCard(d: AnalysisData) {
-    const signal = d.signal || 'hold'
-    const signalLabel: Record<string, string> = { buy: '买入', hold: '持有', sell: '卖出', warn: '观望' }
-    const signalBarCls = signal === 'buy' ? 'buy' : signal === 'hold' ? 'hold' : signal === 'warn' ? 'warn' : 'none'
-    const changeCls = (d.change || 0) >= 0 ? 'up' : 'down'
-
-    return (
-      <div className="result-card">
-        {/* Signal bar */}
-        <div className={`signal-bar ${signalBarCls}`}>
-          {signal === 'buy' ? '🟢' : signal === 'hold' ? '🟡' : signal === 'warn' ? '🟠' : '⚪'} {signalLabel[signal] || signal}
-          {d.buy_point ? ` · ${d.buy_point}` : ''}
-        </div>
-
-        {/* Header */}
-        <div className="result-header">
-          <div>
-            <span className="stock-name">{d.name}</span>
-            <span className="stock-code">{d.code}</span>
-          </div>
-          <div className="stock-price">{d.price?.toFixed(2)}</div>
-        </div>
-
-        {/* Tags */}
-        <div className="tags">
-          {d.sector && <span className="tag">{d.sector}</span>}
-          {d.direction && <span className="tag">{d.direction}</span>}
-          {d.structure && <span className="tag">{d.structure}</span>}
-          {d.stage && <span className="tag" style={{ color: STAGE_COLORS[d.stage] || '#888' }}>{d.stage}</span>}
-          {d.trend_stock && <span className="tag trend-tag">趋势股</span>}
-          {d.profit_model1 && <span className="tag pmi-tag">盈利模式1</span>}
-          {d.trend_buy?.buy_type && <span className="tag trend-buy-tag">{d.trend_buy.buy_type}</span>}
-        </div>
-
-        {/* Info grid */}
-        <div className="info-grid">
-          <div className="info-item">
-            <div className="l">涨跌幅</div>
-            <div className={`v ${changeCls === 'up' ? 'good' : 'bad'}`}>
-              {(d.change || 0) >= 0 ? '+' : ''}{(d.change || 0).toFixed(2)}%
-            </div>
-          </div>
-          <div className="info-item">
-            <div className="l">交易系统</div>
-            <div className="v normal">{d.trading_system === 'trend' ? '🎯 趋势交易' : '📊 3L体系'}</div>
-          </div>
-          <div className="info-item">
-            <div className="l">K线结构</div>
-            <div className="v normal">{d.structure || '--'}</div>
-          </div>
-          <div className="info-item">
-            <div className="l">当前阶段</div>
-            <div className="v normal" style={{ color: STAGE_COLORS[d.stage] || '#e0e0e0' }}>{d.stage || '--'}</div>
-          </div>
-          <div className="info-item">
-            <div className="l">BIAS5</div>
-            <div className="v normal">{d.trend_buy?.bias5 !== undefined ? d.trend_buy.bias5.toFixed(2) + '%' : '--'}</div>
-          </div>
-        </div>
-
-        {/* Chart */}
-        {d.chart_svg && (
-          <div className="chart-section">
-            <details open={chartOpen} onToggle={e => setChartOpen((e.target as HTMLDetailsElement).open)}>
-              <summary>📊 K线图（含关键点标注）</summary>
-              <object data={`${d.chart_svg}?t=${Date.now()}`} type="image/svg+xml" style={{ width: '100%', borderRadius: 8 }} />
-            </details>
-          </div>
-        )}
-
-        {/* Detail table */}
-        <div className="detail-section">
-          <h3>📋 详细数据</h3>
-          <table className="detail-table">
-            <tbody>
-              <tr><td>股票名称</td><td>{d.name || '--'}</td></tr>
-              <tr><td>股票代码</td><td>{d.code || '--'}</td></tr>
-              <tr><td>当前价格</td><td>{d.price?.toFixed(2) || '--'}</td></tr>
-              <tr><td>所属行业</td><td>{d.sector || '--'}</td></tr>
-              <tr><td>所属方向</td><td>{d.direction || '--'}</td></tr>
-              <tr><td>交易系统</td><td>{d.trading_system || '--'}</td></tr>
-              <tr><td>买点信号</td><td>{d.buy_point || '--'}</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    )
+  /** AnalysisData → BuySignalItem 适配 */
+  function toBuySignalItem(d: AnalysisData): BuySignalItem {
+    return {
+      code: d.code,
+      name: d.name,
+      signal: (d.signal || 'hold') as 'buy' | 'sell' | 'hold',
+      stage: d.stage,
+      structure: d.structure,
+      trading_system: d.trading_system as '3l' | 'trend' | undefined,
+      buy_point: d.buy_point,
+      stop_loss: d.stop_loss != null ? parseFloat(String(d.stop_loss)) : undefined,
+      stop_loss_pct: d.stop_loss_pct != null ? parseFloat(String(d.stop_loss_pct)) : undefined,
+      profit_model1: d.profit_model1,
+      trend_stock: d.trend_stock,
+      trend_bias: d.trend_bias ?? undefined,
+      direction: d.direction,
+      change: d.change ?? undefined,
+      price: d.price ?? undefined,
+      sector: d.sector ?? '',
+      sector_chg: d.sector_chg ?? undefined,
+      mainline_level: d.mainline_level,
+    }
   }
 
   function renderBacktest(d: BacktestData) {
@@ -247,7 +183,7 @@ export default function StockAnalysis() {
         <div id="resultArea">
           {loading && <div className="loading"><div className="spinner"></div>正在分析...</div>}
           {error && <div className="error-box">❌ {error}</div>}
-          {!loading && !error && analysis && renderCard(analysis)}
+          {!loading && !error && analysis && <StockCard s={toBuySignalItem(analysis)} idx={0} />}
           {!loading && !error && !analysis && (
             <div className="no-result">输入股票代码或名称开始分析</div>
           )}

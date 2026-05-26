@@ -1,4 +1,5 @@
 /* 个股分析 — React 版 */
+/* stock_item 样式复用旧版 signalStockCard 格式 */
 
 .header {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
@@ -9,6 +10,30 @@
 .header .sub { color: #a0a0b0; font-size: 12px; margin-top: 4px; }
 .container { max-width: 800px; margin: 0 auto; padding: 20px; }
 .hint { color: #555; font-size: 12px; text-align: center; padding: 10px; border-top: 1px solid #1a1a2e; margin-top: 20px; }
+
+/* Stock Card (signalStockCard 兼容格式) */
+.stock-item {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #2a2a4e;
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+.stock-item .name { font-size: 14px; font-weight: 600; color: #e0e0e0; }
+.stock-item .code { color: #666; font-size: 11px; margin-left: 6px; }
+.stock-item .row { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.stock-item .field { font-size: 12px; }
+.stock-item .field .l { color: #888; }
+.stock-item .field .v { color: #e0e0e0; }
+.stock-item .field .v.hold { color: #4ecdc4; }
+.stock-item .field .v.warn { color: #e94560; }
+.stock-item .field .v.danger { color: #666; }
+.stock-item .tag {
+  display: inline-block; font-size: 10px; padding: 1px 6px;
+  border-radius: 4px; margin-left: 4px;
+}
+.chart-container { margin-top: 6px; }
+.chart-container object { width: 100%; max-width: 700px; border-radius: 8px; }
 
 /* Search */
 .search-box {
@@ -47,61 +72,6 @@
   padding: 20px; text-align: center; color: #e94560; font-size: 14px;
 }
 
-/* Result Card */
-.result-card {
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
-  border: 1px solid #2a2a4e; border-radius: 14px; padding: 24px;
-}
-.result-header {
-  display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
-}
-.stock-name { font-size: 20px; font-weight: 700; color: #4ecdc4; }
-.stock-code { color: #888; font-size: 13px; margin-left: 8px; }
-.stock-price { font-size: 22px; font-weight: 700; }
-
-/* Signal Bar */
-.signal-bar {
-  padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
-  text-align: center; margin-bottom: 12px;
-}
-.signal-bar.buy { background: rgba(33,150,243,0.15); border: 1px solid #2196f3; color: #2196f3; }
-.signal-bar.hold { background: rgba(78,205,196,0.12); border: 1px solid #4ecdc4; color: #4ecdc4; }
-.signal-bar.warn { background: rgba(255,215,0,0.12); border: 1px solid #ffd700; color: #ffd700; }
-.signal-bar.none { background: rgba(255,255,255,0.03); border: 1px solid #444; color: #888; }
-
-/* Tags */
-.tags { margin: 8px 0; display: flex; gap: 4px; flex-wrap: wrap; }
-.tag {
-  background: #2a2a4e; border-radius: 4px; padding: 2px 8px;
-  font-size: 11px; color: #aaa; display: inline-block;
-}
-.trend-tag { background: rgba(78,205,196,0.2); color: #4ecdc4; }
-.pmi-tag { background: rgba(233,69,96,0.2); color: #e94560; }
-.trend-buy-tag { background: rgba(255,215,0,0.2); color: #ffd700; }
-
-/* Info Grid */
-.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
-.info-item { background: rgba(255,255,255,0.03); border: 1px solid #2a2a4e; border-radius: 8px; padding: 10px 12px; }
-.info-item .l { color: #888; font-size: 11px; margin-bottom: 2px; }
-.info-item .v { font-size: 16px; font-weight: 600; }
-.info-item .v.good { color: #4ecdc4; }
-.info-item .v.bad { color: #e94560; }
-.info-item .v.warn { color: #ffd700; }
-.info-item .v.normal { color: #e0e0e0; }
-
-/* Chart */
-.chart-section { margin-top: 16px; }
-.chart-section summary { cursor: pointer; color: #4ecdc4; font-size: 14px; padding: 6px 0; }
-.chart-section svg, .chart-section object { width: 100%; border-radius: 8px; margin-top: 8px; }
-
-/* Detail */
-.detail-section { margin-top: 16px; }
-.detail-section h3 { color: #4ecdc4; font-size: 14px; margin-bottom: 8px; }
-.detail-table { width: 100%; font-size: 13px; border-collapse: collapse; }
-.detail-table td { padding: 6px 10px; border-bottom: 1px solid #1a1a2e; }
-.detail-table td:first-child { color: #888; width: 120px; }
-.detail-table td:last-child { color: #e0e0e0; }
-
 /* Backtest */
 .bt-summary {
   background: linear-gradient(135deg, #1a1a2e, #16213e);
@@ -135,7 +105,6 @@
 .bt-table .tag.yellow { background: #ffd700; color: #000; }
 
 @media (max-width: 600px) {
-  .info-grid { grid-template-columns: 1fr; }
   .search-box { flex-direction: column; }
   .search-box button { padding: 10px; }
 }

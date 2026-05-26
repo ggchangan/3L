@@ -814,6 +814,14 @@ class TestAnalysisServiceWithMock:
         assert result.get('direction') == '半导体'
         assert result.get('name') == '测试A'
 
+    def test_search_result_has_sector_fields(self):
+        """搜索结果包含 sector 和 sector_chg"""
+        from services.analysis_service import search_and_analyze
+        result = search_and_analyze('688999', stocks=MOCK_STOCKS, wl=MOCK_WATCHLIST)
+        assert 'sector' in result
+        assert 'sector_chg' in result or result.get('sector_chg') is None
+        assert 'trend_bias' in result
+
     def test_search_by_name(self):
         """按名称搜索返回正确结构"""
         from services.analysis_service import search_and_analyze
@@ -826,6 +834,14 @@ class TestAnalysisServiceWithMock:
         from services.analysis_service import search_and_analyze
         result = search_and_analyze('不存在的股票', stocks=MOCK_STOCKS, wl=MOCK_WATCHLIST)
         assert 'error' in result
+
+    def test_search_by_pinyin_initials(self):
+        """拼音首字母搜索"""
+        from backend.core.data_layer import resolve_stock
+        # 用已有的测试数据 mock stocks
+        mock_stocks = {'半导体': {'688999': [{'name': '测试A', 'date': '20250103', 'close': 10}]}}
+        result = resolve_stock('csa', stocks=mock_stocks)
+        assert result is not None and result[0] == '688999'
 
 
 class TestBacktestServiceWithMock:

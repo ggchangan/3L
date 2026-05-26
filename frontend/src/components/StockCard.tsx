@@ -82,7 +82,7 @@ export default function StockCard({ s, idx, chartPrefix = '', mode }: StockCardP
       conclusion = `触发${s.buy_point}，${s.stage}阶段确认，可执行买入计划${slText}`
     }
     conclusionColor = '#4ecdc4'
-  } else if (isTrend && s.trend_bias !== undefined && s.trend_bias !== '') {
+  } else if (isTrend && s.trend_bias != null && s.trend_bias !== '') {
     const bias = Number(s.trend_bias)
     if (bias < 0) { conclusion = `BIAS5=${bias.toFixed(2)}%，价格在EMA5下方，乖离率买入区，属于趋势交易乖离率买点`; conclusionColor = '#4ecdc4' }
     else if (bias <= 2) { conclusion = `BIAS5=${bias.toFixed(2)}%，价格靠近EMA5，乖离率买入区，可考虑逢低吸纳`; conclusionColor = '#4ecdc4' }
@@ -126,7 +126,7 @@ export default function StockCard({ s, idx, chartPrefix = '', mode }: StockCardP
         <div className="field">
           <span className="l">板块:</span>
           <span className="v" style={{ color: '#aaa', fontSize: 11 }}>{s.sector || '--'}</span>
-          {s.sector_chg !== undefined ? <span style={{ color: s.sector_chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginLeft: 4 }}>{s.sector_chg >= 0 ? '+' : ''}{s.sector_chg.toFixed(2)}%</span> : null}
+          {s.sector_chg != null ? <span style={{ color: s.sector_chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginLeft: 4 }}>{s.sector_chg >= 0 ? '+' : ''}{s.sector_chg.toFixed(2)}%</span> : null}
           {s.direction ? <><span style={{ color: '#555', margin: '0 4px' }}>|</span><span className="l">方向:</span> <span className="v" style={{ color: '#4ecdc4', fontSize: 11 }}>{s.direction}</span></> : null}
         </div>
         {s.mainline_level ? (
