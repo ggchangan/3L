@@ -18,10 +18,10 @@ class TestSaveHoldings:
 
     def test_save_and_read_back(self, tmp_path):
         """基本保存：写入后可以正确读出"""
-        from services.holdings_service import save_holdings, get_holdings
+        from backend.services.holdings_service import save_holdings, get_holdings
 
         holdings_path = str(tmp_path / 'holdings.json')
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             data = {
                 'holdings': [
                     {'name': '药明康德', 'code': '603259', 'ratio': 14.70,
@@ -42,10 +42,10 @@ class TestSaveHoldings:
 
     def test_save_updates_date(self, tmp_path):
         """保存后 update_date 自动更新为当天"""
-        from services.holdings_service import save_holdings
+        from backend.services.holdings_service import save_holdings
 
         holdings_path = str(tmp_path / 'holdings.json')
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             today = datetime.now().strftime('%Y-%m-%d')
             result = save_holdings({'holdings': [], 'cash_ratio': 100})
             assert result['success'] is True
@@ -57,7 +57,7 @@ class TestSaveHoldings:
 
     def test_anti_overwrite_protection(self, tmp_path):
         """防误覆盖：已有50只，写入≤10只时拒绝"""
-        from services.holdings_service import save_holdings
+        from backend.services.holdings_service import save_holdings
 
         holdings_path = str(tmp_path / 'holdings.json')
         # 先创建50只持仓
@@ -68,7 +68,7 @@ class TestSaveHoldings:
         with open(holdings_path, 'w') as f:
             json.dump(initial, f)
 
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             # 尝试只写入5只 → 拒绝
             result = save_holdings({'holdings': many_holdings[:5], 'cash_ratio': 90})
             assert result['success'] is False
@@ -76,7 +76,7 @@ class TestSaveHoldings:
 
     def test_anti_overwrite_allows_large_save(self, tmp_path):
         """防误覆盖：已有50只，写入15只时允许"""
-        from services.holdings_service import save_holdings
+        from backend.services.holdings_service import save_holdings
 
         holdings_path = str(tmp_path / 'holdings.json')
         many_holdings = [{'name': f'Stock{i}', 'code': f'{i:06d}',
@@ -85,42 +85,42 @@ class TestSaveHoldings:
         with open(holdings_path, 'w') as f:
             json.dump(initial, f)
 
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             result = save_holdings({'holdings': many_holdings[:15], 'cash_ratio': 70})
             assert result['success'] is True
             assert result['count'] == 15
 
     def test_cash_ratio_validation_negative(self, tmp_path):
         """cash_ratio 为负数时拒绝"""
-        from services.holdings_service import save_holdings
+        from backend.services.holdings_service import save_holdings
 
         holdings_path = str(tmp_path / 'holdings.json')
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             result = save_holdings({'holdings': [], 'cash_ratio': -1})
             assert result['success'] is False
 
     def test_cash_ratio_validation_over_100(self, tmp_path):
         """cash_ratio > 100 时拒绝"""
-        from services.holdings_service import save_holdings
+        from backend.services.holdings_service import save_holdings
 
         holdings_path = str(tmp_path / 'holdings.json')
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             result = save_holdings({'holdings': [], 'cash_ratio': 101})
             assert result['success'] is False
 
     def test_first_deploy_empty_data(self, tmp_path):
         """首次部署（文件不存在）：写入空数据正常"""
-        from services.holdings_service import save_holdings
+        from backend.services.holdings_service import save_holdings
 
         holdings_path = str(tmp_path / 'nonexistent' / 'holdings.json')
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             result = save_holdings({'holdings': [], 'cash_ratio': 100})
             assert result['success'] is True
             assert result['count'] == 0
 
     def test_save_empty_holdings_list(self, tmp_path):
         """保存空列表：正常"""
-        from services.holdings_service import save_holdings
+        from backend.services.holdings_service import save_holdings
 
         holdings_path = str(tmp_path / 'holdings.json')
         # 先创建一个50只的
@@ -129,7 +129,7 @@ class TestSaveHoldings:
         with open(holdings_path, 'w') as f:
             json.dump({'holdings': many, 'cash_ratio': 0}, f)
 
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             # 防误覆盖会拒绝，但不应该是 bug
             result = save_holdings({'holdings': [], 'cash_ratio': 100})
             assert result['success'] is False  # 被防误覆盖拒绝
@@ -153,17 +153,17 @@ class TestGetHoldingsWithPrices:
 
     def test_returns_empty_when_no_file(self, tmp_path):
         """文件不存在时返回空持仓"""
-        from services.holdings_service import get_holdings_with_prices
+        from backend.services.holdings_service import get_holdings_with_prices
 
         holdings_path = str(tmp_path / 'no_such_file.json')
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             result = get_holdings_with_prices()
             assert result['holdings'] == []
             assert result['cash_ratio'] == 100
 
     def test_adds_price_and_change(self, tmp_path):
         """正常叠加实时行情：price/change/stop_loss_pct 正确计算"""
-        from services.holdings_service import get_holdings_with_prices
+        from backend.services.holdings_service import get_holdings_with_prices
 
         holdings_path = str(tmp_path / 'holdings.json')
         data = {
@@ -182,8 +182,8 @@ class TestGetHoldingsWithPrices:
         f[1] = '药明康德'; f[2] = '603259'; f[3] = '51.20'; f[32] = '-1.54'
         mock_tencent_text = 'v_sh603259="' + '~'.join(f) + '"\n'
 
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
-            with patch('services.holdings_service.requests.get',
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('backend.services.holdings_service.requests.get',
                        return_value=MockResponse(mock_tencent_text)):
                 result = get_holdings_with_prices()
 
@@ -196,7 +196,7 @@ class TestGetHoldingsWithPrices:
 
     def test_handles_missing_stop_loss(self, tmp_path):
         """止损价未设置时 stop_loss_pct 为 None"""
-        from services.holdings_service import get_holdings_with_prices
+        from backend.services.holdings_service import get_holdings_with_prices
 
         holdings_path = str(tmp_path / 'holdings.json')
         data = {
@@ -216,8 +216,8 @@ class TestGetHoldingsWithPrices:
         fields_88[3] = '51.20'
         fields_88[32] = '2.30'
         mock_text = 'v_sh603259="' + '~'.join(fields_88) + '"\n'
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
-            with patch('services.holdings_service.requests.get',
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('backend.services.holdings_service.requests.get',
                        return_value=MockResponse(mock_text)):
                 result = get_holdings_with_prices()
 
@@ -225,7 +225,7 @@ class TestGetHoldingsWithPrices:
 
     def test_handles_price_fetch_error(self, tmp_path):
         """腾讯接口异常时 price/change 为 None"""
-        from services.holdings_service import get_holdings_with_prices
+        from backend.services.holdings_service import get_holdings_with_prices
 
         holdings_path = str(tmp_path / 'holdings.json')
         data = {
@@ -238,8 +238,8 @@ class TestGetHoldingsWithPrices:
         with open(holdings_path, 'w') as f:
             json.dump(data, f)
 
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
-            with patch('services.holdings_service.requests.get',
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('backend.services.holdings_service.requests.get',
                        side_effect=Exception('Connection error')):
                 result = get_holdings_with_prices()
 
@@ -251,7 +251,7 @@ class TestGetHoldingsWithPrices:
 
     def test_batch_fetch_multiple_stocks(self, tmp_path):
         """多只持仓时批量获取行情"""
-        from services.holdings_service import get_holdings_with_prices
+        from backend.services.holdings_service import get_holdings_with_prices
 
         holdings_path = str(tmp_path / 'holdings.json')
         data = {
@@ -275,10 +275,10 @@ class TestGetHoldingsWithPrices:
             'v_sh603259="' + '~'.join(f1) + '"\n'
             'v_sz301200="' + '~'.join(f2) + '"\n'
         )
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
-            with patch('services.holdings_service.requests.get',
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('backend.services.holdings_service.requests.get',
                        return_value=MockResponse(mock_text)):
-                with patch('services.stock_card_service.get_stock_card',
+                with patch('backend.services.stock_card_service.get_stock_card',
                            return_value={'sector': '', 'structure': '--',
                                          'stage': '--'}):
                     result = get_holdings_with_prices()
@@ -316,7 +316,7 @@ class TestGetHoldingsWithAnalysis:
 
     def test_adds_sector_from_industry_map(self, tmp_path):
         """板块信息从行业映射正确获取"""
-        from services.holdings_service import get_holdings_with_prices
+        from backend.services.holdings_service import get_holdings_with_prices
 
         holdings_path = str(tmp_path / 'holdings.json')
         data = {
@@ -331,10 +331,10 @@ class TestGetHoldingsWithAnalysis:
 
         text = self._tencent('603259', '药明康德', 51.20, -1.54)
 
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
-            with patch('services.holdings_service.requests.get',
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('backend.services.holdings_service.requests.get',
                        return_value=self.MockResponse(text)):
-                with patch('services.stock_card_service.get_stock_card',
+                with patch('backend.services.stock_card_service.get_stock_card',
                            return_value={'sector': '化学制药',
                                          'structure': '上涨趋势',
                                          'stage': '上行'}):
@@ -344,7 +344,7 @@ class TestGetHoldingsWithAnalysis:
 
     def test_adds_structure_stage_from_klines(self, tmp_path):
         """结构/阶段从K线数据正确计算"""
-        from services.holdings_service import get_holdings_with_prices
+        from backend.services.holdings_service import get_holdings_with_prices
 
         holdings_path = str(tmp_path / 'holdings.json')
         data = {
@@ -359,10 +359,10 @@ class TestGetHoldingsWithAnalysis:
 
         text = self._tencent('603259', '药明康德', 51.20, -1.54)
 
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
-            with patch('services.holdings_service.requests.get',
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('backend.services.holdings_service.requests.get',
                        return_value=self.MockResponse(text)):
-                with patch('services.stock_card_service.get_stock_card',
+                with patch('backend.services.stock_card_service.get_stock_card',
                            return_value={'sector': '化学制药',
                                          'structure': '上涨趋势',
                                          'stage': '上行'}):
@@ -375,7 +375,7 @@ class TestGetHoldingsWithAnalysis:
 
     def test_graceful_when_no_klines(self, tmp_path):
         """K线数据不足时 gracefully fallback 到 '--'"""
-        from services.holdings_service import get_holdings_with_prices
+        from backend.services.holdings_service import get_holdings_with_prices
 
         holdings_path = str(tmp_path / 'holdings.json')
         data = {
@@ -390,10 +390,10 @@ class TestGetHoldingsWithAnalysis:
 
         text = self._tencent('603259', '药明康德', 51.20, -1.54)
 
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
-            with patch('services.holdings_service.requests.get',
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('backend.services.holdings_service.requests.get',
                        return_value=self.MockResponse(text)):
-                with patch('services.stock_card_service.get_stock_card',
+                with patch('backend.services.stock_card_service.get_stock_card',
                            side_effect=Exception('数据不足')):
                     result = get_holdings_with_prices()
 
@@ -404,7 +404,7 @@ class TestGetHoldingsWithAnalysis:
 
     def test_graceful_when_industry_map_missing(self, tmp_path):
         """行业映射异常时 gracefully 返回空"""
-        from services.holdings_service import get_holdings_with_prices
+        from backend.services.holdings_service import get_holdings_with_prices
 
         holdings_path = str(tmp_path / 'holdings.json')
         data = {
@@ -419,10 +419,10 @@ class TestGetHoldingsWithAnalysis:
 
         text = self._tencent('603259', '药明康德', 51.20, -1.54)
 
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
-            with patch('services.holdings_service.requests.get',
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
+            with patch('backend.services.holdings_service.requests.get',
                        return_value=self.MockResponse(text)):
-                with patch('services.stock_card_service.get_stock_card',
+                with patch('backend.services.stock_card_service.get_stock_card',
                            side_effect=Exception('map error')):
                     result = get_holdings_with_prices()
 
@@ -440,23 +440,23 @@ class TestGetHoldings:
 
     def test_returns_empty_when_no_file(self, tmp_path):
         """文件不存在返回空"""
-        from services.holdings_service import get_holdings
+        from backend.services.holdings_service import get_holdings
 
         holdings_path = str(tmp_path / 'nonexistent.json')
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             result = get_holdings()
             assert result == {'holdings': []}
 
     def test_returns_saved_data(self, tmp_path):
         """文件存在返回正确数据"""
         import json
-        from services.holdings_service import get_holdings, save_holdings
+        from backend.services.holdings_service import get_holdings, save_holdings
 
         holdings_path = str(tmp_path / 'holdings.json')
-        with patch('services.holdings_service.HOLDINGS_PATH', holdings_path):
+        with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             save_holdings({
-                'holdings': [{'name': '测试', 'code': '000001', 'ratio': 10,
-                              'direction': '测试', 'stop_loss_price': None}],
+                    'holdings': [{'name': '测试', 'code': '000001', 'ratio': 10,
+                                  'direction': '测试', 'stop_loss_price': None}],
                 'cash_ratio': 90
             })
             result = get_holdings()

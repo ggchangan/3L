@@ -86,7 +86,7 @@ class TestGenerateHoldingsReview:
 
     def _make_review(self, **overrides):
         """调用 generate_holdings_review，默认用 mock 数据"""
-        from scripts.review_analysis import generate_holdings_review
+        from backend.core.review_analysis import generate_holdings_review
         timing_holdings = [
             {'code': '688999'},
             {'code': '688111'},
@@ -134,7 +134,7 @@ class TestGenerateHoldingsReview:
         def _mock_card(code, **kw):
             return card_data.get(code, {})
 
-        with patch('services.stock_card_service.get_stock_card', side_effect=_mock_card):
+        with patch('backend.services.stock_card_service.get_stock_card', side_effect=_mock_card):
             return generate_holdings_review(**params)
 
     def test_returns_list(self):
@@ -216,7 +216,7 @@ class TestGenerateBuySignalsReview:
     """买点信号复盘生成"""
 
     def _make_review(self, **overrides):
-        from scripts.review_analysis import generate_buy_signals_review
+        from backend.core.review_analysis import generate_buy_signals_review
         params = {
             'buy_signals': MOCK_BUY_SIGNALS,
             'stocks': MOCK_STOCKS,
@@ -256,7 +256,7 @@ class TestGenerateBuySignalsReview:
                 'date': '20260330',
             }
 
-        with patch('services.stock_card_service.get_stock_card', side_effect=_mock_card):
+        with patch('backend.services.stock_card_service.get_stock_card', side_effect=_mock_card):
             return generate_buy_signals_review(**params)
 
     def test_returns_list(self):

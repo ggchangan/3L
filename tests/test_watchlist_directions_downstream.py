@@ -39,7 +39,7 @@ class TestReviewDirectionFilter:
 
     def test_scan_only_enabled_directions(self, tmp_path):
         """scan_buy_signals_if_needed 只保留启用方向的自选股"""
-        from services.watchlist_service import is_enabled_direction
+        from backend.services.watchlist_service import is_enabled_direction
 
         wl_path = tmp_path / "watchlist.json"
         with open(wl_path, 'w', encoding='utf-8') as f:
@@ -62,7 +62,7 @@ class TestReviewDirectionFilter:
 
     def test_get_enabled_directions_only_enabled(self):
         """get_enabled_directions 返回正确的列表"""
-        from services.watchlist_service import get_enabled_directions
+        from backend.services.watchlist_service import get_enabled_directions
         
         # mock watchlist path
         with tempfile.NamedTemporaryFile(suffix='.json', mode='w', delete=False, encoding='utf-8') as f:
@@ -85,7 +85,7 @@ class TestMonitorDirectionFilter:
 
     def test_load_stock_list_filters_disabled(self, tmp_path):
         """load_stock_list 只返回启用方向股票"""
-        from services.watchlist_service import get_enabled_directions
+        from backend.services.watchlist_service import get_enabled_directions
 
         wl_path = tmp_path / "watchlist.json"
         with open(wl_path, 'w', encoding='utf-8') as f:
@@ -109,7 +109,7 @@ class TestTrendCandidateFilter:
 
     def test_trend_candidate_filter(self, tmp_path):
         """趋势候选结果中，移除禁用方向股票"""
-        from services.watchlist_service import is_enabled_direction
+        from backend.services.watchlist_service import is_enabled_direction
 
         wl_path = tmp_path / "watchlist.json"
         with open(wl_path, 'w', encoding='utf-8') as f:

@@ -1,5 +1,5 @@
 """监控/盯盘相关路由"""
-from services.monitor_service import (
+from backend.services.monitor_service import (
     get_volume_comparison, get_buy_signals, get_stop_loss_triggered,
     get_top_sectors, get_industry_leaders, get_market_leaders,
 )

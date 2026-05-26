@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
+import StockCard from '../components/StockCard'
+import type { BuySignalItem } from '../lib/types'
 import './Holdings.css'
 
 interface HoldingItem {
@@ -325,15 +327,6 @@ export default function Holdings() {
     } catch (err: any) { alert('删除失败: ' + err.message) }
   }
 
-  // ── Render helpers ──
-
-  function stockCardHtml(h: HoldingItem, i: number) {
-    const sig = inferSignal(h)
-    const leftColor = STAGE_COLORS[h.stage] || '#888'
-    const barColor = h.ratio >= 10 ? '#e94560' : h.ratio >= 6 ? '#ffd700' : '#4ecdc4'
-    return { sig, leftColor, barColor }
-  }
-
   // ── Render ──
 
   const holdings = data?.holdings || []
@@ -408,51 +401,43 @@ export default function Holdings() {
               <div id="cardBody">
                 <div id="cardList">
                   {sortedHoldings.map(({ idx: origIdx, item: h }, i) => {
-                    const { sig, leftColor, barColor } = stockCardHtml(h, i)
-                    const cardData = {
-                      name: h.name, code: h.code, price: h.price, change: h.change,
-                      signal: sig, stage: h.stage || '--', structure: h.structure || '--',
-                      sector: h.sector || '--', direction: h.direction || '',
-                      stop_loss: h.stop_loss_price, stop_loss_pct: h.stop_loss_pct,
-                      buy_point: '', trading_system: '3l', trading_reason: '持仓管理',
-                      profit_model1: false, trend_stock: false,
+                    // ── 构造 StockCard 数据 ──
+                    const s: BuySignalItem = {
+                      code: h.code,
+                      name: h.name,
+                      signal: inferSignal(h),
+                      stage: h.stage || '--',
+                      structure: h.structure || '--',
+                      trading_system: '3l',
+                      price: h.price ?? undefined,
+                      change: h.change ?? undefined,
+                      direction: h.direction || '',
+                      sector: h.sector || '',
+                      stop_loss: h.stop_loss_price ?? undefined,
+                      stop_loss_pct: h.stop_loss_pct ?? undefined,
+                      profit_model1: false,
+                      trend_stock: false,
+                      trading_reason: '持仓管理',
                     }
-                    const priceStr = h.price !== null && h.price !== undefined ? (h.price as number).toFixed(2) : '--'
-                    const changeStr = h.change !== null && h.change !== undefined ? `${h.change > 0 ? '+' : ''}${(h.change as number).toFixed(2)}%` : '--'
+                    const leftColor = STAGE_COLORS[h.stage] || '#888'
+                    const barColor = h.ratio >= 10 ? '#e94560' : h.ratio >= 6 ? '#ffd700' : '#4ecdc4'
                     return (
                       <div key={h.code + origIdx} className="watchlist-card-wrapper" style={{ borderLeft: `3px solid ${leftColor}`, borderRadius: '12px 0 0 12px' }}>
-                        <div className="stock-item">
-                          <div className="stock-top">
-                            <div className="stock-left">
-                              <span className="stock-name">{h.name}</span>
-                              <span className="stock-code">{h.code}</span>
-                              <span className="direction-tag">{h.direction || '--'}</span>
-                            </div>
-                            <div className="stock-right">
-                              <span className="price">{priceStr}</span>
-                              <span className={`change ${(h.change || 0) >= 0 ? 'up' : 'down'}`}>{changeStr}</span>
-                            </div>
-                          </div>
-                          <div className="stock-tags">
-                            <span className={`tag tag-signal-${sig}`}>{sig === 'buy' ? '买入' : sig === 'sell' ? '卖出' : sig === 'hold' ? '持有' : '--'}</span>
-                            <span className="tag">{h.structure}</span>
-                            <span className="tag" style={{ color: STAGE_COLORS[h.stage] || '#888' }}>{h.stage}</span>
-                          </div>
-                          <div className="stock-detail-row">
-                            <span style={{ color: '#ffd700', fontWeight: 600, fontSize: 12 }}>仓位: {(h.ratio || 0).toFixed(2)}%</span>
-                            <span className="ratio-bar-bg"><span className="ratio-bar" style={{ width: `${Math.min(h.ratio, 100)}%`, background: barColor }}></span></span>
-                          </div>
-                        </div>
+                        <StockCard s={s} idx={i} />
                         <div className="watchlist-card-actions">
-                          <div className="wca-left">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                            <span style={{ color: '#ffd700', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap' }}>仓位: {(h.ratio || 0).toFixed(2)}%</span>
+                            <div className="ratio-bar-bg" style={{ flex: 1, maxWidth: 100 }}>
+                              <div className="ratio-bar" style={{ width: `${Math.min(h.ratio, 100)}%`, background: barColor }}></div>
+                            </div>
                             {h.stop_loss_price !== null && h.stop_loss_price !== undefined && (
-                              <span style={{ fontSize: 11, color: '#888' }}>
+                              <span style={{ fontSize: 11, color: '#888', whiteSpace: 'nowrap' }}>
                                 止损 {h.stop_loss_price.toFixed(2)}
                                 {h.stop_loss_pct !== null && h.stop_loss_pct !== undefined && ` (${(h.stop_loss_pct as number).toFixed(2)}%)`}
                               </span>
                             )}
                           </div>
-                          <div style={{ display: 'flex', gap: 4 }}>
+                          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                             <button className="act-btn" onClick={() => openEditModal(origIdx)}>✏️ 编辑</button>
                             <button className="act-btn" onClick={() => openDeleteConfirm(origIdx)}>🗑️ 删除</button>
                           </div>

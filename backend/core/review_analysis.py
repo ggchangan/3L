@@ -39,7 +39,7 @@ def generate_holdings_review(holdings, stocks, buy_signals,
     Returns:
         [{'code', 'name', 'structure', 'stage', 'signal', ...}]
     """
-    from services.stock_card_service import get_stock_card
+    from backend.services.stock_card_service import get_stock_card
 
     if trend_mainlines is None:
         trend_mainlines = [l['name'] for l in (
@@ -131,7 +131,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
     Returns:
         [{'code', 'name', 'buy_point', 'score', ...}]
     """
-    from services.stock_card_service import get_stock_card
+    from backend.services.stock_card_service import get_stock_card
 
     if direction_map is None:
         direction_map = {}

@@ -1,0 +1,170 @@
+"""
+3L 交易系统 — 集中配置文件
+所有路径/常量集中在此，其他模块通过 config.XXX 引用
+
+环境变量覆盖（通过 .env 文件或 export）:
+  WWW_DIR, DATA_DIR, PORT, LOG_LEVEL, LOG_DIR
+"""
+
+import os, json, tempfile
+from threading import Lock
+
+# ── 从 .env 文件加载（如果存在）──────────────────
+_env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+if os.path.isfile(_env_path):
+    with open(_env_path, 'r') as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if not _line or _line.startswith('#'):
+                continue
+            if '=' in _line:
+                _k, _v = _line.split('=', 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
+# ── 工具函数 ────────────────────────────────────
+def _env(key, default):
+    return os.environ.get(key, default)
+
+# =====================================================
+# 项目根路径
+# =====================================================
+WWW_DIR = _env('WWW_DIR', '/home/ubuntu/3l-server')
+DATA_DIR = _env('DATA_DIR', '/home/ubuntu/data/3l')
+
+# =====================================================
+# 数据文件路径
+# =====================================================
+ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
+WATCHLIST_PATH = os.path.join(DATA_DIR, 'watchlist.json')
+INDUSTRY_MAP_PATH = os.path.join(DATA_DIR, 'stock_industry_map.json')
+SUB_SECTOR_CLUSTERS_PATH = os.path.join(DATA_DIR, 'sub_sector_clusters.json')
+FINANCIAL_CACHE_PATH = os.path.join(DATA_DIR, 'financial_data_cache.json')
+PROFIT_QUALITY_PATH = os.path.join(DATA_DIR, 'profit_quality_results.json')
+INDEX_DATA_PATH = os.path.join(DATA_DIR, 'index_sh_data.json')
+SECTOR_DAILY_PATH = os.path.join(DATA_DIR, 'sector_daily.json')
+INDUSTRY_LEADERS_PATH = os.path.join(DATA_DIR, 'industry_leaders.json')
+LATEST_SCAN_PATH = os.path.join(DATA_DIR, 'latest_scan_result.json')
+ALL_CODES_PATH = os.path.join(DATA_DIR, 'all_stock_codes.json')
+PINYIN_PATH = os.path.join(DATA_DIR, 'pinyin_initials.json')
+SCRIPTS_DIR = os.path.join(WWW_DIR, 'scripts')
+
+# =====================================================
+# 缓存目录/文件
+# =====================================================
+CACHE_DIR = os.path.join(DATA_DIR, 'cache')
+KEY_POINTS_DIR = os.path.join(DATA_DIR, 'key_points')
+
+# =====================================================
+# 知识库
+# =====================================================
+KB_BASE = os.path.join(DATA_DIR, 'knowledge_base')
+TRADING_TIPS_DIR = os.path.join(KB_BASE, 'trading_tips')
+
+# =====================================================
+# 私人数据（持仓、交易、复盘存档）
+# =====================================================
+PRIVATE_DIR = os.path.join(DATA_DIR, 'private')
+HOLDINGS_PATH = os.path.join(PRIVATE_DIR, 'holdings.json')
+TRADES_PATH = os.path.join(PRIVATE_DIR, 'trades.json')
+REVIEW_ARCHIVE_DIR = os.path.join(PRIVATE_DIR, 'review_archive')
+MANUAL_TREND_PATH = os.path.join(PRIVATE_DIR, 'manual_trend_stocks.json')
+BT_RESULTS_PATH = os.path.join(WWW_DIR, 'files', 'buy_signal_backtest_results.json')
+
+# =====================================================
+# 公开访问的后端生成文件（统一由 /pub/ 路由服务）
+# =====================================================
+PUBLIC_DIR = os.path.join(WWW_DIR, 'data', 'public')
+CHARTS_DIR = os.path.join(PUBLIC_DIR, 'charts')
+FILES_DIR = os.path.join(PUBLIC_DIR, 'files')
+
+# =====================================================
+# 复盘图表
+# =====================================================
+REVIEW_CHARTS_DIR = CHARTS_DIR
+REVIEW_DATA_PATH = os.path.join(PRIVATE_DIR, 'review_data.json')
+
+# 主线缓存（每日复盘时写入一次，供趋势候选等模块读取）
+MAINLINES_CACHE_PATH = os.path.join(PRIVATE_DIR, 'mainlines_cache.json')
+
+# =====================================================
+# 服务器配置
+# =====================================================
+SERVER_PORT = int(_env('PORT', '8080'))
+SERVER_HOST = _env('SERVER_HOST', '127.0.0.1')
+AUTH_USER = _env('AUTH_USER', '')
+AUTH_PASS = _env('AUTH_PASS', '')
+MOMENTUM_CACHE_PREFIX = os.path.join(WWW_DIR, 'data', 'cache', 'momentum_')
+
+# =====================================================
+# 数据库/存档历史路径
+# =====================================================
+SIMULATION_DIR = os.path.join(DATA_DIR, 'simulation')
+SIMULATION_V3_DIR = os.path.join(SIMULATION_DIR, 'v3')
+
+# =====================================================
+# 日志
+# =====================================================
+LOG_LEVEL = _env('LOG_LEVEL', 'INFO')
+LOG_DIR = _env('LOG_DIR', os.path.join(WWW_DIR, 'logs'))
+
+# =====================================================
+# SVG 图表路径模板
+# =====================================================
+# ── 文件写入锁（防止多线程并发覆盖）──────────────
+_FILE_WRITE_LOCK = Lock()
+
+def atomic_json_dump(data, path, indent=None):
+    """原子写入JSON：先写临时文件，再rename替换，避免崩溃导致文件损坏。线程安全。"""
+    with _FILE_WRITE_LOCK:
+        dirname = os.path.dirname(path)
+        os.makedirs(dirname, exist_ok=True)
+        with tempfile.NamedTemporaryFile('w', dir=dirname, delete=False, suffix='.tmp') as f:
+            json.dump(data, f, ensure_ascii=False, indent=indent)
+            tmp = f.name
+        os.replace(tmp, path)
+
+def review_chart_svg(code):
+    return os.path.join(REVIEW_CHARTS_DIR, f'{code}.svg')
+
+def trend_chart_svg(code):
+    return os.path.join(REVIEW_CHARTS_DIR, f'trend_{code}.svg')
+
+def backtest_chart_svg(code):
+    return os.path.join(REVIEW_CHARTS_DIR, f'bt_{code}.svg')
+
+def cleanup_cache():
+    """清理过期缓存文件（超过 CACHE_MAX_AGE_DAYS 的文件自动删除）"""
+    import re, time, logging
+    logger = logging.getLogger('config.cleanup')
+    now = time.time()
+    max_age = 30 * 86400  # 默认保留30天
+    total_removed = 0
+
+    for cache_path in [CACHE_DIR, os.path.join(WWW_DIR, 'data', 'cache')]:
+        if not os.path.isdir(cache_path):
+            continue
+        for fname in os.listdir(cache_path):
+            fpath = os.path.join(cache_path, fname)
+            if not os.path.isfile(fpath):
+                continue
+            # 从文件名提取日期判断（格式：name_YYYY-MM-DD.json 或 name_YYYYMMDD.json）
+            m = re.search(r'(20\d{2}[_-]\d{2}[_-]\d{2}|20\d{6})', fname)
+            if m:
+                try:
+                    date_str = m.group(1).replace('_', '').replace('-', '')
+                    ftime = time.mktime(time.strptime(date_str[:8], '%Y%m%d'))
+                except (ValueError, OverflowError):
+                    ftime = os.path.getmtime(fpath)
+            else:
+                ftime = os.path.getmtime(fpath)
+
+            if now - ftime > max_age:
+                try:
+                    os.remove(fpath)
+                    total_removed += 1
+                    logger.info(f'清理过期缓存: {fname}')
+                except OSError:
+                    logger.warning(f'清理缓存失败: {fname}')
+    if total_removed:
+        logger.info(f'缓存清理完成，共删除 {total_removed} 个文件')
+    return total_removed

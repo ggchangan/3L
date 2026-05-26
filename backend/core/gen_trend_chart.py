@@ -13,9 +13,9 @@
 import json, os, sys, math
 from datetime import date
 
-import config
+from backend import config
 
-DATA_PATH = "/home/ubuntu/data/3l/all_stocks_60d.json"
+DATA_PATH = config.ALL_STOCKS_PATH
 OUT_DIR = config.CHARTS_DIR
 
 

@@ -1,7 +1,7 @@
 """交易技巧/知识库路由"""
 import json
 from . import parse_query
-from services.knowledge_service import (
+from backend.services.knowledge_service import (
     get_tips_list, get_tip_content,
     get_journal_entries, save_journal_entry,
 )

@@ -12,7 +12,7 @@ from backend.core.data_layer import get_industry_map, PROFIT_QUALITY_PATH, ALL_S
 
 # 导入系统B：EMA10趋势分析
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from ema_utils import get_ema_arrangement, get_structure, get_stage, ema_list
 
 def find_idx(date_str, klines):

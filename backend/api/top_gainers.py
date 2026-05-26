@@ -1,6 +1,6 @@
 """涨幅榜路由"""
 from . import parse_query
-from services.top_gainers_service import get_top_gainers
+from backend.services.top_gainers_service import get_top_gainers
 
 
 def _handle_top_gainers(h, path):

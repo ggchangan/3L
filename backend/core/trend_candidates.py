@@ -4,13 +4,13 @@
 同时生成 trend_ 趋势交易SVG图表
 """
 import json, os, sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from backend.core.data_layer import _load_json
 from backend.core.ema_utils import ema_list, get_structure, get_stage
 from backend.core.gen_trend_chart import gen_trend_svg
 from backend.core.trend_trading import _load_manual_trend
-import config
+from backend import config
 
 DATA_DIR = config.DATA_DIR
 INDUSTRY_MAP_PATH = config.INDUSTRY_MAP_PATH

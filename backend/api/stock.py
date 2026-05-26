@@ -1,8 +1,8 @@
 """个股分析/回测/图表路由"""
 from . import parse_query
-from services.analysis_service import search_and_analyze
-from services.backtest_service import run_backtest
-from services.stock_chart_service import generate_stock_chart, generate_trend_stock_chart
+from backend.services.analysis_service import search_and_analyze
+from backend.services.backtest_service import run_backtest
+from backend.services.stock_chart_service import generate_stock_chart, generate_trend_stock_chart
 
 
 def _handle_stock_analysis(h, path):
@@ -35,7 +35,7 @@ def _get_stock_trading_system(code):
             break
     raw_code = raw_code[-6:] if len(raw_code) >= 6 else raw_code
     try:
-        from config import MANUAL_TREND_PATH
+        from backend.config import MANUAL_TREND_PATH
         import json
         with open(MANUAL_TREND_PATH, 'r', encoding='utf-8') as f:
             manual = json.load(f)

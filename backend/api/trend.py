@@ -1,6 +1,6 @@
 """趋势交易路由"""
 from . import parse_query
-from services.trend_service import (
+from backend.services.trend_service import (
     get_trend_candidates, get_trend_tracked, toggle_trend_stock,
     search_watchlist_for_trend,
 )

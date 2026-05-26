@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
+import StockCard from '../components/StockCard'
+import type { BuySignalItem } from '../lib/types'
 import './TrendCandidates.css'
 
 interface CandidateStock {
@@ -202,7 +204,7 @@ export default function TrendCandidates() {
             pageItems.map((s, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'stretch', gap: 0, marginBottom: 6 }}>
                 <div style={{ flex: 1 }}>
-                  <TrendCard stock={{ ...s, trading_system: 'trend' }} idx={(safePage - 1) * PAGE_SIZE + i} />
+                  <StockCard s={s as BuySignalItem} idx={(safePage - 1) * PAGE_SIZE + i} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', borderLeft: '1px solid #1a1a30' }}>
                   <input type="checkbox"
@@ -246,50 +248,4 @@ export default function TrendCandidates() {
     </>
   )
 }
-
-function TrendCard({ stock, idx }: { stock: CandidateStock; idx: number }) {
-  const changeVal = stock.change || 0
-  const changeColor = changeVal >= 0 ? '#ff4444' : '#44aa44'
-  const bias = stock.trend_bias !== undefined ? Number(stock.trend_bias) : null
-  const structIcon = stock.structure === '上涨趋势' ? '📈' : stock.structure === '区间震荡' ? '📊' : stock.structure === '下降趋势' ? '📉' : ''
-  const stageColors: Record<string, string> = {
-    '上行': '#4ecdc4', '加速': '#e94560', '缩量整理': '#ffd700', '滞涨': '#ff6b6b',
-    '转弱': '#ff6b6b', '下行': '#666', '加速跌': '#e94560', '转强': '#4ecdc4',
-  }
-
-  return (
-    <div className="stock-item" style={{ border: 'none', margin: 0, padding: '8px 10px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <span className="name">{structIcon} {stock.name}</span>
-          <span className="code">{stock.code}</span>
-          {stock.signal === 'buy' && (
-            <span style={{ background: '#e94560', color: '#fff', fontSize: 11, fontWeight: 'bold', padding: '2px 8px', borderRadius: 4, marginLeft: 6 }}>🎯 买点</span>
-          )}
-        </div>
-        <span style={{ fontSize: 13, color: changeColor }}>
-          {stock.price !== undefined && stock.price !== null ? stock.price.toFixed(2) : '--'} {changeVal >= 0 ? '+' : ''}{changeVal}%
-        </span>
-      </div>
-      <div className="row" style={{ marginTop: 6 }}>
-        <div className="field"><span className="l">操作:</span>
-          <span className={`v ${stock.signal === 'sell' ? 'danger' : stock.signal === 'buy' ? 'warn' : 'hold'}`} style={{ fontWeight: 'bold' }}>
-            {stock.signal === 'hold' ? '✅持有' : stock.signal === 'buy' ? '⚡买入' : stock.signal === 'sell' ? '❌卖出' : '--'}
-          </span>
-        </div>
-        <div className="field"><span className="l">结构:</span> <span className="v">{structIcon} {stock.structure || '--'}</span></div>
-        <div className="field"><span className="l">阶段:</span>
-          <span className="v" style={{ color: stageColors[stock.stage || ''] || '#888', fontWeight: 'bold' }}>{stock.stage || '--'}</span>
-        </div>
-        {bias !== null && (
-          <div className="field"><span className="l">BIAS:</span>
-            <span className="v" style={{ color: bias > 8 ? '#e94560' : bias <= 2 ? '#4ecdc4' : '#ffd700' }}>{bias.toFixed(2)}%</span>
-          </div>
-        )}
-        <div className="field"><span className="l">板块:</span>
-          <span className="v" style={{ color: '#aaa', fontSize: 11 }}>{stock.sector || stock.direction || '--'}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
+// ──

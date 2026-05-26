@@ -3,12 +3,11 @@ import json
 import os
 import sys
 import requests
-from services.direction_service import (
+from backend.config import DATA_DIR
+from backend.services.direction_service import (
     get_all, get_active, get_all_ordered, add, remove, set_active, get_suggestions,
     reorder,
 )
-
-DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
 
 INDUSTRY_MAP_PATH = os.environ.get('INDUSTRY_MAP_PATH',
     os.path.join(DATA_DIR, 'stock_industry_map.json'))
@@ -320,7 +319,7 @@ def _handle_remove(h, path, body):
             h.send_json({'success': False, 'error': '不能删除"其他"方向'})
             return
         # 1. 从 directions.json 删除该方向
-        from services.direction_service import remove as _remove_dir
+        from backend.services.direction_service import remove as _remove_dir
         r = _remove_dir(name)
         if not r.get('success'):
             h.send_json(r)
@@ -335,9 +334,9 @@ def _handle_remove(h, path, body):
             wl['stocks'] = [s for s in wl.get('stocks', []) if s.get('direction') != name]
             removed = before - len(wl['stocks'])
             if removed > 0:
-                from services.watchlist_service import save_watchlist
+                from backend.services.watchlist_service import save_watchlist
                 save_watchlist(wl)
-                from scripts.cache_layer import cache
+                from backend.core.cache_layer import cache
                 cache.invalidate('watchlist')
         h.send_json({'success': True, 'removed_stocks': removed})
     except Exception as e:

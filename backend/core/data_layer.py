@@ -6,7 +6,7 @@
 import json, os
 from datetime import datetime
 from backend.core.cache_layer import cache
-from config import (
+from backend.config import (
     DATA_DIR, WWW_DIR, CACHE_DIR, PRIVATE_DIR,
     ALL_STOCKS_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH,
     SUB_SECTOR_CLUSTERS_PATH, FINANCIAL_CACHE_PATH,

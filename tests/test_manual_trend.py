@@ -2,7 +2,7 @@
 手动趋势交易指定测试
 """
 import pytest, json, os
-from scripts.trend_trading import (
+from backend.core.trend_trading import (
     decide_system, decide_system_with_detail, _load_manual_trend,
 )
 

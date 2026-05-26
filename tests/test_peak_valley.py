@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 import pytest
 
-from services.review_compute_service import judge_peak_valley, _fallback_cycle
+from backend.services.review_compute_service import judge_peak_valley, _fallback_cycle
 
 
 # ==============================================================
@@ -255,7 +255,7 @@ class TestPositionStrategy:
 
     def test_empty_klines_returns_fallback(self):
         """空K线列表返回 fallback"""
-        from services.review_compute_service import judge_peak_valley
+        from backend.services.review_compute_service import judge_peak_valley
         result = judge_peak_valley([])
         assert 'position' in result
         assert result.get('position_pct', '') != ''

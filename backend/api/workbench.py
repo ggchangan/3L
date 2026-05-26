@@ -5,7 +5,7 @@ import json
 import os
 from urllib.parse import urlparse, parse_qs
 
-from services.workbench_service import get_log, save_log, list_logs
+from backend.services.workbench_service import get_log, save_log, list_logs
 
 
 def _handle_get(h, path):

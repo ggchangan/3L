@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
+import StockCard from '../components/StockCard'
+import type { BuySignalItem } from '../lib/types'
 import './Watchlist.css'
 
 interface WatchlistStock {
@@ -377,7 +379,7 @@ export default function Watchlist() {
                   <div key={`c-${i}`} className={`watchlist-card-wrapper${tr ? '' : ' untracked'}`}
                     style={{ borderLeft: `3px solid ${stageColors[s.stage || ''] || '#888'}`, borderRadius: '12px 0 0 12px' }}>
                     {/* Card内容 */}
-                    <WatchlistCard stock={s} idx={i} />
+                    <StockCard s={s as BuySignalItem} idx={i} />
                     {/* 底部操作栏 */}
                     <div className="watchlist-card-actions">
                       <div className="wca-left">
@@ -521,48 +523,4 @@ function DirNameInput({ dirData, onAdd }: { dirData: DirData; onAdd: (name: stri
   )
 }
 
-function WatchlistCard({ stock, idx }: { stock: WatchlistStock; idx: number }) {
-  const isTrend = stock.trading_system === 'trend'
-  const systemIcon = isTrend ? '🔥' : '📘'
-  const systemText = isTrend ? '趋势交易' : '3L交易'
-  const changeVal = stock.change || 0
-  const changeColor = changeVal >= 0 ? '#ff4444' : '#44aa44'
-  const bias = stock.trend_bias !== undefined ? Number(stock.trend_bias) : null
-  const structIcon = stock.structure === '上涨趋势' ? '📈' : stock.structure === '区间震荡' ? '📊' : stock.structure === '下降趋势' ? '📉' : ''
-  const stageColors: Record<string, string> = {
-    '上行': '#4ecdc4', '加速': '#e94560', '缩量整理': '#ffd700', '滞涨': '#ff6b6b',
-    '转弱': '#ff6b6b', '下行': '#666', '加速跌': '#e94560', '转强': '#4ecdc4',
-  }
-
-  return (
-    <div className="stock-item" style={{ border: 'none', margin: 0, padding: '8px 10px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <span className="name">{structIcon} {stock.name}</span>
-          <span className="code">{stock.code}</span>
-          {stock.profit_model1 && <span className="tag" style={{ background: '#e94560', fontSize: 10, padding: '1px 6px', borderRadius: 4, marginLeft: 4 }}>🏆 盈利1</span>}
-          {stock.trend_stock && <span className="tag" style={{ background: '#2196f3', fontSize: 10, padding: '1px 6px', borderRadius: 4, marginLeft: 4 }}>📈 趋势股</span>}
-          {stock.signal === 'buy' && <span style={{ background: '#e94560', color: '#fff', fontSize: 11, fontWeight: 'bold', padding: '2px 8px', borderRadius: 4, marginLeft: 6 }}>🎯 买点</span>}
-        </div>
-        <span style={{ fontSize: 13, color: changeColor }}>
-          {stock.price !== undefined && stock.price !== null ? stock.price.toFixed(2) : '--'} {changeVal >= 0 ? '+' : ''}{changeVal}%
-        </span>
-      </div>
-      <div className="row" style={{ marginTop: 6 }}>
-        <div className="field"><span className="l">方法:</span> <span className="v">{systemIcon}{systemText}</span></div>
-        <div className="field"><span className="l">操作:</span> <span className={`v ${stock.signal === 'sell' ? 'danger' : stock.signal === 'buy' ? 'warn' : 'hold'}`} style={{ fontWeight: 'bold' }}>{stock.signal === 'hold' ? '✅持有' : stock.signal === 'buy' ? '⚡买入' : stock.signal === 'sell' ? '❌卖出' : '--'}</span></div>
-        <div className="field"><span className="l">结构:</span> <span className="v">{structIcon} {stock.structure || '--'}</span></div>
-        <div className="field"><span className="l">阶段:</span> <span className="v" style={{ color: stageColors[stock.stage || ''] || '#888', fontWeight: 'bold' }}>{stock.stage || '--'}</span></div>
-        {isTrend && bias !== null && (
-          <div className="field"><span className="l">区域:</span> <span className="v" style={{ color: bias > 8 ? '#e94560' : bias <= 2 ? '#4ecdc4' : '#ffd700' }}>BIAS={bias.toFixed(2)}%</span></div>
-        )}
-        {stock.buy_point && (
-          <div className="field"><span className="l">买点:</span> <span className="v">{stock.buy_point}</span></div>
-        )}
-        <div className="field"><span className="l">板块:</span>
-          <span className="v" style={{ color: '#aaa', fontSize: 11 }}>{stock.sector || '--'}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
+// ── ──

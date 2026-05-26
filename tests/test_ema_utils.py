@@ -2,7 +2,7 @@
 import sys
 sys.path.insert(0, '/home/ubuntu/3l-server')
 import pytest
-from scripts.ema_utils import ema_list, get_ema_arrangement, _reg_slope, get_mainline_level
+from backend.core.ema_utils import ema_list, get_ema_arrangement, _reg_slope, get_mainline_level
 
 
 class TestEmaList:

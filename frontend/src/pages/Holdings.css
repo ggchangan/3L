@@ -91,45 +91,11 @@
   margin-bottom: 12px;
   overflow: hidden;
 }
-.watchlist-card-wrapper .stock-item {
-  background: transparent !important;
-  border-left: none !important;
-  border-bottom: 1px solid #2a2a4e;
-  border-radius: 0 !important;
-  padding: 12px 14px 10px;
-}
-.stock-item .stock-top {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 6px;
-}
-.stock-item .stock-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.stock-item .stock-name { font-size: 14px; font-weight: 600; color: #e0e0e0; }
-.stock-item .stock-code { font-size: 11px; color: #666; }
-.stock-item .direction-tag {
-  background: #2a2a4e; color: #4ecdc4;
-  padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;
-}
-.stock-item .stock-right { text-align: right; }
-.stock-item .stock-right .price { font-size: 13px; font-weight: 600; color: #e0e0e0; margin-right: 8px; }
-.stock-item .stock-right .change { font-size: 12px; font-weight: 600; }
-.stock-item .stock-right .change.up { color: #ff4444; }
-.stock-item .stock-right .change.down { color: #44aa44; }
-.stock-item .stock-tags { display: flex; gap: 6px; margin-bottom: 6px; }
-.stock-item .stock-tags .tag {
-  background: #2a2a4e; border-radius: 4px; padding: 1px 6px;
-  font-size: 10px; color: #aaa; font-weight: 500;
-}
-.stock-item .stock-tags .tag-signal-buy { background: rgba(233, 69, 96, 0.2); color: #e94560; }
-.stock-item .stock-tags .tag-signal-sell { background: rgba(102, 102, 102, 0.3); color: #ccc; }
-.stock-item .stock-tags .tag-signal-hold { background: rgba(78, 205, 196, 0.2); color: #4ecdc4; }
-.stock-item .stock-detail-row {
-  display: flex; align-items: center; gap: 6px;
-}
-.stock-item .ratio-bar-bg {
+.ratio-bar-bg {
   background: #2a2a4e; border-radius: 6px; height: 6px;
-  width: 60px; display: inline-block; vertical-align: middle;
+  display: inline-block; vertical-align: middle;
 }
-.stock-item .ratio-bar {
+.ratio-bar {
   display: inline-block; height: 6px; border-radius: 6px;
   vertical-align: middle; transition: width 0.5s;
 }

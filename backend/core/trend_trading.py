@@ -14,7 +14,7 @@
 4. 止盈：跟踪止盈（从买入后最高点回落10%卖出，至少赚5%才启动）
 """
 import sys, os, json
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from ema_utils import ema_list, get_structure
 
 
@@ -287,7 +287,7 @@ def is_smooth_trend(code, date_str, data):
 
 # ==================== 手动指定趋势交易 ====================
 
-import config
+from backend import config
 MANUAL_TREND_PATH = config.MANUAL_TREND_PATH
 _manual_trend_cache = None
 

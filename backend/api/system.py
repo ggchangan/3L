@@ -6,7 +6,7 @@ from . import parse_query
 def _handle_health(h, path):
     """动态健康检查：验证数据源/缓存/磁盘"""
     import os, shutil, time
-    import config
+    from backend import config
     DATA_DIR = os.environ.get('DATA_DIR', config.DATA_DIR)
     checks = {}
 

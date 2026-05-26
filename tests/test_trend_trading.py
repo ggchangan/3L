@@ -1,7 +1,7 @@
 """趋势交易系统模块测试"""
 import pytest
-from scripts.data_layer import get_all_stocks
-from scripts.trend_trading import (
+from backend.core.data_layer import get_all_stocks
+from backend.core.trend_trading import (
     decide_system, decide_system_with_detail,
     detect_trend_buy, simulate_trend_trade,
     check_trend_type, get_bias5_zone, get_bias10_zone,

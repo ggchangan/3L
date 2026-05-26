@@ -2,7 +2,7 @@
 
 import json
 import pytest
-from scripts.buy_point_detection import (
+from backend.core.buy_point_detection import (
     check_trend_stock,
     detect_huicai_buy_point,
     detect_buy_point,

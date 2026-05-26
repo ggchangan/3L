@@ -178,7 +178,7 @@ def load_stock_list():
     stocks = data.get('stocks', [])
     # 方向过滤：只返回已启用方向的自选股
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-    from services.direction_service import get_active
+    from backend.services.direction_service import get_active
     active = get_active()
     stocks = [s for s in stocks if s.get('direction', '其他') in active]
     return stocks
@@ -304,7 +304,7 @@ def main():
         
         # 通过 StockCardService 获取完整卡片数据（含系统判定+买点判定+止损）
         try:
-            from services.stock_card_service import get_stock_card
+            from backend.services.stock_card_service import get_stock_card
             card = get_stock_card(
                 code=code,
                 date_str=today_str,

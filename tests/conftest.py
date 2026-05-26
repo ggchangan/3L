@@ -4,13 +4,13 @@ sys.path.insert(0, '/home/ubuntu/3l-server')
 
 @pytest.fixture(scope='session')
 def stocks():
-    from scripts.data_layer import get_all_stocks
+    from backend.core.data_layer import get_all_stocks
     return get_all_stocks()
 
 
 @pytest.fixture(scope='session')
 def watchlist():
-    from scripts.data_layer import get_watchlist
+    from backend.core.data_layer import get_watchlist
     return get_watchlist()
 
 
