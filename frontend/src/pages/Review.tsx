@@ -96,19 +96,21 @@ export default function Review() {
               </div>
             )}
 
-            {/* STEP 4: 自选股买点信号 */}
-            {data?.buy_signals_review && data.buy_signals_review.length > 0 && (
-              <div className="section">
-                <div className="section-title">
-                  <span className="step">STEP 4</span>
-                  自选股买点信号
-                  <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 关注买入机会</span>
-                </div>
-                <div id="buySignalList">
-                  <BuySignalsReview signals={data.buy_signals_review as any} />
-                </div>
+            {/* STEP 4: 自选股买点信号 — section始终显示 */}
+            <div className="section">
+              <div className="section-title">
+                <span className="step">STEP 4</span>
+                自选股买点信号
+                <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 关注买入机会</span>
               </div>
-            )}
+              <div id="buySignalList">
+                {data?.buy_signals_review && data.buy_signals_review.length > 0 ? (
+                  <BuySignalsReview signals={data.buy_signals_review as any} />
+                ) : (
+                  <div className="empty">暂无买点信号</div>
+                )}
+              </div>
+            </div>
 
             {/* PLAN: 每日交易计划 */}
             {data?.trading_plan && (

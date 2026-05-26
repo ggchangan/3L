@@ -800,6 +800,11 @@ MOCK_WATCHLIST = [
 class TestAnalysisServiceWithMock:
     """analysis_service 测试 — mock 注入"""
 
+    @classmethod
+    def setup_class(cls):
+        import services.stock_card_service as scs
+        scs._ALL_A_STOCKS = {'688999': '测试A', '688888': '测试B'}
+
     def test_search_by_code(self):
         """按代码搜索返回正确结构"""
         from services.analysis_service import search_and_analyze

@@ -171,7 +171,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
         if not card:
             continue
 
-        # 信号只看最新K线
+        # 信号只看最新K线 — 用 get_stock_card 确认
         if card.get("signal") != "buy":
             continue
 
