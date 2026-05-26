@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Monitor from './pages/Monitor'
 import Review from './pages/Review'
+import Workbench from './pages/Workbench'
+import Watchlist from './pages/Watchlist'
+import TrendCandidates from './pages/TrendCandidates'
 
 export default function App() {
   return (
@@ -9,12 +12,13 @@ export default function App() {
         {/* 已迁移的 React 页面 */}
         <Route path="/monitor" element={<Monitor />} />
         <Route path="/review" element={<Review />} />
+        <Route path="/journal" element={<Workbench />} />
+        <Route path="/workbench" element={<Workbench />} />
+        <Route path="/watchlist" element={<Watchlist />} />
+        <Route path="/trend_candidates" element={<TrendCandidates />} />
         <Route path="/" element={<Monitor />} />
 
         {/* 未迁移的旧页面：通过 window.location 跳转 */}
-        <Route path="/journal" element={<LegacyRedirect to="/journal.html" />} />
-        <Route path="/watchlist" element={<LegacyRedirect to="/watchlist.html" />} />
-        <Route path="/trend_candidates" element={<LegacyRedirect to="/trend_candidates.html" />} />
         <Route path="/holdings" element={<LegacyRedirect to="/holdings.html" />} />
         <Route path="/industry" element={<LegacyRedirect to="/industry.html" />} />
         <Route path="/macro" element={<LegacyRedirect to="/macro.html" />} />

@@ -218,6 +218,10 @@ class Handler(SimpleHTTPRequestHandler):
             '/review': '/react.html',
             '/review.html': None,
             '/monitor': '/react.html',
+            '/journal': '/react.html',
+            '/workbench': '/react.html',
+            '/watchlist': '/react.html',
+            '/trend_candidates': '/react.html',
             '/': '/react.html',
         }
         if path in aliases and aliases[path]:
