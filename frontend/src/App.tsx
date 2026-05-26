@@ -4,6 +4,7 @@ import Review from './pages/Review'
 import Workbench from './pages/Workbench'
 import Watchlist from './pages/Watchlist'
 import TrendCandidates from './pages/TrendCandidates'
+import Holdings from './pages/Holdings'
 
 export default function App() {
   return (
@@ -18,8 +19,9 @@ export default function App() {
         <Route path="/trend_candidates" element={<TrendCandidates />} />
         <Route path="/" element={<Monitor />} />
 
+        <Route path="/holdings" element={<Holdings />} />
         {/* 未迁移的旧页面：通过 window.location 跳转 */}
-        <Route path="/holdings" element={<LegacyRedirect to="/holdings.html" />} />
+        <Route path="/holdings.html" element={<LegacyRedirect to="/holdings" />} />
         <Route path="/industry" element={<LegacyRedirect to="/industry.html" />} />
         <Route path="/macro" element={<LegacyRedirect to="/macro.html" />} />
         <Route path="/stock_analysis" element={<LegacyRedirect to="/stock_analysis.html" />} />
