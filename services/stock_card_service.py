@@ -14,11 +14,22 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from config import MANUAL_TREND_PATH as _MANUAL_TREND_PATH
+from config import MANUAL_TREND_PATH as _MANUAL_TREND_PATH, DATA_DIR
 from backend.core.data_layer import (
     get_stock_klines,
     get_industry_map,
 )
+
+# 统一名字源：all_a_stocks.json — 5317只全量A股 {code: name}
+_ALL_A_STOCKS = {}
+_aas_path = os.path.join(DATA_DIR, 'all_a_stocks.json')
+if os.path.isfile(_aas_path):
+    try:
+        import json
+        with open(_aas_path) as _f:
+            _ALL_A_STOCKS = json.load(_f)
+    except Exception:
+        pass
 from backend.core.ema_utils import (
     ema_list,
     get_ema_arrangement,
@@ -35,23 +46,18 @@ from backend.core.trend_trading import (
 )
 
 
-# ── 手动趋势股缓存 ──
+# ── 手动趋势股（不缓存，文件很小直接读）──
 MANUAL_TREND_PATH = _MANUAL_TREND_PATH
-_manual_trend_cache = None
 
 
 def _load_manual_trend():
-    """加载手动趋势股列表（带模块缓存）"""
-    global _manual_trend_cache
-    if _manual_trend_cache is not None:
-        return _manual_trend_cache
+    """加载手动趋势股列表（每次读文件，不缓存）"""
     try:
         import json
         with open(MANUAL_TREND_PATH) as f:
-            _manual_trend_cache = set(json.load(f))
+            return set(json.load(f))
     except Exception:
-        _manual_trend_cache = set()
-    return _manual_trend_cache
+        return set()
 
 
 # ═══════════════════════════════════════════
@@ -224,10 +230,11 @@ def get_stock_card(code, date_str, market_position='波中',
     stock_info = industry_map.get(code, {})
     if isinstance(stock_info, dict):
         sector = stock_info.get('ths_industry', '') or direction or ''
-        name = stock_info.get('name', code)
     else:
         sector = direction or ''
-        name = code
+
+    # 名字统一从 all_a_stocks.json 取
+    name = _ALL_A_STOCKS.get(code, code)
 
     # 2. 获取K线：优先外部传入，否则从 data_layer 加载
     if klines is not None:
@@ -236,12 +243,6 @@ def get_stock_card(code, date_str, market_position='波中',
         klines = get_stock_klines(code, direction)
     if not klines or len(klines) < 30:
         return _empty_card(code, name, sector, direction, '数据不足')
-
-    # 从K线数据取名字（比行业映射更可靠）
-    for k in klines:
-        if k.get('name'):
-            name = k['name']
-            break
 
     idx = _find_idx(klines, date_str)
     if idx < 10:

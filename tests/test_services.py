@@ -183,45 +183,35 @@ class TestGetConceptBoards:
 # 3. monitor_service.get_buy_signals()
 # ═══════════════════════════════════════════════════════════════════
 #
-# ⚠️ BUG KNOWN: monitor_service.py uses config.atomic_json_dump() at line 46
-#    but does NOT import `config` (only `from config import CACHE_DIR, ...`).
-#    This test catches that bug: without mocking 'config' into the module,
-#    calling the subprocess-success path would raise NameError.
-#    We inject `monitor_service.config = MagicMock()` to bypass it and test
-#    the remaining logic.
+# NOTE: monitor_service imports atomic_json_dump directly via
+#   `from config import ... atomic_json_dump`
+# Subprocess-success tests must patch services.monitor_service.atomic_json_dump
+# (not config.atomic_json_dump) to avoid writing to production cache.
 
 class TestGetBuySignals:
     """Tests for monitor_service.get_buy_signals().
 
     Returns error dict on subprocess failure. Has 1-hour cache TTL.
-    Exposes the missing 'config' import bug when subprocess succeeds.
     """
-
-    def _patch_config(self, module):
-        """Inject missing 'config' reference into module namespace."""
-        module.config = MagicMock()
-        return module.config
 
     @patch('services.monitor_service.os.path.isfile', return_value=True)
     @patch('builtins.open', new_callable=mock_open,
-           read_data='{"signals": [{"code": "000001"}]}')
+           read_data='{"signals": [{"code": "000001", "name": "平安银行", "trading_system": "3l"}]}')
     def test_returns_cached_data(self, mock_file, mock_isfile):
         """Happy path: existing cache file returns its contents."""
         from services import monitor_service
         result = monitor_service.get_buy_signals()
-        assert result == {"signals": [{"code": "000001"}]}
+        assert result == {"signals": [{"code": "000001", "name": "平安银行", "trading_system": "3l"}]}
 
     @patch('services.monitor_service.os.path.isfile', return_value=False)
     @patch('services.monitor_service.subprocess.run')
     @patch('services.monitor_service.os.makedirs')
-    def test_subprocess_success_returns_data(self, mock_mkdir,
+    @patch('services.monitor_service.atomic_json_dump')
+    def test_subprocess_success_returns_data(self, mock_dump,
+                                             mock_mkdir,
                                              mock_subp, mock_isfile):
-        """Subprocess success: returns parsed JSON, writes cache.
-
-        This path reveals the missing 'config' import bug if not mocked.
-        """
+        """Subprocess success: returns parsed JSON, writes cache."""
         from services import monitor_service
-        mock_config = self._patch_config(monitor_service)
 
         mock_subp.return_value = MagicMock(
             returncode=0,
@@ -232,7 +222,7 @@ class TestGetBuySignals:
         result = monitor_service.get_buy_signals()
 
         assert result == {"signals": [{"code": "300750"}]}
-        mock_config.atomic_json_dump.assert_called_once()
+        mock_dump.assert_called_once()
 
     @patch('services.monitor_service.os.path.isfile', return_value=False)
     @patch('services.monitor_service.subprocess.run')
@@ -270,15 +260,17 @@ class TestGetBuySignals:
     @patch('services.monitor_service.os.path.isfile', return_value=False)
     @patch('services.monitor_service.subprocess.run')
     @patch('services.monitor_service.os.makedirs')
-    def test_exposes_missing_config_import(self, mock_mkdir,
+    @patch('services.monitor_service.atomic_json_dump')
+    def test_exposes_missing_config_import(self, mock_dump,
+                                           mock_mkdir,
                                            mock_subp, mock_isfile):
-        """Without injecting 'config', subprocess success hits NameError
-        but it's caught by the generic except Exception handler and
-        returned as an error dict. This test proves the P0 bug exists
-        by checking the return value instead of expecting an exception.
+        """Subprocess success writes cache via direct import (NOT config.atomic_json_dump).
+
+        The function imports atomic_json_dump directly, so removing
+        module.config has no effect — verify it works without it.
         """
         from services import monitor_service
-        # Remove our patch if it exists from a previous test
+        # Remove any injected config mock
         if hasattr(monitor_service, 'config') and not isinstance(
                 monitor_service.config, type(monitor_service)):
             del monitor_service.config
@@ -291,8 +283,9 @@ class TestGetBuySignals:
 
         result = monitor_service.get_buy_signals()
 
-        assert 'error' in result
-        assert 'config' in result['error'] or 'atomic_json_dump' in result['error']
+        # atomic_json_dump is imported directly, not via config
+        assert result == {"signals": [{"code": "300750"}]}
+        mock_dump.assert_called_once()
 
     @patch('services.monitor_service.os.path.isfile', return_value=True)
     @patch('builtins.open', new_callable=mock_open,
@@ -807,6 +800,11 @@ MOCK_WATCHLIST = [
 class TestAnalysisServiceWithMock:
     """analysis_service 测试 — mock 注入"""
 
+    @classmethod
+    def setup_class(cls):
+        import services.stock_card_service as scs
+        scs._ALL_A_STOCKS = {'688999': '测试A', '688888': '测试B'}
+
     def test_search_by_code(self):
         """按代码搜索返回正确结构"""
         from services.analysis_service import search_and_analyze
@@ -949,3 +947,66 @@ class TestStockChartDefensive(unittest.TestCase):
         svg, err = generate_stock_chart('000988')
         self.assertIsNotNone(svg, f'应在缓存中: {err}')
         self.assertIn('<svg', svg)
+
+
+# ── 复盘数据源一致性回归测试 ──────────────────────────
+# 唯一写K线数据的入口是 update_stock_data.py（17:00 cron），
+# 其他地方（包括复盘实时计算）不应篡改 all_stocks_60d。
+
+
+class TestReviewDataSourceConsistency:
+    """scan_buy_signals_if_needed 不应篡改 K 线数据"""
+
+    def test_scan_buy_signals_does_not_mutate_klines(self):
+        """
+        给定 all_stocks_60d 后，调用 scan_buy_signals_if_needed 不应改变 K 线内容。
+        唯一写入口是 update_stock_data.py（17:00 cron）。
+        """
+        import sys
+        from unittest.mock import MagicMock
+
+        # scan_buy_signals_if_needed 内部会 from buy_point_detection import format_buy_signals
+        # 且做了 sys.path.insert，我们需要 mock 这个模块
+        mock_bpd = MagicMock()
+        mock_bpd.format_buy_signals.return_value = {}
+        sys.modules['buy_point_detection'] = mock_bpd
+
+        try:
+            from services.review_service import scan_buy_signals_if_needed
+
+            # 构造测试数据：1只股票，包含2根K线（最后日期=20260522）
+            test_klines = [
+                {'date': '20260521', 'open': 10.0, 'high': 11.0, 'low': 9.5,
+                 'close': 10.5, 'volume': 100000},
+                {'date': '20260522', 'open': 10.5, 'high': 12.0, 'low': 10.0,
+                 'close': 11.0, 'volume': 120000},
+            ]
+            test_stocks = {'电子': {'600888': test_klines}}
+            test_mainlines = {'lines': [{'name': '电子'}], 'secondary': []}
+            test_market = {'position': '波中'}
+
+            # Mock direction_service.get_active 和 wl_func
+            with patch('services.direction_service.get_active') as mock_active, \
+                 patch.object(os.path, 'isfile', return_value=False):
+
+                mock_active.return_value = ['电子']
+                mock_wl = MagicMock(return_value=[])
+
+                buy_signals, result_stocks = scan_buy_signals_if_needed(
+                    [], test_stocks, '20260523',
+                    '/tmp', '/tmp/dummy.json',
+                    test_mainlines, test_market, mock_wl,
+                )
+
+            # 核心断言：K 线数据未被篡改（未追加新日期的 K 线）
+            assert '600888' in result_stocks.get('电子', {})
+            result_klines = result_stocks['电子']['600888']
+            assert len(result_klines) == 2, (
+                f'预期2根K线不变，实际{len(result_klines)}根。'
+                f'如果多了说明scan_buy_signals_if_needed篡改了数据。'
+            )
+            assert result_klines[-1]['date'] == '20260522'
+            assert result_klines[-1]['close'] == 11.0
+        finally:
+            # 清理 mock
+            sys.modules.pop('buy_point_detection', None)

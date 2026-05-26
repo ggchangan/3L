@@ -2,7 +2,7 @@
 from . import parse_query
 from services.analysis_service import search_and_analyze
 from services.backtest_service import run_backtest
-from services.stock_chart_service import generate_stock_chart
+from services.stock_chart_service import generate_stock_chart, generate_trend_stock_chart
 
 
 def _handle_stock_analysis(h, path):
@@ -26,18 +26,49 @@ def _handle_stock_backtest(h, path):
     h.send_json(run_backtest(code, days, market_position=market_position, main_lines=main_lines))
 
 
+def _get_stock_trading_system(code):
+    """从 manual_trend_stocks.json 查交易系统类型"""
+    raw_code = str(code).strip()
+    for pfx in ['SH', 'SZ', 'sh', 'sz']:
+        if raw_code.startswith(pfx):
+            raw_code = raw_code[len(pfx):]
+            break
+    raw_code = raw_code[-6:] if len(raw_code) >= 6 else raw_code
+    try:
+        from config import MANUAL_TREND_PATH
+        import json
+        with open(MANUAL_TREND_PATH, 'r', encoding='utf-8') as f:
+            manual = json.load(f)
+        if raw_code in manual:
+            return 'trend'
+    except Exception:
+        pass
+    return '3l'
+
+
 def _handle_stock_chart(h, path):
-    code = parse_query(path).get('code', [None])[0]
+    params = parse_query(path)
+    code = params.get('code', [None])[0]
     if not code:
         h.send_json({'error': 'missing code param'})
         return
     if code in ('undefined', 'null', 'None', ''):
         h.send_json({'error': f'invalid code: {code}'})
         return
-    svg_str, err = generate_stock_chart(code)
-    if err:
-        h.send_json({'error': err})
-        return
+    # 图表模式：monitor=含实时，其他=不实时（只用日K线）
+    mode = (params.get('mode') or ['review'])[0]
+    # 后端自决交易系统类型，不依赖前端传 sys 参数
+    trading_system = _get_stock_trading_system(code)
+    if trading_system == 'trend':
+        svg_str, err = generate_trend_stock_chart(code, mode=mode)
+        if err:
+            h.send_json({'error': err})
+            return
+    else:
+        svg_str, err = generate_stock_chart(code, mode=mode)
+        if err:
+            h.send_json({'error': err})
+            return
     body = svg_str.encode('utf-8')
     h.send_response(200)
     h.send_header('Content-Type', 'image/svg+xml')

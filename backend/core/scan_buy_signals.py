@@ -273,6 +273,7 @@ def main():
     
     today_str = datetime.now().strftime('%Y-%m-%d')
     signals = []
+    all_analysis = []  # 全部股票的分析数据（含非买入信号）
     svg_ok = 0
     now = datetime.now()
     is_trading_hours = (9 <= now.hour < 15)  # 盘中
@@ -315,6 +316,29 @@ def main():
         except Exception as e:
             print(f"  卡片服务失败 {code}: {e}", file=sys.stderr)
             continue
+        
+        # 构建全量分析数据（所有股票，不区分买卖）
+        analysis_entry = {
+            'code': code,
+            'name': name,
+            'direction': direction,
+            'price': card['price'],
+            'change': card['change'],
+            'change_pct': card['change'],
+            'signal': card['signal'] or 'hold',
+            'buy_type': card.get('buy_point', ''),
+            'buy_point': card.get('buy_point', ''),
+            'structure': card['structure'],
+            'stage': card['stage'],
+            'vol_analysis': card.get('vol_analysis', ''),
+            'score': card.get('score', 0),
+            'trading_system': card.get('trading_system', '3l'),
+            'trend_bias': card.get('trend_bias', 0),
+            'trend_buy_reason': card.get('trading_reason', ''),
+            'stop_loss': card.get('stop_loss'),
+            'stop_loss_pct': card.get('stop_loss_pct'),
+        }
+        all_analysis.append(analysis_entry)
         
         if card['signal'] != 'buy':
             continue
@@ -362,6 +386,7 @@ def main():
     result = {
         'signals': signals,
         'count': len(signals),
+        'all_analysis': all_analysis,  # 所有股票分析数据（review页面用）
         'scan_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'focused_directions': FOCUS_DIRECTIONS if FOCUS_DIRECTIONS else 'all',
         'stocks_scanned': len(stocks),

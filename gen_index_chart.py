@@ -190,5 +190,8 @@ if __name__ == '__main__':
     os.makedirs(REVIEW_CHARTS_DIR, exist_ok=True)
     gen_svg(data, kps, os.path.join(REVIEW_CHARTS_DIR, 'sz000985.svg'))
     
+    # Also save as zzqz_key_points.svg for review page to load static
+    gen_svg(data, kps, os.path.join(REVIEW_CHARTS_DIR, 'zzqz_key_points.svg'))
+    
     # Also update the label in review.html
     # The current label shows "中证全指 000985" which is fine but let's also update the real-time value display in the page

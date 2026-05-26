@@ -134,7 +134,7 @@ def gen_trend_svg(name, code, klines, output_path, trend_bias=None):
         sv.append(f'<text x="{pl-4}" y="{yp+3}" text-anchor="end" font-family="sans-serif" font-size="8" fill="#666666">{y_val:.1f}</text>')
 
     # ── 判断盘中 ──
-    today_str = date.today().strftime('%Y-%m-%d')
+    today_str = date.today().strftime('%Y%m%d')  # 匹配数据存储的YYYYMMDD格式
     is_intraday = klines[-1].get('date', '') == today_str
 
     # 成交量柱

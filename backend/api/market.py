@@ -8,8 +8,28 @@ log = get_logger('api.market')
 
 
 def _handle_market(h, path):
-    _srv = get_server()
-    h.send_json(_srv.REVIEW_DATA.get('market', {}))
+    """实时计算大盘周期数据（不读存档）"""
+    from services.review_compute_service import fetch_index_klines, judge_peak_valley, fetch_market_quote
+    try:
+        index_klines = fetch_index_klines(120)
+        if not index_klines:
+            index_klines = fetch_index_klines(120)
+        today_quote = fetch_market_quote()
+        market_cycle = judge_peak_valley(index_klines)
+        if index_klines:
+            last = index_klines[-1]
+            prev = index_klines[-2] if len(index_klines) >= 2 else None
+            market_cycle['price'] = f"{last['close']:.2f}"
+            if prev:
+                chg_pct = (last['close'] - prev['close']) / prev['close'] * 100
+                market_cycle['change'] = round(chg_pct, 2)
+            else:
+                market_cycle['change'] = 0
+            market_cycle['data_date'] = last.get('date', '')
+        h.send_json(market_cycle)
+    except Exception as e:
+        log.error(f'实时计算大盘数据失败: {e}')
+        h.send_json({'price': '--', 'position': '波中', 'score': 0})
 
 
 def _handle_mainlines(h, path):
@@ -33,8 +53,14 @@ def _handle_review_full(h, path):
 
 
 def _handle_index_chart(h, path):
-    """返回中证全指K线SVG（含实时叠加）"""
-    svg_path, err = generate_index_chart()
+    """返回中证全指K线SVG
+    ?mode=monitor → 总是最新数据（含实时）
+    ?mode=review → 按时间控制（18:00前不包含今天）
+    """
+    from urllib.parse import parse_qs, urlparse
+    qs = parse_qs(urlparse(path).query)
+    mode = (qs.get('mode') or ['review'])[0]
+    svg_path, err = generate_index_chart(mode=mode)
     if err:
         h.send_json({'error': err})
         return
