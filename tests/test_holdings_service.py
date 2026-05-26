@@ -455,8 +455,8 @@ class TestGetHoldings:
         holdings_path = str(tmp_path / 'holdings.json')
         with patch('backend.services.holdings_service.HOLDINGS_PATH', holdings_path):
             save_holdings({
-                'holdings': [{'name': '测试', 'code': '000001', 'ratio': 10,
-                              'direction': '测试', 'stop_loss_price': None}],
+                    'holdings': [{'name': '测试', 'code': '000001', 'ratio': 10,
+                                  'direction': '测试', 'stop_loss_price': None}],
                 'cash_ratio': 90
             })
             result = get_holdings()

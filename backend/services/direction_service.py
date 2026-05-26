@@ -14,9 +14,10 @@
 """
 import json
 import os
+from backend.config import DATA_DIR
 
 DIRECTIONS_FILE = os.environ.get('DIRECTIONS_PATH',
-    os.path.join(os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'directions.json'))
+    os.path.join(DATA_DIR, 'directions.json'))
 
 
 def _load():
@@ -128,7 +129,7 @@ def get_suggestions():
     suggestions = {'industry': [], 'concept': [], 'custom': []}
 
     # 从 industry map 提取行业
-    imp = '/home/ubuntu/data/3l/stock_industry_map.json'
+    imp = os.path.join(DATA_DIR, 'stock_industry_map.json')
     if os.path.isfile(imp):
         with open(imp) as f:
             im = json.load(f)
@@ -155,7 +156,7 @@ def get_suggestions():
 def migrate_from_watchlist(wl_path=None):
     """从 watchlist.json 的 directions 字段迁移到独立文件"""
     if wl_path is None:
-        wl_path = '/home/ubuntu/data/3l/watchlist.json'
+        wl_path = os.path.join(DATA_DIR, 'watchlist.json')
     if not os.path.isfile(wl_path):
         return {'success': False, 'error': 'watchlist.json 不存在'}
 

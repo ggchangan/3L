@@ -7,8 +7,8 @@
 import json
 import os
 from datetime import date
+from backend.config import DATA_DIR
 
-DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
 WORKBENCH_DIR = os.path.join(DATA_DIR, 'private', 'workbench')
 os.makedirs(WORKBENCH_DIR, exist_ok=True)
 

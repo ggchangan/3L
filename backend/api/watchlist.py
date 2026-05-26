@@ -89,8 +89,9 @@ def _handle_set_direction_enabled(h, path, body):
 def _handle_watchlist_boards(h, path):
     """GET: 按行业分组浏览（用于批量添加）"""
     import json, os
-    leaders_path = '/home/ubuntu/data/3l/industry_leaders.json'
-    sp = '/home/ubuntu/data/3l/all_stocks_60d.json'
+    from backend.config import DATA_DIR
+    leaders_path = os.path.join(DATA_DIR, 'industry_leaders.json')
+    sp = os.path.join(DATA_DIR, 'all_stocks_60d.json')
     if not os.path.isfile(leaders_path):
         h.send_json({'error': 'industry_leaders.json 不存在', 'boards': []})
         return
@@ -123,7 +124,7 @@ def _handle_watchlist_boards(h, path):
                 'in_watchlist': False,
             })
         # 标记在自选股的
-        wl_path = '/home/ubuntu/data/3l/watchlist.json'
+        wl_path = os.path.join(DATA_DIR, 'watchlist.json')
         if os.path.isfile(wl_path):
             with open(wl_path) as wf:
                 wld = json.load(wf)

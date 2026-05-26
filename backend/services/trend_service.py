@@ -201,6 +201,14 @@ def get_watchlist_analysis(stocks=None, wl=None):
             'signal': card.get('signal', 'hold'),
             'trend_stock': card.get('trend_stock', False),
             'profit_model1': card.get('profit_model1', False),
+            # 补充卡片字段，WTWatchlistCard/StockCard 共用
+            'buy_point': card.get('buy_point', ''),
+            'stop_loss': card.get('stop_loss'),
+            'stop_loss_pct': card.get('stop_loss_pct'),
+            'mainline_level': card.get('mainline_level', ''),
+            'trading_reason': card.get('trading_reason', ''),
+            'vol_analysis': card.get('vol_analysis', ''),
+            'sector_chg': card.get('sector_chg'),
         })
 
     return {'stocks': results, 'count': len(results)}

@@ -3,12 +3,11 @@ import json
 import os
 import sys
 import requests
+from backend.config import DATA_DIR
 from backend.services.direction_service import (
     get_all, get_active, get_all_ordered, add, remove, set_active, get_suggestions,
     reorder,
 )
-
-DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
 
 INDUSTRY_MAP_PATH = os.environ.get('INDUSTRY_MAP_PATH',
     os.path.join(DATA_DIR, 'stock_industry_map.json'))

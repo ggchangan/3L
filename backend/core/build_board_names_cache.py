@@ -5,8 +5,8 @@
 import os, json
 os.environ['TQDM_DISABLE'] = '1'
 import akshare as ak
+from backend.config import DATA_DIR
 
-DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
 OUTPUT = os.path.join(DATA_DIR, 'board_names_cache.json')
 
 # 行业板块

@@ -6,8 +6,8 @@
 import os, json, time, requests, re
 os.environ['TQDM_DISABLE'] = '1'
 import akshare as ak
+from backend.config import DATA_DIR
 
-DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
 OUTPUT_PATH = os.path.join(DATA_DIR, 'board_constituents.json')
 
 def get_all_th_boards():
