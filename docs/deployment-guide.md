@@ -1,6 +1,6 @@
 # 3L交易系统 — Docker 部署指南
 
-> 给同学或朋友的 5 步部署文档
+> 给同学或朋友的 4 步部署文档
 > 更新时间：2026-05-27
 
 ---
@@ -13,43 +13,40 @@
 
 ---
 
-## 第1步：安装 Docker
+## 第1步：装 Docker + 拉取镜像
+
+如果目标机器还没装 Docker，一键脚本会自动安装。直接跑：
 
 ```bash
-# Ubuntu / Debian
-sudo apt-get update
-sudo apt-get install -y docker.io
+# 下载一键部署脚本
+curl -O https://raw.githubusercontent.com/ggchangan/3L/feature/deploy-docker/deploy/deploy.sh
 
-# 启动 Docker 并设置开机自启
-sudo systemctl enable docker
-sudo systemctl start docker
+# 运行（会提示输入密码）
+bash deploy.sh
+
+# 或者直接传密码（避免交互）
+AUTH_PASS=你的密码 bash deploy.sh
 ```
 
----
+脚本会帮你完成所有步骤：装 Docker → 创建数据目录 → 拉镜像 → 生成配置 → 启动。
 
-## 第2步：获取镜像（二选一）
-
-### 方式A：从镜像仓库拉取（推荐）
+如果用 docker-compose 手动部署：
 
 ```bash
+# 先装 Docker
+sudo apt-get install -y docker.io
+sudo systemctl enable docker
+sudo systemctl start docker
+
+# 拉取镜像
 sudo docker pull ccr.ccs.tencentyun.com/ygys30ds/lll:latest
 ```
 
-### 方式B：从文件加载（离线传输）
-
-我这边会把镜像导出为 `3l-server.tar.gz` 发给你。你收到后：
-
-```bash
-# 解压
-gunzip 3l-server.tar.gz
-
-# 加载到 Docker
-sudo docker load -i 3l-server.tar
-```
+然后创建目录和 docker-compose.yml 按第3~4步。
 
 ---
 
-## 第3步：准备数据目录
+## 第2步：准备数据目录
 
 创建数据目录（挂载到容器 `/data`）：
 
@@ -85,7 +82,7 @@ mkdir -p ~/3l-server/logs
 
 ---
 
-## 第4步：运行
+## 第3步：运行
 
 方式A — 用 docker run（简单）：
 
@@ -132,7 +129,7 @@ sudo docker compose up -d
 
 ---
 
-## 第5步：验证
+## 第4步：验证
 
 浏览器访问 `http://<服务器IP>:8080/`，用你设置的账号密码登录。
 
