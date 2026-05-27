@@ -79,6 +79,7 @@ export default function LogicTracking() {
   const [entries, setEntries] = useState<any[]>([])
   const [entriesLoading, setEntriesLoading] = useState(false)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const [showGraph, setShowGraph] = useState(false)
 
   useEffect(() => { fetchTags(); fetchEntries() }, [])
 
@@ -603,9 +604,37 @@ const handleFeedProcess = async () => {
         )}
       </div>
 
-      {/* ── Logic Graph Visualization ── */}
-      {!feedLoading && !feedResult && entries.length > 0 && (
-        (() => {
+      {tags.length === 0 ? (
+        <div className="info-card" style={{ textAlign: 'center', padding: 30, color: '#666', marginTop: 12 }}>
+          <p style={{ fontSize: 14 }}>暂无逻辑标签</p>
+          <p style={{ fontSize: 12 }}>点击「+ 新建逻辑」开始追踪市场最强逻辑</p>
+        </div>
+      ) : (
+        <>
+          {/* Search */}
+          <div style={{ marginBottom: 10 }}>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="🔍 搜索逻辑标签..."
+              style={{ width: '100%', padding: '6px 10px', background: '#1a1a2e', border: '1px solid #333', color: '#eee', borderRadius: 4, fontSize: 13 }}
+            />
+          </div>
+          {renderSection('focused', '🌟 聚焦（' + Math.min(tags.filter(t => t.tier === 'focused').length, 3) + '/3）')}
+          {renderSection('core', '📌 核心')}
+          {renderSection('watch', '👁️ 观察')}
+        </>
+      )}
+
+      {/* ── Logic Graph (collapsible) ── */}
+      {entries.length > 0 && (
+        <div className="section" style={{ marginTop: 12 }}>
+          <div
+            onClick={() => setShowGraph(!showGraph)}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
+          >
+            <h2 style={{ margin: 0, color: '#eee', fontSize: 16 }}>🧠 逻辑图谱（{entries.length} 条投喂）</h2>
+            <span style={{ color: '#888', fontSize: 12 }}>{showGraph ? '▲ 收起' : '▼ 展开'}</span>
+          </div>
+          {showGraph && (() => {
           // ── Graph data ──
           interface GraphNode { id: string; type: 'logic' | 'industry' | 'stock' | 'entry'; label: string; }
           interface GraphEdge { source: string; target: string; }
@@ -838,28 +867,8 @@ const handleFeedProcess = async () => {
                 )}
               </div>
             </div>
-          )
-        })()
-      )}
-
-      {tags.length === 0 ? (
-        <div className="info-card" style={{ textAlign: 'center', padding: 30, color: '#666', marginTop: 12 }}>
-          <p style={{ fontSize: 14 }}>暂无逻辑标签</p>
-          <p style={{ fontSize: 12 }}>点击「+ 新建逻辑」开始追踪市场最强逻辑</p>
+          )})()}
         </div>
-      ) : (
-        <>
-          {/* Search */}
-          <div style={{ marginBottom: 10 }}>
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="🔍 搜索逻辑标签..."
-              style={{ width: '100%', padding: '6px 10px', background: '#1a1a2e', border: '1px solid #333', color: '#eee', borderRadius: 4, fontSize: 13 }}
-            />
-          </div>
-          {renderSection('focused', '🌟 聚焦（' + Math.min(tags.filter(t => t.tier === 'focused').length, 3) + '/3）')}
-          {renderSection('core', '📌 核心')}
-          {renderSection('watch', '👁️ 观察')}
-        </>
       )}
 
       {/* Form Modal */}
