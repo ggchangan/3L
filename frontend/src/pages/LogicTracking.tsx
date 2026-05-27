@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import NavBar from '../components/NavBar'
 
 interface LogicTag {
@@ -57,12 +58,20 @@ export default function LogicTracking() {
     core: true,
     watch: true,
   })
+  const [search, setSearch] = useState('')
+  const navigate = useNavigate()
   const [showFeed, setShowFeed] = useState(false)
   const [feedUrl, setFeedUrl] = useState('')
   const [feedLoading, setFeedLoading] = useState(false)
   const [feedResult, setFeedResult] = useState<any>(null)
   const [feedSelected, setFeedSelected] = useState<string[]>([])
   const [feedError, setFeedError] = useState('')
+
+  // Forecast state
+  const [showForecast, setShowForecast] = useState(false)
+  const [forecasts, setForecasts] = useState<any[]>([])
+  const [fcForm, setFcForm] = useState({ title: '', event_date: '', prediction: '', logic_tags: '' })
+  const [fcTab, setFcTab] = useState('list') // list | add
 
   useEffect(() => { fetchTags() }, [])
 
@@ -153,6 +162,58 @@ export default function LogicTracking() {
     }
   }
 
+  const openForecast = async () => {
+    setFcTab('list')
+    setFcForm({ title: '', event_date: '', prediction: '', logic_tags: '' })
+    setShowForecast(true)
+    try {
+      const r = await fetch('/api/logic-tracking/forecasts?upcoming=30')
+      const d = await r.json()
+      setForecasts(d.forecasts || [])
+    } catch { setForecasts([]) }
+  }
+
+  const handleAddForecast = async () => {
+    if (!fcForm.title.trim() || !fcForm.event_date) return
+    try {
+      const r = await fetch('/api/logic-tracking/forecasts/add', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 'fcst-' + Date.now().toString(36),
+          type: 'forecast',
+          subtype: 'manual',
+          title: fcForm.title.trim(),
+          event_date: fcForm.event_date,
+          prediction: fcForm.prediction.trim(),
+          logic_tags: fcForm.logic_tags.split(',').map(s => s.trim()).filter(Boolean),
+          related_stocks: [],
+          remind_before_days: 3,
+          created_at: new Date().toISOString().slice(0, 10),
+        }),
+      })
+      const data = await r.json()
+      if (data.success) {
+        setFcForm({ title: '', event_date: '', prediction: '', logic_tags: '' })
+        setFcTab('list')
+        // Refresh
+        const r2 = await fetch('/api/logic-tracking/forecasts?upcoming=30')
+        const d2 = await r2.json()
+        setForecasts(d2.forecasts || [])
+      }
+    } catch {}
+  }
+
+  const handleDeleteForecast = async (id: string) => {
+    if (!confirm('确定删除？')) return
+    try {
+      await fetch('/api/logic-tracking/forecasts/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      setForecasts(prev => prev.filter(f => f.id !== id))
+    } catch {}
+  }
+
   const openFeed = () => {
     setFeedUrl('')
     setFeedResult(null)
@@ -211,16 +272,17 @@ export default function LogicTracking() {
   }
 
   const renderTagCard = (tag: LogicTag) => (
-    <div key={tag.id} className="info-card" style={{ marginBottom: 8, padding: 10, position: 'relative' }}>
+    <div key={tag.id} className="info-card" style={{ marginBottom: 8, padding: 10, position: 'relative', cursor: 'pointer' }}
+      onClick={() => navigate(`/logic-tracking/${tag.id}`)}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontWeight: 'bold', color: COLORS[tag.tier] || '#eee' }}>
           {tag.name}
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className="action-btn" onClick={() => openEdit(tag)} style={{ fontSize: 11, padding: '2px 6px' }}>
+          <button className="action-btn" onClick={(e) => { e.stopPropagation(); openEdit(tag); }} style={{ fontSize: 11, padding: '2px 6px' }}>
             编辑
           </button>
-          <button className="action-btn" onClick={() => handleDelete(tag.id)} style={{ fontSize: 11, padding: '2px 6px', color: '#e94560' }}>
+          <button className="action-btn" onClick={(e) => { e.stopPropagation(); handleDelete(tag.id); }} style={{ fontSize: 11, padding: '2px 6px', color: '#e94560' }}>
             删除
           </button>
         </div>
@@ -244,6 +306,7 @@ export default function LogicTracking() {
 
   const renderSection = (tier: string, title: string) => {
     const sectionTags = tags.filter(t => t.tier === tier)
+      .filter(t => !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.id.toLowerCase().includes(search.toLowerCase()))
     if (sectionTags.length === 0) return null
     const isCollapsed = collapsed[tier]
     const maxShow = tier === 'focused' ? undefined : (isCollapsed ? 2 : undefined)
@@ -297,6 +360,9 @@ export default function LogicTracking() {
             <button className="action-btn" onClick={openFeed} style={{ fontSize: 12 }}>
               📤 投喂
             </button>
+            <button className="action-btn" onClick={openForecast} style={{ fontSize: 12 }}>
+              📅 事件日历
+            </button>
           </div>
         </div>
       </div>
@@ -308,6 +374,13 @@ export default function LogicTracking() {
         </div>
       ) : (
         <>
+          {/* Search */}
+          <div style={{ marginBottom: 10 }}>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="🔍 搜索逻辑标签..."
+              style={{ width: '100%', padding: '6px 10px', background: '#1a1a2e', border: '1px solid #333', color: '#eee', borderRadius: 4, fontSize: 13 }}
+            />
+          </div>
           {renderSection('focused', '🌟 聚焦（' + Math.min(tags.filter(t => t.tier === 'focused').length, 3) + '/3）')}
           {renderSection('core', '📌 核心')}
           {renderSection('watch', '👁️ 观察')}
@@ -504,6 +577,81 @@ export default function LogicTracking() {
                   <button className="action-btn" onClick={() => setShowFeed(false)} style={{ fontSize: 12 }}>取消</button>
                   <button className="action-btn" onClick={handleFeedSave}
                     style={{ fontSize: 12, background: '#4ecdc4', color: '#111' }}>确认保存</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Forecast Modal */}
+      {showForecast && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.7)',
+        }} onClick={() => setShowForecast(false)}>
+          <div className="info-card" style={{ width: 450, maxWidth: '90vw', padding: 20, maxHeight: '80vh', overflow: 'auto' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 12px', color: '#eee', fontSize: 15 }}>📅 前置预判</h3>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button className="action-btn" onClick={() => setFcTab('list')}
+                style={{ fontSize: 12, background: fcTab === 'list' ? '#4ecdc4' : '#1a1a2e', color: fcTab === 'list' ? '#111' : '#888' }}>事件列表</button>
+              <button className="action-btn" onClick={() => setFcTab('add')}
+                style={{ fontSize: 12, background: fcTab === 'add' ? '#4ecdc4' : '#1a1a2e', color: fcTab === 'add' ? '#111' : '#888' }}>+ 新建</button>
+            </div>
+
+            {fcTab === 'list' ? (
+              <>
+                {forecasts.length === 0 ? (
+                  <div style={{ color: '#666', fontSize: 13, textAlign: 'center', padding: 20 }}>未来30天无预判事件</div>
+                ) : (
+                  forecasts.map((f: any) => (
+                    <div key={f.id} className="info-card" style={{ padding: 10, marginBottom: 6, borderLeft: '3px solid #f59e0b' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#f59e0b', fontSize: 12 }}>{f.event_date}</span>
+                        <button className="action-btn" onClick={() => handleDeleteForecast(f.id)}
+                          style={{ fontSize: 10, padding: '1px 6px', color: '#e94560' }}>删除</button>
+                      </div>
+                      <div style={{ color: '#eee', fontSize: 13 }}>{f.title}</div>
+                      {f.prediction && <div style={{ color: '#aaa', fontSize: 11, marginTop: 2 }}>预判：{f.prediction}</div>}
+                      {f.logic_tags?.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                          {f.logic_tags.map((t: string) => (
+                            <span key={t} style={{ fontSize: 10, padding: '1px 6px', background: '#1a1a2e', borderRadius: 3, color: '#888' }}>{t}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </>
+            ) : (
+              <>
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>事件名称 *</label>
+                  <input value={fcForm.title} onChange={e => setFcForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder="英伟达FY26Q2财报" style={{ width: '100%', padding: '6px 8px', background: '#1a1a2e', border: '1px solid #333', color: '#eee', borderRadius: 4, fontSize: 13 }} />
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>事件日期 *</label>
+                  <input type="date" value={fcForm.event_date} onChange={e => setFcForm(f => ({ ...f, event_date: e.target.value }))}
+                    style={{ width: '100%', padding: '6px 8px', background: '#1a1a2e', border: '1px solid #333', color: '#eee', borderRadius: 4, fontSize: 13 }} />
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>你的预判</label>
+                  <input value={fcForm.prediction} onChange={e => setFcForm(f => ({ ...f, prediction: e.target.value }))}
+                    placeholder="超预期→光模块受益" style={{ width: '100%', padding: '6px 8px', background: '#1a1a2e', border: '1px solid #333', color: '#eee', borderRadius: 4, fontSize: 13 }} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>关联逻辑标签ID（逗号分隔）</label>
+                  <input value={fcForm.logic_tags} onChange={e => setFcForm(f => ({ ...f, logic_tags: e.target.value }))}
+                    placeholder="tag-ai-chain,tag-pkg" style={{ width: '100%', padding: '6px 8px', background: '#1a1a2e', border: '1px solid #333', color: '#eee', borderRadius: 4, fontSize: 13 }} />
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="action-btn" onClick={() => setShowForecast(false)} style={{ fontSize: 12 }}>关闭</button>
+                  <button className="action-btn" onClick={handleAddForecast}
+                    style={{ fontSize: 12, background: '#4ecdc4', color: '#111' }}>保存预判</button>
                 </div>
               </>
             )}

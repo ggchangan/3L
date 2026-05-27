@@ -13,6 +13,7 @@ import Tips from './pages/Tips'
 import Simulation from './pages/Simulation'
 import Skills from './pages/Skills'
 import LogicTracking from './pages/LogicTracking'
+import LogicTrackingDetail from './pages/LogicTrackingDetail'
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/simulation" element={<Simulation />} />
         <Route path="/skills" element={<Skills />} />
         <Route path="/logic-tracking" element={<LogicTracking />} />
+        <Route path="/logic-tracking/:tagId" element={<LogicTrackingDetail />} />
         <Route path="/" element={<Monitor />} />
 
         {/* 旧 HTML 重定向到 React 路由 */}

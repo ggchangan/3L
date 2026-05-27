@@ -19,6 +19,11 @@ from urllib.parse import urlparse, parse_qs
 from backend.core.logic_tracking_store import LogicTrackingStore
 from backend.services.logic_feed_service import process_feed, save_feed
 from backend.services.logic_verify_service import verify_unverified_entries
+from backend.services.logic_p1_service import (
+    compute_tier_suggestions,
+    generate_top_pool,
+    push_focused_alarms,
+)
 
 
 _store = None
@@ -293,6 +298,37 @@ def _handle_trigger_verify(h, path):
 
 
 # ═══════════════════════════════════════════════════
+# P1: Suggestions / Pool / Alarms
+# ═══════════════════════════════════════════════════
+
+def _handle_tier_suggestions(h, path):
+    """GET /api/logic-tracking/suggestions"""
+    try:
+        result = compute_tier_suggestions()
+        h.send_json({'suggestions': result})
+    except Exception as e:
+        h.send_json({'suggestions': [], 'error': str(e)})
+
+
+def _handle_top_pool(h, path):
+    """GET /api/logic-tracking/pool"""
+    try:
+        result = generate_top_pool()
+        h.send_json({'pool': result})
+    except Exception as e:
+        h.send_json({'pool': [], 'error': str(e)})
+
+
+def _handle_alarms(h, path):
+    """POST /api/logic-tracking/alarms/check"""
+    try:
+        result = push_focused_alarms()
+        h.send_json({'alarms': result})
+    except Exception as e:
+        h.send_json({'alarms': [], 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════
 # Route registration
 # ═══════════════════════════════════════════════════
 
@@ -302,4 +338,6 @@ def register_routes(routes):
     routes.exact('/api/logic-tracking/entries', func=_handle_list_entries)
     routes.exact('/api/logic-tracking/forecasts', func=_handle_list_forecasts)
     routes.exact('/api/logic-tracking/tags/detail', func=_handle_tag_detail)
+    routes.exact('/api/logic-tracking/suggestions', func=_handle_tier_suggestions)
+    routes.exact('/api/logic-tracking/pool', func=_handle_top_pool)
     return routes
