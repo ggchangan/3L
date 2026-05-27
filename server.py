@@ -83,6 +83,7 @@ def register_api_routes(routes):
         'backend.api.holdings', 'backend.api.system',
         'backend.api.top_gainers', 'backend.api.macro',
         'backend.api.directions', 'backend.api.workbench',
+        'backend.api.logic_tracking',
     ]
     for mod_name in api_modules:
         mod = importlib.import_module(mod_name)
@@ -227,6 +228,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/top_gainers', '/tips', '/simulation',
             '/skills', '/journal', '/workbench',
             '/watchlist', '/trend_candidates',
+            '/logic-tracking',
         }
         if path in spa_routes:
             self.path = '/react.html'
@@ -301,6 +303,16 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/directions/reorder': ('backend.api.directions', '_handle_reorder'),
             '/api/workbench/save': ('backend.api.workbench', '_handle_save'),
             '/api/holdings/save': ('backend.api.holdings', '_handle_save'),
+            '/api/logic-tracking/tags/add': ('backend.api.logic_tracking', '_handle_add_tag'),
+            '/api/logic-tracking/tags/update': ('backend.api.logic_tracking', '_handle_update_tag'),
+            '/api/logic-tracking/tags/delete': ('backend.api.logic_tracking', '_handle_delete_tag'),
+            '/api/logic-tracking/entries/add': ('backend.api.logic_tracking', '_handle_add_entry'),
+            '/api/logic-tracking/entries/delete': ('backend.api.logic_tracking', '_handle_delete_entry'),
+            '/api/logic-tracking/forecasts/add': ('backend.api.logic_tracking', '_handle_add_forecast'),
+            '/api/logic-tracking/forecasts/delete': ('backend.api.logic_tracking', '_handle_delete_forecast'),
+            '/api/logic-tracking/feed/process': ('backend.api.logic_tracking', '_handle_feed_process'),
+            '/api/logic-tracking/feed/save': ('backend.api.logic_tracking', '_handle_feed_save'),
+            '/api/logic-tracking/verify/run': ('backend.api.logic_tracking', '_handle_trigger_verify'),
         }
         if self.path in post_routes:
             mod_name, func_name = post_routes[self.path]

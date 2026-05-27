@@ -41,6 +41,11 @@ data/public/
 review_charts/
 files/
 
+# Seed data files (copied from data directory for Docker build)
+all_a_stocks.json
+pinyin_initials.json
+
 # Hidden config files that shouldn't be tracked
 .ssh/
 .config/
+3l-server.tar.gz

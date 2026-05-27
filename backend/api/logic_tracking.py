@@ -1,0 +1,345 @@
+"""
+逻辑追踪系统 API 路由
+
+GET /api/logic-tracking/tags               → 列表
+GET /api/logic-tracking/tags?id=xxx        → 单个
+POST /api/logic-tracking/tags/add          → 新增
+PUT /api/logic-tracking/tags/update        → 更新
+POST /api/logic-tracking/tags/delete       → 删除
+GET /api/logic-tracking/entries            → 条目列表
+POST /api/logic-tracking/entries/add       → 新增条目
+POST /api/logic-tracking/entries/delete    → 删除条目
+GET /api/logic-tracking/forecasts          → 预判列表
+POST /api/logic-tracking/forecasts/add     → 新增预判
+POST /api/logic-tracking/forecasts/delete  → 删除预判
+"""
+import json
+from urllib.parse import urlparse, parse_qs
+
+from backend.core.logic_tracking_store import LogicTrackingStore
+from backend.services.logic_feed_service import process_feed, save_feed
+from backend.services.logic_verify_service import verify_unverified_entries
+from backend.services.logic_p1_service import (
+    compute_tier_suggestions,
+    generate_top_pool,
+    push_focused_alarms,
+)
+
+
+_store = None
+
+
+def _get_store():
+    global _store
+    if _store is None:
+        _store = LogicTrackingStore()
+    return _store
+
+
+# ═══════════════════════════════════════════════════
+# Tag handlers
+# ═══════════════════════════════════════════════════
+
+def _handle_list_tags(h, path):
+    """GET /api/logic-tracking/tags?tier=focused"""
+    qs = parse_qs(urlparse(path).query)
+    tier = qs.get('tier', [None])[0]
+    store = _get_store()
+    h.send_json({'tags': store.get_tags(tier=tier)})
+
+
+def _handle_get_tag(h, path):
+    """GET /api/logic-tracking/tags/get?id=xxx"""
+    qs = parse_qs(urlparse(path).query)
+    tag_id = qs.get('id', [None])[0]
+    if not tag_id:
+        h.send_json({'error': '缺少id参数'})
+        return
+    store = _get_store()
+    tag = store.get_tag(tag_id)
+    if tag is None:
+        h.send_json({'error': '标签不存在'})
+        return
+    h.send_json(tag)
+
+
+def _handle_add_tag(h, path, body):
+    """POST /api/logic-tracking/tags/add"""
+    try:
+        data = json.loads(body)
+        store = _get_store()
+        store.add_tag(data)
+        h.send_json({'success': True})
+    except ValueError as e:
+        h.send_json({'success': False, 'error': str(e)})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_update_tag(h, path, body):
+    """POST /api/logic-tracking/tags/update"""
+    try:
+        data = json.loads(body)
+        tag_id = data.get('id', '')
+        if not tag_id:
+            h.send_json({'success': False, 'error': '缺少id'})
+            return
+        store = _get_store()
+        store.update_tag(tag_id, data)
+        h.send_json({'success': True})
+    except ValueError as e:
+        h.send_json({'success': False, 'error': str(e)})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_delete_tag(h, path, body):
+    """POST /api/logic-tracking/tags/delete"""
+    try:
+        data = json.loads(body)
+        tag_id = data.get('id', '')
+        if not tag_id:
+            h.send_json({'success': False, 'error': '缺少id'})
+            return
+        store = _get_store()
+        store.delete_tag(tag_id)
+        h.send_json({'success': True})
+    except ValueError as e:
+        h.send_json({'success': False, 'error': str(e)})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════
+# Entry handlers
+# ═══════════════════════════════════════════════════
+
+def _handle_list_entries(h, path):
+    """GET /api/logic-tracking/entries?tag_id=xxx"""
+    qs = parse_qs(urlparse(path).query)
+    tag_id = qs.get('tag_id', [None])[0]
+    store = _get_store()
+    h.send_json({'entries': store.get_entries(tag_id=tag_id)})
+
+
+def _handle_add_entry(h, path, body):
+    """POST /api/logic-tracking/entries/add"""
+    try:
+        data = json.loads(body)
+        store = _get_store()
+        store.add_entry(data)
+        h.send_json({'success': True})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_delete_entry(h, path, body):
+    """POST /api/logic-tracking/entries/delete"""
+    try:
+        data = json.loads(body)
+        eid = data.get('id', '')
+        if not eid:
+            h.send_json({'success': False, 'error': '缺少id'})
+            return
+        store = _get_store()
+        store.delete_entry(eid)
+        h.send_json({'success': True})
+    except ValueError as e:
+        h.send_json({'success': False, 'error': str(e)})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════
+# Forecast handlers
+# ═══════════════════════════════════════════════════
+
+def _handle_list_forecasts(h, path):
+    """GET /api/logic-tracking/forecasts?upcoming=30"""
+    qs = parse_qs(urlparse(path).query)
+    upcoming = qs.get('upcoming', [None])[0]
+    store = _get_store()
+    if upcoming:
+        try:
+            days = int(upcoming)
+            h.send_json({'forecasts': store.get_forecasts(upcoming_days=days)})
+            return
+        except ValueError:
+            pass
+    h.send_json({'forecasts': store.get_forecasts()})
+
+
+def _handle_add_forecast(h, path, body):
+    """POST /api/logic-tracking/forecasts/add"""
+    try:
+        data = json.loads(body)
+        store = _get_store()
+        store.add_forecast(data)
+        h.send_json({'success': True})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_delete_forecast(h, path, body):
+    """POST /api/logic-tracking/forecasts/delete"""
+    try:
+        data = json.loads(body)
+        fid = data.get('id', '')
+        if not fid:
+            h.send_json({'success': False, 'error': '缺少id'})
+            return
+        store = _get_store()
+        store.delete_forecast(fid)
+        h.send_json({'success': True})
+    except ValueError as e:
+        h.send_json({'success': False, 'error': str(e)})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════
+# Feed handlers
+# ═══════════════════════════════════════════════════
+
+def _handle_feed_process(h, path, body):
+    """POST /api/logic-tracking/feed/process
+
+    投喂链接，返回预览数据（含推荐标签+核心逻辑）
+    """
+    try:
+        data = json.loads(body)
+        url = data.get('url', '')
+        if not url:
+            h.send_json({'error': '缺少url参数'})
+            return
+        source_type = data.get('source_type', 'wechat')
+        source_subtype = data.get('source_subtype', '')
+        result = process_feed(url, source_type=source_type, source_subtype=source_subtype)
+        h.send_json(result)
+    except Exception as e:
+        h.send_json({'error': str(e)})
+
+
+def _handle_feed_save(h, path, body):
+    """POST /api/logic-tracking/feed/save
+
+    确认保存投喂条目，保存后自动触发走势验证
+    """
+    try:
+        data = json.loads(body)
+        result = save_feed(data)
+        if result.get('success'):
+            # 自动触发走势验证
+            try:
+                verify_unverified_entries()
+            except Exception:
+                pass
+        h.send_json(result)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════
+# Tag detail + verify
+# ═══════════════════════════════════════════════════
+
+def _handle_tag_detail(h, path):
+    """GET /api/logic-tracking/tags/detail?id=xxx
+
+    返回标签详情 + 关联条目 + 验证统计
+    """
+    qs = parse_qs(urlparse(path).query)
+    tag_id = qs.get('id', [None])[0]
+    if not tag_id:
+        h.send_json({'error': '缺少id参数'})
+        return
+
+    store = _get_store()
+    tag = store.get_tag(tag_id)
+    if tag is None:
+        h.send_json({'error': '标签不存在'})
+        return
+
+    entries = store.get_entries(tag_id=tag_id)
+    # 按时间降序
+    entries.sort(key=lambda e: e.get('fed_at', ''), reverse=True)
+
+    # 统计验证结果
+    verified = [e for e in entries if e.get('verify', {}).get('verified_at')]
+    confirmed = sum(1 for e in verified if e['verify'].get('score') == 'confirmed')
+    diverged = sum(1 for e in verified if e['verify'].get('score') == 'diverged')
+
+    # 走势数据
+    returns = [e['verify'].get('5d_return', 0) for e in verified if e['verify'].get('5d_return')]
+    avg_return = round(sum(returns) / len(returns), 2) if returns else 0
+
+    h.send_json({
+        'tag': tag,
+        'entries': entries,
+        'stats': {
+            'total_entries': len(entries),
+            'verified': len(verified),
+            'confirmed': confirmed,
+            'diverged': diverged,
+            'avg_5d_return': avg_return,
+            'verify_rate': tag.get('verify_rate', 0),
+        },
+    })
+
+
+def _handle_trigger_verify(h, path):
+    """POST /api/logic-tracking/verify/run
+
+    手动触发对所有未验证条目的走势验证
+    """
+    try:
+        count = verify_unverified_entries()
+        h.send_json({'success': True, 'verified': count})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════
+# P1: Suggestions / Pool / Alarms
+# ═══════════════════════════════════════════════════
+
+def _handle_tier_suggestions(h, path):
+    """GET /api/logic-tracking/suggestions"""
+    try:
+        result = compute_tier_suggestions()
+        h.send_json({'suggestions': result})
+    except Exception as e:
+        h.send_json({'suggestions': [], 'error': str(e)})
+
+
+def _handle_top_pool(h, path):
+    """GET /api/logic-tracking/pool"""
+    try:
+        result = generate_top_pool()
+        h.send_json({'pool': result})
+    except Exception as e:
+        h.send_json({'pool': [], 'error': str(e)})
+
+
+def _handle_alarms(h, path):
+    """POST /api/logic-tracking/alarms/check"""
+    try:
+        result = push_focused_alarms()
+        h.send_json({'alarms': result})
+    except Exception as e:
+        h.send_json({'alarms': [], 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════
+# Route registration
+# ═══════════════════════════════════════════════════
+
+def register_routes(routes):
+    routes.exact('/api/logic-tracking/tags', func=_handle_list_tags)
+    routes.exact('/api/logic-tracking/tags/get', func=_handle_get_tag)
+    routes.exact('/api/logic-tracking/entries', func=_handle_list_entries)
+    routes.exact('/api/logic-tracking/forecasts', func=_handle_list_forecasts)
+    routes.exact('/api/logic-tracking/tags/detail', func=_handle_tag_detail)
+    routes.exact('/api/logic-tracking/suggestions', func=_handle_tier_suggestions)
+    routes.exact('/api/logic-tracking/pool', func=_handle_top_pool)
+    return routes

@@ -1,15 +1,43 @@
 # 3L 交易系统 — Docker .dockerignore
-# 排除不需要复制到 Docker 镜像的文件
+# 排除不需要复制到镜像的文件
 
+# Git
 .git
 .gitignore
+.github/
+
+# Python 环境
 .venv
 .venv.bak
 __pycache__
 *.pyc
+*.pyo
+
+# 环境配置（运行时通过 -e 传入）
 .env
-logs/
-data/
+.env.*
+
+# 构建输出（运行时不需要）
 node_modules/
+frontend/node_modules/
+frontend/src/
+frontend/tsconfig.json
+frontend/tsconfig.node.json
+frontend/vite.config.ts
+frontend/package.json
+frontend/package-lock.json
+frontend/css/
+
+# 运行时数据（通过 -v 挂载）
+data/
+private/
+logs/
+
+# 其他
+.hermes/
+.pytest_cache/
+test_snapshots/
+__pycache__/
 .DS_Store
-*.md
+server.pid
+*.log
