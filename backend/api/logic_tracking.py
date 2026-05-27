@@ -204,7 +204,7 @@ def _handle_delete_forecast(h, path, body):
 def _handle_feed_process(h, path, body):
     """POST /api/logic-tracking/feed/process
 
-    投喂链接，返回预览数据（含推荐标签）
+    投喂链接，返回预览数据（含推荐标签+核心逻辑）
     """
     try:
         data = json.loads(body)
@@ -212,7 +212,9 @@ def _handle_feed_process(h, path, body):
         if not url:
             h.send_json({'error': '缺少url参数'})
             return
-        result = process_feed(url)
+        source_type = data.get('source_type', 'wechat')
+        source_subtype = data.get('source_subtype', '')
+        result = process_feed(url, source_type=source_type, source_subtype=source_subtype)
         h.send_json(result)
     except Exception as e:
         h.send_json({'error': str(e)})

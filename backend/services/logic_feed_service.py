@@ -132,6 +132,81 @@ def llm_summarize(text, title=''):
     return _call_llm(prompt)
 
 
+def llm_extract_core_logic(text, title, existing_tags):
+    """LLM提取核心逻辑（独立于摘要）
+
+    Returns: str or None (LLM不可用时返回None)
+    """
+    tags_desc = '\n'.join([
+        f"- {t['name']} (行业: {','.join(t.get('related_industries', []))})"
+        for t in existing_tags[:5]
+    ]) if existing_tags else '暂无已有逻辑标签'
+
+    prompt = f"""以下是一篇与股市投资相关的文章，请提取它的「核心逻辑」——即文章最核心的投资逻辑、驱动因素或主线观点。
+
+格式要求：
+- 用1-2句话概括核心逻辑
+- 指出驱动的行业/板块
+- **列出文中提到的所有受益公司及A股代码**（包括龙头标的、产业链相关公司、可能受益的方向。即使只是行业泛指，也尽量列出合理的对标公司）
+
+要求：**尽量全面地提取所有相关公司，不要遗漏。**
+
+标题：{title[:200]}
+内容：{text[:2000]}
+
+已有逻辑标签参考：
+{tags_desc}
+
+核心逻辑："""
+    return _call_llm(prompt, max_tokens=512)
+
+
+def llm_suggest_new_tags(text, title):
+    """LLM从文章提取候选新逻辑标签（当无已有标签时）
+
+    Returns: [{id, name, description, industries, related_stocks}, ...] or None
+    """
+    prompt = f"""以下是一篇与股市投资相关的文章。请从文章中提取可能的「投资逻辑」——即事件驱动→影响的逻辑链。
+
+每个逻辑应遵循「事件 → 驱动方向 → 受益环节」的格式。
+
+返回JSON数组，每项包含：
+- id: 简短英文ID（如 tag-huawei-advanced-pkg）
+- name: 逻辑名称（事件+驱动方向，如"华为τ定律→先进封装升级"）
+- description: 展开说明逻辑链条和影响
+- industries: 关联行业数组
+- related_stocks: 个股列表，每项为 {{"code": "600584", "name": "长电科技"}} 格式。提取文章中提到或合理推断的受益A股，**尽量提取所有相关个股并补上中文名称**；未找到则填[]
+
+要求：
+- 提取2-4个最核心的逻辑
+- 逻辑名称要有因果关系，不要只是行业名称
+- **尽量提取所有相关的个股**，包括文中直接提到的和产业链中与之关联的龙头公司，**必须同时附上股票代码和中文名称**
+- 只返回JSON数组，不要其他文字
+
+文章标题：{title[:200]}
+文章内容：{text[:2000]}
+
+JSON："""
+
+    result = _call_llm(prompt, max_tokens=1024)
+    if not result:
+        return None
+
+    try:
+        parsed = json.loads(result)
+        if isinstance(parsed, list):
+            return parsed
+        return None
+    except json.JSONDecodeError:
+        arr_match = re.search(r'\[.*?\]', result, re.DOTALL)
+        if arr_match:
+            try:
+                return json.loads(arr_match.group())
+            except json.JSONDecodeError:
+                pass
+        return None
+
+
 def llm_suggest_tags(text, title, existing_tags):
     """LLM推荐匹配的逻辑标签
 
@@ -233,15 +308,23 @@ def match_tags(text, title, existing_tags):
 # 投喂处理
 # ═══════════════════════════════════════════════════
 
-def process_feed(url):
-    """处理URL投喂：抓取→提取→打标签→返回预览
+def process_feed(url, source_type='wechat', source_subtype=''):
+    """处理URL投喂：抓取→提取→打标签→提取核心逻辑→返回预览
 
-    Returns: 预览数据，包含提取结果+推荐标签
+    Args:
+        url: 文章链接
+        source_type: 'wechat' | 'report' | 'douyin'
+        source_subtype: 公众号子类型 'industry' | 'review' | 'other'
+
+    Returns: 预览数据，包含提取结果+推荐标签+核心逻辑
     """
     # 1. 提取内容
     content = extract_url_content(url)
     if 'error' in content:
         return content
+
+    store = _get_store()
+    tags = store.get_tags()
 
     # 2. 尝试LLM摘要
     summary = content['text'][:500]  # 保底摘录
@@ -250,16 +333,28 @@ def process_feed(url):
         summary = llm_summary
 
     # 3. 打标签
-    store = _get_store()
-    tags = store.get_tags()
     tag_result = match_tags(content['text'], content['title'], tags)
+
+    # 4. 提取核心逻辑
+    core_logic = llm_extract_core_logic(content['text'], content['title'], tags)
+
+    # 5. 如果无已有标签或匹配结果为空，尝试从文章提取候选新标签
+    suggested_new_tags = []
+    if not tags or not tag_result['tags']:
+        new_tags = llm_suggest_new_tags(content['text'], content['title'])
+        if new_tags:
+            suggested_new_tags = new_tags
 
     return {
         'title': content['title'],
         'summary': summary,
+        'core_logic': core_logic or '',
         'source_name': content['source_name'],
+        'source_type': source_type,
+        'source_subtype': source_subtype,
         'url': content['url'],
         'recommended_tags': tag_result['tags'],
+        'suggested_new_tags': suggested_new_tags,
         'llm_used': tag_result['llm_used'],
     }
 
@@ -269,7 +364,7 @@ def save_feed(data):
 
     Args:
         data: {
-            title, summary, source_name, url,
+            title, summary, core_logic, source_name, source_type, source_subtype, url,
             logic_tags: [tag_id, ...],
             industries: [str, ...],
             companies: [code, ...],
@@ -278,17 +373,27 @@ def save_feed(data):
     Returns: {'success': True} or {'error': str}
     """
     store = _get_store()
-    entry_id = 'feed-' + hashlib.md5(data.get('url', str(datetime.now())).encode()).hexdigest()[:12]
+    url = data.get('url', '')
+    if url:
+        # 去重：检查相同URL是否已存在
+        existing = store.get_entries()
+        for e in existing:
+            if e.get('url') == url:
+                return {'success': False, 'error': '该链接已投喂过了', 'duplicate': True}
+    entry_id = 'feed-' + hashlib.md5(url.encode()).hexdigest()[:12]
 
     entry = {
         'id': entry_id,
-        'source_type': 'link',
+        'source_type': data.get('source_type', 'link'),
+        'source_subtype': data.get('source_subtype', ''),
         'source_name': data.get('source_name', ''),
         'title': data.get('title', ''),
         'summary': data.get('summary', ''),
+        'core_logic': data.get('core_logic', ''),
         'url': data.get('url', ''),
         'industries': data.get('industries', []),
-        'companies': [],
+        'companies': data.get('companies', []),
+        'extracted_logics': data.get('extracted_logics', []),
         'logic_tags': data.get('logic_tags', []),
         'fed_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
         'verify': {
@@ -299,4 +404,4 @@ def save_feed(data):
         },
     }
     store.add_entry(entry)
-    return {'success': True}
+    return {'success': True, 'entry': entry}

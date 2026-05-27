@@ -60,12 +60,14 @@ export default function LogicTracking() {
   })
   const [search, setSearch] = useState('')
   const navigate = useNavigate()
-  const [showFeed, setShowFeed] = useState(false)
   const [feedUrl, setFeedUrl] = useState('')
   const [feedLoading, setFeedLoading] = useState(false)
   const [feedResult, setFeedResult] = useState<any>(null)
   const [feedSelected, setFeedSelected] = useState<string[]>([])
   const [feedError, setFeedError] = useState('')
+  const [feedTab, setFeedTab] = useState('wechat') // wechat | report | douyin
+  const [wechatSubtype, setWechatSubtype] = useState('industry') // industry | review | other
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
 
   // Forecast state
   const [showForecast, setShowForecast] = useState(false)
@@ -73,7 +75,25 @@ export default function LogicTracking() {
   const [fcForm, setFcForm] = useState({ title: '', event_date: '', prediction: '', logic_tags: '' })
   const [fcTab, setFcTab] = useState('list') // list | add
 
-  useEffect(() => { fetchTags() }, [])
+  // Entries state
+  const [entries, setEntries] = useState<any[]>([])
+  const [entriesLoading, setEntriesLoading] = useState(false)
+  const [selectedNode, setSelectedNode] = useState<string | null>(null)
+
+  useEffect(() => { fetchTags(); fetchEntries() }, [])
+
+  const fetchEntries = async () => {
+    setEntriesLoading(true)
+    try {
+      const r = await fetch('/api/logic-tracking/entries')
+      const d = await r.json()
+      setEntries(d.entries || [])
+    } catch (e) {
+      console.error('加载条目失败:', e)
+    } finally {
+      setEntriesLoading(false)
+    }
+  }
 
   const fetchTags = async () => {
     try {
@@ -162,6 +182,20 @@ export default function LogicTracking() {
     }
   }
 
+  const handleDeleteEntry = async (entryId: string) => {
+    if (!confirm('确定删除这条投喂记录？')) return
+    try {
+      const r = await fetch('/api/logic-tracking/entries/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: entryId }),
+      })
+      const data = await r.json()
+      if (data.success) fetchEntries()
+    } catch (e) {
+      console.error('删除失败:', e)
+    }
+  }
+
   const openForecast = async () => {
     setFcTab('list')
     setFcForm({ title: '', event_date: '', prediction: '', logic_tags: '' })
@@ -214,15 +248,7 @@ export default function LogicTracking() {
     } catch {}
   }
 
-  const openFeed = () => {
-    setFeedUrl('')
-    setFeedResult(null)
-    setFeedSelected([])
-    setFeedError('')
-    setShowFeed(true)
-  }
-
-  const handleFeedProcess = async () => {
+const handleFeedProcess = async () => {
     if (!feedUrl.trim()) { setFeedError('请输入链接'); return }
     setFeedLoading(true)
     setFeedError('')
@@ -230,7 +256,11 @@ export default function LogicTracking() {
     try {
       const r = await fetch('/api/logic-tracking/feed/process', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: feedUrl.trim() }),
+        body: JSON.stringify({
+          url: feedUrl.trim(),
+          source_type: feedTab,
+          source_subtype: feedTab === 'wechat' ? wechatSubtype : '',
+        }),
       })
       const data = await r.json()
       if (data.error) { setFeedError(data.error); return }
@@ -247,22 +277,53 @@ export default function LogicTracking() {
 
   const handleFeedSave = async () => {
     if (!feedResult) return
+    // Extract industries and companies from suggested_new_tags
+    const allIndustries: string[] = []
+    const allCompanies: {code:string,name:string}[] = []
+    const allLogics: string[] = []
+    if (feedResult.suggested_new_tags) {
+      for (const st of feedResult.suggested_new_tags) {
+        if (st.name) allLogics.push(st.name)
+        if (st.industries) {
+          for (const ind of st.industries) {
+            if (!allIndustries.includes(ind)) allIndustries.push(ind)
+          }
+        }
+        if (st.related_stocks) {
+          for (const s of st.related_stocks) {
+            const code = typeof s === 'string' ? s : s.code
+            const name = typeof s === 'string' ? '' : s.name || ''
+            if (!allCompanies.find(c => c.code === code)) {
+              allCompanies.push({code, name})
+            }
+          }
+        }
+      }
+    }
     try {
       const r = await fetch('/api/logic-tracking/feed/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: feedResult.title,
           summary: feedResult.summary,
+          core_logic: feedResult.core_logic || '',
           source_name: feedResult.source_name,
+          source_type: feedTab,
+          source_subtype: feedTab === 'wechat' ? wechatSubtype : '',
           url: feedResult.url,
           logic_tags: feedSelected,
-          industries: feedResult.recommended_tags?.map((t: any) => t.tag_name) || [],
+          industries: allIndustries,
+          companies: allCompanies,
+          extracted_logics: allLogics,
         }),
       })
       const data = await r.json()
       if (data.success) {
-        setShowFeed(false)
+        setFeedResult(null)
+        setFeedUrl('')
+        setFeedError('')
         fetchTags()
+        fetchEntries()
       } else {
         setFeedError(data.error || '保存失败')
       }
@@ -357,15 +418,429 @@ export default function LogicTracking() {
             <button className="action-btn" onClick={openNew} style={{ fontSize: 12 }}>
               + 新建逻辑
             </button>
-            <button className="action-btn" onClick={openFeed} style={{ fontSize: 12 }}>
-              📤 投喂
-            </button>
             <button className="action-btn" onClick={openForecast} style={{ fontSize: 12 }}>
               📅 事件日历
             </button>
           </div>
         </div>
       </div>
+
+      {/* ── Feed Section ── */}
+      <div className="section" style={{ marginTop: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <h2 style={{ margin: 0, color: '#eee', fontSize: 16 }}>📤 投喂资料</h2>
+        </div>
+
+        {/* Single input bar */}
+        {!feedResult && (
+          <div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ flex: 1, position: 'relative' }}>
+                <input
+                  value={feedUrl}
+                  onChange={e => setFeedUrl(e.target.value)}
+                  placeholder="粘贴链接或上传文件..."
+                  style={{ width: '100%', padding: '6px 8px', background: '#1a1a2e', border: '1px solid #333', color: '#eee', borderRadius: 4, fontSize: 13 }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && feedUrl.trim()) {
+                      // Auto-detect from URL
+                      const url = feedUrl.trim()
+                      if (url.includes('mp.weixin.qq.com')) {
+                        setFeedTab('wechat')
+                      } else if (url.includes('douyin.com')) {
+                        setFeedTab('douyin')
+                      } else if (url.endsWith('.pdf')) {
+                        setFeedTab('report')
+                      }
+                      handleFeedProcess()
+                    }
+                  }}
+                />
+                {/* Auto-detect badge */}
+                {feedUrl.includes('mp.weixin.qq.com') && (
+                  <span style={{ position: 'absolute', right: 6, top: 5, fontSize: 10, padding: '1px 6px', borderRadius: 3, background: '#4ecdc422', color: '#4ecdc4' }}>
+                    📱 公众号
+                  </span>
+                )}
+                {feedUrl.includes('douyin.com') && (
+                  <span style={{ position: 'absolute', right: 6, top: 5, fontSize: 10, padding: '1px 6px', borderRadius: 3, background: '#f59e0b22', color: '#f59e0b' }}>
+                    🎬 抖音
+                  </span>
+                )}
+                {feedUrl.endsWith('.pdf') && (
+                  <span style={{ position: 'absolute', right: 6, top: 5, fontSize: 10, padding: '1px 6px', borderRadius: 3, background: '#e9456022', color: '#e94560' }}>
+                    📄 研报
+                  </span>
+                )}
+              </div>
+              <button className="action-btn" onClick={() => document.getElementById('pdf-upload-inline')?.click()}
+                style={{ fontSize: 11, background: '#1a1a2e', color: '#888', border: '1px solid #333', padding: '5px 10px' }}>
+                📎
+              </button>
+              <input type="file" accept=".pdf" onChange={e => {
+                const f = e.target.files?.[0]
+                if (f) { setPdfFile(f); setFeedTab('report') }
+              }} style={{ display: 'none' }} id="pdf-upload-inline" />
+            </div>
+            {feedError && <div style={{ color: '#e94560', fontSize: 11, marginTop: 6 }}>{feedError}</div>}
+          </div>
+        )}
+
+        {/* Loading */}
+        {feedLoading && (
+          <div style={{ textAlign: 'center', color: '#666', fontSize: 12, padding: 12 }}>
+            处理中...
+          </div>
+        )}
+
+        {/* RESULT: after processing */}
+        {feedResult && (
+          <div className="info-card" style={{ padding: 10, marginTop: 4 }}>
+            {/* Source badges */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: '#1a1a2e', color: '#4ecdc4', border: '1px solid #4ecdc444' }}>
+                {feedTab === 'wechat' ? '📱 公众号' : feedTab === 'report' ? '📄 研报' : '🎬 抖音'}
+              </span>
+              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: '#1a1a2e', color: '#f59e0b' }}>
+                {feedResult.source_name}
+              </span>
+              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: '#1a1a2e', color: '#aaa' }}>
+                {feedResult.llm_used ? '🤖 AI辅助' : '🔍 关键词'}
+              </span>
+            </div>
+
+            {/* Title */}
+            <div style={{ color: '#eee', fontSize: 14, fontWeight: 'bold', marginBottom: 8, lineHeight: 1.3 }}>
+              {feedResult.title || '-'}
+            </div>
+
+            {/* Summary + Core Logic + Tags in compact layout */}
+            <div className="info-card" style={{ padding: 8, marginBottom: 6, borderLeft: '3px solid #4ecdc4' }}>
+              <div style={{ color: '#4ecdc4', fontSize: 10, marginBottom: 3 }}>📝 摘要</div>
+              <div style={{ color: '#ccc', fontSize: 11, lineHeight: 1.4 }}>{feedResult.summary || '-'}</div>
+            </div>
+
+            <div className="info-card" style={{ padding: 8, marginBottom: 6, borderLeft: '3px solid #e94560' }}>
+              <div style={{ color: '#e94560', fontSize: 10, marginBottom: 3 }}>🎯 核心逻辑</div>
+              <div style={{ color: '#eee', fontSize: 11, lineHeight: 1.4 }}>{feedResult.core_logic || '（未提取到核心逻辑）'}</div>
+            </div>
+
+            {/* Tags */}
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ color: '#888', fontSize: 10, display: 'block', marginBottom: 3 }}>匹配标签（可修改）</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {tags.map(t => {
+                  const isSelected = feedSelected.includes(t.id)
+                  const recommended = feedResult.recommended_tags?.find((r: any) => r.tag_id === t.id)
+                  return (
+                    <label key={t.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 3,
+                      padding: '2px 6px', borderRadius: 3, fontSize: 11, cursor: 'pointer',
+                      background: isSelected ? '#4ecdc422' : '#1a1a2e',
+                      border: isSelected ? '1px solid #4ecdc4' : '1px solid #333',
+                      color: isSelected ? '#4ecdc4' : '#888',
+                    }}>
+                      <input type="checkbox" checked={isSelected}
+                        onChange={() => setFeedSelected(prev =>
+                          prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                        )} style={{ accentColor: '#4ecdc4', width: 11, height: 11 }} />
+                      {t.name}
+                      {recommended && <span style={{ color: '#aaa', fontSize: 9 }}>({recommended.confidence}分)</span>}
+                    </label>
+                  )
+                })}
+                {tags.length === 0 && <div style={{ color: '#666', fontSize: 11 }}>暂无标签，先创建逻辑标签</div>}
+              </div>
+            </div>
+
+            {/* Suggested New Tags */}
+            {feedResult.suggested_new_tags && feedResult.suggested_new_tags.length > 0 && (
+              <div className="info-card" style={{ padding: 8, marginBottom: 8, borderLeft: '3px solid #f59e0b' }}>
+                <div style={{ color: '#f59e0b', fontSize: 10, marginBottom: 4 }}>💡 建议新建逻辑</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {feedResult.suggested_new_tags.map((st: any, i: number) => (
+                    <div key={i} style={{ padding: '4px 8px', borderRadius: 3, fontSize: 11, background: '#1a1a2e', color: '#f59e0b', border: '1px solid #f59e0b44' }}>
+                      <div style={{ fontWeight: 'bold' }}>🏷️ {st.name}</div>
+                      <div style={{ color: '#aaa', fontSize: 10, marginTop: 2 }}>{st.description}</div>
+                      {st.industries && st.industries.length > 0 && (
+                        <div style={{ color: '#888', fontSize: 9, marginTop: 2 }}>行业: {st.industries.join('、')}</div>
+                      )}
+                      {st.related_stocks && st.related_stocks.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginTop: 2 }}>
+                          {st.related_stocks.map((s: any, j: number) => {
+                            const code = typeof s === 'string' ? s : s.code
+                            const name = typeof s === 'string' ? '' : s.name || ''
+                            return (
+                              <span key={j} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 2, background: '#4ecdc422', color: '#4ecdc4' }}>
+                                📈 {name && `${name}(${code})`}{!name && code}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>
+                  可在「+ 新建逻辑」中创建这些标签
+                </div>
+              </div>
+            )}
+
+            {feedError && <div style={{ color: '#e94560', fontSize: 11, marginBottom: 6 }}>{feedError}</div>}
+
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+              <button className="action-btn" onClick={() => { setFeedResult(null); setFeedUrl(''); setFeedError(''); }}
+                style={{ fontSize: 11, padding: '3px 10px', color: '#888' }}>
+                取消
+              </button>
+              <button className="action-btn" onClick={handleFeedSave}
+                style={{ fontSize: 11, padding: '3px 10px', background: '#4ecdc4', color: '#111' }}>
+                确认保存
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Logic Graph Visualization ── */}
+      {!feedLoading && !feedResult && entries.length > 0 && (
+        (() => {
+          // ── Graph data ──
+          interface GraphNode { id: string; type: 'logic' | 'industry' | 'stock' | 'entry'; label: string; }
+          interface GraphEdge { source: string; target: string; }
+
+          const nodeMap = new Map<string, GraphNode>()
+          const edgeSet = new Set<string>() // "source->target"
+
+          const addNode = (id: string, type: GraphNode['type'], label: string) => {
+            if (!nodeMap.has(id)) nodeMap.set(id, { id, type, label })
+          }
+          const addEdge = (s: string, t: string) => {
+            const key = s < t ? `${s}->${t}` : `${t}->${s}`
+            edgeSet.add(key)
+          }
+
+          for (const e of entries) {
+            const eId = `entry:${e.id}`
+            addNode(eId, 'entry', e.title || 'Untitled')
+            const inds: string[] = e.industries || []
+            const logics: string[] = e.extracted_logics || []
+            const stocks: { code: string; name: string }[] = e.companies || []
+
+            for (const ind of inds) {
+              const nId = `industry:${ind}`
+              addNode(nId, 'industry', ind)
+              addEdge(eId, nId)
+            }
+            for (const l of logics) {
+              const nId = `logic:${l}`
+              addNode(nId, 'logic', l)
+              addEdge(eId, nId)
+            }
+            for (const s of stocks) {
+              const code = typeof s === 'string' ? s : s.code
+              const name = typeof s === 'string' ? '' : s.name || ''
+              const nId = `stock:${code}`
+              const label = name ? `${name}(${code})` : code
+              addNode(nId, 'stock', label)
+              addEdge(eId, nId)
+              // Logic ↔ Stock
+              for (const l of logics) {
+                addEdge(`logic:${l}`, nId)
+              }
+              // Industry ↔ Stock
+              for (const ind of inds) {
+                addEdge(`industry:${ind}`, nId)
+              }
+            }
+            // Logic ↔ Industry
+            for (const l of logics) {
+              for (const ind of inds) {
+                addEdge(`logic:${l}`, `industry:${ind}`)
+              }
+            }
+          }
+
+          const nodes = Array.from(nodeMap.values())
+          const edges = Array.from(edgeSet).map(k => {
+            const [a, b] = k.split('->')
+            return { source: a, target: b } as GraphEdge
+          })
+
+          // ── Position calculation ──
+          const COL_W = 320
+          const ROW_H = 90
+          const ENTRY_Y_OFFSET = 60
+
+          const logicNodes = nodes.filter(n => n.type === 'logic')
+          const industryNodes = nodes.filter(n => n.type === 'industry')
+          const stockNodes = nodes.filter(n => n.type === 'stock')
+          const entryNodes = nodes.filter(n => n.type === 'entry')
+
+          const positions: Record<string, { x: number; y: number }> = {}
+
+          const maxRows = Math.max(logicNodes.length, industryNodes.length, stockNodes.length)
+          const entryStartY = maxRows * ROW_H + 120 + ENTRY_Y_OFFSET
+
+          industryNodes.forEach((n, i) => { positions[n.id] = { x: 0, y: i * ROW_H + 20 } })
+          logicNodes.forEach((n, i) => { positions[n.id] = { x: COL_W, y: i * ROW_H + 20 } })
+          stockNodes.forEach((n, i) => { positions[n.id] = { x: COL_W * 2, y: i * ROW_H + 20 } })
+          entryNodes.forEach((n, i) => { positions[n.id] = { x: COL_W, y: entryStartY + i * ROW_H } })
+
+          // ── Node dimensions for edge endpoint calcs ──
+          const nodeWidth: Record<string, number> = {}
+          nodes.forEach(n => {
+            if (n.type === 'entry') nodeWidth[n.id] = 280
+            else if (n.type === 'logic') nodeWidth[n.id] = 280
+            else if (n.type === 'industry') nodeWidth[n.id] = 200
+            else nodeWidth[n.id] = 220
+          })
+          const nodeHeight = 28
+
+          // ── Selection state ──
+
+          const getConnectedNodeIds = (nodeId: string): Set<string> => {
+            const connected = new Set<string>([nodeId])
+            for (const edge of edges) {
+              if (edge.source === nodeId) connected.add(edge.target)
+              if (edge.target === nodeId) connected.add(edge.source)
+            }
+            return connected
+          }
+
+          const isConnected = (nodeId: string, selectedId: string): boolean => {
+            if (nodeId === selectedId) return true
+            for (const edge of edges) {
+              if ((edge.source === nodeId && edge.target === selectedId) ||
+                  (edge.target === nodeId && edge.source === selectedId)) return true
+            }
+            return false
+          }
+
+          const graphWidth = COL_W * 2 + 280
+          const graphHeight = entryStartY + entryNodes.length * ROW_H + 60
+
+          return (
+            <div style={{ marginTop: 4, background: '#0d0d1a', borderRadius: 8, padding: 8, overflow: 'auto', maxHeight: 'calc(100vh - 280px)' }}>
+              <div style={{ position: 'relative', width: graphWidth, height: graphHeight, minWidth: graphWidth, minHeight: graphHeight }}>
+                {/* SVG layer for edges */}
+                <svg width={graphWidth} height={graphHeight} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 0 }}>
+                  {edges.map((edge, idx) => {
+                    const sp = positions[edge.source]
+                    const tp = positions[edge.target]
+                    if (!sp || !tp) return null
+                    const sw = nodeWidth[edge.source] || 200
+                    const tw = nodeWidth[edge.target] || 200
+                    const x1 = sp.x + sw / 2
+                    const y1 = sp.y + nodeHeight / 2
+                    const x2 = tp.x + tw / 2
+                    const y2 = tp.y + nodeHeight / 2
+
+                    let dimmed = false
+                    if (selectedNode !== null) {
+                      const srcConnected = isConnected(edge.source, selectedNode)
+                      const tgtConnected = isConnected(edge.target, selectedNode)
+                      dimmed = !(srcConnected && tgtConnected)
+                    }
+
+                    return (
+                      <line
+                        key={idx}
+                        x1={x1} y1={y1} x2={x2} y2={y2}
+                        stroke={dimmed ? '#ffffff11' : selectedNode ? '#ffffff66' : '#ffffff33'}
+                        strokeWidth={dimmed ? 0.5 : selectedNode ? 2 : 1}
+                      />
+                    )
+                  })}
+                </svg>
+
+                {/* Node layer */}
+                {nodes.map(n => {
+                  const pos = positions[n.id]
+                  if (!pos) return null
+                  const isSelected = selectedNode === n.id
+                  const connectedNodes = selectedNode ? getConnectedNodeIds(selectedNode) : null
+                  const isDimmed = selectedNode !== null && !connectedNodes!.has(n.id)
+
+                  let bgColor = '#888'
+                  let borderColor = '#888'
+                  if (n.type === 'logic') { bgColor = '#f59e0b22'; borderColor = '#f59e0b' }
+                  else if (n.type === 'industry') { bgColor = '#4ecdc422'; borderColor = '#4ecdc4' }
+                  else if (n.type === 'stock') { bgColor = '#4ecdc422'; borderColor = '#4ecdc4' }
+                  else { bgColor = '#444422'; borderColor = '#888' }
+
+                  const dotColor = n.type === 'logic' ? '#f59e0b' : n.type === 'entry' ? '#888' : '#4ecdc4'
+
+                  const maxLabelLen = n.type === 'entry' ? 28 : n.type === 'logic' ? 30 : 20
+                  const displayLabel = n.label.length > maxLabelLen ? n.label.slice(0, maxLabelLen) + '...' : n.label
+
+                  return (
+                    <div
+                      key={n.id}
+                      onClick={() => setSelectedNode(isSelected ? null : n.id)}
+                      style={{
+                        position: 'absolute',
+                        left: pos.x,
+                        top: pos.y,
+                        width: nodeWidth[n.id],
+                        height: nodeHeight,
+                        background: isDimmed ? '#1a1a2e44' : bgColor,
+                        border: `1px solid ${isDimmed ? '#333' : isSelected ? borderColor : borderColor + '66'}`,
+                        borderRadius: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0 6px 0 8px',
+                        cursor: 'pointer',
+                        zIndex: isSelected ? 10 : 1,
+                        opacity: isDimmed ? 0.3 : 1,
+                        transition: 'opacity 0.2s, border-color 0.2s',
+                        boxSizing: 'border-box',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        boxShadow: isSelected ? `0 0 12px ${dotColor}66` : 'none',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', flex: 1 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, color: isDimmed ? '#666' : isSelected ? '#fff' : '#ddd', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {displayLabel}
+                        </span>
+                      </div>
+                      {n.type === 'entry' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteEntry(n.id.replace('entry:', '')) }}
+                          style={{
+                            background: 'none', border: 'none', color: '#e94560', cursor: 'pointer',
+                            fontSize: 10, padding: '0 2px', flexShrink: 0, lineHeight: 1,
+                            opacity: isDimmed ? 0.3 : 0.7,
+                          }}
+                          title="删除"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {/* Column labels */}
+                {industryNodes.length > 0 && (
+                  <div style={{ position: 'absolute', left: 0, top: -2, fontSize: 10, color: '#4ecdc4', opacity: 0.6, fontWeight: 'bold' }}>🏭 行业</div>
+                )}
+                {logicNodes.length > 0 && (
+                  <div style={{ position: 'absolute', left: COL_W, top: -2, fontSize: 10, color: '#f59e0b', opacity: 0.6, fontWeight: 'bold' }}>🧠 逻辑</div>
+                )}
+                {stockNodes.length > 0 && (
+                  <div style={{ position: 'absolute', left: COL_W * 2, top: -2, fontSize: 10, color: '#4ecdc4', opacity: 0.6, fontWeight: 'bold' }}>📈 个股</div>
+                )}
+              </div>
+            </div>
+          )
+        })()
+      )}
 
       {tags.length === 0 ? (
         <div className="info-card" style={{ textAlign: 'center', padding: 30, color: '#666', marginTop: 12 }}>
@@ -481,109 +956,6 @@ export default function LogicTracking() {
           </div>
         </div>
       )}
-      {/* Feed Modal */}
-      {showFeed && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: 'rgba(0,0,0,0.7)',
-        }} onClick={() => setShowFeed(false)}>
-          <div className="info-card" style={{
-            width: 500, maxWidth: '90vw', padding: 20, maxHeight: '80vh', overflow: 'auto',
-          }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 12px', color: '#eee', fontSize: 15 }}>📤 投喂资料</h3>
-
-            {!feedResult ? (
-              <>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>文章链接</label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                      value={feedUrl}
-                      onChange={e => setFeedUrl(e.target.value)}
-                      placeholder="https://mp.weixin.qq.com/s/..."
-                      style={{ flex: 1, padding: '6px 8px', background: '#1a1a2e', border: '1px solid #333', color: '#eee', borderRadius: 4, fontSize: 13 }}
-                      onKeyDown={e => e.key === 'Enter' && handleFeedProcess()}
-                    />
-                    <button className="action-btn" onClick={handleFeedProcess} disabled={feedLoading}
-                      style={{ fontSize: 12, background: '#4ecdc4', color: '#111' }}>
-                      {feedLoading ? '处理中...' : '提取'}
-                    </button>
-                  </div>
-                </div>
-                {feedError && <div style={{ color: '#e94560', fontSize: 12, marginBottom: 8 }}>{feedError}</div>}
-              </>
-            ) : (
-              <>
-                <div style={{ color: '#4ecdc4', fontSize: 12, marginBottom: 6 }}>
-                  {feedResult.llm_used ? '🤖 AI辅助打标签' : '🔍 关键词匹配'}
-                </div>
-
-                <div style={{ marginBottom: 8 }}>
-                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>标题</label>
-                  <div style={{ color: '#eee', fontSize: 13, padding: '4px 8px', background: '#1a1a2e', borderRadius: 4 }}>
-                    {feedResult.title || '-'}
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: 8 }}>
-                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>来源</label>
-                  <div style={{ color: '#aaa', fontSize: 12 }}>{feedResult.source_name}</div>
-                </div>
-
-                <div style={{ marginBottom: 8 }}>
-                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>摘要</label>
-                  <div style={{ color: '#ccc', fontSize: 12, padding: '4px 8px', background: '#1a1a2e', borderRadius: 4, maxHeight: 120, overflow: 'auto' }}>
-                    {feedResult.summary?.slice(0, 500) || '-'}
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>
-                    匹配标签（可修改）
-                  </label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {tags.map(t => {
-                      const isSelected = feedSelected.includes(t.id)
-                      const recommended = feedResult.recommended_tags?.find((r: any) => r.tag_id === t.id)
-                      return (
-                        <label key={t.id} style={{
-                          display: 'flex', alignItems: 'center', gap: 4,
-                          padding: '3px 8px', borderRadius: 4, fontSize: 12, cursor: 'pointer',
-                          background: isSelected ? '#4ecdc422' : '#1a1a2e',
-                          border: isSelected ? '1px solid #4ecdc4' : '1px solid #333',
-                          color: isSelected ? '#4ecdc4' : '#888',
-                        }}>
-                          <input type="checkbox" checked={isSelected}
-                            onChange={() => setFeedSelected(prev =>
-                              prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
-                            )} style={{ accentColor: '#4ecdc4' }} />
-                          {t.name}
-                          {recommended && <span style={{ color: '#aaa', fontSize: 10 }}>
-                            ({recommended.confidence}分)
-                          </span>}
-                        </label>
-                      )
-                    })}
-                    {tags.length === 0 && (
-                      <div style={{ color: '#666', fontSize: 12 }}>暂无标签，请先创建逻辑标签</div>
-                    )}
-                  </div>
-                </div>
-
-                {feedError && <div style={{ color: '#e94560', fontSize: 12, marginBottom: 8 }}>{feedError}</div>}
-
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                  <button className="action-btn" onClick={() => setShowFeed(false)} style={{ fontSize: 12 }}>取消</button>
-                  <button className="action-btn" onClick={handleFeedSave}
-                    style={{ fontSize: 12, background: '#4ecdc4', color: '#111' }}>确认保存</button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Forecast Modal */}
       {showForecast && (
         <div style={{
