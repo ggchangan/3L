@@ -312,6 +312,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/logic-tracking/forecasts/delete': ('backend.api.logic_tracking', '_handle_delete_forecast'),
             '/api/logic-tracking/feed/process': ('backend.api.logic_tracking', '_handle_feed_process'),
             '/api/logic-tracking/feed/save': ('backend.api.logic_tracking', '_handle_feed_save'),
+            '/api/logic-tracking/verify/run': ('backend.api.logic_tracking', '_handle_trigger_verify'),
         }
         if self.path in post_routes:
             mod_name, func_name = post_routes[self.path]

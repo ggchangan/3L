@@ -18,6 +18,7 @@ from urllib.parse import urlparse, parse_qs
 
 from backend.core.logic_tracking_store import LogicTrackingStore
 from backend.services.logic_feed_service import process_feed, save_feed
+from backend.services.logic_verify_service import verify_unverified_entries
 
 
 _store = None
@@ -215,12 +216,78 @@ def _handle_feed_process(h, path, body):
 def _handle_feed_save(h, path, body):
     """POST /api/logic-tracking/feed/save
 
-    确认保存投喂条目
+    确认保存投喂条目，保存后自动触发走势验证
     """
     try:
         data = json.loads(body)
         result = save_feed(data)
+        if result.get('success'):
+            # 自动触发走势验证
+            try:
+                verify_unverified_entries()
+            except Exception:
+                pass
         h.send_json(result)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════
+# Tag detail + verify
+# ═══════════════════════════════════════════════════
+
+def _handle_tag_detail(h, path):
+    """GET /api/logic-tracking/tags/detail?id=xxx
+
+    返回标签详情 + 关联条目 + 验证统计
+    """
+    qs = parse_qs(urlparse(path).query)
+    tag_id = qs.get('id', [None])[0]
+    if not tag_id:
+        h.send_json({'error': '缺少id参数'})
+        return
+
+    store = _get_store()
+    tag = store.get_tag(tag_id)
+    if tag is None:
+        h.send_json({'error': '标签不存在'})
+        return
+
+    entries = store.get_entries(tag_id=tag_id)
+    # 按时间降序
+    entries.sort(key=lambda e: e.get('fed_at', ''), reverse=True)
+
+    # 统计验证结果
+    verified = [e for e in entries if e.get('verify', {}).get('verified_at')]
+    confirmed = sum(1 for e in verified if e['verify'].get('score') == 'confirmed')
+    diverged = sum(1 for e in verified if e['verify'].get('score') == 'diverged')
+
+    # 走势数据
+    returns = [e['verify'].get('5d_return', 0) for e in verified if e['verify'].get('5d_return')]
+    avg_return = round(sum(returns) / len(returns), 2) if returns else 0
+
+    h.send_json({
+        'tag': tag,
+        'entries': entries,
+        'stats': {
+            'total_entries': len(entries),
+            'verified': len(verified),
+            'confirmed': confirmed,
+            'diverged': diverged,
+            'avg_5d_return': avg_return,
+            'verify_rate': tag.get('verify_rate', 0),
+        },
+    })
+
+
+def _handle_trigger_verify(h, path):
+    """POST /api/logic-tracking/verify/run
+
+    手动触发对所有未验证条目的走势验证
+    """
+    try:
+        count = verify_unverified_entries()
+        h.send_json({'success': True, 'verified': count})
     except Exception as e:
         h.send_json({'success': False, 'error': str(e)})
 
@@ -234,4 +301,5 @@ def register_routes(routes):
     routes.exact('/api/logic-tracking/tags/get', func=_handle_get_tag)
     routes.exact('/api/logic-tracking/entries', func=_handle_list_entries)
     routes.exact('/api/logic-tracking/forecasts', func=_handle_list_forecasts)
+    routes.exact('/api/logic-tracking/tags/detail', func=_handle_tag_detail)
     return routes
