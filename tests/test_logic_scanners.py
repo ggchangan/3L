@@ -56,6 +56,17 @@ def mock_akshare_zt():
 
 
 @pytest.fixture
+def mock_high_store():
+    """mock logic_high_scanner._get_store"""
+    with patch('backend.services.logic_high_scanner._get_store') as m:
+        store = MagicMock()
+        store.get_tags.return_value = MOCK_TAGS
+        store.get_all.return_value = {'tags': MOCK_TAGS, 'entries': [], 'forecasts': []}
+        m.return_value = store
+        yield store
+
+
+@pytest.fixture
 def mock_akshare_high():
     """mock akshare.stock_rank_cxg_ths"""
     with patch('akshare.stock_rank_cxg_ths') as m:
@@ -115,7 +126,7 @@ class TestZtScanner:
 
 class TestHighScanner:
 
-    def test_scan_matches_correct_tags(self, mock_store, mock_akshare_high):
+    def test_scan_matches_correct_tags(self, mock_high_store, mock_akshare_high):
         """深南电路+中际旭创匹配AI算力"""
         from backend.services.logic_high_scanner import scan_new_highs
         result = scan_new_highs('2026-05-27')
@@ -124,7 +135,7 @@ class TestHighScanner:
         assert '300502' in matched_codes
         assert '600000' not in matched_codes
 
-    def test_scan_empty_pool(self, mock_store):
+    def test_scan_empty_pool(self, mock_high_store):
         """新高池为空时正常处理"""
         with patch('akshare.stock_rank_cxg_ths') as m:
             import pandas as pd
@@ -134,7 +145,7 @@ class TestHighScanner:
             assert result['total'] == 0
             assert result['matched'] == []
 
-    def test_scan_api_error(self, mock_store):
+    def test_scan_api_error(self, mock_high_store):
         """API错误时优雅降级"""
         with patch('akshare.stock_rank_cxg_ths', side_effect=Exception('API error')):
             from backend.services.logic_high_scanner import scan_new_highs

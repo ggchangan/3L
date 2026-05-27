@@ -57,6 +57,12 @@ export default function LogicTracking() {
     core: true,
     watch: true,
   })
+  const [showFeed, setShowFeed] = useState(false)
+  const [feedUrl, setFeedUrl] = useState('')
+  const [feedLoading, setFeedLoading] = useState(false)
+  const [feedResult, setFeedResult] = useState<any>(null)
+  const [feedSelected, setFeedSelected] = useState<string[]>([])
+  const [feedError, setFeedError] = useState('')
 
   useEffect(() => { fetchTags() }, [])
 
@@ -147,6 +153,63 @@ export default function LogicTracking() {
     }
   }
 
+  const openFeed = () => {
+    setFeedUrl('')
+    setFeedResult(null)
+    setFeedSelected([])
+    setFeedError('')
+    setShowFeed(true)
+  }
+
+  const handleFeedProcess = async () => {
+    if (!feedUrl.trim()) { setFeedError('请输入链接'); return }
+    setFeedLoading(true)
+    setFeedError('')
+    setFeedResult(null)
+    try {
+      const r = await fetch('/api/logic-tracking/feed/process', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: feedUrl.trim() }),
+      })
+      const data = await r.json()
+      if (data.error) { setFeedError(data.error); return }
+      setFeedResult(data)
+      if (data.recommended_tags) {
+        setFeedSelected(data.recommended_tags.map((t: any) => t.tag_id))
+      }
+    } catch (e: any) {
+      setFeedError('处理失败: ' + e.message)
+    } finally {
+      setFeedLoading(false)
+    }
+  }
+
+  const handleFeedSave = async () => {
+    if (!feedResult) return
+    try {
+      const r = await fetch('/api/logic-tracking/feed/save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: feedResult.title,
+          summary: feedResult.summary,
+          source_name: feedResult.source_name,
+          url: feedResult.url,
+          logic_tags: feedSelected,
+          industries: feedResult.recommended_tags?.map((t: any) => t.tag_name) || [],
+        }),
+      })
+      const data = await r.json()
+      if (data.success) {
+        setShowFeed(false)
+        fetchTags()
+      } else {
+        setFeedError(data.error || '保存失败')
+      }
+    } catch (e: any) {
+      setFeedError('保存失败: ' + e.message)
+    }
+  }
+
   const renderTagCard = (tag: LogicTag) => (
     <div key={tag.id} className="info-card" style={{ marginBottom: 8, padding: 10, position: 'relative' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -231,7 +294,7 @@ export default function LogicTracking() {
             <button className="action-btn" onClick={openNew} style={{ fontSize: 12 }}>
               + 新建逻辑
             </button>
-            <button className="action-btn" style={{ fontSize: 12 }}>
+            <button className="action-btn" onClick={openFeed} style={{ fontSize: 12 }}>
               📤 投喂
             </button>
           </div>
@@ -342,6 +405,108 @@ export default function LogicTracking() {
                 {editing ? '保存修改' : '创建'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Feed Modal */}
+      {showFeed && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.7)',
+        }} onClick={() => setShowFeed(false)}>
+          <div className="info-card" style={{
+            width: 500, maxWidth: '90vw', padding: 20, maxHeight: '80vh', overflow: 'auto',
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 12px', color: '#eee', fontSize: 15 }}>📤 投喂资料</h3>
+
+            {!feedResult ? (
+              <>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>文章链接</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      value={feedUrl}
+                      onChange={e => setFeedUrl(e.target.value)}
+                      placeholder="https://mp.weixin.qq.com/s/..."
+                      style={{ flex: 1, padding: '6px 8px', background: '#1a1a2e', border: '1px solid #333', color: '#eee', borderRadius: 4, fontSize: 13 }}
+                      onKeyDown={e => e.key === 'Enter' && handleFeedProcess()}
+                    />
+                    <button className="action-btn" onClick={handleFeedProcess} disabled={feedLoading}
+                      style={{ fontSize: 12, background: '#4ecdc4', color: '#111' }}>
+                      {feedLoading ? '处理中...' : '提取'}
+                    </button>
+                  </div>
+                </div>
+                {feedError && <div style={{ color: '#e94560', fontSize: 12, marginBottom: 8 }}>{feedError}</div>}
+              </>
+            ) : (
+              <>
+                <div style={{ color: '#4ecdc4', fontSize: 12, marginBottom: 6 }}>
+                  {feedResult.llm_used ? '🤖 AI辅助打标签' : '🔍 关键词匹配'}
+                </div>
+
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>标题</label>
+                  <div style={{ color: '#eee', fontSize: 13, padding: '4px 8px', background: '#1a1a2e', borderRadius: 4 }}>
+                    {feedResult.title || '-'}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>来源</label>
+                  <div style={{ color: '#aaa', fontSize: 12 }}>{feedResult.source_name}</div>
+                </div>
+
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>摘要</label>
+                  <div style={{ color: '#ccc', fontSize: 12, padding: '4px 8px', background: '#1a1a2e', borderRadius: 4, maxHeight: 120, overflow: 'auto' }}>
+                    {feedResult.summary?.slice(0, 500) || '-'}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ color: '#888', fontSize: 11, display: 'block', marginBottom: 3 }}>
+                    匹配标签（可修改）
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {tags.map(t => {
+                      const isSelected = feedSelected.includes(t.id)
+                      const recommended = feedResult.recommended_tags?.find((r: any) => r.tag_id === t.id)
+                      return (
+                        <label key={t.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 4,
+                          padding: '3px 8px', borderRadius: 4, fontSize: 12, cursor: 'pointer',
+                          background: isSelected ? '#4ecdc422' : '#1a1a2e',
+                          border: isSelected ? '1px solid #4ecdc4' : '1px solid #333',
+                          color: isSelected ? '#4ecdc4' : '#888',
+                        }}>
+                          <input type="checkbox" checked={isSelected}
+                            onChange={() => setFeedSelected(prev =>
+                              prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                            )} style={{ accentColor: '#4ecdc4' }} />
+                          {t.name}
+                          {recommended && <span style={{ color: '#aaa', fontSize: 10 }}>
+                            ({recommended.confidence}分)
+                          </span>}
+                        </label>
+                      )
+                    })}
+                    {tags.length === 0 && (
+                      <div style={{ color: '#666', fontSize: 12 }}>暂无标签，请先创建逻辑标签</div>
+                    )}
+                  </div>
+                </div>
+
+                {feedError && <div style={{ color: '#e94560', fontSize: 12, marginBottom: 8 }}>{feedError}</div>}
+
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="action-btn" onClick={() => setShowFeed(false)} style={{ fontSize: 12 }}>取消</button>
+                  <button className="action-btn" onClick={handleFeedSave}
+                    style={{ fontSize: 12, background: '#4ecdc4', color: '#111' }}>确认保存</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -34,12 +34,7 @@ def scan_new_highs(date_str=None):
         date_str: 日期字符串 YYYY-MM-DD，默认今天
 
     Returns:
-        {
-            'total': int,
-            'matched': [...],
-            'unmatched': [...],
-            'scan_date': str,
-        }
+        {'total': int, 'matched': [...], 'unmatched': [...], 'scan_date': str}
     """
     date_str = date_str or datetime.now().strftime('%Y-%m-%d')
     result = {
@@ -51,8 +46,6 @@ def scan_new_highs(date_str=None):
 
     try:
         import akshare as ak
-        import pandas as pd
-
         high_df = ak.stock_rank_cxg_ths()
     except Exception as e:
         result['error'] = f'新高数据拉取失败: {e}'
@@ -80,7 +73,6 @@ def scan_new_highs(date_str=None):
         name = row.get('股票简称', '')
         change_pct = float(row.get('涨跌幅', 0))
 
-        # 新高扫描没有直接的行业字段，走代码+名称匹配
         matches = matcher.match_all(code, name, '')
 
         stock_info = {
@@ -92,7 +84,6 @@ def scan_new_highs(date_str=None):
         if matches:
             stock_info['matched_tags'] = matches
             result['matched'].append(stock_info)
-
             try:
                 _record_high_verify(store, code, name, matches, date_str, change_pct)
             except Exception:
@@ -129,7 +120,6 @@ def _record_high_verify(store, code, name, matched_tags, date_str, change_pct):
     }
     store.add_entry(entry)
 
-    # 新高信号强，拉高verify_rate
     all_data = store.get_all()
     for tag in all_data.get('tags', []):
         if tag['id'] in [m['tag_id'] for m in matched_tags]:

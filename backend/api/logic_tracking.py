@@ -17,6 +17,7 @@ import json
 from urllib.parse import urlparse, parse_qs
 
 from backend.core.logic_tracking_store import LogicTrackingStore
+from backend.services.logic_feed_service import process_feed, save_feed
 
 
 _store = None
@@ -186,6 +187,40 @@ def _handle_delete_forecast(h, path, body):
         h.send_json({'success': True})
     except ValueError as e:
         h.send_json({'success': False, 'error': str(e)})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════
+# Feed handlers
+# ═══════════════════════════════════════════════════
+
+def _handle_feed_process(h, path, body):
+    """POST /api/logic-tracking/feed/process
+
+    投喂链接，返回预览数据（含推荐标签）
+    """
+    try:
+        data = json.loads(body)
+        url = data.get('url', '')
+        if not url:
+            h.send_json({'error': '缺少url参数'})
+            return
+        result = process_feed(url)
+        h.send_json(result)
+    except Exception as e:
+        h.send_json({'error': str(e)})
+
+
+def _handle_feed_save(h, path, body):
+    """POST /api/logic-tracking/feed/save
+
+    确认保存投喂条目
+    """
+    try:
+        data = json.loads(body)
+        result = save_feed(data)
+        h.send_json(result)
     except Exception as e:
         h.send_json({'success': False, 'error': str(e)})
 
