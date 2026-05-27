@@ -7,7 +7,7 @@
 
 不再通过 subprocess 调用 generate_review_data.py，改为直接 import。
 """
-import json, os, sys, shutil, subprocess, time
+import json, os, sys, shutil, subprocess
 from datetime import datetime
 from backend.config import (
     REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
@@ -542,14 +542,8 @@ def compute_review_real_time(date_str=None):
     """纯实时计算复盘数据，不读写存档、不生成文档/图表
 
     返回完整的 review dict，供 /api/review/today 实时调用。
-    带60秒缓存，避免每次全量扫描。
+    无缓存，每次重新读取本地文件实时计算。
     """
-    # 60秒缓存
-    now = time.time()
-    if (compute_review_real_time._cache.get('data') and
-        now - compute_review_real_time._cache.get('ts', 0) < 60):
-        return compute_review_real_time._cache['data']
-
     if not date_str:
         date_str = datetime.now().strftime('%Y-%m-%d')
 
@@ -674,9 +668,7 @@ def compute_review_real_time(date_str=None):
         'buy_signals_review': buy_signals_review,
     }
 
-    compute_review_real_time._cache = {'data': review, 'ts': now}
     return review
-compute_review_real_time._cache = {}
 
 
 def generate_daily_achievements_pdf(date_str):
