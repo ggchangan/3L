@@ -8,12 +8,13 @@ log = get_logger('api.market')
 
 
 def _handle_market(h, path):
-    """实时计算大盘周期数据（不读存档）"""
-    from backend.services.review_compute_service import fetch_index_klines, judge_peak_valley, fetch_market_quote
+    """实时计算大盘周期数据（读本地K线）"""
+    from backend.core.data_layer import get_index_klines
+    from backend.services.review_compute_service import judge_peak_valley, fetch_market_quote
     try:
-        index_klines = fetch_index_klines(120)
-        if not index_klines:
-            index_klines = fetch_index_klines(120)
+        index_klines = get_index_klines()
+        if isinstance(index_klines, list):
+            index_klines = [k for k in index_klines if k.get('date', '') <= '99999999']
         today_quote = fetch_market_quote()
         market_cycle = judge_peak_valley(index_klines)
         if index_klines:

@@ -37,7 +37,8 @@ export default function StockCard({ s, idx, chartPrefix = '', mode }: StockCardP
   const isBuy = s.signal === 'buy'
   const chartId = `${chartPrefix}chart_${idx}`
   const modeParam = mode ? `&mode=${mode}` : ''
-  const chartUrl = `/api/stock-chart?code=${s.code}${modeParam}&t=${Date.now()}`
+  const chartUrl = `/api/stock-chart?code=${s.code}${modeParam}`
+  const [chartEverShown, setChartEverShown] = useState(false)
 
   // 止损
   let slContent: React.ReactNode = null
@@ -136,13 +137,15 @@ export default function StockCard({ s, idx, chartPrefix = '', mode }: StockCardP
           </div>
         ) : null}
         <div className="field">
-          <span className="l" style={{ cursor: 'pointer', color: '#4ecdc4' }} onClick={() => setShowChart(v => !v)}>📊</span>
+          <span className="l" style={{ cursor: 'pointer', color: '#4ecdc4' }} onClick={() => { setChartEverShown(true); setShowChart(v => !v); }}>📊</span>
         </div>
       </div>
       <div style={{ marginTop: 2, fontSize: 11, color: conclusionColor, padding: '2px 0' }}>💡 {conclusion}</div>
-      <div id={chartId} className="chart-container" style={{ display: showChart ? 'block' : 'none', marginTop: 6 }}>
-        <object data={chartUrl} type="image/svg+xml" style={{ width: '100%', maxWidth: 700, borderRadius: 8 }} />
-      </div>
+      {(chartEverShown || showChart) && (
+        <div id={chartId} className="chart-container" style={{ display: showChart ? 'block' : 'none', marginTop: 6 }}>
+          <object data={chartUrl} type="image/svg+xml" style={{ width: '100%', maxWidth: 700, borderRadius: 8 }} />
+        </div>
+      )}
     </div>
   )
 }

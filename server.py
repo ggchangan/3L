@@ -2,7 +2,7 @@
 """
 3L Daily Achievements Web Server + Review API
 """
-import os, json, signal, sys, base64, mimetypes, urllib.parse, time
+import os, json, signal, sys, base64, mimetypes, urllib.parse, time, subprocess
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from urllib.parse import quote
@@ -26,6 +26,9 @@ PROTECTED_PREFIX = '/private/'
 FE_DIR = os.path.join(WWW_DIR, 'frontend', 'dist')
 if not os.path.isdir(FE_DIR):
     FE_DIR = WWW_DIR
+
+# SSR 服务端渲染端口
+SSR_PORT = 3001
 
 REVIEW_DATA = {}
 DATA_FILE = config.REVIEW_DATA_PATH
@@ -221,7 +224,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
-        # --- SPA 内部别名（直接返回 react.html，让 BrowserRouter 处理路由）---
+        # --- SPA 内部别名（优先 SSR，回退到 react.html）---
         spa_routes = {
             '/monitor', '/review', '/stock_analysis',
             '/holdings', '/industry', '/macro',
@@ -231,6 +234,9 @@ class Handler(SimpleHTTPRequestHandler):
             '/logic-tracking',
         }
         if path in spa_routes:
+            if self._ssr_proxy(path):
+                return
+            # SSR 不可用，回退到纯客户端
             self.path = '/react.html'
             path = self.path
 
@@ -286,6 +292,40 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_error(401)
             return False
         return True
+
+    def _serve_text(self, text, ct='text/html; charset=utf-8'):
+        data = text.encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', ct)
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        self.end_headers()
+        self.wfile.write(data)
+        self.wfile.flush()
+
+    def _ssr_proxy(self, path):
+        """代理请求到 SSR 服务（透传响应头 + 响应体）。返回 True=成功"""
+        import urllib.request
+        try:
+            req = urllib.request.Request(
+                f'http://127.0.0.1:{SSR_PORT}{path}',
+                headers={'Host': 'localhost:3001'},
+            )
+            resp = urllib.request.urlopen(req, timeout=10)
+            body = resp.read()
+
+            ct = resp.headers.get('Content-Type', 'application/octet-stream')
+            self.send_response(200)
+            self.send_header('Content-Type', ct)
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.end_headers()
+            self.wfile.write(body)
+            self.wfile.flush()
+            return True
+        except Exception as e:
+            log.warning('SSR 代理失败 (%s)，回退', e)
+            return False
 
     def do_POST(self):
         cl = int(self.headers.get('Content-Length', 0))
@@ -343,6 +383,16 @@ class Handler(SimpleHTTPRequestHandler):
     def log_error(self, fmt, *args):
         log.error('%s - %s', self.client_address[0], fmt % args)
 
+def _cleanup(ssr_proc=None):
+    if ssr_proc and ssr_proc.poll() is None:
+        ssr_proc.terminate()
+        try:
+            ssr_proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            ssr_proc.kill()
+    sys.exit(0)
+
+
 def main():
     # 支持 --host 参数（Docker 环境需要 0.0.0.0）
     import argparse
@@ -351,17 +401,46 @@ def main():
     args = parser.parse_args()
     host = args.host
 
+    # 启动 SSR Node.js 服务（后端进程）
+    ssr_cwd = os.path.join(WWW_DIR, 'frontend')
+    ssr_proc = None
+    if os.path.isdir(os.path.join(ssr_cwd, 'dist', 'ssr')):
+        log.info('启动 SSR 服务 (port %d)...', SSR_PORT)
+        try:
+            ssr_proc = subprocess.Popen(
+                ['node', 'ssr/server.mjs'],
+                cwd=ssr_cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            # 等 SSR 就绪
+            import time
+            time.sleep(2)
+            # 检查是否存活
+            if ssr_proc.poll() is not None:
+                out = ssr_proc.stdout.read(500).decode(errors='replace')
+                log.error('SSR 启动失败: %s', out)
+                ssr_proc = None
+            else:
+                log.info('SSR 服务已就绪')
+        except Exception as e:
+            log.warning('SSR 启动失败 (%s)，纯客户端运行', e)
+            ssr_proc = None
+    else:
+        log.info('SSR build 未找到（dist/ssr/ 不存在），纯客户端运行')
+
     load_review_data()
     config.cleanup_cache()  # 启动时清理过期缓存
     os.chdir(FE_DIR)
     server = ThreadingHTTPServer((host, PORT), Handler)
     log.info('服务启动 http://%s:%d', host, PORT)
-    signal.signal(signal.SIGTERM, lambda s, f: (log.info('收到SIGTERM'), sys.exit(0)))
+    signal.signal(signal.SIGTERM, lambda s, f: (log.info('收到SIGTERM'), _cleanup(ssr_proc)))
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         log.info('收到 KeyboardInterrupt，关闭服务')
         server.server_close()
+        _cleanup(ssr_proc)
 
 if __name__ == '__main__':
     main()

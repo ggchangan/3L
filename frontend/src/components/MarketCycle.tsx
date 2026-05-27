@@ -127,7 +127,7 @@ export default function MarketCycle({ date: _date, mode = 'review' }: { date?: s
       {showChart && (
         <div style={{ marginTop: 8 }}>
           <div style={{ width: '100%', maxWidth: 750, height: 550, overflow: 'hidden', borderRadius: 8, margin: '0 auto' }}>
-            <img src={`/api/index-chart?mode=${mode}&t=${Date.now()}`} alt="中证全指关键点图"
+            <img src={`/api/index-chart?mode=${mode}`} alt="中证全指关键点图"
               style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
           </div>
         </div>

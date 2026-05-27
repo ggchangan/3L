@@ -3,7 +3,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
-// 单页 React SPA 入口
 const htmlPages = ['react']
 
 export default defineConfig({
@@ -39,4 +38,11 @@ export default defineConfig({
       },
     },
   },
+  experimental: {
+    renderBuiltUrl(filename, { hostType }) {
+      if (hostType === 'html') {
+        return { url: filename, runtime: false }
+      }
+    }
+  }
 })
