@@ -6,6 +6,21 @@ import os
 from urllib.parse import urlparse, parse_qs
 
 from backend.services.workbench_service import get_log, save_log, list_logs
+from backend.config import REVIEW_DATA_PATH
+
+
+def _handle_suggestions(h, path):
+    """GET /api/workbench/suggestions — 从复盘拉取操作建议"""
+    review = {}
+    if os.path.isfile(REVIEW_DATA_PATH):
+        with open(REVIEW_DATA_PATH, 'r', encoding='utf-8') as f:
+            review = json.load(f)
+    trading_plan = review.get('trading_plan', {})
+    h.send_json({
+        'holdings_action': trading_plan.get('holdings_action', []),
+        'buy_priority': trading_plan.get('buy_priority', []),
+        'risk_items': trading_plan.get('risk_items', []),
+    })
 
 
 def _handle_get(h, path):
@@ -38,4 +53,5 @@ def register_routes(routes):
     routes.exact('/api/workbench/get', func=_handle_get)
     routes.exact('/api/workbench/list', func=_handle_list)
     routes.exact('/api/workbench/save', func=_handle_save)  # POST handled separately
+    routes.exact('/api/workbench/suggestions', func=_handle_suggestions)
     return routes

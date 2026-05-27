@@ -233,3 +233,68 @@ class TestEmptyTemplate:
         assert log['reflection']['discipline'] == ''
         assert log['reflection']['learned'] == ''
         assert log['reflection']['rating'] == ''
+        # alerts
+        assert log['alerts'] == []
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Alerts
+# ═══════════════════════════════════════════════════════════════════
+
+class TestAlerts:
+
+    def test_empty_template_has_alerts_field(self, svc):
+        """空模板包含 alerts 字段"""
+        log = svc.get_log('2026-06-01')
+        assert 'alerts' in log
+        assert log['alerts'] == []
+
+    def test_save_and_read_alerts(self, svc):
+        """保存 alerts 后能完整读回"""
+        data = dict(SAMPLE_LOG)
+        data['date'] = '2026-06-01'
+        data['alerts'] = [
+            {'type': 'price', 'stock': '雷赛智能', 'condition': '跌破22.5', 'enabled': True},
+            {'type': 'deviation', 'stock': '大盘', 'condition': '成交额低于昨日50%', 'enabled': True},
+        ]
+        svc.save_log('2026-06-01', data)
+        log = svc.get_log('2026-06-01')
+        assert len(log['alerts']) == 2
+        assert log['alerts'][0]['type'] == 'price'
+        assert log['alerts'][0]['stock'] == '雷赛智能'
+        assert log['alerts'][0]['condition'] == '跌破22.5'
+        assert log['alerts'][1]['condition'] == '成交额低于昨日50%'
+
+    def test_save_plan_with_alert(self, svc):
+        """plan 每项可带 alert 字段"""
+        data = dict(SAMPLE_LOG)
+        data['date'] = '2026-06-02'
+        data['plan']['buy'][0]['alert'] = {
+            'type': 'price', 'stock': '000001', 'condition': '跌破10', 'enabled': True
+        }
+        svc.save_log('2026-06-02', data)
+        log = svc.get_log('2026-06-02')
+        buy_alert = log['plan']['buy'][0]['alert']
+        assert buy_alert is not None
+        assert buy_alert['type'] == 'price'
+        assert buy_alert['condition'] == '跌破10'
+
+    def test_plan_alert_defaults_to_null(self, svc):
+        """未设置报警的 plan 项 alert 为 null"""
+        log = svc.get_log('2026-06-03')
+        for items in [log['plan']['buy'], log['plan']['sell'], log['plan']['watch']]:
+            for item in items:
+                assert item.get('alert') is None or item.get('alert') == ''
+
+    def test_alerts_serialized_correctly(self, svc, tmp_path):
+        """磁盘上的 JSON 文件包含 alerts 字段"""
+        data = dict(SAMPLE_LOG)
+        data['date'] = '2026-06-04'
+        data['alerts'] = [{'type': 'time', 'condition': '收盘前15分钟提醒', 'enabled': True}]
+        svc.save_log('2026-06-04', data)
+
+        fp = tmp_path / 'workbench' / '2026-06-04.json'
+        with open(fp) as f:
+            saved = __import__('json').load(f)
+        assert 'alerts' in saved
+        assert saved['alerts'][0]['type'] == 'time'
