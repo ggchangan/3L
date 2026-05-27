@@ -28,8 +28,9 @@ class TestTrendWatchlistConsistency:
     @patch('backend.core.trend_candidates._load_manual_trend')
     @patch('backend.core.trend_candidates._ensure_in_watchlist')
     @patch('backend.core.trend_candidates._set_watchlist_trading_system')
-    def test_toggle_adds_to_manual(self, mock_set, mock_ensure, mock_load):
+    def test_toggle_adds_to_manual(self, mock_set, mock_ensure, mock_load, monkeypatch, tmp_path):
         """toggle趋势股时调用 _ensure_in_watchlist（不写线上文件）"""
+        monkeypatch.setattr('backend.core.trend_candidates.MANUAL_TREND_PATH', str(tmp_path / 'manual.json'))
         mock_load.return_value = set()
         from backend.core.trend_candidates import toggle_trend_stock
         result = toggle_trend_stock('999999', True)
@@ -39,8 +40,9 @@ class TestTrendWatchlistConsistency:
     @patch('backend.core.trend_candidates._load_manual_trend')
     @patch('backend.core.trend_candidates._ensure_in_watchlist')
     @patch('backend.core.trend_candidates._set_watchlist_trading_system')
-    def test_toggle_no_duplicate_ensure(self, mock_set, mock_ensure, mock_load):
+    def test_toggle_no_duplicate_ensure(self, mock_set, mock_ensure, mock_load, monkeypatch, tmp_path):
         """toggle已在manual中的股票，不重复调用 _ensure_in_watchlist"""
+        monkeypatch.setattr('backend.core.trend_candidates.MANUAL_TREND_PATH', str(tmp_path / 'manual.json'))
         mock_load.return_value = {'002281'}
         from backend.core.trend_candidates import toggle_trend_stock
         result = toggle_trend_stock('002281', True)
@@ -51,8 +53,9 @@ class TestTrendWatchlistConsistency:
     @patch('backend.core.trend_candidates._load_manual_trend')
     @patch('backend.core.trend_candidates._ensure_in_watchlist')
     @patch('backend.core.trend_candidates._set_watchlist_trading_system')
-    def test_toggle_remove(self, mock_set, mock_ensure, mock_load):
+    def test_toggle_remove(self, mock_set, mock_ensure, mock_load, monkeypatch, tmp_path):
         """关闭趋势标志时从manual移除"""
+        monkeypatch.setattr('backend.core.trend_candidates.MANUAL_TREND_PATH', str(tmp_path / 'manual.json'))
         mock_load.return_value = {'002281'}
         from backend.core.trend_candidates import toggle_trend_stock
         result = toggle_trend_stock('002281', False)
