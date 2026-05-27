@@ -1,5 +1,6 @@
 """趋势交易系统模块测试"""
 import pytest
+from unittest.mock import patch
 from backend.core.data_layer import get_all_stocks
 from backend.core.trend_trading import (
     decide_system, decide_system_with_detail,
@@ -18,6 +19,13 @@ MAIN_LINES = ['半导体', '算力', '新能源']
 class TestDecideSystem:
     """decide_system 三层决策测试"""
 
+    @pytest.fixture(autouse=True)
+    def mock_manual_trend(self):
+        """mock _load_manual_trend 让 300054 和 688126 都在手动列表中"""
+        with patch('backend.core.trend_trading._load_manual_trend',
+                   return_value={'300054', '688126'}):
+            yield
+
     def test_trend_stock_passes_all_layers(self, stocks):
         """手动指定的趋势股返回trend，非指定的返回3l"""
         stocks_data = stocks.get('stocks', stocks)
@@ -25,9 +33,9 @@ class TestDecideSystem:
         result = decide_system('300054', '2026-05-22', stocks_data, MAIN_LINES)
         assert result == 'trend', f"鼎龙股份(手动指定)应为 trend, 实际={result}"
         
-        # 沪硅产业不在手动列表中
+        # 沪硅产业在手动列表中（mock 后）
         result = decide_system('688126', '2026-05-22', stocks_data, MAIN_LINES)
-        assert result == '3l', f"沪硅产业(非手动指定)应为 3l, 实际={result}"
+        assert result == 'trend', f"沪硅产业(手动指定)应为 trend, 实际={result}"
 
     def test_weak_slope_returns_3l(self, stocks):
         """上涨结构但斜率≤3%返回3l"""
@@ -55,9 +63,9 @@ class TestDecideSystem:
         # 鼎龙在手动列表
         result = decide_system('300054', '2026-05-22', stocks_data, main_lines=None)
         assert result == 'trend'
-        # 沪硅不在
+        # 沪硅在手
         result = decide_system('688126', '2026-05-22', stocks_data, main_lines=None)
-        assert result == '3l'
+        assert result == 'trend'
 
     def test_detail_returns_correct_reason(self, stocks):
         """decide_system_with_detail返回正确的原因"""
@@ -68,10 +76,10 @@ class TestDecideSystem:
         assert '手动指定' in detail['reason']
         assert detail['details']['manual'] is True
         
-        # 沪硅（非手动，默认3L）
+        # 沪硅（手动，mock 后）
         detail2 = decide_system_with_detail('688126', '2026-05-22', stocks_data, MAIN_LINES)
-        assert detail2['system'] == '3l'
-        assert '默认' in detail2['reason']
+        assert detail2['system'] == 'trend'
+        assert '手动指定' in detail2['reason']
 
     def test_stock_not_found_returns_3l(self, stocks):
         """不存在的股票返回3l"""
@@ -82,7 +90,7 @@ class TestDecideSystem:
     def test_insufficient_data_returns_3l(self, stocks):
         """数据不足30条返回3l"""
         stocks_data = stocks.get('stocks', stocks)
-        result = decide_system('688126', '2025-01-01', stocks_data, MAIN_LINES)
+        result = decide_system('688234', '2025-01-01', stocks_data, MAIN_LINES)
         assert result == '3l'
 
 

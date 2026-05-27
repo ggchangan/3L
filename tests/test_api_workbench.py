@@ -145,8 +145,9 @@ class TestHandleSuggestions:
     def test_suggestions_reads_review_data(self, monkeypatch, mock_handler):
         """suggestions 从 REVIEW_DATA_PATH 读取复盘数据"""
         import backend.api.workbench as mod
+        import os as os_mod
+        import json as json_mod
         # mock json.load 直接返回测试数据
-        import json as real_json
         mock_review = {
             'trading_plan': {
                 'holdings_action': [
@@ -164,7 +165,7 @@ class TestHandleSuggestions:
         }
         monkeypatch.setattr(mod, 'json', type(sys)('fake_json'))
         mod.json.load = lambda f: mock_review
-        mod.os.path.isfile = lambda p: True
+        monkeypatch.setattr(os_mod.path, 'isfile', lambda p: True)
 
         mod._handle_suggestions(mock_handler, '/api/workbench/suggestions')
         data = mock_handler.send_json.call_args[0][0]
@@ -178,9 +179,10 @@ class TestHandleSuggestions:
     def test_suggestions_empty_review(self, monkeypatch, mock_handler):
         """复盘数据为空时返回空列表"""
         import backend.api.workbench as mod
+        import os as os_mod
         monkeypatch.setattr(mod, 'json', type(sys)('fake_json'))
         mod.json.load = lambda f: {}
-        mod.os.path.isfile = lambda p: True
+        monkeypatch.setattr(os_mod.path, 'isfile', lambda p: True)
 
         mod._handle_suggestions(mock_handler, '/api/workbench/suggestions')
         data = mock_handler.send_json.call_args[0][0]
@@ -191,7 +193,8 @@ class TestHandleSuggestions:
     def test_suggestions_no_review_file(self, monkeypatch, mock_handler):
         """复盘文件不存在时返回空列表"""
         import backend.api.workbench as mod
-        mod.os.path.isfile = lambda p: False
+        import os as os_mod
+        monkeypatch.setattr(os_mod.path, 'isfile', lambda p: False)
 
         mod._handle_suggestions(mock_handler, '/api/workbench/suggestions')
         data = mock_handler.send_json.call_args[0][0]
