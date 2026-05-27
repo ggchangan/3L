@@ -234,15 +234,16 @@ export default function Holdings() {
 
   function handleSearch(q: string) {
     setSearchQ(q)
-    clearTimeout(searchTimer.current)
     if (q.length < 1) { setSearchResults([]); return }
-    searchTimer.current = setTimeout(async () => {
+    ;(async () => {
       try {
         const r = await fetch('/api/directions/stocks?q=' + encodeURIComponent(q))
         const d = await r.json()
         setSearchResults((d.stocks || []).slice(0, 10))
-      } catch { setSearchResults([]) }
-    }, 300)
+      } catch {
+        setSearchResults([])
+      }
+    })()
   }
 
   function selectStock(name: string, code: string, price: number) {
@@ -513,7 +514,7 @@ export default function Holdings() {
                 <input type="text" placeholder="输入股票名称或代码..." autoComplete="off"
                   value={searchQ} onChange={e => handleSearch(e.target.value)} />
                 {searchResults.length > 0 && (
-                  <div className="search-results" style={{ display: 'block' }}>
+                  <div className="search-results">
                     {searchResults.map((s: any) => (
                       <div key={s.code} className="result-item" onClick={() => selectStock(s.name, s.code, s.price || 0)}>
                         <span>{s.name} <span style={{ color: '#4ecdc4', fontSize: 11 }}>{s.price ? s.price.toFixed(2) : ''}</span></span>
@@ -522,6 +523,7 @@ export default function Holdings() {
                     ))}
                   </div>
                 )}
+                <div style={{ fontSize: 10, color: '#555', marginTop: 2 }}>debug: q="{searchQ}" hits={searchResults.length}</div>
               </div>
             )}
 
