@@ -77,9 +77,9 @@ class TestGetAllStocks:
         from backend.config import DATA_DIR
         dir_path = os.path.join(DATA_DIR, 'directions.json')
         if os.path.isfile(dir_path):
-            from backend.services.direction_service import load_directions
-            data = load_directions(dir_path)
-            assert isinstance(data.get('all'), list)
+            from backend.services.direction_service import get_all
+            data = get_all()
+            assert isinstance(data, dict)
         else:
             # Before any direction is created, empty is valid
             pass

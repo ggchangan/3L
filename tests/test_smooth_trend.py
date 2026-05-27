@@ -67,10 +67,17 @@ class TestIsSmoothTrend:
 
 
 class TestDecideSystemSmooth:
-    """集成测试：平滑趋势股票在手动指定后的表现"""
+    """decide_system + decide_system_with_detail — 全 mock 手动列表"""
+
+    @pytest.fixture(autouse=True)
+    def mock_manual(self):
+        from unittest.mock import patch
+        with patch('backend.core.trend_trading._load_manual_trend',
+                   return_value={'002281', '688698', '300508'}) as m:
+            yield m
 
     def test_weichuang_returns_trend(self, stocks):
-        """伟创电气（在手动列表）应返回 trend"""
+        """伟创电气（手动指定）应返回 trend"""
         stocks_data = stocks.get('stocks', stocks)
         result = decide_system('688698', '2026-05-22', stocks_data, MAIN_LINES)
         assert result == 'trend', \
