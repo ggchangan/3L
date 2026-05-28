@@ -1,4 +1,11 @@
-"""部署构建脚本：npm build + 注入模块预加载"""
+"""
+3L 部署构建脚本：全回归 → npm build → 注入模块预加载
+
+流程：
+  1. 运行全回归测试（CRITICAL必须通过）
+  2. npm run build
+  3. 注入 modulepreload 链接
+"""
 import os
 import subprocess
 import sys
@@ -7,6 +14,25 @@ import glob
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FE_DIR = os.path.join(ROOT, 'frontend')
 DIST_DIR = os.path.join(FE_DIR, 'dist')
+
+
+def run_regression():
+    """运行全回归测试（CRITICAL等级）"""
+    print('🧪 运行全回归测试...')
+    r = subprocess.run(
+        [sys.executable, 'scripts/run_full_regression.py', '--ci'],
+        cwd=ROOT, capture_output=True, text=True
+    )
+    # 输出结果
+    for line in (r.stdout + r.stderr).split('\n'):
+        if line.strip():
+            print(f'  {line}')
+    if r.returncode != 0:
+        print('❌ 回归测试失败，构建终止')
+        print(r.stderr[-500:])
+        return False
+    print('✅ 回归测试通过')
+    return True
 
 
 def run_npm_build():
@@ -58,6 +84,8 @@ def main():
     print('═══════════════════════════════════')
     print('    3L 前端构建+部署')
     print('═══════════════════════════════════')
+    if not run_regression():
+        sys.exit(1)
     if not run_npm_build():
         sys.exit(1)
     inject_preload()

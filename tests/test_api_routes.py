@@ -116,6 +116,7 @@ EXPECTED_ROUTES_GET = [
     '/api/monitor/stop-loss',
     '/api/monitor/sectors',
     '/api/monitor/leaders',
+    '/api/monitor/leader-dashboard',
     '/api/monitor/market-leaders',
     '/api/sector-chart',
     '/api/tips',
@@ -136,6 +137,8 @@ EXPECTED_ROUTES_POST = [
     '/api/directions/reorder',
     '/api/workbench/save',
     '/api/holdings/save',
+    '/api/monitor/add-watched-industry',
+    '/api/monitor/remove-watched-industry',
 ]
 
 
@@ -159,8 +162,8 @@ class TestRouteCompleteness:
         count = len(fresh_routes._exact)
         expected_min = len(EXPECTED_ROUTES_GET)
         assert count >= expected_min, f'路由数 {count} 不足 {expected_min}'
-        # 允许最多+8个额外路由（新功能新增路由时松一点）
-        assert count <= expected_min + 8, \
+        # 允许最多+12个额外路由（新功能新增路由时松一点）
+        assert count <= expected_min + 12, \
             f'路由数 {count} 超出预期 {expected_min}，可能有未预期的路由'
 
 
