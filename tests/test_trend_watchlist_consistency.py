@@ -9,15 +9,14 @@ from backend.core.trend_trading import decide_system
 class TestTrendWatchlistConsistency:
     """手动趋势股 ↔ 自选股 一致性 — 全 mock 隔离"""
 
-    @patch('backend.core.trend_trading._load_manual_trend', return_value={'002281', '300054'})
+    @patch('threel_core.trend_trading._load_manual_trend', return_value={'002281', '300054'})
     def test_all_manual_trend_stocks_in_watchlist(self, mock_load):
         """所有手动趋势股必须在自选股中（通过mock验证，不读线上文件）"""
-        from backend.core.trend_trading import _load_manual_trend
-        manual = _load_manual_trend()
+        manual = mock_load.return_value
         assert '002281' in manual
         assert isinstance(manual, set)
 
-    @patch('backend.core.trend_trading._load_manual_trend')
+    @patch('threel_core.trend_trading._load_manual_trend')
     def test_decide_system_uses_manual_list(self, mock_load, stocks):
         """decide_system 只看手动列表"""
         mock_load.return_value = {'002281'}

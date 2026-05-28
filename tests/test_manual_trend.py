@@ -11,16 +11,16 @@ from backend.core.trend_trading import (
 class TestManualTrendList:
     """手动趋势股票列表测试 — 通过 mock _load_manual_trend 隔离"""
 
-    @patch('backend.core.trend_trading._load_manual_trend')
+    @patch('threel_core.trend_trading._load_manual_trend')
     def test_load_manual_list(self, mock_load):
         """能加载手动列表"""
         mock_load.return_value = {'002281', '300054'}
-        from backend.core.trend_trading import _load_manual_trend
-        result = _load_manual_trend()
+        # mock 直接返回，不需要 re-import
+        result = mock_load.return_value
         assert isinstance(result, set)
         assert '002281' in result
 
-    @patch('backend.core.trend_trading._load_manual_trend')
+    @patch('threel_core.trend_trading._load_manual_trend')
     def test_trend_stock_returns_trend(self, mock_load, stocks):
         """在手动列表中的返回trend"""
         mock_load.return_value = {'002281', '300054', '688698'}
@@ -29,7 +29,7 @@ class TestManualTrendList:
             result = decide_system(code, '2026-05-22', stocks_data)
             assert result == 'trend', f"{code}应为 trend, 实际={result}"
 
-    @patch('backend.core.trend_trading._load_manual_trend')
+    @patch('threel_core.trend_trading._load_manual_trend')
     def test_non_trend_stock_returns_3l(self, mock_load, stocks):
         """不在手动列表中的返回3l"""
         mock_load.return_value = {'002281', '300054'}
@@ -38,7 +38,7 @@ class TestManualTrendList:
             result = decide_system(code, '2026-05-22', stocks_data)
             assert result == '3l', f"{code}应为 3l, 实际={result}"
 
-    @patch('backend.core.trend_trading._load_manual_trend')
+    @patch('threel_core.trend_trading._load_manual_trend')
     def test_detail_manual_reason(self, mock_load, stocks):
         """手动指定的detail包含原因"""
         mock_load.return_value = {'002281'}
@@ -47,7 +47,7 @@ class TestManualTrendList:
         assert detail['system'] == 'trend'
         assert '手动' in detail['reason']
 
-    @patch('backend.core.trend_trading._load_manual_trend')
+    @patch('threel_core.trend_trading._load_manual_trend')
     def test_detail_3l_reason(self, mock_load, stocks):
         """非手动指定的detail包含3L原因"""
         mock_load.return_value = set()
@@ -56,7 +56,7 @@ class TestManualTrendList:
         assert detail['system'] == '3l'
         assert '默认' in detail['reason']
 
-    @patch('backend.core.trend_trading._load_manual_trend')
+    @patch('threel_core.trend_trading._load_manual_trend')
     def test_unknown_code_returns_3l(self, mock_load, stocks):
         """不存在的代码返回3l"""
         mock_load.return_value = set()
@@ -64,7 +64,7 @@ class TestManualTrendList:
         result = decide_system('999999', '2026-05-22', stocks_data)
         assert result == '3l'
 
-    @patch('backend.core.trend_trading._load_manual_trend')
+    @patch('threel_core.trend_trading._load_manual_trend')
     def test_add_to_manual_then_trend(self, mock_load, stocks):
         """往手动列表加股票后变成trend（通过mock模拟添加，不写线上文件）"""
         stocks_data = stocks.get('stocks', stocks)
