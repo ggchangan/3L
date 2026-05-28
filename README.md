@@ -10,7 +10,7 @@
 | **每日复盘** | `/review` | 大盘结构、主线分析、持仓回顾、买点信号 |
 | **自选股管理** | `/watchlist` | 增删改方向分组，趋势/3L 双模式 |
 | **趋势候选** | `/trend_candidates` | 自动候选 + 手动趋势股管理 |
-| **个股分析** | `/stock_analysis` / `/stock-analysis` | 3L 量价分析、K线图、买卖信号、回测 |
+| **个股分析** | `/stock_analysis` / `/stock-analysis` | 3L 量价分析、K线图、诊断评分、买卖信号 |
 | **持仓管理** | `/holdings` | 持仓股追踪 |
 | **工作台** | `/workbench` | 每日工作流、计划生成 |
 | **逻辑追踪** | `/logic-tracking` | 聚焦分层、前置预判、逻辑关联 |
@@ -126,4 +126,6 @@ cd frontend && npx vitest run
 - `docs/architecture-v2.md` — 架构设计
 - `docs/usage-guide.md` — 使用指南
 - `docs/stock-card-logic-design.md` — 个股卡片逻辑设计
+- `docs/stock-diagnosis-design.md` — 个股诊断系统设计
+- `docs/on-demand-stock-analysis-design.md` — 按需数据拉取设计
 - `docs/product-design-v1.md` — 产品设计文档

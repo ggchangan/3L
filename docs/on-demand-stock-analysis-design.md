@@ -1,6 +1,6 @@
 # 按需个股数据拉取 — 设计文档
 
-> 版本: v0.1 | 日期: 2026-05-29 | 分支: feature/stock-analysis-enhance
+> 版本: v0.2 | 日期: 2026-05-29 | 分支: feature/stock-analysis-enhance | 状态: ✅ 已实现
 
 ---
 
