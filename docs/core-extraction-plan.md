@@ -251,17 +251,19 @@ python3 -m venv .venv
 - [x] 创建 `threel_core/__init__.py` 包入口
 - [x] 迁移 `ema_utils.py` → `threel_core/ema_utils.py`
 - [x] `backend/core/ema_utils.py` 改为转发层（7行）
+- [x] 迁移 `trend_trading.py` → `threel_core/trend_trading.py`
+- [x] `backend/core/trend_trading.py` 改为转发层（15个函数）
+- [x] 迁移 `cache_layer.py` → `threel_core/cache_layer.py`
+- [x] 迁移 `buy_point_detection.py` → `threel_core/buy_point_detection.py`
+- [x] 创建 `threel_core/data_layer.py` 精简版（共享子集）
 - [x] `pip install -e` 安装到 3l-server 的 venv
 - [x] 全回归 6/6 通过（89前端 + 649后端 + 4项检查）
+- [x] 创建 `3l-analysis` 项目脚手架，验证独立可运行
 
 ### 待完成
 
-- [ ] 迁移 `trend_trading.py`
-- [ ] 迁移 `buy_point_detection.py`
-- [ ] 迁移 `cache_layer.py`
-- [ ] 迁移 `data_layer.py`（去除 update_stock_data 相关代码）
 - [ ] 迁移 `config.py`（精简版路径常量）
-- [ ] 创建 `3l-analysis` 新项目脚手架
+- [ ] `3l-analysis` 添加 server.py + 前端页面
 
 ### 验证方式
 
