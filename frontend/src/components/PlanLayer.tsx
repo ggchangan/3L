@@ -1,32 +1,78 @@
 import { useEffect, useState } from 'react'
-import { fetchWorkbenchPlan, getYesterdayStr, fetchActiveAlarms } from '../lib/api'
+import { fetchWorkbenchPlan, getYesterdayStr, fetchActiveAlarms, fetchReviewToday } from '../lib/api'
 import type { PlanItem, StoredAlarm } from '../lib/api'
+import type { BuySignalItem } from '../lib/types'
 
 const ALARM_TYPE_ICONS: Record<string, string> = { price: '🔴', deviation: '🟡', time: '⏰' }
 const ALARM_TYPE_LABELS: Record<string, string> = { price: '价格', deviation: '偏差', time: '时间' }
 
+/** 获取今天日期 YYYY-MM-DD */
+function getTodayStr(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+/** 合并两个计划，按 stock 去重，today 优先 */
+function mergePlans(yesterday: PlanItem[], today: PlanItem[]): PlanItem[] {
+  const seen = new Set<string>()
+  const merged = [...today]
+  today.forEach(p => { if (p.stock) seen.add(p.stock) })
+  yesterday.forEach(p => {
+    if (p.stock && !seen.has(p.stock)) {
+      merged.push(p)
+      seen.add(p.stock)
+    }
+  })
+  return merged
+}
+
 export default function PlanLayer() {
+  const [collapsed, setCollapsed] = useState(false)
   const [buy, setBuy] = useState<PlanItem[]>([])
   const [sell, setSell] = useState<PlanItem[]>([])
   const [watch, setWatch] = useState<PlanItem[]>([])
   const [alarms, setAlarms] = useState<StoredAlarm[]>([])
+  const [holdings, setHoldings] = useState<BuySignalItem[]>([])
   const [loaded, setLoaded] = useState(false)
-  const dateStr = getYesterdayStr()
 
   useEffect(() => {
-    fetchWorkbenchPlan(dateStr).then(data => {
-      const plan = data.plan || {}
-      setBuy(plan.buy || [])
-      setSell(plan.sell || [])
-      setWatch(plan.watch || [])
+    const yst = getYesterdayStr()
+    const tdy = getTodayStr()
+
+    // 并行加载计划、报警、持仓数据
+    Promise.all([
+      fetchWorkbenchPlan(yst),
+      fetchWorkbenchPlan(tdy),
+      fetchActiveAlarms().catch(() => ({ alarms: [], count: 0 })),
+      fetchReviewToday().catch(() => ({ holdings: [] })),
+    ]).then(([yData, tData, alarmData, reviewData]) => {
+      const yPlan = yData.plan || { buy: [], sell: [], watch: [] }
+      const tPlan = tData.plan || { buy: [], sell: [], watch: [] }
+      setBuy(mergePlans(yPlan.buy || [], tPlan.buy || []))
+      setSell(mergePlans(yPlan.sell || [], tPlan.sell || []))
+      setWatch(mergePlans(yPlan.watch || [], tPlan.watch || []))
+      setAlarms((alarmData as any).alarms || [])
+      setHoldings((reviewData as any).holdings || [])
       setLoaded(true)
     }).catch(() => setLoaded(true))
-
-    // 加载持久化报警清单
-    fetchActiveAlarms().then(data => {
-      setAlarms(data.alarms || [])
-    }).catch(() => {})
   }, [])
+
+  // 持仓止损：只取有止损价的持仓（支持 stop_loss_price 和 stop_loss 两种字段名）
+  const holdingsStopLoss = holdings.filter(h => (h as any).stop_loss_price != null || h.stop_loss != null)
+  const holdingCodes = new Set(holdings.map(h => h.code))
+
+  // 取止损价，优先 stop_loss_price
+  function getStopPrice(h: any): number | undefined {
+    return h.stop_loss_price ?? h.stop_loss
+  }
+  function getStopPct(h: any): number | undefined {
+    return h.stop_loss_pct
+  }
+
+  // 计划报警：过滤掉持仓股的价格报警
+  const planAlarms = alarms.filter(a => {
+    if (a.type === 'price' && holdingCodes.has(a.stock_code)) return false
+    return true
+  })
 
   const total = buy.length + sell.length + watch.length
   const badgeBg = total > 0 ? '#e94560' : '#555'
@@ -34,49 +80,89 @@ export default function PlanLayer() {
 
   return (
     <div className="layer plan-layer">
-      <div className="layer-title">
+      <div className="layer-title" style={{ cursor: 'pointer' }} onClick={() => setCollapsed(v => !v)}>
         <span className="badge-layer">②</span> 📋 今日计划
         <span className="badge" style={{ background: badgeBg }}>{badgeText}</span>
+        <span className="collapse-indicator">{collapsed ? '▶' : '▼'}</span>
       </div>
-      {!loaded ? (
-        <div className="empty">正在加载昨日计划…</div>
+      {!collapsed && (!loaded ? (
+        <div className="empty">正在加载计划…</div>
       ) : (
         <div id="todayPlanArea">
-          <div style={{ fontSize: 11, color: '#555', marginBottom: 6 }}>📅 {dateStr} 计划</div>
-          {buy.length > 0 && (
+          {/* ── 今日计划列表 ── */}
+          {total > 0 && (
             <>
-              <div style={{ fontSize: 11, marginBottom: 4 }}>🟢 买入：</div>
-              {buy.map((p, i) => renderPlanItem(p, i, 'buy'))}
+              {buy.length > 0 && (
+                <>
+                  <div style={{ fontSize: 11, marginBottom: 4 }}>🟢 买入：</div>
+                  {buy.map((p, i) => renderPlanItem(p, i, 'buy'))}
+                </>
+              )}
+              {sell.length > 0 && (
+                <>
+                  <div style={{ fontSize: 11, margin: '6px 0 4px' }}>🔴 卖出：</div>
+                  {sell.map((p, i) => renderPlanItem(p, i, 'sell'))}
+                </>
+              )}
+              {watch.length > 0 && (
+                <>
+                  <div style={{ fontSize: 11, margin: '6px 0 4px' }}>👁️ 观察：</div>
+                  {watch.map((p, i) => (
+                    <div key={`w-${i}`} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.02)', marginBottom: 2, fontSize: 12 }}>
+                      <span style={{ color: '#e0e0e0' }}>{p.stock || p.sector || '--'}</span>
+                      {p.focus && <span style={{ color: '#888' }}>→ {p.focus}</span>}
+                      {renderStopLoss(p)}
+                      {renderAlertIcon(p)}
+                    </div>
+                  ))}
+                </>
+              )}
             </>
           )}
-          {sell.length > 0 && (
-            <>
-              <div style={{ fontSize: 11, margin: '6px 0 4px' }}>🔴 卖出：</div>
-              {sell.map((p, i) => renderPlanItem(p, i, 'sell'))}
-            </>
-          )}
-          {watch.length > 0 && (
-            <>
-              <div style={{ fontSize: 11, margin: '6px 0 4px' }}>👁️ 观察：</div>
-              {watch.map((p, i) => (
-                <div key={`w-${i}`} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.02)', marginBottom: 2, fontSize: 12 }}>
-                  <span style={{ color: '#e0e0e0' }}>{p.stock || p.sector || '--'}</span>
-                  {p.focus && <span style={{ color: '#888' }}>→ {p.focus}</span>}
-                  {renderStopLoss(p)}
-                  {renderAlertIcon(p)}
-                </div>
-              ))}
-            </>
+          {total === 0 && holdingsStopLoss.length === 0 && planAlarms.length === 0 && (
+            <div className="empty">暂无计划</div>
           )}
 
-          {/* 🔔 报警清单 — 从 alarms.json 持久化读取 */}
-          {alarms.length > 0 && (
+          {/* ── 🔴 持仓止损 ── */}
+          {holdingsStopLoss.length > 0 && (
             <>
               <div style={{ borderTop: '1px solid #2a2a4e', margin: '8px 0' }} />
               <div style={{ fontSize: 11, marginBottom: 4 }}>
-                🔔 报警清单 <span className="badge" style={{ background: '#ff9800', fontSize: 9, padding: '1px 6px' }}>{alarms.length}</span>
+                🔴 持仓止损 <span className="badge" style={{ background: '#e94560', fontSize: 9, padding: '1px 6px' }}>{holdingsStopLoss.length}</span>
               </div>
-              {alarms.map((a, i) => (
+              {holdingsStopLoss.map((h, i) => {
+                const sp = getStopPrice(h)
+                const spPct = getStopPct(h)
+                const spFormatted = spPct != null ? ` (${spPct >= 0 ? '+' : ''}${spPct.toFixed(2)}%)` : ''
+                return (
+                <div key={`sl-${i}`} style={{
+                  display: 'flex', gap: 6, alignItems: 'center',
+                  padding: '3px 8px', borderRadius: 4,
+                  background: 'rgba(233,69,96,0.06)', marginBottom: 2, fontSize: 12,
+                }}>
+                  <span style={{ color: '#e0e0e0' }}>{h.name}({h.code})</span>
+                  <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
+                    止损 {sp}{spFormatted}
+                  </span>
+                  {h.price != null && (
+                    <span style={{ fontSize: 9, color: '#888', marginLeft: 'auto' }}>
+                      现价 {h.price} {h.change != null ? `${h.change >= 0 ? '+' : ''}${h.change.toFixed(1)}%` : ''}
+                    </span>
+                  )}
+                </div>
+                )
+              })}
+            </>
+          )}
+
+          {/* ── 🟡 计划报警 ── */}
+          {planAlarms.length > 0 && (
+            <>
+              <div style={{ borderTop: '1px solid #2a2a4e', margin: '8px 0' }} />
+              <div style={{ fontSize: 11, marginBottom: 4 }}>
+                🟡 计划报警 <span className="badge" style={{ background: '#ff9800', fontSize: 9, padding: '1px 6px' }}>{planAlarms.length}</span>
+              </div>
+              {planAlarms.map((a, i) => (
                 <div key={`alarm-${i}`} style={{
                   display: 'flex', gap: 6, alignItems: 'center',
                   padding: '3px 8px', borderRadius: 4,
@@ -86,7 +172,7 @@ export default function PlanLayer() {
                   <span style={{ color: '#e0e0e0' }}>{a.stock}</span>
                   {a.type === 'price' && a.stop_loss != null && (
                     <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
-                      止损{a.stop_loss}{a.stop_loss_pct != null ? `(${a.stop_loss_pct}%)` : ''}
+                      止损 {a.stop_loss}{a.stop_loss_pct != null ? `(${a.stop_loss_pct}%)` : ''}
                     </span>
                   )}
                   {a.type === 'deviation' && (
@@ -102,7 +188,7 @@ export default function PlanLayer() {
             </>
           )}
         </div>
-      )}
+      ))}
     </div>
   )
 }

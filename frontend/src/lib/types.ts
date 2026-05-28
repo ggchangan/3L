@@ -14,13 +14,13 @@ export interface VolumeData {
 /** 板块监测API返回类型 */
 export interface SectorData {
   today_top5?: SectorItem[]
-  chg5d_top5?: SectorItem[]
+  chg20d_top10?: SectorItem[]
 }
 
 export interface SectorItem {
   name: string
   chg?: number
-  chg5d?: number
+  chg20d?: number
   structure?: string
   phase?: string
 }
@@ -127,6 +127,7 @@ export interface BuySignalItem {
   trading_system?: '3l' | 'trend'
   buy_point?: string
   stop_loss?: number
+  stop_loss_price?: number  // 真实API字段名（review返回的数据）
   stop_loss_pct?: number
   profit_model1?: boolean
   trend_stock?: boolean
