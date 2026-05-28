@@ -28,11 +28,11 @@ server.pid
 .venv/
 .hermes/
 
-# Build output copies (source in frontend/css/)
-frontend/dist/css/
-frontend/dist/assets/
-frontend/dist/react.html
-frontend/dist/*.pdf
+# Build output copies (source in server/frontend/css/)
+server/frontend/dist/css/
+server/frontend/dist/assets/
+server/frontend/dist/react.html
+server/frontend/dist/*.pdf
 
 # Private user data
 private/
