@@ -4,7 +4,7 @@ review_compute_service.py — 复盘计算层
 所有函数接收数据为参数，不直接依赖文件 I/O（可测试）
 """
 import json, os, sys, requests, math
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from backend import config
 from backend.config import DATA_DIR, ALL_STOCKS_PATH, WWW_DIR, MAINLINES_CACHE_PATH
@@ -102,27 +102,6 @@ def get_industry_rankings():
     except Exception as e:
         print(f"[WARN] 获取行业排行失败: {e}")
         return []
-
-
-def _calc_board_20d(ind_name):
-    """计算单板块20日涨幅"""
-    import akshare as ak
-    try:
-        start_date = (datetime.now() - timedelta(days=45)).strftime('%Y%m%d')
-        end_date = datetime.now().strftime('%Y%m%d')
-        df = ak.stock_board_industry_index_ths(symbol=ind_name, start_date=start_date, end_date=end_date)
-        if len(df) < 15:
-            return None
-        recent = df.tail(20) if len(df) >= 20 else df.tail(len(df))
-        if len(recent) < 10:
-            return None
-        chg_20d = (recent.iloc[-1]['收盘价'] / recent.iloc[0]['收盘价'] - 1) * 100
-        return {
-            'name': ind_name,
-            'chg_20d': round(chg_20d, 2),
-        }
-    except:
-        return None
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -308,23 +287,23 @@ def get_mainline_data(date_str):
         except Exception:
             pass
 
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import akshare as ak
-
-    try:
-        name_df = ak.stock_board_industry_name_ths()
-        industries = name_df['name'].tolist()
-    except Exception as e:
-        print(f"[WARN] 获取板块名称失败: {e}")
-        return {'lines': [], 'secondary': [], 'industries': get_industry_rankings()}
+    # 从本地板块K线数据计算20日涨幅（cron 17:00 已通过 update_sectors() 拉好）
+    from backend.core.data_layer import get_sector_daily
+    sector_data = get_sector_daily()
+    industries_data = sector_data.get('industries', {})
+    if not industries_data:
+        print(f"[WARN] 本地板块数据为空（sector_daily.json 可能未更新）")
+        return {'lines': [], 'secondary': [], 'industries': get_industry_rankings(), 'all_ranked': []}
 
     scores = []
-    with ThreadPoolExecutor(max_workers=10) as pool:
-        fut_map = {pool.submit(_calc_board_20d, ind): ind for ind in industries}
-        for fut in as_completed(fut_map):
-            r = fut.result()
-            if r:
-                scores.append(r)
+    for name, klines in industries_data.items():
+        try:
+            if len(klines) < 20:
+                continue
+            chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
+            scores.append({'name': name, 'chg_20d': round(chg_20d, 2)})
+        except Exception:
+            continue
 
     scores.sort(key=lambda x: x['chg_20d'], reverse=True)
     daily_rankings = get_industry_rankings()
