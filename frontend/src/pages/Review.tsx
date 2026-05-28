@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { fetchReviewToday } from '../lib/api'
 import NavBar, { BottomNav } from '../components/NavBar'
 import MarketCycle from '../components/MarketCycle'
@@ -20,7 +20,7 @@ export default function Review() {
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const weekday = now.getDay()
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     setLoading(true)
     setError('')
     fetchReviewToday().then(reviewData => {
@@ -38,6 +38,19 @@ export default function Review() {
       setLoading(false)
     })
   }, [])
+
+  useEffect(() => {
+    loadData()
+    // 页面切回来时自动重刷（其他页面修改趋势股/持仓后）
+    const onFocus = () => { if (!loading) loadData() }
+    const onVisible = () => { if (!document.hidden && !loading) loadData() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [loadData])
 
   return (
     <>

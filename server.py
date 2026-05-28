@@ -339,9 +339,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         log.info('%s - %s', self.client_address[0], fmt % args)
-
     def log_error(self, fmt, *args):
         log.error('%s - %s', self.client_address[0], fmt % args)
+
 
 def main():
     # 支持 --host 参数（Docker 环境需要 0.0.0.0）

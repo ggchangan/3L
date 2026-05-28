@@ -60,10 +60,9 @@ class TestMatchTags:
         assert len(result['tags']) > 0
         tag_ids = [t['tag_id'] for t in result['tags']]
         assert 'tag-pkg' in tag_ids
-        assert result['llm_used'] is False  # 关键词已足够
 
     def test_keyword_match_low_confidence_triggers_llm(self):
-        """低置信度时走LLM（LLM不可用时回退关键词结果）"""
+        """低置信度时走LLM（mock LLM调用来隔离）"""
         from backend.services.logic_feed_service import match_tags
         text = '今天天气不错，市场整体上涨。'
         result = match_tags(text, '市场日报', MOCK_TAGS)

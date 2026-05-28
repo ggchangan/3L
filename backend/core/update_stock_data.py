@@ -337,17 +337,20 @@ def update_index(client):
 
 def _fetch_sector_klines_akshare(sector_type, name):
     """
-    拉取单个板块的日K线。
+    拉取单个板块的日K线（只拉最近90天，足够60天+裁剪缓冲）
     sector_type: 'industry' 或 'concept'
     name: 板块名称
     返回 [{date, open, close, high, low, volume}] 或 []
     """
     import akshare as ak
+    from datetime import datetime, timedelta
+    today = datetime.now().strftime('%Y%m%d')
+    start = (datetime.now() - timedelta(days=90)).strftime('%Y%m%d')
     try:
         if sector_type == 'industry':
-            df = ak.stock_board_industry_index_ths(symbol=name)
+            df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)
         else:
-            df = ak.stock_board_concept_index_ths(symbol=name)
+            df = ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=today)
         if df is None or len(df) == 0:
             return []
         return _df_to_kline(df)
@@ -410,8 +413,8 @@ def update_sectors():
                     added += 1
             if added > 0:
                 klines.sort(key=lambda x: x['date'])
-                if len(klines) > 200:
-                    klines = klines[-200:]
+                if len(klines) > 60:
+                    klines = klines[-60:]
                     industries[name] = klines
                 ind_updated += 1
         except Exception as e:
@@ -442,8 +445,8 @@ def update_sectors():
                     added += 1
             if added > 0:
                 klines.sort(key=lambda x: x['date'])
-                if len(klines) > 200:
-                    klines = klines[-200:]
+                if len(klines) > 60:
+                    klines = klines[-60:]
                     concepts[name] = klines
                 con_updated += 1
         except Exception as e:

@@ -946,15 +946,15 @@ class TestStockChartDefensive(unittest.TestCase):
 
     @patch('backend.services.stock_chart_service._fetch_realtime_quote')
     @patch('backend.services.stock_chart_service.get_stock_klines')
-    @patch('backend.services.stock_chart_service.ensure_stock_data')
-    def test_invalid_code_rejected_early(self, mock_ensure, mock_klines, mock_rt):
-        """无效code如'undefined'不应调用ensure_stock_data/腾讯API"""
+    def test_invalid_code_rejected_early(self, mock_klines, mock_rt):
+        """无效code如'undefined'不应调用腾讯API"""
         mock_klines.return_value = []  # 不在缓存
-        mock_ensure.return_value = (False, 'API返回异常: data字段类型=list')
+        mock_rt.return_value = None  # 腾讯API返回异常
         from backend.services.stock_chart_service import generate_stock_chart
         svg, err = generate_stock_chart('undefined')
         self.assertIsNone(svg)
-        self.assertIn('API返回异常', err)
+        self.assertTrue(err and '数据不足' in err,
+                        f'应提示数据不足，实际={err}')
 
     def test_normal_code_skips_ensure_if_cached(self):
         """正常code且在缓存中的，不调腾讯API"""

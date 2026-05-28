@@ -1,24 +1,27 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import Monitor from './pages/Monitor'
-import Review from './pages/Review'
-import Workbench from './pages/Workbench'
-import Watchlist from './pages/Watchlist'
-import TrendCandidates from './pages/TrendCandidates'
-import Holdings from './pages/Holdings'
-import Industry from './pages/Industry'
-import Macro from './pages/Macro'
-import TopGainers from './pages/TopGainers'
-import StockAnalysis from './pages/StockAnalysis'
-import Tips from './pages/Tips'
-import Simulation from './pages/Simulation'
-import Skills from './pages/Skills'
-import LogicTracking from './pages/LogicTracking'
-import LogicTrackingDetail from './pages/LogicTrackingDetail'
+import { lazy, Suspense } from 'react'
+
+const Monitor = lazy(() => import('./pages/Monitor'))
+const Review = lazy(() => import('./pages/Review'))
+const Workbench = lazy(() => import('./pages/Workbench'))
+const Watchlist = lazy(() => import('./pages/Watchlist'))
+const TrendCandidates = lazy(() => import('./pages/TrendCandidates'))
+const Holdings = lazy(() => import('./pages/Holdings'))
+const Industry = lazy(() => import('./pages/Industry'))
+const Macro = lazy(() => import('./pages/Macro'))
+const TopGainers = lazy(() => import('./pages/TopGainers'))
+const StockAnalysis = lazy(() => import('./pages/StockAnalysis'))
+const Tips = lazy(() => import('./pages/Tips'))
+const Simulation = lazy(() => import('./pages/Simulation'))
+const Skills = lazy(() => import('./pages/Skills'))
+const LogicTracking = lazy(() => import('./pages/LogicTracking'))
+const LogicTrackingDetail = lazy(() => import('./pages/LogicTrackingDetail'))
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <Suspense fallback={<div className="empty">加载中...</div>}>
+        <Routes>
         {/* 已迁移的 React 页面 */}
         <Route path="/monitor" element={<Monitor />} />
         <Route path="/review" element={<Review />} />
@@ -52,12 +55,15 @@ export default function App() {
         <Route path="/tip-detail" element={<LegacyRedirect to="/tip-detail.html" />} />
         <Route path="*" element={<Navigate to="/monitor" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }
 
 /** 跳转到旧版 HTML 页面 */
 function LegacyRedirect({ to }: { to: string }) {
-  window.location.href = to
+  if (typeof window !== 'undefined') {
+    window.location.href = to
+  }
   return null
 }

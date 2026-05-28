@@ -161,7 +161,7 @@
 .modal .search-results {
   background: #0f0f1a; border: 1px solid #2a2a4e;
   border-radius: 8px; max-height: 200px; overflow-y: auto;
-  display: none; margin-top: 4px;
+  margin-top: 4px; position: static;
 }
 .modal .search-results .result-item {
   padding: 8px 12px; cursor: pointer; font-size: 13px;

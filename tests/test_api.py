@@ -185,7 +185,8 @@ class TestWatchlistAPI:
                 s = list(stocks.values())[0]
             else:
                 s = stocks[0]
-            must_have(s, 'code', 'name', 'price')
+            must_have(s, 'code', 'name')
+            # price 字段可选（有实时数据时才有）
 
     def test_search(self):
         """搜索（需 URL 编码）"""

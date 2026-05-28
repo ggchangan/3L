@@ -4,10 +4,13 @@ review_compute_service.py — 复盘计算层
 所有函数接收数据为参数，不直接依赖文件 I/O（可测试）
 """
 import json, os, sys, requests, math
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from backend import config
 from backend.config import DATA_DIR, ALL_STOCKS_PATH, WWW_DIR, MAINLINES_CACHE_PATH
+
+MAINLINE_FULL_CACHE = os.path.join(DATA_DIR, '.cache', 'mainline_full.json')
+MAINLINE_HISTORY_PATH = os.path.join(DATA_DIR, 'mainline_history.json')
 
 # ═══════════════════════════════════════════════════════════════
 # 工具函数
@@ -21,6 +24,14 @@ def to_yyyymmdd(d):
     if len(d) == 10 and d[4] == '-':
         return d
     return d
+
+
+def is_trading_day(date_str):
+    """简单交易日判断（仅按周末，不考虑法定节假日）"""
+    if not date_str:
+        return False
+    dt = datetime.strptime(date_str[:10], '%Y-%m-%d')
+    return dt.weekday() < 5
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -92,27 +103,6 @@ def get_industry_rankings():
     except Exception as e:
         print(f"[WARN] 获取行业排行失败: {e}")
         return []
-
-
-def _calc_board_20d(ind_name):
-    """计算单板块20日涨幅"""
-    import akshare as ak
-    try:
-        start_date = (datetime.now() - timedelta(days=45)).strftime('%Y%m%d')
-        end_date = datetime.now().strftime('%Y%m%d')
-        df = ak.stock_board_industry_index_ths(symbol=ind_name, start_date=start_date, end_date=end_date)
-        if len(df) < 15:
-            return None
-        recent = df.tail(20) if len(df) >= 20 else df.tail(len(df))
-        if len(recent) < 10:
-            return None
-        chg_20d = (recent.iloc[-1]['收盘价'] / recent.iloc[0]['收盘价'] - 1) * 100
-        return {
-            'name': ind_name,
-            'chg_20d': round(chg_20d, 2),
-        }
-    except:
-        return None
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -286,24 +276,35 @@ def _fallback_cycle(klines):
 # ═══════════════════════════════════════════════════════════════
 
 def get_mainline_data(date_str):
-    """三梯队：前5=主线，6~10=次级主线，其余=非主线"""
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import akshare as ak
+    """三梯队：前5=主线，6~10=次级主线，其余=非主线（当天文件缓存）"""
+    # 检查当天缓存
+    if os.path.isfile(MAINLINE_FULL_CACHE):
+        try:
+            with open(MAINLINE_FULL_CACHE) as _f:
+                cached = json.load(_f)
+            if cached.get('date') == date_str:
+                print(f"[3L复盘] 主线数据读缓存 {date_str}")
+                return cached
+        except Exception:
+            pass
 
-    try:
-        name_df = ak.stock_board_industry_name_ths()
-        industries = name_df['name'].tolist()
-    except Exception as e:
-        print(f"[WARN] 获取板块名称失败: {e}")
-        return {'lines': [], 'secondary': [], 'industries': get_industry_rankings()}
+    # 从本地板块K线数据计算20日涨幅（cron 17:00 已通过 update_sectors() 拉好）
+    from backend.core.data_layer import get_sector_daily
+    sector_data = get_sector_daily()
+    industries_data = sector_data.get('industries', {})
+    if not industries_data:
+        print(f"[WARN] 本地板块数据为空（sector_daily.json 可能未更新）")
+        return {'lines': [], 'secondary': [], 'industries': get_industry_rankings(), 'all_ranked': []}
 
     scores = []
-    with ThreadPoolExecutor(max_workers=10) as pool:
-        fut_map = {pool.submit(_calc_board_20d, ind): ind for ind in industries}
-        for fut in as_completed(fut_map):
-            r = fut.result()
-            if r:
-                scores.append(r)
+    for name, klines in industries_data.items():
+        try:
+            if len(klines) < 20:
+                continue
+            chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
+            scores.append({'name': name, 'chg_20d': round(chg_20d, 2)})
+        except Exception:
+            continue
 
     scores.sort(key=lambda x: x['chg_20d'], reverse=True)
     daily_rankings = get_industry_rankings()
@@ -311,17 +312,69 @@ def get_mainline_data(date_str):
     main_lines = scores[:5]
     secondary_lines = scores[5:10]
 
-    return {
+    result = {
+        'date': date_str,
         'lines': main_lines,
         'secondary': secondary_lines,
         'industries': daily_rankings,
         'all_ranked': scores,
     }
 
+    # 写入缓存
+    os.makedirs(os.path.dirname(MAINLINE_FULL_CACHE), exist_ok=True)
+    with open(MAINLINE_FULL_CACHE, 'w') as _f:
+        json.dump(result, _f)
+    print(f"[3L复盘] 主线数据已缓存 {date_str}")
+
+    # 保存当日 top10 到历史记录（用于持续性跟踪）
+    try:
+        top10_names = [l['name'] for l in (main_lines + secondary_lines)]
+        history = {}
+        if os.path.isfile(MAINLINE_HISTORY_PATH):
+            with open(MAINLINE_HISTORY_PATH) as _fh:
+                history = json.load(_fh)
+        # 只保留当天及之前的历史（防止future覆盖）
+        history = {k: v for k, v in history.items() if k <= date_str}
+        history[date_str] = {'top10': top10_names}
+        with open(MAINLINE_HISTORY_PATH, 'w') as _fh:
+            json.dump(history, _fh, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[3L复盘] ⚠️ 历史记录保存失败: {e}")
+
+    return result
+
 
 def track_mainline_persistence(date_str, current_lines):
-    """主线持续性跟踪"""
-    return [{'name': l['name'], 'days': 1, 'status': '持续'} for l in current_lines]
+    """主线持续性跟踪 — 从历史记录追溯连续在榜天数"""
+    if not current_lines:
+        return []
+
+    try:
+        history = {}
+        if os.path.isfile(MAINLINE_HISTORY_PATH):
+            with open(MAINLINE_HISTORY_PATH) as _fh:
+                history = json.load(_fh)
+    except Exception:
+        return [{'name': l['name'], 'days': 1, 'status': '持续'} for l in current_lines]
+
+    # 获取所有历史日期，从最近到最远
+    past_dates = sorted([d for d in history.keys() if d < date_str], reverse=True)
+    result = []
+
+    for line in current_lines:
+        name = line['name']
+        days = 1  # 当天算1天
+        # 逐日往前追溯
+        for d in past_dates:
+            top10 = history[d].get('top10', [])
+            if name in top10:
+                days += 1
+            else:
+                break
+        status = '新进' if days == 1 else '持续'
+        result.append({'name': name, 'days': days, 'status': status})
+
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -498,107 +551,58 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 })
             elif stage == '区间中段':
                 plan['holdings_action'].append({
-                    'stock': name, 'action': '等待方向', 'reason': f'{struct}·{stage}，无明确方向', 'priority': '低'
+                    'stock': name, 'action': '持有·观望', 'reason': f'{struct}·{stage}，方向未明', 'priority': '低'
+                })
+            else:
+                plan['holdings_action'].append({
+                    'stock': name, 'action': '持有', 'reason': f'{struct}·{stage}', 'priority': '中'
                 })
 
     if buy_signals_review:
-        for s in buy_signals_review:
-            is_main = s.get('sector', '') in [l.split('(')[0] for l in plan['main_lines']]
-            pm1 = s.get('profit_model1', False)
-            trend = s.get('trend_stock', False)
-            priority = 0
-            if is_main and s['buy_point'] == '突破买点' and pm1:
-                priority = 1
-            elif is_main and s['buy_point'] == '突破买点':
-                priority = 2
-            elif is_main and s['buy_point'] == '中继买点' and pm1:
-                priority = 3
-            elif is_main and s['buy_point'] == '中继买点':
-                priority = 4
-            elif s['buy_point'] == '突破买点':
-                priority = 5
-            else:
-                priority = 6
+        for bs in buy_signals_review[:5]:
             plan['buy_priority'].append({
-                'name': s['name'], 'code': s['code'], 'sector': s.get('sector', ''),
-                'buy_point': s['buy_point'], 'is_main': is_main,
-                'profit_model1': pm1, 'trend_stock': trend, 'priority': priority,
-                'change': s.get('change', 0),
+                'name': bs.get('name', bs.get('code', '')),
+                'code': bs.get('code', ''),
+                'buy_point': bs.get('buy_point', '') or bs.get('flags', '') or '买点信号',
+                'change': bs.get('change'),
+                'mainline_level': bs.get('mainline_level', ''),
+                'is_main': bs.get('mainline_level', '') in ('主线', '次级主线'),
+                'profit_model1': bs.get('profit_model1', False),
+                'trend_stock': bs.get('trend_stock', False),
+                'structure': bs.get('structure', ''),
+                'priority': '高' if bs.get('buy_point', '') in ('中继买点', '突破买点') else '中',
             })
-        plan['buy_priority'].sort(key=lambda x: x['priority'])
-        plan['buy_priority'] = sorted(plan['buy_priority'], key=lambda x: (x['priority'], -x['change']))
-        plan['buy_priority'] = plan['buy_priority'][:10]
 
-    score = market_cycle.get('score', 0)
-    if score >= 0.8:
-        plan['risk_items'].append('🔴 大盘偏波峰，控制总仓位，收紧止盈')
-    elif score <= -0.5:
-        plan['risk_items'].append('🟢 大盘偏波谷，积极寻找买点机会')
+    # 排序：个股操作 高→低
+    PRIORITY_ORDER = {'高': 0, '中': 1, '低': 2}
+    plan['holdings_action'].sort(key=lambda x: PRIORITY_ORDER.get(x.get('priority', '中'), 2))
 
-    if holdings_review:
-        sell_stocks = [h for h in holdings_review if h.get('signal') == 'sell']
-        weak_stocks = [h for h in holdings_review if h.get('stage') in ('转弱', '滞涨') and h.get('signal') != 'sell']
-        accel_stocks = [h for h in holdings_review if h.get('stage') == '加速']
-        if sell_stocks:
-            names = '、'.join([h['name'] for h in sell_stocks])
-            plan['risk_items'].append(f'🔴 {names} 触发卖出信号，严格按计划执行')
-        if weak_stocks:
-            names = '、'.join([h['name'] for h in weak_stocks])
-            plan['risk_items'].append(f'⚠️ {names} 趋势转弱/滞涨，关注止损位')
-        if accel_stocks:
-            names = '、'.join([h['name'] for h in accel_stocks])
-            plan['risk_items'].append(f'📈 {names} 处于加速阶段，关注左侧止盈信号')
+    # 排序：关注买点 主线级 > 趋势状态
+    MAINLINE_ORDER = {'主线': 0, '次级主线': 1}
+    STRUCTURE_ORDER = {'上涨趋势': 0, '区间震荡': 1, '区间中段': 1, '区间底部': 1, '区间顶部': 2, '下降趋势': 3}
+    plan['buy_priority'].sort(key=lambda x: (
+        MAINLINE_ORDER.get(x.get('mainline_level', ''), 2),
+        STRUCTURE_ORDER.get(x.get('structure', ''), 4),
+        -(x.get('change', 0) or 0),  # 同优先级涨幅高的靠前
+    ))
 
-    if holdings_review and len(holdings_review) <= 3:
-        plan['risk_items'].append(f'💡 持仓集中度较高（仅{len(holdings_review)}只），考虑分散风险')
-    elif holdings_review and len(holdings_review) >= 10:
-        plan['risk_items'].append(f'💡 持仓较为分散（{len(holdings_review)}只），可聚焦主线精简持仓')
-
-    if not plan['risk_items']:
-        plan['risk_items'].append('✅ 整体风险可控，按正常节奏交易')
-
-    pri_order = {'高': 0, '中': 1, '低': 2}
-    plan['holdings_action'].sort(key=lambda x: pri_order.get(x['priority'], 9))
+    pk_score = market_cycle.get('pk_score', 0)
+    vl_score = market_cycle.get('vl_score', 0)
+    bias20 = market_cycle.get('bias20', 0)
+    if pk_score >= 4:
+        plan['risk_items'].append(f'大盘偏波峰（pk_score={pk_score}），控制仓位')
+    if bias20 > 5:
+        plan['risk_items'].append(f'乖离率偏高（BIAS20={bias20:.1f}%），警惕回调')
+    if vl_score >= 3:
+        plan['risk_items'].append(f'大盘偏波谷（vl_score={vl_score}），积极寻找机会')
 
     return plan
 
 
 # ═══════════════════════════════════════════════════════════════
-# 交易日判断
+# 辅助函数（供外部调用）
 # ═══════════════════════════════════════════════════════════════
 
-def is_trading_day(date_str):
-    """用akshare交易日历判断是否为A股交易日（含缓存）"""
-    cache_file = os.path.join(config.PRIVATE_DIR, 'trading_days_cache.json')
-    trading_days = None
-    if os.path.isfile(cache_file):
-        try:
-            with open(cache_file) as _f:
-                _c = json.load(_f)
-            _cached_at = _c.get('cached_at', '')
-            if _cached_at:
-                _cache_dt = datetime.strptime(_cached_at, '%Y-%m-%d')
-                if (datetime.now() - _cache_dt).days <= 7:
-                    trading_days = _c.get('days', [])
-        except:
-            pass
-    if trading_days is None:
-        try:
-            import akshare as _ak
-            _df = _ak.tool_trade_date_hist_sina()
-            trading_days = sorted(_df['trade_date'].astype(str).tolist())
-            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
-            with open(cache_file, 'w') as _f:
-                json.dump({'cached_at': datetime.now().strftime('%Y-%m-%d'), 'days': trading_days}, _f)
-        except Exception as _e:
-            print(f"[3L复盘] ⚠️ 交易日历获取失败: {_e}，降级为周末检查")
-            _dt = datetime.strptime(date_str, '%Y-%m-%d')
-            return _dt.weekday() < 5
-    return date_str in trading_days
-
-
 def load_market_data_for_profit_check():
-    """加载全量股票K线数据"""
-    from backend.config import ALL_STOCKS_PATH
-    from backend.core.data_layer import _load_json
-    return _load_json(ALL_STOCKS_PATH, {})
+    """加载市场数据（用于业绩排雷对照）"""
+    return {}

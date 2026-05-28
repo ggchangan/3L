@@ -199,6 +199,8 @@ class TestGetStockCardIntegration:
         def mock_get_industry_map():
             return {'000001': {'name': '测试股', 'ths_industry': '半导体'}}
 
+        # mock _ALL_A_STOCKS（name 来源）
+        monkeypatch.setattr(scs, '_ALL_A_STOCKS', {'000001': '测试股'})
         monkeypatch.setattr('backend.services.stock_card_service.get_stock_klines', mock_get_stock_klines)
         monkeypatch.setattr('backend.services.stock_card_service.get_industry_map', mock_get_industry_map)
 
@@ -319,13 +321,13 @@ class TestGetStockCardIntegration:
         assert card['price'] > 0
 
     def test_get_stock_card_with_downtrend_klines(self):
-        """下降趋势K线 → structure=下降趋势"""
+        """下降趋势K线 → structure=下降趋势, signal=sell"""
         from backend.services.stock_card_service import get_stock_card
         from tests.test_stock_card_service import _make_klines, _DOWNTREND, _DATES
         klines = _make_klines(_DOWNTREND, _DATES)
         card = get_stock_card(code='999999', date_str='20260920', klines=klines)
         assert card['structure'] == '下降趋势'
-        assert card['signal'] == 'hold'
+        assert card['signal'] == 'sell'
 
     def test_get_stock_card_with_range_klines(self):
         """区间震荡K线 → structure=区间震荡"""

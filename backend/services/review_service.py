@@ -144,20 +144,24 @@ def load_review_data(date_str, existing, ww_dir):
 
 def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
                                 ww_dir, all_stocks_path, mainline_data,
-                                market_cycle, wl_func):
+                                market_cycle, wl_func, holdings_codes=None):
     """扫描/过滤买点信号
 
     始终按当前已启用方向过滤 buy_signals，
+    按 holdings_codes + 启用方向自选股限定扫描范围，
     必要时才执行全量扫描（buy_signals 为空时）。
 
     Returns: (buy_signals, all_stocks_60d)
     """
-    # ── 始终加载 watchlist 并按已启用方向过滤 ──────────────
+    # ── 加载 watchlist 并按已启用方向过滤 ──────────────
     from backend.services.direction_service import get_active as get_active_dirs
     active_dirs = get_active_dirs()
     wl = wl_func() if callable(wl_func) else []
     wl = [s for s in wl if s.get('direction', '其他') in active_dirs]
     wl_codes = set(s['code'] for s in wl)
+    # 合并持仓股代码，确保持仓股也被扫描
+    if holdings_codes:
+        wl_codes |= holdings_codes
 
     # 已有信号 → 按当前启用方向过滤后返回（排除禁用方向的历史数据）
     if buy_signals:
@@ -538,28 +542,28 @@ def compute_review_real_time(date_str=None):
     """纯实时计算复盘数据，不读写存档、不生成文档/图表
 
     返回完整的 review dict，供 /api/review/today 实时调用。
+    无缓存，每次重新读取本地文件实时计算。
     """
     if not date_str:
         date_str = datetime.now().strftime('%Y-%m-%d')
 
     from backend.services.review_compute_service import (
-        is_trading_day, fetch_index_klines, fetch_market_quote,
+        is_trading_day,
         judge_peak_valley, get_mainline_data, track_mainline_persistence,
         generate_trading_plan, get_buy_sell_signals, load_market_data_for_profit_check,
     )
     from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
     from backend.core.scan_buy_signals import get_main_lines
-    from backend.core.data_layer import get_watchlist, get_all_stocks
+    from backend.core.data_layer import get_watchlist, get_all_stocks, get_index_klines
 
     print(f"[3L复盘实时] 计算 {date_str} 复盘数据...")
 
-    # 获取大盘K线数据
-    index_klines = fetch_index_klines(120)
-    index_klines = [k for k in index_klines if k['date'] <= date_str]
-    if not index_klines:
-        index_klines = fetch_index_klines(120)
-        index_klines = [k for k in index_klines if k['date'] <= date_str]
-    today_quote = fetch_market_quote()
+    # 获取大盘K线数据（本地，17:00 cron 已更新）
+    index_klines = get_index_klines()
+    if isinstance(index_klines, list):
+        index_klines = [k for k in index_klines if k['date'] <= date_str.replace('-', '')]
+    else:
+        index_klines = []
 
     # ① 大盘周期判定
     market_cycle = judge_peak_valley(index_klines)
@@ -580,7 +584,7 @@ def compute_review_real_time(date_str=None):
         persistence = track_mainline_persistence(date_str, mainline_data['lines'])
         mainline_data['persistence'] = persistence
 
-    # ③ 实时扫描买点信号（传空列表强制全量扫描 + 方向过滤）
+    # ③ 扫描买点信号（只扫持仓股 + 启用方向自选股）
     all_stocks = get_all_stocks()
     all_stocks_60d = all_stocks.get('stocks', {}) if isinstance(all_stocks, dict) else {}
     if not all_stocks_60d:
@@ -588,13 +592,7 @@ def compute_review_real_time(date_str=None):
             with open(ALL_STOCKS_PATH) as _f:
                 all_stocks_60d = json.load(_f).get('stocks', {})
 
-    buy_signals, all_stocks_60d = scan_buy_signals_if_needed(
-        [], all_stocks_60d,
-        date_str, WWW_DIR, ALL_STOCKS_PATH,
-        mainline_data, market_cycle, get_watchlist,
-    )
-
-    # 从实时 buy_signals 生成持仓信号
+    # 先加载持仓股，合并到扫描范围
     holdings_file = os.path.join(DATA_DIR, 'private', 'holdings.json')
     holdings = []
     if os.path.isfile(holdings_file):
@@ -604,6 +602,13 @@ def compute_review_real_time(date_str=None):
             holdings = hdata.get('holdings', [])
         except Exception:
             pass
+
+    buy_signals, all_stocks_60d = scan_buy_signals_if_needed(
+        [], all_stocks_60d,
+        date_str, WWW_DIR, ALL_STOCKS_PATH,
+        mainline_data, market_cycle, get_watchlist,
+        holdings_codes={h['code'] for h in holdings if h.get('code')},
+    )
 
     timing_signals, stock_cache, bs_by_code = get_buy_sell_signals(
         holdings, buy_signals, date_str, all_stocks_data=all_stocks_60d
@@ -651,10 +656,6 @@ def compute_review_real_time(date_str=None):
     }
     save_json(MAINLINES_CACHE_PATH, _mainlines_cache)
 
-    # 获取方向顺序（用户自定义排序）
-    from backend.services.direction_service import get_all_ordered as _get_dir_order
-    direction_order = _get_dir_order()
-
     review = {
         'date': date_str,
         'market': {**market_cycle, 'date': date_str},
@@ -665,7 +666,6 @@ def compute_review_real_time(date_str=None):
         'buy_signals': buy_signals,
         'holdings_review': holdings_review,
         'buy_signals_review': buy_signals_review,
-        'direction_order': direction_order,
     }
 
     return review

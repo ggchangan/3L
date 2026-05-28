@@ -225,6 +225,23 @@ def _handle_search_stocks(h, path):
                 'direction': info.get('direction', ''),
                 'industry': info.get('ths_industry', '')})
 
+    # 1.5 拼音首字母搜索（如 "fwkj" → 飞沃科技）
+    if not matched or len(matched) < 20:
+        pinyin_path = os.path.join(DATA_DIR, 'pinyin_initials.json')
+        if os.path.isfile(pinyin_path):
+            try:
+                pinyin_map = json.load(open(pinyin_path))
+                for code, initials in pinyin_map.items():
+                    if code not in seen and q in initials.lower():
+                        seen.add(code)
+                        name = names.get(code, '')
+                        info = imap.get(code, {})
+                        matched.append({'code': code, 'name': name,
+                            'direction': info.get('direction', ''),
+                            'industry': info.get('ths_industry', '')})
+            except:
+                pass
+
     # 2. 搜索同花顺板块成分股映射
     for board_name, stocks in boards.items():
         if q in board_name.lower():

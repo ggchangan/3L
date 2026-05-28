@@ -156,8 +156,7 @@ def toggle_trend_stock(code, enable):
         # 取消趋势时恢复 watchlist 里的 trading_system 字段
         _set_watchlist_trading_system(code, '3l')
     if changed:
-        with open(MANUAL_TREND_PATH, 'w') as f:
-            json.dump(sorted(manual), f)
+        config.atomic_json_dump(sorted(manual), MANUAL_TREND_PATH)
     return {'success': True, 'in_manual': code in manual}
 
 
