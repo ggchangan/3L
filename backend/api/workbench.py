@@ -2,20 +2,19 @@
 工作台 API 路由
 """
 import json
-import os
 from urllib.parse import urlparse, parse_qs
 
 from backend.services.workbench_service import get_log, save_log, list_logs
-from backend.config import REVIEW_DATA_PATH
 
 
 def _handle_suggestions(h, path):
-    """GET /api/workbench/suggestions — 从复盘拉取操作建议"""
-    review = {}
-    if os.path.isfile(REVIEW_DATA_PATH):
-        with open(REVIEW_DATA_PATH, 'r', encoding='utf-8') as f:
-            review = json.load(f)
-    trading_plan = review.get('trading_plan', {})
+    """GET /api/workbench/suggestions — 从复盘拉取操作建议（实时计算）"""
+    from backend.services.review_service import compute_review_real_time
+    try:
+        review = compute_review_real_time()
+        trading_plan = review.get('trading_plan', {})
+    except Exception:
+        trading_plan = {}
     h.send_json({
         'holdings_action': trading_plan.get('holdings_action', []),
         'buy_priority': trading_plan.get('buy_priority', []),
