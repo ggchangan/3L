@@ -559,7 +559,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 })
 
     if buy_signals_review:
-        for bs in buy_signals_review[:5]:
+        for bs in buy_signals_review:
             plan['buy_priority'].append({
                 'name': bs.get('name', bs.get('code', '')),
                 'code': bs.get('code', ''),
