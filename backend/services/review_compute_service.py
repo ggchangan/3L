@@ -565,12 +565,26 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'code': bs.get('code', ''),
                 'buy_point': bs.get('buy_point', '') or bs.get('flags', '') or '买点信号',
                 'change': bs.get('change'),
+                'mainline_level': bs.get('mainline_level', ''),
                 'is_main': bs.get('mainline_level', '') in ('主线', '次级主线'),
                 'profit_model1': bs.get('profit_model1', False),
                 'trend_stock': bs.get('trend_stock', False),
                 'structure': bs.get('structure', ''),
                 'priority': '高' if bs.get('buy_point', '') in ('中继买点', '突破买点') else '中',
             })
+
+    # 排序：个股操作 高→低
+    PRIORITY_ORDER = {'高': 0, '中': 1, '低': 2}
+    plan['holdings_action'].sort(key=lambda x: PRIORITY_ORDER.get(x.get('priority', '中'), 2))
+
+    # 排序：关注买点 主线级 > 趋势状态
+    MAINLINE_ORDER = {'主线': 0, '次级主线': 1}
+    STRUCTURE_ORDER = {'上涨趋势': 0, '区间震荡': 1, '区间中段': 1, '区间底部': 1, '区间顶部': 2, '下降趋势': 3}
+    plan['buy_priority'].sort(key=lambda x: (
+        MAINLINE_ORDER.get(x.get('mainline_level', ''), 2),
+        STRUCTURE_ORDER.get(x.get('structure', ''), 4),
+        -(x.get('change', 0) or 0),  # 同优先级涨幅高的靠前
+    ))
 
     pk_score = market_cycle.get('pk_score', 0)
     vl_score = market_cycle.get('vl_score', 0)
