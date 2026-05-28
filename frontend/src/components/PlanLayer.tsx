@@ -26,6 +26,7 @@ function mergePlans(yesterday: PlanItem[], today: PlanItem[]): PlanItem[] {
 }
 
 export default function PlanLayer() {
+  const [collapsed, setCollapsed] = useState(false)
   const [buy, setBuy] = useState<PlanItem[]>([])
   const [sell, setSell] = useState<PlanItem[]>([])
   const [watch, setWatch] = useState<PlanItem[]>([])
@@ -79,11 +80,12 @@ export default function PlanLayer() {
 
   return (
     <div className="layer plan-layer">
-      <div className="layer-title">
+      <div className="layer-title" style={{ cursor: 'pointer' }} onClick={() => setCollapsed(v => !v)}>
         <span className="badge-layer">②</span> 📋 今日计划
         <span className="badge" style={{ background: badgeBg }}>{badgeText}</span>
+        <span className="collapse-indicator" style={{ marginLeft: 6, fontSize: 10, color: '#888' }}>{collapsed ? '▶' : '▼'}</span>
       </div>
-      {!loaded ? (
+      {!collapsed && (!loaded ? (
         <div className="empty">正在加载计划…</div>
       ) : (
         <div id="todayPlanArea">
@@ -186,7 +188,7 @@ export default function PlanLayer() {
             </>
           )}
         </div>
-      )}
+      ))}
     </div>
   )
 }

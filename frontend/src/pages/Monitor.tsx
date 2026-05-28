@@ -13,6 +13,7 @@ import AlarmLayer, { pushAlarm } from '../components/AlarmLayer'
 
 export default function Monitor() {
   const [updateTime, setUpdateTime] = useState('等待数据...')
+  const [collapseInfo, setCollapseInfo] = useState(false)
   const [collapseSectors, setCollapseSectors] = useState(true)
   const [collapseBuySignals, setCollapseBuySignals] = useState(true)
 
@@ -67,10 +68,12 @@ export default function Monitor() {
 
         {/* ③ 信息层 */}
         <div className="layer info-layer">
-          <div className="layer-title">
+          <div className="layer-title" style={{ cursor: 'pointer' }} onClick={() => setCollapseInfo(v => !v)}>
             <span className="badge-layer">③</span> 📊 实时信息
+            <span className="collapse-indicator" style={{ marginLeft: 6, fontSize: 10, color: '#888' }}>{collapseInfo ? '▶' : '▼'}</span>
           </div>
 
+          {!collapseInfo && (<>
           {/* 大盘观测 */}
           <div className="info-block">
             <MarketQuote />
@@ -114,6 +117,7 @@ export default function Monitor() {
           <div className="info-block">
             <StopLossArea />
           </div>
+          </>)}
         </div>
 
         {/* ④ 报警层 */}
