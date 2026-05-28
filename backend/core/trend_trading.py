@@ -219,7 +219,12 @@ def is_smooth_trend(code, date_str, data):
     
     if not klines or len(klines) < 30:
         return {'is_smooth': False, 'details': {'reason': f'数据不足{len(klines) if klines else 0}'}}
-    
+
+    # 按 date_str 截断（函数接受此参数但之前未使用）
+    if date_str:
+        date_clean = date_str.replace('-', '')
+        klines = [k for k in klines if k.get('date', '') <= date_clean]
+
     n = len(klines)
     closes = [k['close'] for k in klines]
     ema5 = ema_list(closes, 5)

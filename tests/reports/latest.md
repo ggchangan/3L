@@ -1,23 +1,24 @@
 # 3L 全回归测试报告
 
-> 时间: 2026-05-28 17:39:54 | 模式: standard
+> 时间: 2026-05-28 21:08:53 | 模式: standard
 
 ## 总览
 
 | 等级 | 通过 | 失败 | 总计 |
 |:---|:---:|:---:|:---:|
 | ✅ **CRITICAL** | 2 | 0 | 2 |
-| ✅ **WARNING** | 3 | 0 | 3 |
+| ✅ **WARNING** | 4 | 0 | 4 |
 | ⬜ **INFO** | 0 | 0 | 0 |
 
 ## 详细结果
 
 | # | 测试 | 等级 | 结果 | 耗时 | 摘要 |
 |:---:|:---|:---:|:---:|:---:|:---|
-| 1 | 前端组件渲染测试 | 🔴CRITICAL | ✅ | 19.9s | exit code: 0 |
-| 2 | 后端单元测试 | 🔴CRITICAL | ✅ | 31.7s | tests/test_services.py::TestGetTopSectors::test_returns_error_dict_on_failure PASSED [ 68%] |
+| 1 | 前端组件渲染测试 | 🔴CRITICAL | ✅ | 21.4s | exit code: 0 |
+| 2 | 后端单元测试 | 🔴CRITICAL | ✅ | 29.8s | tests/test_services.py::TestGetTopSectors::test_returns_error_dict_on_failure PASSED [ 68%] |
 | 3 | 设计文档交叉检查 | 🟡WARNING | ✅ | 0.0s | exit code: 0 |
 | 4 | UI风格一致性审计 | 🟡WARNING | ✅ | 0.0s | exit code: 0 |
 | 5 | 后端API合约测试（需服务运行） | 🟡WARNING | ✅ | 2.2s | tests/test_api.py::TestLeaderDashboard::test_response_structure PASSED   [ 33%] |
+| 6 | 数据新鲜度检查（最新交易日 vs 当前日期） | 🟡WARNING | ✅ | 0.0s | exit code: 0 |
 > ⚠️ UI审计: ⚠️ 低频色 (72种, 用<3次 — 可能不规范):
 > ⚠️ UI审计: 输入框风格不一致: 6个页面没用search-input共享类

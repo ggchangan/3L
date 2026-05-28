@@ -477,11 +477,54 @@ def update_sectors():
 # 主入口
 # ════════════════════════════════════════════════════════════════
 
+def _ensure_mootdx_config():
+    """确保 mootdx 配置文件中有有效的 BESTIP，避免空配置导致连接失败。"""
+    from pathlib import Path
+    import json
+    config_path = Path.home() / '.mootdx' / 'config.json'
+    if not config_path.exists():
+        return
+    try:
+        cfg = json.loads(config_path.read_text(encoding='utf-8'))
+        bestip = cfg.get('BESTIP', {})
+        hq = bestip.get('HQ', '')
+        if not hq or (isinstance(hq, (list, tuple)) and len(hq) != 2):
+            # 空BESTIP或格式错误 → 写入一个已知可达的服务器
+            bestip['HQ'] = ['218.6.170.47', 7709]
+            bestip['EX'] = ['47.112.95.207', 7720]
+            bestip['GP'] = ['120.76.152.87', 7709]
+            config_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding='utf-8')
+            log('🔧 已修复 mootdx 配置: BESTIP.HQ 为空，填入默认服务器')
+    except Exception as e:
+        log(f'⚠️  读取mootdx配置失败: {e}')
+
+
+def _create_mootdx_client(max_retries=3, delay=5):
+    """创建 mootdx 客户端，带重试机制。通达信服务器偶发连接失败，自动重试。"""
+    from mootdx.quotes import Quotes
+    last_err = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            client = Quotes.factory(market='std')
+            # 快速验证：请求1根K线确认连接可用
+            test = client.bars(symbol='000001', frequency=9, start=0, count=1)
+            if test is not None:
+                return client
+        except Exception as e:
+            last_err = e
+            log(f'⚠️  mootdx连接第{attempt}次失败: {e}')
+            if attempt < max_retries:
+                time.sleep(delay)
+    raise last_err or RuntimeError('mootdx所有重试均失败')
+
+
 def main():
     t0 = time.time()
 
-    from mootdx.quotes import Quotes
-    client = Quotes.factory(market='std')
+    # 启动前确保 mootdx 配置有效（避免空BESTIP导致连接失败）
+    _ensure_mootdx_config()
+
+    client = _create_mootdx_client()
 
     # 阶段1: 个股
     log('━━━ 个股更新 ━━━')

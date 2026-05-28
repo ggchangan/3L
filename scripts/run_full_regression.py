@@ -71,6 +71,44 @@ TESTS = [
         'tier': 'WARNING',
         'timeout': 30,
     },
+    {
+        'id': 'data-freshness',
+        'name': '数据新鲜度检查（最新交易日 vs 当前日期）',
+        'cmd': [VENV_PYTHON, '-c', """
+import json, os, sys
+from datetime import datetime
+path = os.path.join(os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'all_stocks_60d.json')
+raw = json.load(open(path))
+last = raw.get('last_updated', '')
+if not last:
+    print('❌ 无 last_updated 字段')
+    sys.exit(1)
+today = datetime.now().strftime('%Y%m%d')
+weekday = datetime.now().weekday()
+if weekday >= 5:
+    print(f'✅ 周末({today}), 最后数据: {last}')
+    sys.exit(0)
+if last >= today:
+    print(f'✅ 数据最新: {last}')
+    sys.exit(0)
+else:
+    diff_days = (datetime.strptime(today, '%Y%m%d') - datetime.strptime(last, '%Y%m%d')).days
+    print(f'⚠️  数据滞后: 最新={last}, 今日={today}, 差{diff_days}天')
+    # 周一允许滞后3天（周末），平时允许1天
+    if weekday == 0:  # 周一
+        cutoff = 3
+    else:
+        cutoff = 1
+    if diff_days > cutoff:
+        print(f'❌ 数据过期超过允许值({cutoff}天)')
+        sys.exit(1)
+    print(f'✅ 滞后在允许范围(≤{cutoff}天)')
+    sys.exit(0)
+"""],
+        'cwd': PROJECT_DIR,
+        'tier': 'WARNING',
+        'timeout': 5,
+    },
 ]
 
 # ══════════════════════════════════════════════
