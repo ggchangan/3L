@@ -304,6 +304,8 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/directions/reorder': ('backend.api.directions', '_handle_reorder'),
             '/api/workbench/save': ('backend.api.workbench', '_handle_save'),
             '/api/alarms/remove': ('backend.api.alarms', '_handle_remove'),
+            '/api/monitor/add-watched-industry': ('backend.api.monitor', '_handle_add_watched'),
+            '/api/monitor/remove-watched-industry': ('backend.api.monitor', '_handle_remove_watched'),
             '/api/holdings/save': ('backend.api.holdings', '_handle_save'),
             '/api/logic-tracking/tags/add': ('backend.api.logic_tracking', '_handle_add_tag'),
             '/api/logic-tracking/tags/update': ('backend.api.logic_tracking', '_handle_update_tag'),

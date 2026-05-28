@@ -36,6 +36,10 @@ export function fetchMarketLeaders(): Promise<MarketLeadersData> {
   return fetchJson<MarketLeadersData>('/api/monitor/market-leaders')
 }
 
+export function fetchLeaderDashboard(): Promise<LeaderDashboardData> {
+  return fetchJson<LeaderDashboardData>('/api/monitor/leader-dashboard')
+}
+
 export function fetchBuySignals(): Promise<BuySignalsData> {
   return fetchJson<BuySignalsData>('/api/monitor/buy-signals')
 }
