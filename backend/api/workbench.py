@@ -4,6 +4,7 @@ from urllib.parse import urlparse, parse_qs
 from datetime import date, timedelta
 
 from backend.services.workbench_service import get_log, save_log, list_logs
+from backend.services.alarm_service import sync_alarms_from_plan
 
 
 def _handle_suggestions(h, path):
@@ -29,14 +30,26 @@ def _handle_get(h, path):
 
 
 def _handle_save(h, path, body):
-    """POST /api/workbench/save"""
+    """POST /api/workbench/save
+
+    保存日志后自动同步报警到 alarms.json（持久化，独立于每日日志）
+    """
     try:
         data = json.loads(body)
         dt = data.get('date', '')
         if not dt:
             h.send_json({'success': False, 'error': '缺少日期'})
             return
+
+        # 保存日志
         result = save_log(dt, data)
+
+        # 同步报警到 alarms.json（提取 plan 中所有启用的 alert）
+        plan = data.get('plan', {})
+        if plan:
+            sync_result = sync_alarms_from_plan(plan)
+            result['alarm_sync'] = sync_result
+
         h.send_json(result)
     except Exception as e:
         h.send_json({'success': False, 'error': str(e)})
@@ -48,19 +61,14 @@ def _handle_list(h, path):
 
 
 def _handle_check_alerts(h, path):
-    """GET /api/workbench/check-alerts?date=2026-05-27
+    """GET /api/workbench/check-alerts
 
-    检查今日计划中的价格报警（默认昨日 -> 今日计划）
+    从 alarms.json 读取持久化报警，检查是否触发。
+    不再依赖每日日志文件。
     """
-    qs = parse_qs(urlparse(path).query)
-    dt = qs.get('date', [None])[0]
-    if not dt:
-        dt = (date.today() - timedelta(days=1)).isoformat()
     from backend.services.check_alerts import check_all_alerts
     try:
-        # 同时检查昨天和今天的计划（昨天的是明天计划，今天的是当日快速配置）
-        yst = (date.today() - timedelta(days=1)).isoformat()
-        result = check_all_alerts(merge_dates=[yst, date.today().isoformat()])
+        result = check_all_alerts()
         h.send_json(result)
     except Exception as e:
         h.send_json({'triggered': [], 'count': 0, 'error': str(e)})
@@ -69,7 +77,7 @@ def _handle_check_alerts(h, path):
 def register_routes(routes):
     routes.exact('/api/workbench/get', func=_handle_get)
     routes.exact('/api/workbench/list', func=_handle_list)
-    routes.exact('/api/workbench/save', func=_handle_save)  # POST handled separately
+    routes.exact('/api/workbench/save', func=_handle_save)
     routes.exact('/api/workbench/suggestions', func=_handle_suggestions)
     routes.exact('/api/workbench/check-alerts', func=_handle_check_alerts)
     return routes

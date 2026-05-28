@@ -1,5 +1,37 @@
 # Changelog
 
+## [v3.1.0] — 2026-05-28
+
+### 新增：独立持久化报警系统
+
+**报警现在独立存储，不再跟随每日计划文件过期。**
+
+- **alarm_service.py**：新增 `data/private/alarms.json` 持久化报警存储
+  - `save_alarm()` / `remove_alarm()` / `mark_alarm_triggered()` / `get_active_alarms()`
+  - `sync_alarms_from_plan()` — 工作台保存时自动同步
+  - 报警状态：active → triggered / disabled / expired
+  - 默认有效期7天，触发了自动标记
+- **check_alerts.py**：改从 `alarms.json` 读取报警配置，不再依赖每日日志文件
+  - 价格报警、偏差报警统一检查
+  - 触发的自动标记状态为 triggered，5分钟内不重复弹
+  - 核心股自动偏差报警（direction_service）保持并行
+- **alarms API**：`GET /api/alarms/list` 返回生效报警、`POST /api/alarms/remove` 删除
+- **workbench API**：保存日志后自动调用 `sync_alarms_from_plan()` 同步到 alarms.json
+- **PlanLayer（盯盘）**：新增 🔔 报警清单区块，显示所有生效中报警（类型、股票、止损/阈值）
+- **测试**：新增 `test_alarm_service.py` 11个 + 重构 `test_check_alerts.py` 9个
+- 全回归：665 passed / 2 skipped / 1 xfailed
+
+### 修复：盘中买点扫描只有趋势信号，3L买点全漏
+
+**根因：** `get_stock_card()` 传入实时K线（含预估全天成交量），但3L买点检测 `detect_buy_point()` 内部从 `get_all_stocks()` 读取了数据层的旧K线，旧K线没有预估成交量，量比算不对，所有3L买点（突破/中继/涨停回踩）全部漏掉。
+
+- **stock_card_service.py**：外部传 `klines` 参数时，覆盖 `all_stocks` 字典中对应股票的K线，`detect_buy_point` 现在用实时K线检测
+- **restore scan_buy_signals.py shim**：`scripts/` 目录清理时被误删，恢复指向 `backend.core.scan_buy_signals` 的shim
+- **测试**：新增 `test_external_klines_overrides_all_stocks_for_detect_buy_point`
+- 修复后扫描结果：1个趋势信号 → **11个信号（突破买点×8 + 中继买点×3 + 趋势×1）**
+
+---
+
 ## [v3.0.1] — 2026-05-28
 
 ### 修复：板块数据管线 + 主线持续天数跟踪

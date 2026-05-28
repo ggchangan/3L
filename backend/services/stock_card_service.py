@@ -322,6 +322,13 @@ def get_stock_card(code, date_str, market_position='波中',
         except Exception:
             all_stocks = {sector: {code: klines}}
 
+        # 外部传了实时K线时，覆盖 all_stocks 中对应股票的K线（含预估成交量）
+        if klines is not None and all_stocks:
+            for sec in list(all_stocks.keys()):
+                if code in all_stocks[sec]:
+                    all_stocks[sec][code] = klines
+                    break
+
         bt = detect_buy_point(code, date_clean, all_stocks,
                               market_position=market_position,
                               main_lines=main_line_names)
