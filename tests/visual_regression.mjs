@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 视觉回归测试 — 龙头观测页面截图对比
+ * 视觉回归测试 — 页面截图基线对比
  *
  * 用法:
  *   node tests/visual_regression.mjs              # 首次运行（生成基线）
@@ -22,31 +22,48 @@ const CURRENT_DIR = join(SCREENSHOTS_DIR, 'current');
 
 const BASE_URL = 'http://localhost:8080';
 
-// 需要截图的页面区域
 const SHOTS = [
   {
-    name: 'leader-dashboard',
-    description: '龙头观测：两区布局',
+    name: 'leader-dashboard-full',
+    description: '龙头观测：完整展开',
     path: '/monitor',
-    selector: '.info-block', // 只在龙头观测区块截图
+    type: 'viewport',
     viewport: { width: 1280, height: 900 },
   },
   {
     name: 'leader-dashboard-watched',
     description: '龙头观测：关注的行业表格',
     path: '/monitor',
-    selector: '.leader-table',
+    type: 'element',
+    selector: '.leader-table >> nth=0', // 第一个表格=关注的行业
     viewport: { width: 1280, height: 900 },
   },
 ];
+
+async function expandLeaderDashboard(page) {
+  // 点击"龙头观测"标题展开
+  const leaderTitle = page.locator('.block-title:has-text("🏆 龙头观测")');
+  await leaderTitle.waitFor({ state: 'visible', timeout: 10000 });
+  await leaderTitle.click();
+
+  // 等待展开后的内容出现（"关注的行业"子标题）
+  await page.locator('.block-title-sm:has-text("📋 关注的行业")').waitFor({ state: 'visible', timeout: 10000 });
+
+  // 等待实际数据渲染（等一只股票名称出现）
+  await page.waitForTimeout(2000); // 等API返回+渲染
+
+  // 尝试等任意龙头股名出现（证明数据已到）
+  await page.locator('.leader-table td b').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {
+    console.log('  ⚠️ 龙头数据未加载完成，继续截图');
+  });
+}
 
 async function main() {
   const mode = process.argv.includes('--compare') ? 'compare'
     : process.argv.includes('--update') ? 'update'
     : 'baseline';
 
-  console.log(`📸 视觉回归测试 — 模式: ${mode}`);
-  console.log(`   基线目录: ${BASELINE_DIR}`);
+  console.log(`📸 视觉回归 — 模式: ${mode}`);
   console.log();
 
   mkdirSync(BASELINE_DIR, { recursive: true });
@@ -63,46 +80,39 @@ async function main() {
   });
 
   const page = await context.newPage();
-
   let passed = 0;
   let failed = 0;
+
+  // 单页导航 — 所有截图共享一次页面加载
+  try {
+    await page.goto(`${BASE_URL}/monitor`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForSelector('.monitor-layout', { timeout: 10000 });
+    await expandLeaderDashboard(page);
+  } catch (err) {
+    console.log(`  ❌ 页面加载/展开失败: ${err.message}`);
+    await browser.close();
+    process.exit(1);
+  }
 
   for (const shot of SHOTS) {
     const currentPath = join(CURRENT_DIR, `${shot.name}.png`);
     const baselinePath = join(BASELINE_DIR, `${shot.name}.png`);
 
     try {
-      // 导航到页面（不用 networkidle，页面有30秒轮询）
-      await page.goto(`${BASE_URL}${shot.path}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-
-      // 等待页面静态内容就绪
-      await page.waitForSelector('.monitor-layout', { timeout: 10000 }).catch(() => {});
-      await page.waitForTimeout(1000);
-
-      // 点击"龙头观测"标题展开内容
-      const leaderTitle = page.locator('text=🏆 龙头观测');
-      if (await leaderTitle.isVisible()) {
-        await leaderTitle.click();
-        await page.waitForTimeout(500);
+      if (shot.type === 'element' && shot.selector) {
+        // 截取特定元素区域（取第一个匹配）
+        const el = page.locator(shot.selector).first();
+        await el.screenshot({ path: currentPath });
+      } else {
+        // 截取视口
+        await page.screenshot({ path: currentPath, fullPage: false });
       }
-
-      // 等待特定元素可见
-      if (shot.selector) {
-        await page.waitForSelector(shot.selector, { timeout: 5000 }).catch(() => {
-          console.log(`  ⚠️ 选择器 "${shot.selector}" 未找到，截全页`);
-        });
-      }
-
-      // 截图
-      await page.screenshot({ path: currentPath, fullPage: false });
       console.log(`  📷 截图: ${shot.name} (${shot.description})`);
 
-      // 对比基线
+      // 对比/生成基线
       if (mode === 'compare' && existsSync(baselinePath)) {
         const baseline = readFileSync(baselinePath);
         const current = readFileSync(currentPath);
-
-        // 简单的像素大小对比（完美对比需要 pixelmatch 库）
         if (baseline.length !== current.length) {
           console.log(`  ❌ 像素差异! 基线=${baseline.length}bytes, 当前=${current.length}bytes`);
           failed++;
@@ -110,10 +120,9 @@ async function main() {
           console.log(`  ✅ 与基线一致 (${baseline.length}bytes)`);
           passed++;
         }
-      } else if (mode === 'update' || mode === 'baseline') {
-        // 生成/更新基线
+      } else {
         writeFileSync(baselinePath, readFileSync(currentPath));
-        console.log(`  💾 基线已${mode === 'update' ? '更新' : '生成'}: ${baselinePath}`);
+        console.log(`  💾 基线${mode === 'update' ? '更新' : '生成'}: ${baselinePath}`);
         passed++;
       }
     } catch (err) {
@@ -124,13 +133,12 @@ async function main() {
 
   await browser.close();
 
-  // 汇总
   console.log();
   console.log('═'.repeat(50));
   if (mode === 'compare') {
-    console.log(`  视觉回归结果: ${passed} 通过 / ${failed} 失败 / 共${SHOTS.length}项`);
+    console.log(`  结果: ${passed} 通过 / ${failed} 失败 / 共${SHOTS.length}项`);
   } else {
-    console.log(`  基线已就绪: ${passed} 张截图 / ${SHOTS.length} 项`);
+    console.log(`  基线就绪: ${passed} 张 / ${SHOTS.length} 项`);
   }
   console.log('═'.repeat(50));
 
