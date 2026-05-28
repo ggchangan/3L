@@ -70,7 +70,7 @@ export default function Monitor() {
         <div className="layer info-layer">
           <div className="layer-title" style={{ cursor: 'pointer' }} onClick={() => setCollapseInfo(v => !v)}>
             <span className="badge-layer">③</span> 📊 实时信息
-            <span className="collapse-indicator" style={{ marginLeft: 6, fontSize: 10, color: '#888' }}>{collapseInfo ? '▶' : '▼'}</span>
+            <span className="collapse-indicator">{collapseInfo ? '▶' : '▼'}</span>
           </div>
 
           {!collapseInfo && (<>
