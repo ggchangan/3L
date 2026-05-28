@@ -1,6 +1,6 @@
 # 3L交易系统 — 架构设计 v2
 
-> 版本: v2.0 | 最后更新: 2026-05-29
+> 版本: v2.1 | 最后更新: 2026-05-29
 
 ---
 
@@ -30,9 +30,11 @@
 │   │   │   ├── review_service.py  ─ 复盘数据
 │   │   │   ├── market_service.py  ─ 大盘/板块/动量
 │   │   │   ├── trend_service.py   ─ 趋势交易
-│   │   │   └── alarm_service.py   ─ 告警
+│   │   │   ├── alarm_service.py   ─ 告警
+│   │   │   └── diagnosis_service.py  ─ 个股诊断（趋势/财务/风险三维度评分）
 │   │   ├── core/             ← 主服务特有的核心逻辑
-│   │   │   └── trend_candidates.py
+│   │   │   ├── trend_candidates.py
+│   │   │   └── on_demand_stock.py  ─ 按需个股K线数据拉取（akshare/mootdx双回退）
 │   │   ├── cli/              ← CLI 脚本入口
 │   │   └── tests/            ← 后端单元测试
 │   ├── frontend/             ← React SPA 前端 (Vite + TypeScript)
@@ -124,8 +126,8 @@ Nginx (43.136.177.133:443)
 
 | 路径 | 目标 | 说明 |
 |:-----|:-----|:-----|
-| `/stock-analysis` | 127.0.0.1:9090 | 独立个股分析页面 |
-| `/api/stock-analysis` | 127.0.0.1:9090 | 个股分析 API |
+| `/api/stock-analysis` | 127.0.0.1:8080 | 个股分析 API（主服务，含诊断+按需拉取） |
+| `/stock-analysis` | 127.0.0.1:9090 | 独立个股分析页面（纯 HTML/JS） |
 | `/` | 127.0.0.1:8080 | 主 SPA 所有页面 |
 
 ---

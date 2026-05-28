@@ -36,8 +36,8 @@ class AnalysisHandler(SimpleHTTPRequestHandler):
             self.send_json(result)
             return
 
-        # 前端页面 — 根路径 / 或 /stock_analysis 返回前端页面
-        if path == '/' or path == '/stock_analysis' or path == '/stock_analysis.html':
+        # 前端页面 — 根路径 / 或 /stock_analysis 或 /stock-analysis 返回前端页面
+        if path == '/' or path == '/stock_analysis' or path == '/stock_analysis.html' or path == '/stock-analysis' or path == '/stock-analysis.html':
             self.serve_frontend('index.html')
             return
 

@@ -48,6 +48,7 @@ LATEST_SCAN_PATH = os.path.join(DATA_DIR, 'latest_scan_result.json')
 ALL_CODES_PATH = os.path.join(DATA_DIR, 'all_stock_codes.json')
 PINYIN_PATH = os.path.join(DATA_DIR, 'pinyin_initials.json')
 LOGIC_TRACKING_PATH = os.path.join(DATA_DIR, 'logic_tracking.json')
+ON_DEMAND_CACHE_PATH = os.path.join(DATA_DIR, 'stock_on_demand_cache.json')
 SCRIPTS_DIR = os.path.join(WWW_DIR, 'scripts')
 
 # =====================================================

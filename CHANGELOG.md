@@ -1,5 +1,43 @@
 # Changelog
 
+## [v3.4.0] — 2026-05-29
+
+### 新增：按需个股数据拉取 + 三维度诊断系统
+
+**按需拉取未缓存股票 K 线数据，个股分析页面现在可以搜索任意 A 股。新增趋势/财务/风险三维度评分引擎。**
+
+#### 功能
+
+- **按需个股数据拉取**：搜索未在 cron 数据中的股票时，自动通过 akshare（HTTP）或 mootdx（通达信）拉取 60 天 K 线
+  - 独立缓存 `stock_on_demand_cache.json`，TTL=1 天，最多保留 30 只
+  - 不污染主数据文件 `all_stocks_60d.json`，cron 不碰
+  - 自动按 `stock_industry_map.json` 映射行业方向
+- **三维度诊断系统**：个股分析结果新增 `diagnosis` 字段
+  - **财务面**(40分)：ROE、净利润增长率、营收增长率、资产负债率
+  - **趋势面**(40分)：结构/阶段/信号/主线/买点/乖离率
+  - **风险面**(20分)：净利润下滑、高负债、流动性差、趋势评分低
+  - 总分 A(≥85)/B(70-84)/C(55-69)/D(<55) 四级评定（akshare 财务数据 1h 缓存）
+- **主 SPA + 独立页面同步展示诊断**：评分条 + 4 列卡片（趋势/财务/风险/消息） + 优势/注意文字
+
+#### 文档
+
+- `docs/on-demand-stock-analysis-design.md` — 按需数据拉取设计文档 v0.1
+- `docs/stock-diagnosis-design.md` — 诊断系统设计文档 v0.1
+
+#### 测试
+
+- `test_on_demand_stock.py` 20 项全通过（缓存管理/akshare拉取/方向映射/过期清理）
+- `test_diagnosis_service.py` 20 项全通过（评分/分级/异常降级）
+- 全回归 40+ 项新增测试全部通过
+
+#### 修复
+
+- 独立分析页 `/stock-analysis` 路径在 Docker 容器中 404 — 增加 rewrite 映射到内部 `/stock_analysis`
+- API 路由 `/api/stock-analysis` 改走主服务(:8080)以使用最新诊断+按需功能
+- analysis/server.py 增加 `/stock-analysis` 和 `/stock-analysis.html` 路径识别
+
+---
+
 ## [v3.3.0] — 2026-05-29
 
 ### 重构：Monorepo 结构重组（extract-core）

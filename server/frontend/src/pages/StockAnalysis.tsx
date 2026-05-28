@@ -110,6 +110,78 @@ export default function StockAnalysis() {
     }
   }
 
+  /** 诊断渲染 */
+  function renderDiagnosis(a: any) {
+    if (!a || !a.diagnosis) return null
+    const di = a.diagnosis
+    if (di.error) return <div className="error-box" style={{ marginBottom: 12, fontSize: 12 }}>诊断异常: {di.error}</div>
+    const det = di.detail || {}
+    const gradeColor = di.grade === 'A' ? '#4ecdc4' : di.grade === 'B' ? '#22c55e' : di.grade === 'C' ? '#f59e0b' : '#e94560'
+    const gradeLabel = di.grade === 'A' ? '优秀' : di.grade === 'B' ? '良好' : di.grade === 'C' ? '一般' : '较差'
+
+    const dims = [
+      { icon: '📊', label: '趋势面', score: det.trend?.score ?? 0, remarks: det.trend?.remarks ?? [] },
+      { icon: '💰', label: '财务面', score: det.financial?.score ?? 0, remarks: det.financial?.remarks ?? [] },
+      { icon: '🛡️', label: '风险面', score: det.risk?.score ?? 0, remarks: det.risk?.items ?? [], riskLevel: det.risk?.level },
+      { icon: '📰', label: '消息面', status: 'coming_soon' },
+    ]
+
+    const strengths: string[] = []
+    const warnings: string[] = []
+    det.financial?.remarks?.forEach((r: string) => {
+      if (r.includes('优秀') || r.includes('良好') || r.includes('高速') || r.includes('稳健') || r.includes('健康')) strengths.push(r)
+      else if (r.includes('偏低') || r.includes('下滑') || r.includes('偏高')) warnings.push(r)
+    })
+    det.trend?.remarks?.forEach((r: string) => {
+      if (r.includes('+')) strengths.push(r.replace(/ [+-]\d+$/, ''))
+      else warnings.push(r.replace(/ [-]\d+$/, ''))
+    })
+    det.risk?.items?.forEach((r: string) => warnings.push(r))
+
+    return (
+      <div className="diagnosis-section">
+        <div className="diagnosis-bar">
+          <span className="diagnosis-score" style={{ color: gradeColor }}>{di.total_score}</span>
+          <span className="diagnosis-grade" style={{ background: gradeColor }}>{di.grade}</span>
+          <span className="diagnosis-label">{gradeLabel} · {a.name}</span>
+          <span className="diagnosis-cost">{di.cost_ms}ms</span>
+        </div>
+        <div className="diagnosis-cards">
+          {dims.map((dim, i) => {
+            if (dim.status === 'coming_soon') {
+              return (
+                <div key={i} className="diagnosis-card soon">
+                  <div className="dc-icon">{dim.icon}</div>
+                  <div className="dc-label">{dim.label}</div>
+                  <div className="dc-placeholder">即将上线</div>
+                </div>
+              )
+            }
+            return (
+              <div key={i} className="diagnosis-card">
+                <div className="dc-icon">{dim.icon}</div>
+                <div className="dc-label">{dim.label}</div>
+                <div className="dc-score">{dim.score}/40</div>
+                {dim.riskLevel && <div className="dc-risk" style={{ color: dim.riskLevel === '低风险' ? '#4ecdc4' : dim.riskLevel === '中风险' ? '#f59e0b' : '#e94560' }}>{dim.riskLevel}</div>}
+                <div className="dc-remarks">
+                  {dim.remarks.slice(0, 2).map((r, j) => (
+                    <div key={j} className="dc-remark">{r}</div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        {(strengths.length > 0 || warnings.length > 0) && (
+          <div className="diagnosis-summary">
+            {strengths.length > 0 && <div className="ds-s">✅ {strengths.slice(0, 3).join(' · ')}</div>}
+            {warnings.length > 0 && <div className="ds-w">⚠️ {warnings.slice(0, 3).join(' · ')}</div>}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   function renderBacktest(d: BacktestData) {
     const totalCls = d.cumulative_return > 0 ? 'good' : 'bad'
     return (
@@ -121,7 +193,6 @@ export default function StockAnalysis() {
           </div>
           <span className="bt-label">60天回测</span>
         </div>
-
         <div className="bt-stats">
           <div className="bt-stat"><div className="l">信号</div><div className="v">{d.total}笔</div></div>
           <div className="bt-stat"><div className="l">盈利</div><div className="v" style={{ color: '#4ecdc4' }}>{d.wins}</div></div>
@@ -130,7 +201,6 @@ export default function StockAnalysis() {
           <div className="bt-stat"><div className="l">累计收益</div><div className={`v ${totalCls}`}>{d.cumulative_return > 0 ? '+' : ''}{d.cumulative_return}%</div></div>
           <div className="bt-stat"><div className="l">均盈/亏</div><div className="v" style={{ fontSize: 14 }}><span style={{ color: '#4ecdc4' }}>+{d.avg_win}%</span> / <span style={{ color: '#e94560' }}>{d.avg_loss}%</span></div></div>
         </div>
-
         {d.has_chart && (
           <div className="bt-chart">
             <details open>
@@ -139,7 +209,6 @@ export default function StockAnalysis() {
             </details>
           </div>
         )}
-
         <h3 className="bt-section-title">📋 交易明细</h3>
         <table className="bt-table">
           <thead><tr><th>#</th><th>系统</th><th>入场日</th><th>类型</th><th>入场价</th><th>出场日</th><th>出场价</th><th>持有</th><th>盈亏</th></tr></thead>
@@ -173,12 +242,10 @@ export default function StockAnalysis() {
   return (
     <div className="page-container">
       <NavBar />
-
       <div className="header">
         <h1>📊 个股买点检测</h1>
         <div className="sub">输入股票代码或名称，查看3L量价分析</div>
       </div>
-
       <div className="container">
         {/* Search Box */}
         <div className="search-box">
@@ -211,6 +278,9 @@ export default function StockAnalysis() {
           <button className="bt-btn" onClick={runBacktest} disabled={btLoading}>📊 回测</button>
         </div>
 
+        {/* 诊断区块 */}
+        {!loading && !error && analysis && renderDiagnosis(analysis)}
+
         {/* Analysis Result */}
         <div id="resultArea">
           {loading && <div className="loading"><div className="spinner"></div>正在分析...</div>}
@@ -230,7 +300,6 @@ export default function StockAnalysis() {
 
         <div className="hint">数据来源：all_stocks_60d.json · 3L量价择时系统</div>
       </div>
-
       <BottomNav />
     </div>
   )
