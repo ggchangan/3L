@@ -495,16 +495,6 @@ def main():
     log('━━━ 板块更新 ━━━')
     s3 = update_sectors()
 
-    # 阶段4: 主线数据（行业20日涨幅，供复盘页面使用）
-    log('━━━ 主线数据计算 ━━━')
-    try:
-        from backend.services.review_compute_service import get_mainline_data
-        today = datetime.now().strftime('%Y-%m-%d')
-        ml = get_mainline_data(today)
-        log(f'✅  主线数据: {len(ml.get("lines", []))} 条主线, {len(ml.get("secondary", []))} 次级')
-    except Exception as e:
-        log(f'⚠️  主线数据计算失败: {e}')
-
     elapsed = time.time() - t0
     log(f'{"━"*30}')
     log(f'📊 汇总: 个股{s1[0]+s1[1]}只变动 | 指数{s2[0]}条新增 | 板块{s3[0]+s3[1]}只变动')
