@@ -1,8 +1,8 @@
 # 3L 核心逻辑共享包 — 架构设计方案
 
-> 版本: v1.0 | 最后更新: 2026-05-28
+> 版本: v1.1 | 最后更新: 2026-05-29
 > 分支: feature/extract-core
-> 状态: 进行中（ema_utils.py 已迁移）
+> 状态: 5/5 核心模块已迁移，全回归 6/6 通过，3l-analysis 开发中
 
 ---
 
@@ -222,11 +222,11 @@ python3 -m venv .venv
 | 步骤 | 文件 | 状态 | 依赖 | 说明 |
 |:----:|:-----|:----:|:----|:-----|
 | 1 | `ema_utils.py` | ✅ 已完成 | 无 | 纯计算，零依赖，最适合第一个 |
-| 2 | `trend_trading.py` | ⏳ 待做 | ema_utils | 趋势判定逻辑 |
-| 3 | `buy_point_detection.py` | ⏳ 待做 | trend_trading, ema_utils | 买点核心 |
-| 4 | `cache_layer.py` | ⏳ 待做 | 无 | 内存缓存 |
-| 5 | `data_layer.py` | ⏳ 待做 | cache_layer, config | 数据访问（去除更新脚本代码）|
-| 6 | `config.py` | ⏳ 待做 | 无 | 精简版路径常量 |
+| 2 | `trend_trading.py` | ✅ 已完成 | ema_utils | 趋势判定逻辑 |
+| 3 | `buy_point_detection.py` | ✅ 已完成 | trend_trading, ema_utils | 买点核心 |
+| 4 | `cache_layer.py` | ✅ 已完成 | 无 | 内存缓存 |
+| 5 | `data_layer.py` | ✅ 已完成 | cache_layer, config | 数据访问（去除更新脚本代码）|
+| — | `config.py` | ❌ 不迁移 | 无 | 服务器特有，不移到 threel_core |
 
 每步完成后运行 `make regression` 全回归验证。
 
@@ -255,15 +255,32 @@ python3 -m venv .venv
 - [x] `backend/core/trend_trading.py` 改为转发层（15个函数）
 - [x] 迁移 `cache_layer.py` → `threel_core/cache_layer.py`
 - [x] 迁移 `buy_point_detection.py` → `threel_core/buy_point_detection.py`
-- [x] 创建 `threel_core/data_layer.py` 精简版（共享子集）
+- [x] 创建 `threel_core/data_layer.py` 精简版（含 resolve_stock）
 - [x] `pip install -e` 安装到 3l-server 的 venv
 - [x] 全回归 6/6 通过（89前端 + 649后端 + 4项检查）
-- [x] 创建 `3l-analysis` 项目脚手架，验证独立可运行
+- [x] 创建 `3l-analysis` 项目脚手架
+- [x] `3l-analysis` 创建 threel_analysis/card.py（卡片组装服务）
+- [x] `3l-analysis` 创建 threel_analysis/analysis.py（分析服务）
+- [x] `3l-analysis` 创建 server.py（HTTP 服务器，端口 9090）
+- [x] `3l-analysis` 创建 frontend/index.html（暗色主题搜索前端）
+- [x] 3l-analysis 独立运行验证（含 API + 前端页面）
+- [x] `threel_core/data_layer.py` 添加 resolve_stock / search_stock_full_market
+
+### 已完成（核心抽取部分）
+
+- [x] 5/5 核心模块已迁移到 threel_core
+- [x] 3l-analysis 独立项目可运行（Python venv + pip install threel-core）
+- [x] 3l-server 全回归一直保持通过
 
 ### 待完成
 
-- [ ] 迁移 `config.py`（精简版路径常量）
-- [ ] `3l-analysis` 添加 server.py + 前端页面
+- [ ] `3l-analysis` 添加 server.py + 前端页面（个股分析页面独立可访问）
+
+---
+
+### 不迁移的模块
+
+- **`config.py`** — 服务器特有（WWW_DIR、路由、端口、日志），不移到 threel_core。核心模块通过 `DATA_DIR` 环境变量直接读取路径，不依赖 `backend.config`。
 
 ### 验证方式
 
