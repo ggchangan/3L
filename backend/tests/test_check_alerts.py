@@ -228,6 +228,23 @@ class TestDeviationAlerts:
             assert 'price' in types
             assert 'deviation' in types
 
+    def test_merge_dates_combines_plans(self, mock_real_time_data):
+        """merge_dates 合并多天计划"""
+        plan_a = {'buy': [{'stock': '飞沃科技(301232)', 'stop_loss': 128.88, 'alert': {'type': 'price', 'enabled': True}}], 'sell': [], 'watch': []}
+        plan_b = {'buy': [{'stock': '兴森科技(002436)', 'stop_loss': 35.68, 'alert': {'type': 'price', 'enabled': True}}], 'sell': [], 'watch': []}
+        load_mock = {
+            '2026-05-27': plan_a,
+            '2026-05-28': plan_b,
+        }
+        with patch('backend.services.check_alerts._load_workbench_plan',
+                   side_effect=lambda d: load_mock.get(d, {'buy': [], 'sell': [], 'watch': []})):
+            with patch('backend.services.check_alerts._get_core_stocks', return_value={}):
+                from backend.services.check_alerts import check_all_alerts
+                result = check_all_alerts(merge_dates=['2026-05-27', '2026-05-28'])
+                stocks = {t['stock'] for t in result['triggered']}
+                assert '飞沃科技(301232)' in stocks
+                assert '兴森科技(002436)' in stocks
+
 
 class TestCoreStocks:
     """核心股读取"""

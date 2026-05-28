@@ -73,23 +73,46 @@ def _get_realtime_data(code: str) -> tuple:
 # ── 外部接口 ──────────────────────────────────────────
 
 
-def check_all_alerts(date_str: str = None) -> dict:
+def check_all_alerts(date_str: str = None, merge_dates: list = None) -> dict:
     """检查所有报警（价格+偏差）
 
     从核心股列表自动检查偏差报警 + 从工作台计划检查价格/偏差报警。
+    支持 merge_dates 合并多天计划。
+
+    Args:
+        date_str: 单日工作台日志日期
+        merge_dates: 多日日期列表，合并后统一检查
 
     Returns:
         {'triggered': [{type, stock, code, msg, ts}], 'count': N}
     """
-    plan = _load_workbench_plan(date_str)
     core_stocks = _get_core_stocks()
     now_ts = datetime.now().timestamp()
+
+    # 合并多天计划
+    plan = _load_workbench_plan(date_str)
+    if merge_dates:
+        plan = {'buy': [], 'sell': [], 'watch': []}
+        seen = set()
+        for d in merge_dates:
+            p = _load_workbench_plan(d)
+            for cat in ('buy', 'sell', 'watch'):
+                for item in p.get(cat, []):
+                    # 按 stock 去重，后加载的覆盖先加载的
+                    stock = item.get('stock', '')
+                    key = f'{cat}:{stock}'
+                    if key not in seen:
+                        seen.add(key)
+                        plan[cat].append(item)
+                    else:
+                        # 替换同名项
+                        for j, existing in enumerate(plan[cat]):
+                            if existing.get('stock') == stock:
+                                plan[cat][j] = item
+                                break
+
     triggered = []
-
-    # ① 价格报警（从计划项）
     triggered += _check_price_alerts(plan, now_ts)
-
-    # ② 偏差报警（从核心股 + 计划项）
     triggered += _check_deviation_alerts(plan, core_stocks, now_ts)
 
     return {'triggered': triggered, 'count': len(triggered)}
