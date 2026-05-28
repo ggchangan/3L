@@ -14,7 +14,7 @@ class TestMonitorLayout:
     """验证 React 版 Monitor 项目结构"""
 
     ROOT = os.path.dirname(os.path.dirname(__file__))
-    SRC = os.path.join(ROOT, 'frontend', 'src')
+    SRC = os.path.join(ROOT, 'server', 'frontend', 'src')
 
     def _read(self, rel):
         path = os.path.join(self.SRC, rel)
@@ -23,7 +23,7 @@ class TestMonitorLayout:
 
     def test_react_entry_exists(self):
         """React 版入口文件存在"""
-        if not os.path.isfile(os.path.join(self.ROOT, 'frontend', 'react.html')):
+        if not os.path.isfile(os.path.join(self.ROOT, 'server', 'frontend', 'react.html')):
             pytest.skip('react.html not found')
         if not os.path.isfile(os.path.join(self.SRC, 'main.tsx')):
             pytest.skip('main.tsx not found')

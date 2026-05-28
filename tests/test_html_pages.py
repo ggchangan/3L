@@ -5,8 +5,8 @@ import re
 import pytest
 
 WWW_DIR = os.path.dirname(os.path.dirname(__file__))
-FE_SRC = os.path.join(WWW_DIR, 'frontend')
-DIST_DIR = os.path.join(FE_SRC, 'dist')
+FE_SRC = os.path.join(WWW_DIR, 'server', 'frontend')
+DIST_DIR = os.path.join(WWW_DIR, 'server', 'frontend', 'dist')
 
 
 class TestReactSPA:
@@ -32,13 +32,13 @@ class TestServerRedirect:
     """验证服务端重定向"""
 
     def test_home_redirects_to_react(self):
-        server_code = open(os.path.join(WWW_DIR, 'server.py')).read()
+        server_code = open(os.path.join(WWW_DIR, 'server', 'server.py')).read()
         assert "self.path = '/react.html'" in server_code, \
             'server.py 中 / 应跳转到 react.html'
 
     def test_old_html_redirects_exist(self):
         """旧 .html 页面有 302 重定向到 React 路径"""
-        server_code = open(os.path.join(WWW_DIR, 'server.py')).read()
+        server_code = open(os.path.join(WWW_DIR, 'server', 'server.py')).read()
         old_pages = ['monitor.html', 'review.html', 'stock_analysis.html',
                      'holdings.html', 'industry.html', 'macro.html',
                      'top_gainers.html', 'tips.html', 'simulation.html', 'skills.html']

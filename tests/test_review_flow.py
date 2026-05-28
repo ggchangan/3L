@@ -9,7 +9,9 @@ import pytest
 
 # 需要提前设置 PYTHONPATH
 WWW_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+SERVER_DIR = os.path.join(WWW_DIR, 'server')
 SCRIPTS_DIR = os.path.join(WWW_DIR, 'scripts')
+sys.path.insert(0, SERVER_DIR)
 sys.path.insert(0, SCRIPTS_DIR)
 os.environ['TQDM_DISABLE'] = '1'
 
@@ -38,14 +40,12 @@ class TestModuleImport:
         from judge_signal import judge_signal
 
     def test_import_generate_module(self):
-        """generate_review_data 主模块导入"""
-        # 先切到 www 目录，避免 import 路径问题
+        """generate_review_data 主模块导入（通过 server/ 路径）"""
         old_cwd = os.getcwd()
-        os.chdir(WWW_DIR)
+        os.chdir(SERVER_DIR)
         try:
             import generate_review_data
             assert hasattr(generate_review_data, 'generate_daily_review')
-            # 计算函数已迁移到 services.review_compute_service
             from backend.services.review_compute_service import is_trading_day
             assert callable(is_trading_day)
         finally:
@@ -113,7 +113,7 @@ class TestGenerateCommandLine:
         """import 脚本本身不抛异常（模拟 python generate_review_data.py 的 import 阶段）"""
         import subprocess
         old_cwd = os.getcwd()
-        os.chdir(WWW_DIR)
+        os.chdir(SERVER_DIR)
         try:
             result = subprocess.run(
                 [sys.executable, '-c', 'import generate_review_data; print("OK")'],
@@ -134,7 +134,7 @@ class TestGenerateCommandLine:
              'r = is_trading_day("2026-05-22"); '
              'print(r)'],
             capture_output=True, text=True, timeout=30,
-            env={**os.environ, 'TQDM_DISABLE': '1'}
+            env={**os.environ, 'TQDM_DISABLE': '1', 'PYTHONPATH': SERVER_DIR}
         )
         assert result.returncode == 0, f'调用失败:\n{result.stderr}'
         assert 'True' in result.stdout or 'False' in result.stdout

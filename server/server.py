@@ -23,17 +23,14 @@ if not AUTH_USER or not AUTH_PASS:
 PROTECTED_PREFIX = '/private/'
 
 # 前端构建输出目录（优先使用，回退到 WWW_DIR）
-FE_DIR = os.path.join(WWW_DIR, 'frontend', 'dist')
+FE_DIR = os.path.join(WWW_DIR, 'server', 'frontend', 'dist')
 if not os.path.isdir(FE_DIR):
     FE_DIR = WWW_DIR
 
 REVIEW_DATA = {}
 DATA_FILE = config.REVIEW_DATA_PATH
-ARCHIVE_DIR = config.REVIEW_ARCHIVE_DIR
 
-# ====== 全局变量 ======
-# 路由表（URL 路径 → 处理方法）
-# ============================================================
+
 class RouteRegistry:
     """注册式路由表：路径模式 → 处理器
     支持三种模式:
@@ -60,12 +57,14 @@ class RouteRegistry:
                 handler_self.send_json(value)
                 return True
             elif kind == 'func':
-                value(handler_self, handler_self.path)  # 传完整 path（含 query string）
+                value(handler_self, handler_self.path)
                 return True
             elif kind == 'method':
                 getattr(handler_self, value)()
                 return True
         return False
+
+
 ROUTES = RouteRegistry()
 
 # ══════════════════════════════════════════════════

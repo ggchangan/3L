@@ -10,7 +10,7 @@ import os, json, tempfile
 from threading import Lock
 
 # ── 从 .env 文件加载（如果存在）──────────────────
-_env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
 if os.path.isfile(_env_path):
     with open(_env_path, 'r') as _f:
         for _line in _f:

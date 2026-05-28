@@ -173,8 +173,7 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
         return buy_signals, all_stocks_60d
 
     try:
-        sys.path.insert(0, os.path.join(ww_dir, 'scripts'))
-        from buy_point_detection import format_buy_signals
+        from backend.core.buy_point_detection import format_buy_signals
 
         if all_stocks_60d is None:
             if os.path.isfile(all_stocks_path):
