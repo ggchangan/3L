@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: threel-core
+Version: 0.1.0
+Summary: 3L 交易系统 — 核心逻辑共享包
+Author: 3L
+Requires-Python: >=3.10
+Requires-Dist: requests>=2.28

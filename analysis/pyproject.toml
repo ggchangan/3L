@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "threel-analysis"
+version = "0.1.0"
+description = "3L 个股买点检测 — 独立服务"
+authors = [{name = "3L"}]
+requires-python = ">=3.10"
+dependencies = [
+    "threel-core @ file:///home/ubuntu/3l-core",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["threel_analysis*"]

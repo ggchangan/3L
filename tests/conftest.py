@@ -1,5 +1,5 @@
 import sys, pytest, json, os
-sys.path.insert(0, '/home/ubuntu/3l-server')
+sys.path.insert(0, '/home/ubuntu/3l-server/server')
 
 
 @pytest.fixture(scope='session')

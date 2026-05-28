@@ -22,7 +22,7 @@ class TestDecideSystem:
     @pytest.fixture(autouse=True)
     def mock_manual_trend(self):
         """mock _load_manual_trend 让 300054 和 688126 都在手动列表中"""
-        with patch('backend.core.trend_trading._load_manual_trend',
+        with patch('threel_core.trend_trading._load_manual_trend',
                    return_value={'300054', '688126'}):
             yield
 

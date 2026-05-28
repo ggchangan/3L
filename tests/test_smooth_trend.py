@@ -72,7 +72,7 @@ class TestDecideSystemSmooth:
     @pytest.fixture(autouse=True)
     def mock_manual(self):
         from unittest.mock import patch
-        with patch('backend.core.trend_trading._load_manual_trend',
+        with patch('threel_core.trend_trading._load_manual_trend',
                    return_value={'002281', '688698', '300508'}) as m:
             yield m
 

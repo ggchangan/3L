@@ -28,7 +28,7 @@ class TestReviewDataField:
     @pytest.fixture(autouse=True)
     def mock_manual_trend(self):
         """mock _load_manual_trend 让 300054 在手动列表中"""
-        with patch('backend.core.trend_trading._load_manual_trend',
+        with patch('threel_core.trend_trading._load_manual_trend',
                    return_value={'300054'}):
             yield
 

@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""买点检测 — 转发层，从 threel_core 导入
+
+所有逻辑实现在 /home/ubuntu/3l-core/threel_core/buy_point_detection.py
+"""
+from threel_core.buy_point_detection import (  # noqa: F401
+    find_idx,
+    _resolve_code,
+    _volume_ratio,
+    _find_support_levels,
+    calc_stop_loss,
+    _layer2_factor,
+    _shrink_threshold,
+    _surge_threshold,
+    _breakout_score,
+    _check_pullback,
+    _is_extreme_shrink,
+    _ema_list,
+    _is_trend_with_ema5,
+    detect_huicai_buy_point,
+    check_trend_stock,
+    scan_huicai_buy_points,
+    detect_buy_point,
+    scan_all_stocks,
+    format_buy_signals,
+    check_profit_model1,
+    scan_profit_model1,
+    get_realtime_kline,
+    find_latest_date_in_data,
+    check_profit_model1_on_signals,
+    check_trend_stock_on_signals,
+    gen_trade_chart_svg,
+    compute_trade_stats,
+    check_acceleration,
+    check_volume_stagnation,
+    check_power_fading,
+    check_reverse_yingbaoyang,
+    check_panic,
+    simulate_trade,
+)

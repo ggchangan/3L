@@ -1,0 +1,71 @@
+/* Search box — 统一样式，包裹输入框+Tab，与 StockAnalysis 风格一致 */
+.search-box {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #2a2a4e; border-radius: 14px; padding: 16px;
+  margin-bottom: 10px;
+}
+.search-box-input {
+  display: flex; gap: 8px;
+}
+.search-box-input input {
+  flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #2a2a4e;
+  background: rgba(255,255,255,0.05); color: #e0e0e0; font-size: 15px;
+  outline: none; transition: border 0.2s;
+}
+.search-box-input input:focus { border-color: #4ecdc4; }
+.search-box-input input::placeholder { color: #555; }
+
+.search-results {
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: #1a1a30; border: 1px solid #2a2a4e; border-radius: 6px;
+    margin-top: 4px; max-height: 300px; overflow-y: auto; z-index: 100;
+}
+.search-box-input {
+  position: relative;
+}
+.search-result-item {
+    padding: 6px 10px; font-size: 12px; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.search-result-item:hover { background: #2a2a4e; }
+.sr-name { color: #e0e0e0; }
+.sr-code { color: #666; font-size: 11px; margin-left: 6px; }
+.sr-ind { color: #555; font-size: 11px; }
+
+.main-tabs {
+    display: flex; gap: 8px; margin-top: 12px;
+    border-bottom: 1px solid #2a2a4e; padding-bottom: 8px;
+}
+.main-tab {
+    padding: 6px 16px; font-size: 13px; color: #888;
+    cursor: pointer; border-radius: 6px; transition: all 0.2s;
+}
+.main-tab:hover { background: rgba(255,255,255,0.05); color: #e0e0e0; }
+.main-tab.active { background: rgba(78,205,196,0.12); color: #4ecdc4; font-weight: 600; }
+
+.ind-tabs-wrap {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;
+}
+.ind-tab {
+    padding: 4px 10px; font-size: 11px; color: #888;
+    border: 1px solid #2a2a4e; border-radius: 4px;
+    cursor: pointer; transition: all 0.2s;
+}
+.ind-tab:hover { border-color: #4ecdc4; }
+.ind-tab.active { background: rgba(78,205,196,0.1); color: #4ecdc4; border-color: #4ecdc4; font-weight: 600; }
+.ind-tab .count { color: #666; font-size: 10px; }
+
+.cards-area { margin-top: 8px; }
+
+.pagination {
+    display: flex; justify-content: center; align-items: center;
+    gap: 12px; margin-top: 16px; padding: 8px 0;
+}
+.page-btn {
+    padding: 6px 14px; font-size: 12px; color: #4ecdc4;
+    border: 1px solid #2a2a4e; border-radius: 6px; cursor: pointer;
+    transition: all 0.2s;
+}
+.page-btn:hover { border-color: #4ecdc4; background: rgba(78,205,196,0.08); }
+.page-btn.disabled { opacity: 0.3; cursor: default; }
+.page-info { font-size: 12px; color: #888; }

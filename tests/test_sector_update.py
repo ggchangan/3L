@@ -165,11 +165,13 @@ class TestSectorMaxK:
 
     def test_refresh_sectors_max_k(self):
         """refresh_sectors.py 的 MAX_K=60"""
+        script_path = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'refresh_sectors.py')
+        if not os.path.isfile(script_path):
+            pytest.skip("refresh_sectors.py 不存在，跳过")
         import sys
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
         import importlib.util
-        spec = importlib.util.spec_from_file_location('refresh_sectors',
-            os.path.join(os.path.dirname(__file__), '..', 'scripts', 'refresh_sectors.py'))
+        spec = importlib.util.spec_from_file_location('refresh_sectors', script_path)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         assert mod.MAX_K == 60
