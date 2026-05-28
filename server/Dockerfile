@@ -1,7 +1,7 @@
 # 3L交易系统 — Docker 镜像
 # 用途：给同学部署用，无需源码可执行
 #
-# 构建: docker build -t 3l-server:latest .
+# 构建: docker build -t 3l-server:latest -f server/Dockerfile .
 # 运行: docker run -d -p 8080:8080 \
 #           -v /path/to/data:/data \
 #           -e AUTH_USER=xxx -e AUTH_PASS=xxx \
@@ -23,11 +23,11 @@ RUN sed -i 's|URIs: http://deb.debian.org/debian|URIs: http://mirrors.tuna.tsing
 WORKDIR /app
 
 # ====== Python 依赖（先 copy requirements 利用 Docker 缓存） ======
-COPY requirements.txt .
+COPY server/requirements.txt .
 RUN python3 -m pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
 
 # ====== 应用代码 ======
-COPY . .
+COPY server/ .
 
 # ====== 运行时目录 ======
 RUN mkdir -p /data/private /data/cache /data/charts /app/logs
