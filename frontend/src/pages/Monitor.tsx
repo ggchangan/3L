@@ -35,8 +35,9 @@ export default function Monitor() {
         const data = await r.json()
         if (data.triggered && data.triggered.length > 0) {
           data.triggered.forEach((t: any) => {
-            const msg = `${t.stock} 跌破止损 ${t.stop_loss}，现价 ${t.current_price} (${t.loss_pct > 0 ? '+' : ''}${t.loss_pct}%)`
-            pushAlarm(msg, 'stop')
+            const alarmType = t.type === 'deviation' ? 'warn' : 'stop'
+            const msg = t.msg || `${t.stock} 跌破止损 ${t.stop_loss}，现价 ${t.current_price}`
+            pushAlarm(msg, alarmType)
           })
         }
       } catch {}

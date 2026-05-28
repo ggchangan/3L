@@ -412,8 +412,16 @@ export default function Workbench() {
                           <option value="deviation">🟡 偏差报警</option>
                           <option value="time">⏰ 时间报警</option>
                         </select>
-                        <input value={p.alert.condition || ''} onChange={e => updateAlert(type, i, 'condition', e.target.value)}
-                          placeholder="条件（如: 跌破22.5）" style={{ flex: 1, background: '#1a1a30', border: '1px solid #2a2a4e', borderRadius: 4, padding: '2px 6px', color: '#e0e0e0', fontSize: 10 }} />
+                        {p.alert.type === 'deviation' ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                            <input type="number" value={p.alert.condition || '6'} onChange={e => updateAlert(type, i, 'condition', e.target.value)}
+                              style={{ width: 50, background: '#1a1a30', border: '1px solid #2a2a4e', borderRadius: 4, padding: '2px 6px', color: '#e0e0e0', fontSize: 10, textAlign: 'right' }} min={1} max={20} step={0.5} />
+                            <span style={{ fontSize: 10, color: '#888' }}>%</span>
+                          </div>
+                        ) : (
+                          <input value={p.alert.condition || ''} onChange={e => updateAlert(type, i, 'condition', e.target.value)}
+                            placeholder={p.alert.type === 'price' ? '自动绑止损价' : '条件说明'} style={{ flex: 1, background: '#1a1a30', border: '1px solid #2a2a4e', borderRadius: 4, padding: '2px 6px', color: '#e0e0e0', fontSize: 10 }} />
+                        )}
                         <label style={{ fontSize: 10, color: '#888', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
                           <input type="checkbox" checked={p.alert.enabled} onChange={e => updateAlert(type, i, 'enabled', e.target.checked ? 'true' : 'false')} />
                           启用

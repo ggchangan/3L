@@ -56,9 +56,9 @@ def _handle_check_alerts(h, path):
     dt = qs.get('date', [None])[0]
     if not dt:
         dt = (date.today() - timedelta(days=1)).isoformat()
-    from backend.services.check_alerts import check_price_alerts
+    from backend.services.check_alerts import check_all_alerts
     try:
-        result = check_price_alerts(dt)
+        result = check_all_alerts(dt)
         h.send_json(result)
     except Exception as e:
         h.send_json({'triggered': [], 'count': 0, 'error': str(e)})

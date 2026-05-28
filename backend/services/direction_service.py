@@ -177,3 +177,27 @@ def migrate_from_watchlist(wl_path=None):
     data = {'all': all_dirs, 'active': active_dirs}
     _save(data)
     return {'success': True, 'migrated': len(all_dirs), 'active': len(active_dirs)}
+
+
+# ── 核心股（偏差报警用） ──
+
+def get_core_stocks() -> dict:
+    """返回核心股列表 {code: {name, deviation}}
+
+    directions.json 中的 core 字段：
+    "core": {"002371": {"name": "北方华创", "deviation": 6}}
+    未配置 deviation 时默认 6%。
+    """
+    data = _load()
+    core = data.get('core', {})
+    result = {}
+    for code, info in core.items():
+        if isinstance(info, str):
+            # 旧格式：{"002371": "北方华创"} → 自动转
+            result[code] = {'name': info, 'deviation': 6}
+        else:
+            result[code] = {
+                'name': info.get('name', ''),
+                'deviation': info.get('deviation', 6),
+            }
+    return result

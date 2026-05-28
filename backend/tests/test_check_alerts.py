@@ -53,16 +53,18 @@ SAMPLE_PLAN = {
 }
 
 
-def _mock_price(code: str) -> float:
-    """模拟实时价格：飞沃破止损、北方未破、兴森破、天华未破"""
-    prices = {
-        '301232': 120.00,   # 跌破 128.88 → 触发
-        '002371': 620.00,   # 未破 614.63 → 不触发
-        '002436': 33.00,    # 跌破 35.68 → 触发
-        '300390': 90.00,    # 未破 85.33 → 不触发
-        '000988': 160.00,   # 已禁用 → 不检查
+def _mock_realtime(code: str) -> tuple:
+    """模拟实时行情：(price, change_pct)
+    飞沃破止损（-7%）、北方未破（+1%）、兴森破（-8%）、天华未破（+2%）
+    """
+    data = {
+        '301232': (120.00, -7.5),   # 跌破 128.88 → 触发价格；跌幅 7.5% > 6% → 也触发偏差
+        '002371': (620.00, 1.2),    # 未破 614.63 → 不触发价格；1.2% < 6% → 不触发偏差
+        '002436': (33.00, -8.1),    # 跌破 35.68 → 触发价格；8.1% > 6% → 也触发偏差
+        '300390': (90.00, 2.5),     # 未破 85.33 → 不触发价格
+        '000988': (160.00, 0.5),    # 已禁用 → 不检查
     }
-    return prices.get(code, 0)
+    return data.get(code, (0, 0))
 
 
 @pytest.fixture
@@ -74,17 +76,17 @@ def mock_workbench_log():
 
 
 @pytest.fixture
-def mock_real_time_price():
+def mock_real_time_data():
     """mock 实时行情接口"""
-    with patch('backend.services.check_alerts._get_realtime_price') as mock:
-        mock.side_effect = _mock_price
+    with patch('backend.services.check_alerts._get_realtime_data') as mock:
+        mock.side_effect = _mock_realtime
         yield mock
 
 
 class TestCheckPriceAlerts:
     """价格报警检查"""
 
-    def test_triggered_when_price_below_stop_loss(self, mock_workbench_log, mock_real_time_price):
+    def test_triggered_when_price_below_stop_loss(self, mock_workbench_log, mock_real_time_data):
         """跌破止损价应触发报警"""
         from backend.services.check_alerts import check_price_alerts
         result = check_price_alerts('2026-05-27')
@@ -95,7 +97,7 @@ class TestCheckPriceAlerts:
         assert hit[0]['current_price'] == 120.00
         assert hit[0]['stop_loss'] == 128.88
 
-    def test_not_triggered_when_price_above_stop_loss(self, mock_workbench_log, mock_real_time_price):
+    def test_not_triggered_when_price_above_stop_loss(self, mock_workbench_log, mock_real_time_data):
         """未跌破止损价不触发"""
         from backend.services.check_alerts import check_price_alerts
         result = check_price_alerts('2026-05-27')
@@ -103,7 +105,7 @@ class TestCheckPriceAlerts:
         hit = [t for t in triggered if '北方华创' in t['stock']]
         assert len(hit) == 0
 
-    def test_disabled_alert_not_checked(self, mock_workbench_log, mock_real_time_price):
+    def test_disabled_alert_not_checked(self, mock_workbench_log, mock_real_time_data):
         """禁用的报警不检查"""
         from backend.services.check_alerts import check_price_alerts
         result = check_price_alerts('2026-05-27')
@@ -111,7 +113,7 @@ class TestCheckPriceAlerts:
         hit = [t for t in triggered if '华工科技' in t['stock']]
         assert len(hit) == 0
 
-    def test_multiple_triggered(self, mock_workbench_log, mock_real_time_price):
+    def test_multiple_triggered(self, mock_workbench_log, mock_real_time_data):
         """多个股票同时跌破止损"""
         from backend.services.check_alerts import check_price_alerts
         result = check_price_alerts('2026-05-27')
@@ -136,7 +138,7 @@ class TestCheckPriceAlerts:
         assert _parse_stock_code('飞沃科技(301232)') == '301232'
         assert _parse_stock_code('') is None
 
-    def test_price_alert_fields(self, mock_workbench_log, mock_real_time_price):
+    def test_price_alert_fields(self, mock_workbench_log, mock_real_time_data):
         """触发报警包含完整字段"""
         from backend.services.check_alerts import check_price_alerts
         result = check_price_alerts('2026-05-27')
@@ -147,3 +149,124 @@ class TestCheckPriceAlerts:
         assert 'stop_loss' in t
         assert 'loss_pct' in t
         assert 'ts' in t
+
+
+class TestDeviationAlerts:
+    """偏差报警检查"""
+
+    def test_core_stock_deviation_triggered(self, mock_real_time_data):
+        """核心股涨跌幅超过阈值触发偏差报警"""
+        mock_core = {'301232': {'name': '飞沃科技', 'deviation': 6}}
+        with patch('backend.services.check_alerts._get_core_stocks',
+                   return_value=mock_core):
+            with patch('backend.services.check_alerts._load_workbench_plan',
+                       return_value={'buy': [], 'sell': [], 'watch': []}):
+                from backend.services.check_alerts import check_all_alerts
+                result = check_all_alerts('2026-05-27')
+                dev = [t for t in result['triggered'] if t['type'] == 'deviation']
+                assert len(dev) == 1
+                assert '飞沃科技' in dev[0]['stock']
+                assert dev[0]['change_pct'] == -7.5
+                assert dev[0]['threshold'] == 6
+
+    def test_core_stock_below_threshold_not_triggered(self, mock_real_time_data):
+        """核心股涨跌幅未超过阈值不触发"""
+        mock_core = {'002371': {'name': '北方华创', 'deviation': 6}}
+        with patch('backend.services.check_alerts._get_core_stocks',
+                   return_value=mock_core):
+            with patch('backend.services.check_alerts._load_workbench_plan',
+                       return_value={'buy': [], 'sell': [], 'watch': []}):
+                from backend.services.check_alerts import check_all_alerts
+                result = check_all_alerts('2026-05-27')
+                dev = [t for t in result['triggered'] if t['type'] == 'deviation']
+                assert len(dev) == 0
+
+    def test_plan_item_deviation_triggered(self, mock_real_time_data):
+        """计划项的手动偏差报警触发"""
+        plan = {
+            'buy': [{'stock': '兴森科技(002436)', 'alert': {'type': 'deviation', 'enabled': True, 'condition': '5'}}],
+            'sell': [], 'watch': []
+        }
+        with patch('backend.services.check_alerts._get_core_stocks',
+                   return_value={}):
+            with patch('backend.services.check_alerts._load_workbench_plan',
+                       return_value=plan):
+                from backend.services.check_alerts import check_all_alerts
+                result = check_all_alerts('2026-05-27')
+                dev = [t for t in result['triggered'] if t['type'] == 'deviation']
+                assert len(dev) == 1
+                assert '兴森科技' in dev[0]['stock']
+                assert dev[0]['change_pct'] == -8.1
+                assert dev[0]['threshold'] == 5
+
+    def test_deviation_alert_fields(self, mock_real_time_data):
+        """偏差触发报警包含完整字段"""
+        mock_core = {'301232': {'name': '飞沃科技', 'deviation': 6}}
+        with patch('backend.services.check_alerts._get_core_stocks',
+                   return_value=mock_core):
+            with patch('backend.services.check_alerts._load_workbench_plan',
+                       return_value={'buy': [], 'sell': [], 'watch': []}):
+                from backend.services.check_alerts import check_all_alerts
+                result = check_all_alerts('2026-05-27')
+                t = result['triggered'][0]
+                assert 'type' in t
+                assert 'stock' in t
+                assert 'code' in t
+                assert 'change_pct' in t
+                assert 'threshold' in t
+                assert 'msg' in t
+                assert 'ts' in t
+
+    def test_check_all_alerts_returns_both_types(self, mock_workbench_log, mock_real_time_data):
+        """check_all_alerts 同时返回价格和偏差报警"""
+        mock_core = {'301232': {'name': '飞沃科技', 'deviation': 6}}
+        with patch('backend.services.check_alerts._get_core_stocks',
+                   return_value=mock_core):
+            from backend.services.check_alerts import check_all_alerts
+            result = check_all_alerts('2026-05-27')
+            types = {t['type'] for t in result['triggered']}
+            assert 'price' in types
+            assert 'deviation' in types
+
+
+class TestCoreStocks:
+    """核心股读取"""
+
+    def test_get_core_stocks_returns_empty_when_not_set(self):
+        """directions.json 没有 core 字段时返回空"""
+        with patch('backend.services.direction_service._load',
+                   return_value={'all': [], 'active': []}):
+            from backend.services.direction_service import get_core_stocks
+            assert get_core_stocks() == {}
+
+    def test_get_core_stocks_with_data(self):
+        """正常返回核心股列表"""
+        mock_data = {
+            'all': ['半导体'],
+            'active': ['半导体'],
+            'core': {
+                '002371': {'name': '北方华创', 'deviation': 6},
+                '301232': {'name': '飞沃科技', 'deviation': 3},
+            }
+        }
+        with patch('backend.services.direction_service._load',
+                   return_value=mock_data):
+            from backend.services.direction_service import get_core_stocks
+            result = get_core_stocks()
+            assert result['002371']['name'] == '北方华创'
+            assert result['002371']['deviation'] == 6
+            assert result['301232']['deviation'] == 3
+
+    def test_core_stock_default_deviation(self):
+        """未设 deviation 默认 6%"""
+        mock_data = {
+            'all': [],
+            'active': [],
+            'core': {
+                '000001': {'name': '平安银行'},
+            }
+        }
+        with patch('backend.services.direction_service._load',
+                   return_value=mock_data):
+            from backend.services.direction_service import get_core_stocks
+            assert get_core_stocks()['000001']['deviation'] == 6
