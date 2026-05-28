@@ -1,10 +1,27 @@
-.search-section { position: relative; margin-bottom: 12px; }
-.search-section .search-input { width: 100%; }
+/* Search box — 统一样式，包裹输入框+Tab，与 StockAnalysis 风格一致 */
+.search-box {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #2a2a4e; border-radius: 14px; padding: 16px;
+  margin-bottom: 10px;
+}
+.search-box-input {
+  display: flex; gap: 8px;
+}
+.search-box-input input {
+  flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #2a2a4e;
+  background: rgba(255,255,255,0.05); color: #e0e0e0; font-size: 15px;
+  outline: none; transition: border 0.2s;
+}
+.search-box-input input:focus { border-color: #4ecdc4; }
+.search-box-input input::placeholder { color: #555; }
 
 .search-results {
     position: absolute; top: 100%; left: 0; right: 0;
     background: #1a1a30; border: 1px solid #2a2a4e; border-radius: 6px;
     margin-top: 4px; max-height: 300px; overflow-y: auto; z-index: 100;
+}
+.search-box-input {
+  position: relative;
 }
 .search-result-item {
     padding: 6px 10px; font-size: 12px; cursor: pointer;
@@ -16,7 +33,7 @@
 .sr-ind { color: #555; font-size: 11px; }
 
 .main-tabs {
-    display: flex; gap: 8px; margin-bottom: 10px;
+    display: flex; gap: 8px; margin-top: 12px;
     border-bottom: 1px solid #2a2a4e; padding-bottom: 8px;
 }
 .main-tab {
@@ -27,7 +44,7 @@
 .main-tab.active { background: rgba(78,205,196,0.12); color: #4ecdc4; font-weight: 600; }
 
 .ind-tabs-wrap {
-    display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px;
+    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;
 }
 .ind-tab {
     padding: 4px 10px; font-size: 11px; color: #888;

@@ -126,72 +126,71 @@ export default function TrendCandidates() {
       </div>
 
       <div className="container">
-        {/* 搜索框 */}
-        <div className="search-section">
-          <input className="search-input" placeholder="🔍 从自选股搜索加入趋势跟踪..."
-            value={searchQ}
-            onChange={e => setSearchQ(e.target.value)}
-            onBlur={() => setTimeout(() => setSearchResults([]), 200)} />
-          {searchResults.length > 0 && (
-            <div className="search-results" style={{ display: 'block' }}>
-              {searchResults.map((st: any, i) => {
-                const inTrend = (data.tracked?.candidates || []).some(c => c.code === st.code)
-                return (
-                  <div key={i} className="search-result-item" style={{ cursor: 'pointer' }}
-                    onMouseDown={async () => {
-                      if (!inTrend) {
-                        try {
-                          const r = await fetch(`/api/trend-candidates/toggle?code=${st.code}&enable=true`)
-                          const d = await r.json()
-                          if (d.success === false) { showToast('❌ ' + (d.error || '')); return }
-                          showToast(`✅ ${st.code} 已加入趋势交易`)
-                          setSearchQ(''); setSearchResults([])
-                          const [r1, r2] = await Promise.all([
-                            fetch('/api/trend-candidates'),
-                            fetch('/api/trend-tracked'),
-                          ])
-                          const c = await r1.json()
-                          const t = await r2.json()
-                          setData(prev => ({ ...prev, candidates: c, tracked: t }))
-                        } catch { showToast('❌ 操作失败') }
-                      }
-                    }}>
-                    <span><span className="sr-name">{st.name}</span> <span className="sr-code">{st.code}</span></span>
-                    <span className="sr-ind">{st.direction || ''}</span>
-                    <span style={{ float: 'right', color: inTrend ? '#4ecdc4' : '#2196f3', fontSize: 11 }}>
-                      {inTrend ? '✅ 已加入' : '➕ 加入'}
-                    </span>
-                  </div>
-                )
-              })}
+        {/* 搜索+Tab整体区域 */}
+        <div className="search-box">
+          <div className="search-box-input">
+            <input placeholder="🔍 从自选股搜索加入趋势跟踪..."
+              value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              onBlur={() => setTimeout(() => setSearchResults([]), 200)} />
+            {searchResults.length > 0 && (
+              <div className="search-results" style={{ display: 'block' }}>
+                {searchResults.map((st: any, i) => {
+                  const inTrend = (data.tracked?.candidates || []).some(c => c.code === st.code)
+                  return (
+                    <div key={i} className="search-result-item" style={{ cursor: 'pointer' }}
+                      onMouseDown={async () => {
+                        if (!inTrend) {
+                          try {
+                            const r = await fetch(`/api/trend-candidates/toggle?code=${st.code}&enable=true`)
+                            const d = await r.json()
+                            if (d.success === false) { showToast('❌ ' + (d.error || '')); return }
+                            showToast(`✅ ${st.code} 已加入趋势交易`)
+                            setSearchQ(''); setSearchResults([])
+                            const [r1, r2] = await Promise.all([
+                              fetch('/api/trend-candidates'),
+                              fetch('/api/trend-tracked'),
+                            ])
+                            const c = await r1.json()
+                            const t = await r2.json()
+                            setData(prev => ({ ...prev, candidates: c, tracked: t }))
+                          } catch { showToast('❌ 操作失败') }
+                        }
+                      }}>
+                      <span><span className="sr-name">{st.name}</span> <span className="sr-code">{st.code}</span></span>
+                      <span className="sr-ind">{st.direction || ''}</span>
+                      <span style={{ float: 'right', color: inTrend ? '#4ecdc4' : '#2196f3', fontSize: 11 }}>
+                        {inTrend ? '✅ 已加入' : '➕ 加入'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="main-tabs">
+            <div className={`main-tab ${activeMain === 'auto' ? 'active' : ''}`}
+              onClick={() => { setActiveMain('auto'); setCurPage(1) }}>
+              📈 自动候选 ({autoCount})
+            </div>
+            <div className={`main-tab ${activeMain === 'tracked' ? 'active' : ''}`}
+              onClick={() => { setActiveMain('tracked'); setCurPage(1) }}>
+              ✅ 已跟踪 ({trackedCount})
+            </div>
+          </div>
+
+          {activeMain === 'auto' && auto.length > 0 && (
+            <div className="ind-tabs-wrap">
+              {auto.map(g => (
+                <div key={g.industry}
+                  className={`ind-tab ${g.industry === activeInd ? 'active' : ''}`}
+                  onClick={() => { setActiveInd(g.industry); setCurPage(1) }}>
+                  {g.industry} <span className="count">({g.candidates.length})</span>
+                </div>
+              ))}
             </div>
           )}
-        </div>
-
-        {/* 主Tab */}
-        <div className="main-tabs">
-          <div className={`main-tab ${activeMain === 'auto' ? 'active' : ''}`}
-            onClick={() => { setActiveMain('auto'); setCurPage(1) }}>
-            📈 自动候选 ({autoCount})
-          </div>
-          <div className={`main-tab ${activeMain === 'tracked' ? 'active' : ''}`}
-            onClick={() => { setActiveMain('tracked'); setCurPage(1) }}>
-            ✅ 已跟踪 ({trackedCount})
-          </div>
-        </div>
-
-        {/* 行业子Tab（自动候选） */}
-        {activeMain === 'auto' && auto.length > 0 && (
-          <div className="ind-tabs-wrap">
-            {auto.map(g => (
-              <div key={g.industry}
-                className={`ind-tab ${g.industry === activeInd ? 'active' : ''}`}
-                onClick={() => { setActiveInd(g.industry); setCurPage(1) }}>
-                {g.industry} <span className="count">({g.candidates.length})</span>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* 卡片区 */}
         <div className="cards-area">
@@ -242,6 +241,8 @@ export default function TrendCandidates() {
               onClick={() => safePage < totalPages && setCurPage(safePage + 1)}>下一页 ▶</div>
           </div>
         )}
+
+        </div>{/* end search-box */}
       </div>
 
       <BottomNav />
