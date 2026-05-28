@@ -22,7 +22,7 @@ const mockHoldings = [
   {
     code: '301232',
     name: '飞沃科技',
-    stop_loss: 128.88,
+    stop_loss_price: 128.88,   // 真实API字段名
     stop_loss_pct: -7.66,
     price: 139.50,
     change: -1.2,
@@ -33,7 +33,7 @@ const mockHoldings = [
   {
     code: '002371',
     name: '北方华创',
-    stop_loss: 614.63,
+    stop_loss_price: 614.63,   // 真实API字段名
     stop_loss_pct: -6.13,
     price: 655.00,
     change: 0.8,
@@ -43,12 +43,12 @@ const mockHoldings = [
   },
 ]
 
-/** 不带止损的持仓 */
+/** 不带止损价的持仓（没有 stop_loss_price） */
 const mockHoldingsNoStopLoss = [
   {
     code: '000988',
     name: '华工科技',
-    stop_loss: undefined,
+    // 没有 stop_loss_price
     price: 168.00,
     change: 0.5,
     signal: 'hold' as const,

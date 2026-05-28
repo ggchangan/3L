@@ -55,9 +55,17 @@ export default function PlanLayer() {
     }).catch(() => setLoaded(true))
   }, [])
 
-  // 持仓止损：只取有止损价的持仓
-  const holdingsStopLoss = holdings.filter(h => h.stop_loss != null)
+  // 持仓止损：只取有止损价的持仓（支持 stop_loss_price 和 stop_loss 两种字段名）
+  const holdingsStopLoss = holdings.filter(h => (h as any).stop_loss_price != null || h.stop_loss != null)
   const holdingCodes = new Set(holdings.map(h => h.code))
+
+  // 取止损价，优先 stop_loss_price
+  function getStopPrice(h: any): number | undefined {
+    return h.stop_loss_price ?? h.stop_loss
+  }
+  function getStopPct(h: any): number | undefined {
+    return h.stop_loss_pct
+  }
 
   // 计划报警：过滤掉持仓股的价格报警
   const planAlarms = alarms.filter(a => {
@@ -120,7 +128,11 @@ export default function PlanLayer() {
               <div style={{ fontSize: 11, marginBottom: 4 }}>
                 🔴 持仓止损 <span className="badge" style={{ background: '#e94560', fontSize: 9, padding: '1px 6px' }}>{holdingsStopLoss.length}</span>
               </div>
-              {holdingsStopLoss.map((h, i) => (
+              {holdingsStopLoss.map((h, i) => {
+                const sp = getStopPrice(h)
+                const spPct = getStopPct(h)
+                const spFormatted = spPct != null ? ` (${spPct >= 0 ? '+' : ''}${spPct.toFixed(2)}%)` : ''
+                return (
                 <div key={`sl-${i}`} style={{
                   display: 'flex', gap: 6, alignItems: 'center',
                   padding: '3px 8px', borderRadius: 4,
@@ -128,8 +140,7 @@ export default function PlanLayer() {
                 }}>
                   <span style={{ color: '#e0e0e0' }}>{h.name}({h.code})</span>
                   <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
-                    止损 {h.stop_loss}
-                    {h.stop_loss_pct != null ? ` (${h.stop_loss_pct >= 0 ? '+' : ''}${h.stop_loss_pct.toFixed(2)}%)` : ''}
+                    止损 {sp}{spFormatted}
                   </span>
                   {h.price != null && (
                     <span style={{ fontSize: 9, color: '#888', marginLeft: 'auto' }}>
@@ -137,7 +148,8 @@ export default function PlanLayer() {
                     </span>
                   )}
                 </div>
-              ))}
+                )
+              })}
             </>
           )}
 
