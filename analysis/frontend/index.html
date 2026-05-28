@@ -140,6 +140,24 @@ body {
 .buy-detail-item { font-size: 13px; padding: 4px 8px; background: var(--bg); border-radius: 4px; }
 .buy-detail-item .label { color: var(--text-dim); margin-right: 4px; }
 
+/* 诊断区块 */
+.diagnosis-section { background: #1a1a2e; margin-bottom: 14px; }
+.diagnosis-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.d-score { font-size: 26px; font-weight: 700; line-height: 1; }
+.d-grade { font-size: 13px; font-weight: 700; color: #fff; padding: 2px 10px; border-radius: 4px; }
+.d-label { font-size: 12px; color: var(--text-dim); flex: 1; }
+.d-cost { font-size: 10px; color: #555; }
+.d-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.d-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-align: center; }
+.d-card.soon { opacity: 0.4; border-style: dashed; }
+.dci { font-size: 20px; margin-bottom: 2px; }
+.dcl { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+.dcs { font-size: 18px; font-weight: 700; color: #e0e0e0; }
+.dcr { font-size: 11px; font-weight: 600; margin-top: 1px; }
+.dcr2 { margin-top: 4px; }
+.dcre { font-size: 10px; color: #666; line-height: 1.4; }
+.dcp { font-size: 11px; color: #555; margin-top: 8px; }
+
 /* 结论 */
 .conclusion {
   background: var(--bg);
@@ -257,12 +275,50 @@ function render(d) {
   if (d.buy_score) html += item('评分', d.buy_score + '', '');
   if (d.trend_bias != null) html += item('趋势乖离', d.trend_bias + '%', d.trend_bias > 0 ? 'up' : 'down');
   html += '</div></div>';
+  // K线图
+  if (d.has_chart) {
+    html += '<div class="section"><h2>📈 K线图</h2>';
+    html += '<object data="/api/stock-chart?code=' + d.code + '&t=' + Date.now() + '" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;display:block;margin:0 auto">图加载中...</object>';
+    html += '</div>';
+  }
 
-  // K线图（3L关键点标注 + 趋势图）
-  html += '<div class="section"><h2>📈 K线图</h2>';
-  html += '<object data="/api/stock-chart?code=' + d.code + '&t=' + Date.now() + '" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;display:block;margin:0 auto">图加载中...</object>';
-  html += '</div>';
-
+  // 诊断
+  if (d.diagnosis && !d.diagnosis.error) {
+    const di = d.diagnosis;
+    const det = di.detail || {};
+    const grd = di.grade || 'C';
+    const gColor = grd === 'A' ? '#4ecdc4' : grd === 'B' ? '#22c55e' : grd === 'C' ? '#f59e0b' : '#e94560';
+    const gLabel = grd === 'A' ? '优秀' : grd === 'B' ? '良好' : grd === 'C' ? '一般' : '较差';
+    html += '<div class="section diagnosis-section">';
+    html += '<div class="diagnosis-bar"><span class="d-score" style="color:' + gColor + '">' + di.total_score + '</span>';
+    html += '<span class="d-grade" style="background:' + gColor + '">' + grd + '</span>';
+    html += '<span class="d-label">' + gLabel + ' · ' + d.name + '</span>';
+    html += '<span class="d-cost">' + (di.cost_ms || '') + 'ms</span></div>';
+    html += '<div class="d-cards">';
+    // 四维度
+    const dims = [
+      { icon: '📊', label: '趋势面', score: det.trend?.score, remarks: det.trend?.remarks },
+      { icon: '💰', label: '财务面', score: det.financial?.score, remarks: det.financial?.remarks },
+      { icon: '🛡️', label: '风险面', score: det.risk?.score, remarks: det.risk?.items, rl: det.risk?.level },
+      { icon: '📰', label: '消息面', soon: true },
+    ];
+    dims.forEach(function(dim) {
+      if (dim.soon) {
+        html += '<div class="d-card soon"><div class="dci">' + dim.icon + '</div><div class="dcl">' + dim.label + '</div><div class="dcp">即将上线</div></div>';
+        return;
+      }
+      html += '<div class="d-card"><div class="dci">' + dim.icon + '</div><div class="dcl">' + dim.label + '</div>';
+      html += '<div class="dcs">' + (dim.score != null ? dim.score + '/40' : '--') + '</div>';
+      if (dim.rl) html += '<div class="dcr" style="color:' + (dim.rl === '低风险' ? '#4ecdc4' : dim.rl === '中风险' ? '#f59e0b' : '#e94560') + '">' + dim.rl + '</div>';
+      if (dim.remarks && dim.remarks.length) {
+        html += '<div class="dcr2">';
+        dim.remarks.slice(0, 2).forEach(function(r) { html += '<div class="dcre">' + r + '</div>'; });
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    html += '</div></div>'; // end d-cards, end section
+  }
   // 交易系统
   const sysInfo = [];
   sysInfo.push('交易系统: ' + (d.trend_stock ? '趋势交易' : '3L交易'));

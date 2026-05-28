@@ -3,6 +3,7 @@ from . import parse_query
 from backend.services.analysis_service import search_and_analyze
 from backend.services.backtest_service import run_backtest
 from backend.services.stock_chart_service import generate_stock_chart, generate_trend_stock_chart
+from backend.services.diagnosis_service import compute_diagnosis
 
 
 def _handle_stock_analysis(h, path):
@@ -10,7 +11,14 @@ def _handle_stock_analysis(h, path):
     if not q:
         h.send_json({'error': '请输入股票代码或名称'})
         return
-    h.send_json(search_and_analyze(q))
+    result = search_and_analyze(q)
+    if isinstance(result, dict) and 'error' not in result:
+        try:
+            diag = compute_diagnosis(result.get('code', ''), result.get('name', ''), result)
+            result['diagnosis'] = diag
+        except Exception as e:
+            result['diagnosis'] = {'error': str(e)}
+    h.send_json(result)
 
 
 def _handle_stock_backtest(h, path):
