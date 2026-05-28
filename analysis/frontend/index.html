@@ -258,12 +258,10 @@ function render(d) {
   if (d.trend_bias != null) html += item('趋势乖离', d.trend_bias + '%', d.trend_bias > 0 ? 'up' : 'down');
   html += '</div></div>';
 
-  // K线图
-  if (d.has_chart) {
-    html += '<div class="section"><h2>📈 K线图</h2>';
-    html += '<object data="/api/stock-chart?code=' + d.code + '&t=' + Date.now() + '" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;display:block;margin:0 auto"></object>';
-    html += '</div>';
-  }
+  // K线图（3L关键点标注 + 趋势图）
+  html += '<div class="section"><h2>📈 K线图</h2>';
+  html += '<object data="/api/stock-chart?code=' + d.code + '&t=' + Date.now() + '" type="image/svg+xml" style="width:100%;max-width:700px;border-radius:8px;display:block;margin:0 auto">图加载中...</object>';
+  html += '</div>';
 
   // 交易系统
   const sysInfo = [];
