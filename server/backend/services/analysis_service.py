@@ -3,7 +3,7 @@
 """
 import json, os
 from backend.config import REVIEW_CHARTS_DIR, BT_RESULTS_PATH
-from backend.core.data_layer import get_all_stocks, get_watchlist, resolve_stock
+from backend.core.data_layer import get_all_stocks, get_watchlist, resolve_stock, search_stock_full_market
 from backend.core.buy_point_detection import (
     detect_buy_point,
     detect_huicai_buy_point, find_idx,
@@ -15,9 +15,8 @@ from backend.core.scan_buy_signals import get_main_lines
 
 def search_and_analyze(query, stocks=None, wl=None):
     """搜索并分析一只股票
-    
-    返回 dict，含 structure/stage/signal 等所有分析字段
-    如果搜索不到返回 {'error': '...'}
+
+    支持按需拉取：如果股票不在数据层，尝试通过 akshare 拉取60天K线。
     stocks/wl 可选参数，用于测试注入；生产不传走缓存
     """
     if stocks is None:
@@ -26,12 +25,50 @@ def search_and_analyze(query, stocks=None, wl=None):
         wl = get_watchlist()
     wl_codes = set(s['code'] for s in wl)
 
-    # 搜索匹配
-    matched_code, matched_direction, matched_name = resolve_stock(query, stocks)
+    q = query.strip()
+
+    # 1. 正常搜索（在已有数据中）
+    matched_code, matched_direction, matched_name = resolve_stock(q, stocks)
     if not matched_code:
-        return {'error': f'未找到股票: {query}'}
+        # 2. 未缓存 → 尝试按需拉取
+        result = _try_on_demand_fetch(q, stocks)
+        if result:
+            matched_code, matched_direction, matched_name = result
+        else:
+            # 尝试全市场搜索，给用户更友好的提示
+            market = search_stock_full_market(q, max_results=1)
+            if market:
+                return {'error': f'{market[0]["name"]}({market[0]["code"]}) 暂无足够数据'}
+            return {'error': f'未找到股票: {q}'}
 
     return _analyze(matched_code, matched_direction, matched_name, stocks, wl_codes)
+
+
+def _try_on_demand_fetch(query, stocks):
+    """尝试按需拉取未缓存的股票数据
+
+    Returns:
+        (code, direction, name) or None
+    """
+    from backend.core.on_demand_stock import get_or_fetch_stock_data
+
+    market = search_stock_full_market(query, max_results=1)
+    if not market:
+        return None
+
+    code = market[0]['code']
+    name = market[0]['name']
+
+    klines, direction, _ = get_or_fetch_stock_data(code)
+    if klines is None or len(klines) < 30:
+        return None
+
+    # 注入到 stocks dict（_analyze 需要 stocks[direction][code]）
+    if direction not in stocks:
+        stocks[direction] = {}
+    stocks[direction][code] = klines
+
+    return code, direction, name
 
 
 def _analyze(code, direction, name, stocks, wl_codes):
