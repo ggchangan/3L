@@ -88,7 +88,12 @@ class TestHandleSave:
         args = mock_all.save_log.call_args[0]
         assert args[0] == '2026-05-25'  # date
         assert args[1]['operations'] == '测试操作'
-        mock_handler.send_json.assert_called_once_with({'success': True, 'date': '2026-05-25'})
+        mock_handler.send_json.assert_called_once()
+        call_kwargs = mock_handler.send_json.call_args[0][0]
+        assert call_kwargs['success'] is True
+        assert call_kwargs['date'] == '2026-05-25'
+        assert 'alarm_sync' in call_kwargs  # 新增：报警同步
+        assert call_kwargs['alarm_sync']['synced'] == 0
 
     def test_save_missing_date(self, mock_all, mock_handler):
         """POST 缺少 date 返回错误"""

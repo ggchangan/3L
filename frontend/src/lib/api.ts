@@ -52,6 +52,30 @@ export function fetchExternalMapping(): Promise<ExternalMappingData> {
   return fetchJson<ExternalMappingData>('/api/external-mapping')
 }
 
+/** 报警监听接口 */
+export interface StoredAlarm {
+  id: string
+  stock: string
+  stock_code: string
+  type: 'price' | 'deviation' | 'time'
+  enabled: boolean
+  stop_loss?: number
+  stop_loss_pct?: number
+  condition: string
+  created: string
+  status: string
+  expires_days: number
+}
+
+export interface AlarmListData {
+  alarms: StoredAlarm[]
+  count: number
+}
+
+export function fetchActiveAlarms(): Promise<AlarmListData> {
+  return fetchJson<AlarmListData>('/api/alarms/list')
+}
+
 export function fetchIndustryBoards(): Promise<{ data: IndustryBoardItem[] }> {
   return fetchJson<{ data: IndustryBoardItem[] }>('/api/industry-boards')
 }

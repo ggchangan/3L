@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
-import { fetchWorkbenchPlan, getYesterdayStr } from '../lib/api'
-import type { PlanItem } from '../lib/types'
+import { fetchWorkbenchPlan, getYesterdayStr, fetchActiveAlarms } from '../lib/api'
+import type { PlanItem, StoredAlarm } from '../lib/api'
+
+const ALARM_TYPE_ICONS: Record<string, string> = { price: '🔴', deviation: '🟡', time: '⏰' }
+const ALARM_TYPE_LABELS: Record<string, string> = { price: '价格', deviation: '偏差', time: '时间' }
 
 export default function PlanLayer() {
   const [buy, setBuy] = useState<PlanItem[]>([])
   const [sell, setSell] = useState<PlanItem[]>([])
   const [watch, setWatch] = useState<PlanItem[]>([])
+  const [alarms, setAlarms] = useState<StoredAlarm[]>([])
   const [loaded, setLoaded] = useState(false)
   const dateStr = getYesterdayStr()
 
@@ -17,6 +21,11 @@ export default function PlanLayer() {
       setWatch(plan.watch || [])
       setLoaded(true)
     }).catch(() => setLoaded(true))
+
+    // 加载持久化报警清单
+    fetchActiveAlarms().then(data => {
+      setAlarms(data.alarms || [])
+    }).catch(() => {})
   }, [])
 
   const total = buy.length + sell.length + watch.length
@@ -31,8 +40,6 @@ export default function PlanLayer() {
       </div>
       {!loaded ? (
         <div className="empty">正在加载昨日计划…</div>
-      ) : total === 0 ? (
-        <div className="empty">昨日无计划</div>
       ) : (
         <div id="todayPlanArea">
           <div style={{ fontSize: 11, color: '#555', marginBottom: 6 }}>📅 {dateStr} 计划</div>
@@ -57,6 +64,39 @@ export default function PlanLayer() {
                   {p.focus && <span style={{ color: '#888' }}>→ {p.focus}</span>}
                   {renderStopLoss(p)}
                   {renderAlertIcon(p)}
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* 🔔 报警清单 — 从 alarms.json 持久化读取 */}
+          {alarms.length > 0 && (
+            <>
+              <div style={{ borderTop: '1px solid #2a2a4e', margin: '8px 0' }} />
+              <div style={{ fontSize: 11, marginBottom: 4 }}>
+                🔔 报警清单 <span className="badge" style={{ background: '#ff9800', fontSize: 9, padding: '1px 6px' }}>{alarms.length}</span>
+              </div>
+              {alarms.map((a, i) => (
+                <div key={`alarm-${i}`} style={{
+                  display: 'flex', gap: 6, alignItems: 'center',
+                  padding: '3px 8px', borderRadius: 4,
+                  background: 'rgba(255,152,0,0.06)', marginBottom: 2, fontSize: 12,
+                }}>
+                  <span title={ALARM_TYPE_LABELS[a.type]}>{ALARM_TYPE_ICONS[a.type] || '🔔'}</span>
+                  <span style={{ color: '#e0e0e0' }}>{a.stock}</span>
+                  {a.type === 'price' && a.stop_loss != null && (
+                    <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
+                      止损{a.stop_loss}{a.stop_loss_pct != null ? `(${a.stop_loss_pct}%)` : ''}
+                    </span>
+                  )}
+                  {a.type === 'deviation' && (
+                    <span style={{ fontSize: 10, color: '#ffd700', whiteSpace: 'nowrap' }}>
+                      ±{a.condition || 6}%
+                    </span>
+                  )}
+                  <span style={{ fontSize: 9, color: '#555', marginLeft: 'auto' }}>
+                    {a.created?.slice(0, 10) || ''}
+                  </span>
                 </div>
               ))}
             </>

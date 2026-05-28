@@ -83,6 +83,7 @@ def register_api_routes(routes):
         'backend.api.holdings', 'backend.api.system',
         'backend.api.top_gainers', 'backend.api.macro',
         'backend.api.directions', 'backend.api.workbench',
+        'backend.api.alarms',
         'backend.api.logic_tracking',
     ]
     for mod_name in api_modules:
@@ -302,6 +303,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/directions/toggle': ('backend.api.directions', '_handle_set_active'),
             '/api/directions/reorder': ('backend.api.directions', '_handle_reorder'),
             '/api/workbench/save': ('backend.api.workbench', '_handle_save'),
+            '/api/alarms/remove': ('backend.api.alarms', '_handle_remove'),
             '/api/holdings/save': ('backend.api.holdings', '_handle_save'),
             '/api/logic-tracking/tags/add': ('backend.api.logic_tracking', '_handle_add_tag'),
             '/api/logic-tracking/tags/update': ('backend.api.logic_tracking', '_handle_update_tag'),

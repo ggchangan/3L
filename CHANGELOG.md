@@ -1,5 +1,28 @@
 # Changelog
 
+## [v3.1.0] — 2026-05-28
+
+### 新增：独立持久化报警系统
+
+**报警现在独立存储，不再跟随每日计划文件过期。**
+
+- **alarm_service.py**：新增 `data/private/alarms.json` 持久化报警存储
+  - `save_alarm()` / `remove_alarm()` / `mark_alarm_triggered()` / `get_active_alarms()`
+  - `sync_alarms_from_plan()` — 工作台保存时自动同步
+  - 报警状态：active → triggered / disabled / expired
+  - 默认有效期7天，触发了自动标记
+- **check_alerts.py**：改从 `alarms.json` 读取报警配置，不再依赖每日日志文件
+  - 价格报警、偏差报警统一检查
+  - 触发的自动标记状态为 triggered，5分钟内不重复弹
+  - 核心股自动偏差报警（direction_service）保持并行
+- **alarms API**：`GET /api/alarms/list` 返回生效报警、`POST /api/alarms/remove` 删除
+- **workbench API**：保存日志后自动调用 `sync_alarms_from_plan()` 同步到 alarms.json
+- **PlanLayer（盯盘）**：新增 🔔 报警清单区块，显示所有生效中报警（类型、股票、止损/阈值）
+- **测试**：新增 `test_alarm_service.py` 11个 + 重构 `test_check_alerts.py` 9个
+- 全回归：665 passed / 2 skipped / 1 xfailed
+
+---
+
 ## [v3.0.1] — 2026-05-28
 
 ### 修复：板块数据管线 + 主线持续天数跟踪
