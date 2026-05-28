@@ -66,12 +66,12 @@ export default function Workbench() {
   // 加载数据
   useEffect(() => {
     loadLog(date)
-    fetch('/api/review/get')
+    fetch('/api/review/today')
       .then(r => r.json())
       .then(d => setReviewSummary({
-        market: d.market?.structure || '--',
-        mainline: d.mainline?.primary || '--',
-        signals: d.timing_signals?.signals?.length || 0,
+        market: d.market?.position || '--',
+        mainline: (d.mainline?.lines || []).map((l: any) => l.name).join(', ') || '--',
+        signals: d.buy_signals?.length || 0,
       }))
       .catch(() => {})
     // 加载复盘建议

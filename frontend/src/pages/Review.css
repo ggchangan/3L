@@ -1,75 +1,9 @@
 /* ═══════════════════════════════════════
    Review 页面样式 — React 版
-   复用原有 .section/.section-title/.step 架构
+   通用布局已移至 index.css
    ═══════════════════════════════════════ */
 
-.container {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 16px;
-}
-
-.section {
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
-  border: 1px solid #2a2a4e;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 12px;
-}
-
-.section-title {
-  font-size: 15px;
-  color: gold;
-  margin-bottom: 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #2a2a4e;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.step {
-  display: inline-block;
-  background: #e94560;
-  color: #fff;
-  font-size: 10px;
-  padding: 1px 8px;
-  border-radius: 8px;
-}
-
-/* grid-4: 大盘判定 4 列 */
-.grid-4 {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-
-.info-card {
-  background: #16213e;
-  border: 1px solid #2a2a4e;
-  border-radius: 10px;
-  padding: 12px;
-  text-align: center;
-}
-
-.info-card .label {
-  font-size: 11px;
-  color: #888;
-  margin-bottom: 4px;
-}
-
-.info-card .value {
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.info-card .meta {
-  font-size: 10px;
-  color: #666;
-  margin-top: 2px;
-}
-
-/* 表格 */
+/* Tables */
 table {
   width: 100%;
   border-collapse: collapse;
@@ -114,34 +48,7 @@ table td {
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
-/* 日期徽章 */
-.date-badge {
-  display: inline-block;
-  background: #e94560;
-  color: #fff;
-  padding: 3px 16px;
-  border-radius: 20px;
-  font-size: 12px;
-  margin-top: 8px;
-}
-
-.sub {
-  color: #888;
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.footer {
-  text-align: center;
-  color: #444;
-  font-size: 11px;
-  padding: 16px;
-  margin-top: 12px;
-}
-
-/* 响应式 */
+/* 响应式覆盖（通用部分已在 index.css） */
 @media (max-width: 600px) {
-  .container { padding: 10px; }
   .grid-4 { grid-template-columns: repeat(2, 1fr); }
-  .info-card .value { font-size: 18px; }
 }
