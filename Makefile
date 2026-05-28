@@ -33,6 +33,32 @@ test-all:
 test-api:
 	cd $(APP_DIR) && $(PYTHON) -m pytest tests/test_api.py -q
 
+# ── 全回归测试 ────────────────────────────────
+regression:
+	cd $(APP_DIR) && $(PYTHON) scripts/run_full_regression.py
+
+regression-ci:
+	cd $(APP_DIR) && $(PYTHON) scripts/run_full_regression.py --ci
+
+# ── UI一致性审计 ──────────────────────────────
+audit-ui:
+	cd $(APP_DIR) && $(PYTHON) scripts/audit_ui_consistency.py
+
+# ── 设计交叉检查 ──────────────────────────────
+check-design:
+	cd $(APP_DIR) && $(PYTHON) scripts/check_design_vs_code.py
+
+# ── 视觉回归 ──────────────────────────────────
+visual-regression:
+	cd $(APP_DIR) && node tests/visual_regression.mjs
+
+visual-regression-compare:
+	cd $(APP_DIR) && node tests/visual_regression.mjs --compare
+
+# ── 构建（含回归） ────────────────────────────
+build:
+	cd $(APP_DIR) && $(PYTHON) frontend/build.py && sudo systemctl restart 3l-server
+
 # ── 代码检查 ────────────────────────────────────
 lint:
 	$(PIP) install -q flake8 2>/dev/null || true

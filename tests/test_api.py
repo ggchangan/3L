@@ -243,6 +243,54 @@ class TestStockAnalysisAPI:
 # 行业板块
 # =====================================================
 
+
+
+# =====================================================
+# 龙头观测新面板
+# =====================================================
+
+class TestLeaderDashboard:
+
+    VALID_MARKS = {'🚀突破', '⚠️领跌', '📊放量', '🔄挑战', '⚡背离'}
+
+    def test_response_structure(self):
+        d = api('/api/monitor/leader-dashboard')
+        must_have(d, 'watched', 'anomalies')
+        assert isinstance(d['watched'], list)
+        assert isinstance(d['anomalies'], dict)
+
+    def test_watched_items_schema(self):
+        d = api('/api/monitor/leader-dashboard')
+        for item in d['watched']:
+            must_have(item, 'industry', 'leader_name', 'leader_code', 'chg', 'price', 'marks', 'source_tags')
+            # 验证标记类型合法
+            for m in item['marks']:
+                assert m in self.VALID_MARKS, f'非法标记: {m}'
+            # 验证涨幅是数字
+            assert isinstance(item['chg'], (int, float))
+            # 验证来源标签合法
+            for tag in item['source_tags']:
+                assert tag in ('持仓', '热榜', '关注'), f'非法来源标签: {tag}'
+            # 验证 switching 结构
+            if item['switching']:
+                must_have(item['switching'], 'runner_up_name', 'runner_up_chg', 'leader_chg', 'diff')
+
+    def test_anomalies_schema(self):
+        d = api('/api/monitor/leader-dashboard')
+        a = d['anomalies']
+        must_have(a, 'surge', 'plunge', 'switching')
+        # surge
+        for s in a['surge']:
+            must_have(s, 'industry', 'name', 'chg', 'price')
+            assert s['chg'] > 3, f'surge项目涨幅应>3%: {s}'
+        # plunge
+        for p in a['plunge']:
+            assert p['chg'] < -3, f'plunge项目跌幅应<-3%: {p}'
+        # switching
+        for sw in a['switching']:
+            must_have(sw, 'industry', 'leader_name', 'leader_chg', 'challenger_name', 'challenger_chg', 'diff', 'direction')
+            assert sw['diff'] > 3, f'switching差值应>3%: {sw}'
+
 class TestBoardAPI:
 
     def test_industry_boards(self):
