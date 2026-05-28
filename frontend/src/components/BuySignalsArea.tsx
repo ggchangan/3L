@@ -18,13 +18,16 @@ export default function BuySignalsArea() {
   const [scanMeta, setScanMeta] = useState<{ scan_time?: string; stocks_scanned?: number }>({})
   const [searchQ, setSearchQ] = useState('')
   const [prevActiveDir, setPrevActiveDir] = useState('')
+  const [dirOrder, setDirOrder] = useState<string[]>([])
 
   useEffect(() => {
     Promise.all([
       fetchBuySignals(),
       fetchIndustryBoards(),
       fetchIndustryMap(),
-    ]).then(([signalsData, boardsData, mapData]) => {
+      fetch('/api/directions/get').then(r => r.json()),
+    ]).then(([signalsData, boardsData, mapData, dirData]) => {
+      setDirOrder(dirData.all || [])
       const boards: IndustryBoardItem[] = boardsData.data || []
       const sectorChg: Record<string, number> = {}
       boards.forEach(b => {
@@ -59,7 +62,9 @@ export default function BuySignalsArea() {
     setPage(1)
   }, [activeDir])
 
-  const dirs = Object.keys(groups)
+  const dirs = dirOrder.length > 0
+    ? dirOrder.filter(d => groups[d])
+    : Object.keys(groups)
   if (dirs.length === 0) return <div className="empty">正在扫描…</div>
 
   const activeData = groups[activeDir] || []
