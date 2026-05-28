@@ -10,6 +10,8 @@ interface PlanItem {
   qty?: string
   status: string
   alert?: AlertItem | null
+  stop_loss?: number
+  stop_loss_pct?: number
 }
 
 interface AlertItem {
@@ -47,6 +49,8 @@ interface SuggestionItem {
   change?: number
   focus?: string
   text?: string
+  stop_loss?: number
+  stop_loss_pct?: number
 }
 
 interface SuggestionsData {
@@ -147,7 +151,7 @@ export default function Workbench() {
       if (!checkedIds.has(id)) return
       const stockName = item.stock || ''
       const act = (item.action || '').toLowerCase()
-      const pi: PlanItem = { stock: stockName, condition: item.reason || '', qty: '', status: 'pending', alert: null }
+      const pi: PlanItem = { stock: stockName, condition: item.reason || '', qty: '', status: 'pending', alert: null, stop_loss: item.stop_loss, stop_loss_pct: item.stop_loss_pct }
       if (act.startsWith('卖出')) {
         newPlan.sell.push(pi)
       } else if (act.includes('买入') || act.includes('执行') || act.includes('加仓')) {
@@ -167,6 +171,8 @@ export default function Workbench() {
         stock: `${name}(${code})`,
         condition: `${item.buy_point || ''} ${item.change != null ? `${item.change > 0 ? '+' : ''}${item.change}%` : ''}`,
         qty: '', status: 'pending', alert: null,
+        stop_loss: item.stop_loss,
+        stop_loss_pct: item.stop_loss_pct,
       })
     })
 
@@ -287,7 +293,13 @@ export default function Workbench() {
                         <span style={{ fontSize: 10, color: priColor, fontWeight: 600 }}>[{item.priority}]</span>
                         <span style={{ fontSize: 12, color: '#e0e0e0' }}>{item.stock || ''}</span>
                         <span style={{ fontSize: 11, color: '#22c55e' }}>{item.action || ''}</span>
-                        <span style={{ fontSize: 10, color: '#888', flex: 1 }}>{item.reason || ''}</span>
+                        <span style={{ fontSize: 10, color: '#888' }}>{item.reason || ''}</span>
+                        {(item.stop_loss != null || item.stop_loss_pct != null) && (
+                          <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
+                            {item.stop_loss != null ? `止损${item.stop_loss}` : ''}
+                            {item.stop_loss_pct != null ? `(${item.stop_loss_pct}%)` : ''}
+                          </span>
+                        )}
                         {item.change != null && (
                           <span style={{ fontSize: 11, color: item.change >= 0 ? '#e94560' : '#22c55e' }}>{item.change > 0 ? '+' : ''}{item.change}%</span>
                         )}
@@ -309,18 +321,18 @@ export default function Workbench() {
                       <div key={id} onClick={() => toggleCheck(id)}
                         style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, marginBottom: 2, cursor: 'pointer', background: checkedIds.has(id) ? 'rgba(34,197,94,0.08)' : 'transparent', border: checkedIds.has(id) ? '1px solid rgba(34,197,94,0.3)' : '1px solid transparent' }}>
                         <span style={{ color: checkedIds.has(id) ? '#22c55e' : '#555', fontSize: 14 }}>{checkedIds.has(id) ? '☑' : '☐'}</span>
-                        <span style={{ fontSize: 10, color: bpColor }}>#{item.priority}</span>
+                        <span style={{ fontSize: 10, color: bpColor, fontWeight: 600 }}>[{item.priority}]</span>
                         <span style={{ fontSize: 12, color: '#e0e0e0' }}>{item.name || ''}({item.code || ''})</span>
                         <span style={{ fontSize: 10, color: bpColor }}>{item.buy_point || ''}</span>
-                        <span style={{ fontSize: 10, color: '#555' }}>{item.sector || ''}</span>
-                        {item.change != null && (
-                          <span style={{ fontSize: 11, color: item.change >= 0 ? '#e94560' : '#22c55e', marginLeft: 'auto' }}>{item.change > 0 ? '+' : ''}{item.change}%</span>
-                        )}
+                        <span style={{ fontSize: 10, color: '#888' }}>{item.structure || ''}{item.structure && item.stage ? '·' : ''}{item.stage || ''}</span>
                         {(item.stop_loss != null || item.stop_loss_pct != null) && (
                           <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
                             {item.stop_loss != null ? `止损${item.stop_loss}` : ''}
                             {item.stop_loss_pct != null ? `(${item.stop_loss_pct}%)` : ''}
                           </span>
+                        )}
+                        {item.change != null && (
+                          <span style={{ fontSize: 11, color: item.change >= 0 ? '#e94560' : '#22c55e' }}>{item.change > 0 ? '+' : ''}{item.change}%</span>
                         )}
                       </div>
                     )
@@ -373,26 +385,27 @@ export default function Workbench() {
               <div key={type} style={{ marginTop: 12 }}>
                 <div style={{ display: 'inline-block', background: type === 'buy' ? 'rgba(34,197,94,0.15)' : type === 'sell' ? 'rgba(233,69,96,0.15)' : 'rgba(255,215,0,0.15)', color: type === 'buy' ? '#22c55e' : type === 'sell' ? '#e94560' : '#ffd700', padding: '2px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{label}</div>
                 {items.map((p, i) => (
-                  <div key={i} className="plan-row" style={{ display: 'grid', gridTemplateColumns: type === 'watch' ? '80px 1fr 60px 80px 30px' : '80px 1fr 60px 80px 30px', gap: 6, alignItems: 'center', fontSize: 11, padding: '4px 0' }}>
-                    <input defaultValue={p.stock || ''} placeholder={type === 'watch' ? '标的/板块' : '代码/名称'} style={{ background: '#1a1a30', border: '1px solid #2a2a4e', borderRadius: 4, padding: '3px 6px', color: '#e0e0e0' }} onChange={e => updatePlanField(type, i, 'stock', e.target.value)} />
-                    <input defaultValue={type === 'watch' ? p.focus || '' : p.condition || ''} placeholder={type === 'watch' ? '关注点' : '条件'} style={{ background: '#1a1a30', border: '1px solid #2a2a4e', borderRadius: 4, padding: '3px 6px', color: '#e0e0e0' }} onChange={e => updatePlanField(type, i, type === 'watch' ? 'focus' : 'condition', e.target.value)} />
-                    {type !== 'watch' && <input defaultValue={p.qty || ''} placeholder="数量" style={{ background: '#1a1a30', border: '1px solid #2a2a4e', borderRadius: 4, padding: '3px 6px', color: '#e0e0e0' }} onChange={e => updatePlanField(type, i, 'qty', e.target.value)} />}
-                    {type === 'watch' && <span></span>}
-                    <select defaultValue={p.status || 'pending'} style={{ background: '#1a1a30', border: '1px solid #2a2a4e', borderRadius: 4, padding: '3px 4px', color: '#e0e0e0', fontSize: 11 }} onChange={e => updatePlanField(type, i, 'status', e.target.value)}>
-                      <option value="pending">⏳ 待触发</option>
-                      <option value="triggered">⚡ 已触发</option>
-                      <option value="executed">✅ 已执行</option>
-                      <option value="not_triggered">❌ 未触发</option>
-                    </select>
-                    {/* 🔔 报警按钮 */}
-                    <span onClick={() => togglePlanAlert(type, i)}
-                      style={{ cursor: 'pointer', fontSize: 13, textAlign: 'center', color: p.alert ? '#ff9800' : '#555' }}
-                      title={p.alert ? '已设置报警' : '点击设置报警'}>
-                      {p.alert ? '🔔' : '🔕'}
-                    </span>
+                  <div key={i} style={{ marginBottom: 2 }}>
+                    <div className="plan-row" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6 }}>
+                      <span style={{ fontSize: 12, color: '#e0e0e0' }}>{p.stock || (type === 'watch' ? (p.sector || '') : '') || '--'}</span>
+                      <span style={{ fontSize: 10, color: '#888' }}>{type === 'watch' ? (p.focus || '') : (p.condition || '')}</span>
+                      {(p.stop_loss != null || p.stop_loss_pct != null) && (
+                        <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
+                          {p.stop_loss != null ? `止损${p.stop_loss}` : ''}
+                          {p.stop_loss_pct != null ? `(${p.stop_loss_pct}%)` : ''}
+                        </span>
+                      )}
+                      {/* 🔔 报警按钮 */}
+                      <span onClick={() => togglePlanAlert(type, i)}
+                        style={{ cursor: 'pointer', fontSize: 13, color: p.alert ? '#ff9800' : '#555' }}
+                        title={p.alert ? '已设置报警' : '点击设置报警'}>
+                        {p.alert ? '🔔' : '🔕'}
+                      </span>
+                      <span style={{ color: '#e94560', cursor: 'pointer', fontSize: 11, marginLeft: 'auto' }} onClick={() => removePlanRow(type, i)}>✕</span>
+                    </div>
                     {/* 报警配置（行内展开） */}
                     {p.alert && (
-                      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, padding: '4px 8px', background: 'rgba(255,152,0,0.06)', borderRadius: 4 }}>
+                      <div style={{ display: 'flex', gap: 6, padding: '4px 8px 4px 14px', background: 'rgba(255,152,0,0.06)', borderRadius: 4, marginTop: 2 }}>
                         <select value={p.alert.type} onChange={e => updateAlert(type, i, 'type', e.target.value)}
                           style={{ background: '#1a1a30', border: '1px solid #2a2a4e', borderRadius: 4, padding: '2px 4px', color: '#e0e0e0', fontSize: 10 }}>
                           <option value="price">🔴 价格报警</option>
@@ -408,10 +421,8 @@ export default function Workbench() {
                         <span style={{ color: '#e94560', cursor: 'pointer', fontSize: 11 }} onClick={() => togglePlanAlert(type, i)}>✕</span>
                       </div>
                     )}
-                    <span style={{ color: '#e94560', cursor: 'pointer', fontSize: 11 }} onClick={() => removePlanRow(type, i)}>✕</span>
                   </div>
                 ))}
-                <div style={{ marginTop: 4, fontSize: 11, color: '#22c55e', cursor: 'pointer' }} onClick={() => addPlanRow(type)}>＋ 添加{type === 'buy' ? '买入计划' : type === 'sell' ? '卖出计划' : '观察项'}</div>
               </div>
             )
           })}
@@ -494,24 +505,6 @@ export default function Workbench() {
   )
 
   // helpers
-  function updatePlanField(type: string, i: number, field: string, value: string) {
-    const newPlan = { ...plan }
-    const items = [...(newPlan[type as keyof typeof newPlan] || [])]
-    items[i] = { ...items[i], [field]: value }
-    const newData = { ...data, plan: { ...newPlan, [type]: items } }
-    setData(newData)
-    persist(newData)
-  }
-
-  function addPlanRow(type: string) {
-    const newPlan = { ...plan }
-    const items = [...(newPlan[type as keyof typeof newPlan] || [])]
-    items.push({ stock: '', condition: '', qty: '', status: 'pending', alert: null })
-    const newData = { ...data, plan: { ...newPlan, [type]: items } }
-    setData(newData)
-    persist(newData)
-  }
-
   function removePlanRow(type: string, i: number) {
     const newPlan = { ...plan }
     const items = (newPlan[type as keyof typeof newPlan] || []).filter((_, j) => j !== i)

@@ -14,8 +14,38 @@ const MAX_ALARMS = 20
 /** 全局报警队列，供其他组件调用 */
 let globalPushAlarm: ((msg: string, type: string) => void) | null = null
 
+/** 发送浏览器通知 */
+function sendBrowserNotification(msg: string) {
+  if (!('Notification' in window)) return
+  if (Notification.permission === 'granted') {
+    new Notification('⚠️ 3L 报警', { body: msg })
+  } else if (Notification.permission === 'default') {
+    Notification.requestPermission()
+  }
+}
+
+/** 播放提示音 */
+function playAlertSound() {
+  try {
+    // 用 AudioContext 生成短促提示音，无需外部文件
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.frequency.value = 880  // A5
+    osc.type = 'square'
+    gain.gain.value = 0.15
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.3)
+  } catch {}
+}
+
 export function pushAlarm(msg: string, type: string = 'info') {
   globalPushAlarm?.(msg, type)
+  sendBrowserNotification(msg)
+  playAlertSound()
 }
 
 export default function AlarmLayer() {

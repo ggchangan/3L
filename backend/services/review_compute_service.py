@@ -511,52 +511,37 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             sig = h.get('signal', 'hold')
             stage = h.get('stage', '')
             struct = h.get('structure', '')
+            # 所有持仓项共有的字段
+            base = {
+                'stock': name,
+                'stop_loss': h.get('stop_loss'),
+                'stop_loss_pct': h.get('stop_loss_pct'),
+                'change': h.get('change'),
+            }
 
             if sig == 'sell':
-                plan['holdings_action'].append({
-                    'stock': name, 'action': '卖出', 'reason': f'{struct}·{stage}', 'priority': '高'
-                })
+                plan['holdings_action'].append({**base, 'action': '卖出', 'reason': f'{struct}·{stage}', 'priority': '高'})
             elif sig == 'buy':
                 buy_pt = h.get('buy_point', '买点')
-                plan['holdings_action'].append({
-                    'stock': name, 'action': f'执行{buy_pt}', 'reason': f'{struct}·{stage}', 'priority': '高'
-                })
+                plan['holdings_action'].append({**base, 'action': f'执行{buy_pt}', 'reason': f'{struct}·{stage}', 'priority': '高'})
             elif stage == '加速':
-                plan['holdings_action'].append({
-                    'stock': name, 'action': '持有·关注止盈', 'reason': f'{struct}·{stage}，关注放量滞涨/加速变缓', 'priority': '中'
-                })
+                plan['holdings_action'].append({**base, 'action': '持有·关注止盈', 'reason': f'{struct}·{stage}，关注放量滞涨/加速变缓', 'priority': '中'})
             elif stage == '缩量整理':
-                plan['holdings_action'].append({
-                    'stock': name, 'action': '持有·可加仓', 'reason': f'{struct}·{stage}，供应枯竭等待放量', 'priority': '中'
-                })
+                plan['holdings_action'].append({**base, 'action': '持有·可加仓', 'reason': f'{struct}·{stage}，供应枯竭等待放量', 'priority': '中'})
             elif stage == '上行':
-                plan['holdings_action'].append({
-                    'stock': name, 'action': '持有不动', 'reason': f'{struct}·{stage}，趋势健康', 'priority': '低'
-                })
+                plan['holdings_action'].append({**base, 'action': '持有不动', 'reason': f'{struct}·{stage}，趋势健康', 'priority': '低'})
             elif stage == '滞涨':
-                plan['holdings_action'].append({
-                    'stock': name, 'action': '警惕·考虑减仓', 'reason': f'{struct}·{stage}，EMA10走平', 'priority': '高'
-                })
+                plan['holdings_action'].append({**base, 'action': '警惕·考虑减仓', 'reason': f'{struct}·{stage}，EMA10走平', 'priority': '高'})
             elif stage == '转弱':
-                plan['holdings_action'].append({
-                    'stock': name, 'action': '关注·可换股', 'reason': f'{struct}·{stage}，EMA10拐头向下', 'priority': '高'
-                })
+                plan['holdings_action'].append({**base, 'action': '关注·可换股', 'reason': f'{struct}·{stage}，EMA10拐头向下', 'priority': '高'})
             elif stage == '区间底部':
-                plan['holdings_action'].append({
-                    'stock': name, 'action': '支撑位·可加仓', 'reason': f'{struct}·{stage}，区底企稳', 'priority': '中'
-                })
+                plan['holdings_action'].append({**base, 'action': '支撑位·可加仓', 'reason': f'{struct}·{stage}，区底企稳', 'priority': '中'})
             elif stage == '区间顶部':
-                plan['holdings_action'].append({
-                    'stock': name, 'action': '压力位·注意减仓', 'reason': f'{struct}·{stage}，区顶受阻', 'priority': '高'
-                })
+                plan['holdings_action'].append({**base, 'action': '压力位·注意减仓', 'reason': f'{struct}·{stage}，区顶受阻', 'priority': '高'})
             elif stage == '区间中段':
-                plan['holdings_action'].append({
-                    'stock': name, 'action': '持有·观望', 'reason': f'{struct}·{stage}，方向未明', 'priority': '低'
-                })
+                plan['holdings_action'].append({**base, 'action': '持有·观望', 'reason': f'{struct}·{stage}，方向未明', 'priority': '低'})
             else:
-                plan['holdings_action'].append({
-                    'stock': name, 'action': '持有', 'reason': f'{struct}·{stage}', 'priority': '中'
-                })
+                plan['holdings_action'].append({**base, 'action': '持有', 'reason': f'{struct}·{stage}', 'priority': '中'})
 
     if buy_signals_review:
         for bs in buy_signals_review:
@@ -570,6 +555,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'profit_model1': bs.get('profit_model1', False),
                 'trend_stock': bs.get('trend_stock', False),
                 'structure': bs.get('structure', ''),
+                'stage': bs.get('stage', ''),
                 'stop_loss': bs.get('stop_loss'),
                 'stop_loss_pct': bs.get('stop_loss_pct'),
                 'priority': '高' if bs.get('buy_point', '') in ('中继买点', '突破买点') else '中',

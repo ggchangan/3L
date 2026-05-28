@@ -1,8 +1,7 @@
-"""
-工作台 API 路由
-"""
+"""工作台 API 路由"""
 import json
 from urllib.parse import urlparse, parse_qs
+from datetime import date, timedelta
 
 from backend.services.workbench_service import get_log, save_log, list_logs
 
@@ -48,9 +47,27 @@ def _handle_list(h, path):
     h.send_json({'dates': list_logs()})
 
 
+def _handle_check_alerts(h, path):
+    """GET /api/workbench/check-alerts?date=2026-05-27
+
+    检查今日计划中的价格报警（默认昨日 -> 今日计划）
+    """
+    qs = parse_qs(urlparse(path).query)
+    dt = qs.get('date', [None])[0]
+    if not dt:
+        dt = (date.today() - timedelta(days=1)).isoformat()
+    from backend.services.check_alerts import check_price_alerts
+    try:
+        result = check_price_alerts(dt)
+        h.send_json(result)
+    except Exception as e:
+        h.send_json({'triggered': [], 'count': 0, 'error': str(e)})
+
+
 def register_routes(routes):
     routes.exact('/api/workbench/get', func=_handle_get)
     routes.exact('/api/workbench/list', func=_handle_list)
     routes.exact('/api/workbench/save', func=_handle_save)  # POST handled separately
     routes.exact('/api/workbench/suggestions', func=_handle_suggestions)
+    routes.exact('/api/workbench/check-alerts', func=_handle_check_alerts)
     return routes

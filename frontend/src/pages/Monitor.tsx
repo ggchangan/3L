@@ -9,7 +9,7 @@ import SectorMonitor from '../components/SectorMonitor'
 import LeaderMonitor from '../components/LeaderMonitor'
 import BuySignalsArea from '../components/BuySignalsArea'
 import StopLossArea from '../components/StopLossArea'
-import AlarmLayer from '../components/AlarmLayer'
+import AlarmLayer, { pushAlarm } from '../components/AlarmLayer'
 
 export default function Monitor() {
   const [updateTime, setUpdateTime] = useState('等待数据...')
@@ -24,6 +24,25 @@ export default function Monitor() {
     }
     tick()
     const timer = setInterval(tick, 30000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // 报警轮询：每30秒检查价格报警
+  useEffect(() => {
+    const checkAlerts = async () => {
+      try {
+        const r = await fetch('/api/workbench/check-alerts')
+        const data = await r.json()
+        if (data.triggered && data.triggered.length > 0) {
+          data.triggered.forEach((t: any) => {
+            const msg = `${t.stock} 跌破止损 ${t.stop_loss}，现价 ${t.current_price} (${t.loss_pct > 0 ? '+' : ''}${t.loss_pct}%)`
+            pushAlarm(msg, 'stop')
+          })
+        }
+      } catch {}
+    }
+    checkAlerts()
+    const timer = setInterval(checkAlerts, 30000)
     return () => clearInterval(timer)
   }, [])
 
