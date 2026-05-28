@@ -316,6 +316,12 @@ export default function Workbench() {
                         {item.change != null && (
                           <span style={{ fontSize: 11, color: item.change >= 0 ? '#e94560' : '#22c55e', marginLeft: 'auto' }}>{item.change > 0 ? '+' : ''}{item.change}%</span>
                         )}
+                        {(item.stop_loss != null || item.stop_loss_pct != null) && (
+                          <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
+                            {item.stop_loss != null ? `止损${item.stop_loss}` : ''}
+                            {item.stop_loss_pct != null ? `(${item.stop_loss_pct}%)` : ''}
+                          </span>
+                        )}
                       </div>
                     )
                   })}

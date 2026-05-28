@@ -570,6 +570,8 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'profit_model1': bs.get('profit_model1', False),
                 'trend_stock': bs.get('trend_stock', False),
                 'structure': bs.get('structure', ''),
+                'stop_loss': bs.get('stop_loss'),
+                'stop_loss_pct': bs.get('stop_loss_pct'),
                 'priority': '高' if bs.get('buy_point', '') in ('中继买点', '突破买点') else '中',
             })
 
