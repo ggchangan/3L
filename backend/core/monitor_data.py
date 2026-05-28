@@ -626,10 +626,10 @@ def get_top_sectors_with_5d():
         kps = kd.get('key_points', [])
         cur = c60[-1]
         
-        # 5日涨幅
-        chg5d = 0
-        if len(c60) >= 6:
-            chg5d = round((cur / c60[-6] - 1) * 100, 2)
+        # 20日涨幅
+        chg20d = 0
+        if len(c60) >= 21:
+            chg20d = round((cur / c60[-21] - 1) * 100, 2)
         
         # 结构（看EMA10极值位置，取最近15日）
         c15 = c60[-15:] if len(c60) >= 15 else c60
@@ -682,51 +682,43 @@ def get_top_sectors_with_5d():
         
         return {
             'name': name, 'chg': chg_today,
-            'chg5d': chg5d, 'yesterday_chg': chg5d,
+            'chg20d': chg20d,
             'structure': structure, 'phase': phase,
         }
     
     # === 计算TOP15所有结果（用于今日涨幅/结构/阶段） ===
     all_results = [_compute_one(name, today_chg_map.get(name, 0)) for name in top15_names]
     
-    # === 5日涨幅：全量板块参与排序 ===
+    # === 20日涨幅：全量板块参与排序 ===
     # 所有在s60d中有数据的板块（含TOP15已计算的 + 其他有缓存的）
-    all_with_5d = []
-    seen_in_results = {r['name'] for r in all_results if r.get('chg5d') is not None}
+    all_with_20d = []
+    seen_in_results = {r['name'] for r in all_results if r.get('chg20d') is not None}
     # TOP15的结果
     for r in all_results:
-        if r.get('chg5d') is not None:
-            all_with_5d.append(r)
-    # 其他有缓存的板块（只需chg5d，不需要结构/阶段）
+        if r.get('chg20d') is not None:
+            all_with_20d.append(r)
+    # 其他有缓存的板块（用缓存数据计算完整结构/阶段）
     for name in all_sector_names:
         if name in seen_in_results:
             continue
         kd = s60d.get(name)
-        if not kd or 'closes' not in kd or len(kd['closes']) < 6:
+        if not kd or 'closes' not in kd or len(kd['closes']) < 21:
             continue
-        c60 = kd['closes']
-        cur = c60[-1]
-        chg5d = round((cur / c60[-6] - 1) * 100, 2)
-        all_with_5d.append({
-            'name': name,
-            'chg': today_chg_map.get(name, 0),
-            'chg5d': chg5d,
-            'structure': '-',
-            'phase': '-',
-        })
+        # 用缓存数据计算完整结构/阶段
+        all_with_20d.append(_compute_one(name, today_chg_map.get(name, 0)))
     
     # 今日涨幅TOP10
     today_top10 = sorted(all_results, key=lambda x: x['chg'], reverse=True)[:10]
     
-    # 5日涨幅TOP10（从全量有数据的板块中排）
-    chg5d_top10 = sorted(all_with_5d, key=lambda x: x['chg5d'], reverse=True)[:10]
+    # 20日涨幅TOP10（从全量有数据的板块中排）
+    chg20d_top10 = sorted(all_with_20d, key=lambda x: x['chg20d'], reverse=True)[:10]
     
     # 昨日涨幅TOP10
     yesterday_top10 = sorted(all_results, key=lambda x: x.get('yesterday_chg', 0), reverse=True)[:10]
     
     return {
         'today_top5': today_top10,
-        'chg5d_top5': chg5d_top10,
+        'chg20d_top10': chg20d_top10,
         'yesterday_top5': yesterday_top10,
     }
 

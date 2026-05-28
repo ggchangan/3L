@@ -1,22 +1,22 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { fetchSectors } from '../lib/api'
 import type { SectorItem } from '../lib/types'
 
 export default function SectorMonitor() {
-  const [data, setData] = useState<{ today: SectorItem[]; chg5d: SectorItem[] } | null>(null)
-  const [tab, setTab] = useState<'today' | 'chg5d'>('today')
+  const [data, setData] = useState<{ today: SectorItem[]; chg20d: SectorItem[] } | null>(null)
+  const [tab, setTab] = useState<'today' | 'chg20d'>('today')
   const [chartVisible, setChartVisible] = useState<string | null>(null)
 
   useEffect(() => {
     fetchSectors().then(d => {
-      setData({ today: d.today_top5 || [], chg5d: d.chg5d_top5 || [] })
+      setData({ today: d.today_top5 || [], chg20d: d.chg20d_top10 || [] })
     })
   }, [])
 
   if (!data) return <div className="empty">加载中...</div>
-  if (data.today.length === 0 && data.chg5d.length === 0) return <div className="empty">暂无数据</div>
+  if (data.today.length === 0 && data.chg20d.length === 0) return <div className="empty">暂无数据</div>
 
-  const activeItems = tab === 'today' ? data.today : data.chg5d
+  const activeItems = tab === 'today' ? data.today : data.chg20d
 
   return (
     <>
@@ -31,14 +31,14 @@ export default function SectorMonitor() {
           }}
         >🔥 今日涨幅</div>
         <div
-          onClick={() => setTab('chg5d')}
+          onClick={() => setTab('chg20d')}
           style={{
             padding: '6px 18px', cursor: 'pointer', fontSize: 13,
-            color: tab === 'chg5d' ? '#ffd700' : '#888',
-            borderBottom: tab === 'chg5d' ? '2px solid #ffd700' : '2px solid transparent',
-            fontWeight: tab === 'chg5d' ? 'bold' : 'normal',
+            color: tab === 'chg20d' ? '#ffd700' : '#888',
+            borderBottom: tab === 'chg20d' ? '2px solid #ffd700' : '2px solid transparent',
+            fontWeight: tab === 'chg20d' ? 'bold' : 'normal',
           }}
-        >📈 5日涨幅</div>
+        >📈 20日涨幅</div>
       </div>
       <table className="signal-table">
         <thead>
@@ -46,12 +46,12 @@ export default function SectorMonitor() {
         </thead>
         <tbody>
           {activeItems.map((b, i) => {
-            const c = b.chg || b.chg5d || 0
+            const c = tab === 'chg20d' ? (b.chg20d ?? b.chg ?? 0) : (b.chg ?? b.chg20d ?? 0)
             const safeName = b.name
             const chartId = `${tab}_chart_${i}`
             return (
-              <>
-                <tr key={`row-${i}`}>
+              <React.Fragment key={`row-${i}`}>
+                <tr>
                   <td style={{ color: '#555', width: 20 }}>{i + 1}</td>
                   <td style={{ fontWeight: 'bold' }}>{b.name || ''}</td>
                   <td style={{ color: Number(c) >= 0 ? '#ff4444' : '#44aa44' }}>{Number(c) >= 0 ? '+' : ''}{Number(c).toFixed(2)}%</td>
@@ -76,7 +76,7 @@ export default function SectorMonitor() {
                     </td>
                   </tr>
                 )}
-              </>
+              </React.Fragment>
             )
           })}
         </tbody>

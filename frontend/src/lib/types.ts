@@ -14,13 +14,13 @@ export interface VolumeData {
 /** 板块监测API返回类型 */
 export interface SectorData {
   today_top5?: SectorItem[]
-  chg5d_top5?: SectorItem[]
+  chg20d_top10?: SectorItem[]
 }
 
 export interface SectorItem {
   name: string
   chg?: number
-  chg5d?: number
+  chg20d?: number
   structure?: string
   phase?: string
 }
