@@ -10,6 +10,7 @@ from backend import config
 from backend.config import DATA_DIR, ALL_STOCKS_PATH, WWW_DIR, MAINLINES_CACHE_PATH
 
 MAINLINE_FULL_CACHE = os.path.join(DATA_DIR, '.cache', 'mainline_full.json')
+MAINLINE_HISTORY_PATH = os.path.join(DATA_DIR, 'mainline_history.json')
 
 # ═══════════════════════════════════════════════════════════════
 # 工具函数
@@ -325,12 +326,55 @@ def get_mainline_data(date_str):
         json.dump(result, _f)
     print(f"[3L复盘] 主线数据已缓存 {date_str}")
 
+    # 保存当日 top10 到历史记录（用于持续性跟踪）
+    try:
+        top10_names = [l['name'] for l in (main_lines + secondary_lines)]
+        history = {}
+        if os.path.isfile(MAINLINE_HISTORY_PATH):
+            with open(MAINLINE_HISTORY_PATH) as _fh:
+                history = json.load(_fh)
+        # 只保留当天及之前的历史（防止future覆盖）
+        history = {k: v for k, v in history.items() if k <= date_str}
+        history[date_str] = {'top10': top10_names}
+        with open(MAINLINE_HISTORY_PATH, 'w') as _fh:
+            json.dump(history, _fh, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[3L复盘] ⚠️ 历史记录保存失败: {e}")
+
     return result
 
 
 def track_mainline_persistence(date_str, current_lines):
-    """主线持续性跟踪"""
-    return [{'name': l['name'], 'days': 1, 'status': '持续'} for l in current_lines]
+    """主线持续性跟踪 — 从历史记录追溯连续在榜天数"""
+    if not current_lines:
+        return []
+
+    try:
+        history = {}
+        if os.path.isfile(MAINLINE_HISTORY_PATH):
+            with open(MAINLINE_HISTORY_PATH) as _fh:
+                history = json.load(_fh)
+    except Exception:
+        return [{'name': l['name'], 'days': 1, 'status': '持续'} for l in current_lines]
+
+    # 获取所有历史日期，从最近到最远
+    past_dates = sorted([d for d in history.keys() if d < date_str], reverse=True)
+    result = []
+
+    for line in current_lines:
+        name = line['name']
+        days = 1  # 当天算1天
+        # 逐日往前追溯
+        for d in past_dates:
+            top10 = history[d].get('top10', [])
+            if name in top10:
+                days += 1
+            else:
+                break
+        status = '新进' if days == 1 else '持续'
+        result.append({'name': name, 'days': days, 'status': status})
+
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════
