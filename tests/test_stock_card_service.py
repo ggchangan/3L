@@ -402,3 +402,55 @@ class TestGetStockCardIntegration:
         assert card['ema30'] is not None and card['ema30'] > 0
         # ema5 应接近收盘价
         assert abs(card['ema5'] - card['price']) / card['price'] < 0.1
+
+    def test_external_klines_overrides_all_stocks_for_detect_buy_point(self, monkeypatch):
+        """外部传实时K线时，all_stocks中对应股票的K线被覆盖，detect_buy_point用实时K线"""
+        from backend.services.stock_card_service import get_stock_card
+        from tests.test_stock_card_service import _make_klines, _UPTREND, _DATES
+
+        # 模拟 get_all_stocks 返回旧数据（低成交量）
+        old_klines = _make_klines(_UPTREND, _DATES, vol_base=100)
+        old_klines[-1]['volume'] = 500  # 旧数据：最后一根成交量很低
+
+        def mock_get_all_stocks():
+            return {'半导体': {'999999': old_klines}, '其他': {}}
+
+        monkeypatch.setattr(
+            'backend.core.data_layer.get_all_stocks',
+            mock_get_all_stocks
+        )
+
+        # 模拟 detect_buy_point，捕获传进来的 all_stocks
+        captured = {}
+
+        def mock_detect_buy_point(code, date_str, all_stocks, **kwargs):
+            captured['all_stocks'] = all_stocks
+            captured['code'] = code
+            return None  # 不返回买点，只验证数据传进去了
+
+        monkeypatch.setattr(
+            'backend.services.stock_card_service.detect_buy_point',
+            mock_detect_buy_point
+        )
+
+        # 外部传入实时K线（高预估成交量）
+        realtime_klines = _make_klines(_UPTREND, _DATES, vol_base=8000)
+        realtime_klines[-1]['volume'] = 15000000  # 实时：最后一根高成交量
+
+        card = get_stock_card(
+            code='999999', date_str='20260920',
+            klines=realtime_klines,
+            main_lines=[],
+        )
+
+        # 验证 all_stocks 中 '999999' 的K线已被实时K线覆盖
+        assert 'all_stocks' in captured
+        target_stock_klines = None
+        for sec, stocks in captured['all_stocks'].items():
+            if '999999' in stocks:
+                target_stock_klines = stocks['999999']
+                break
+        assert target_stock_klines is not None, 'all_stocks 中应有 999999'
+        # 使用最后一根成交量判断：实时K线的高成交量应覆盖旧数据的低成交量
+        assert target_stock_klines[-1]['volume'] == 15000000, \
+            'all_stocks 中的K线应为外部传入的实时K线（高成交量），而非旧数据（低成交量）'

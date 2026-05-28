@@ -21,6 +21,15 @@
 - **测试**：新增 `test_alarm_service.py` 11个 + 重构 `test_check_alerts.py` 9个
 - 全回归：665 passed / 2 skipped / 1 xfailed
 
+### 修复：盘中买点扫描只有趋势信号，3L买点全漏
+
+**根因：** `get_stock_card()` 传入实时K线（含预估全天成交量），但3L买点检测 `detect_buy_point()` 内部从 `get_all_stocks()` 读取了数据层的旧K线，旧K线没有预估成交量，量比算不对，所有3L买点（突破/中继/涨停回踩）全部漏掉。
+
+- **stock_card_service.py**：外部传 `klines` 参数时，覆盖 `all_stocks` 字典中对应股票的K线，`detect_buy_point` 现在用实时K线检测
+- **restore scan_buy_signals.py shim**：`scripts/` 目录清理时被误删，恢复指向 `backend.core.scan_buy_signals` 的shim
+- **测试**：新增 `test_external_klines_overrides_all_stocks_for_detect_buy_point`
+- 修复后扫描结果：1个趋势信号 → **11个信号（突破买点×8 + 中继买点×3 + 趋势×1）**
+
 ---
 
 ## [v3.0.1] — 2026-05-28
