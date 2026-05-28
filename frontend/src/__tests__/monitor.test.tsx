@@ -27,6 +27,98 @@ describe('lib/api 工具函数', () => {
   })
 })
 
+
+
+// ====== LeaderMonitor 组件测试 ======
+import LeaderMonitor from '../components/LeaderMonitor'
+
+const mockWatchedData = {
+  watched: [
+    {
+      industry: '被动元件', leader_name: '三环集团', leader_code: 'SZ300408',
+      chg: 7.42, price: 28.5, mcap: 100000000000,
+      marks: ['🚀突破'], switching: null, divergence: null,
+      source_tags: ['持仓'],
+    },
+    {
+      industry: '锂电池', leader_name: '宁德时代', leader_code: 'SZ300750',
+      chg: 0.21, price: 250.0, mcap: 1000000000000,
+      marks: [], switching: null, divergence: null,
+      source_tags: ['持仓'],
+    },
+  ],
+  anomalies: {
+    surge: [{ industry: '激光设备', name: '锐科激光', code: 'SZ300747', chg: 11.35, price: 45.0, turnover_rate: 8.5 }],
+    plunge: [{ industry: '小家电', name: '苏泊尔', code: 'SZ002032', chg: -6.37, price: 52.0, turnover_rate: 2.1 }],
+    switching: [{
+      industry: '特钢', leader_name: '中信特钢', leader_chg: -1.4,
+      challenger_name: '盛德鑫泰', challenger_chg: 4.9, diff: 6.3, direction: '逆势涨',
+    }],
+  },
+}
+
+describe('LeaderMonitor', () => {
+  // 全局 mock fetch
+  const origFetch = globalThis.fetch
+  beforeAll(() => {
+    globalThis.fetch = (url: string, opts?: any) => {
+      if (url === '/api/monitor/leader-dashboard') {
+        return Promise.resolve(new Response(JSON.stringify(mockWatchedData), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      if (typeof url === 'string' && url.startsWith('/api/monitor/add-watched-industry')) {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      if (typeof url === 'string' && url.startsWith('/api/monitor/remove-watched-industry')) {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      return origFetch(url, opts)
+    }
+  })
+  afterAll(() => { globalThis.fetch = origFetch })
+
+  it('渲染"关注的行业"表格', async () => {
+    render(<LeaderMonitor />)
+    // 等待数据加载
+    const title = await screen.findByText('🏆 龙头观测')
+    expect(title).toBeTruthy()
+  })
+
+  it('展开后显示关注的行业', async () => {
+    render(<LeaderMonitor />)
+    // 点击展开
+    const title = await screen.findByText('🏆 龙头观测')
+    title.click()
+    // 等待异步渲染
+    const watchedTitle = await screen.findByText('📋 关注的行业')
+    expect(watchedTitle).toBeTruthy()
+    // 验证行业名出现
+    const sanhuan = await screen.findByText('三环集团')
+    expect(sanhuan).toBeTruthy()
+    const ningde = await screen.findByText('宁德时代')
+    expect(ningde).toBeTruthy()
+  })
+
+  it('展开后显示龙头异动区块', async () => {
+    render(<LeaderMonitor />)
+    const title = await screen.findByText('🏆 龙头观测')
+    title.click()
+    const anomalyTitle = await screen.findByText('⚡ 龙头异动')
+    expect(anomalyTitle).toBeTruthy()
+    // 验证三个子区块
+    expect(screen.getByText(/放量突破/)).toBeTruthy()
+    expect(screen.getByText(/领跌异动/)).toBeTruthy()
+    expect(screen.getByText(/龙头切换/)).toBeTruthy()
+  })
+
+  it('手动添加关注行业按钮存在', async () => {
+    render(<LeaderMonitor />)
+    const title = await screen.findByText('🏆 龙头观测')
+    title.click()
+    const addBtn = await screen.findByText('➕ 添加关注行业')
+    expect(addBtn).toBeTruthy()
+  })
+})
+
 // ====== RuleLayer 静态组件测试 ======
 describe('RuleLayer', () => {
   it('渲染三条纪律规则', () => {
