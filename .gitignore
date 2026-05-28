@@ -40,7 +40,7 @@ data/3l/private/
 
 # Generated cache/data
 data/cache/
-data/public/
+**/data/public/
 review_charts/
 files/
 
