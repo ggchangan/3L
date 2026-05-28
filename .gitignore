@@ -30,6 +30,9 @@ server.pid
 
 # Build output copies (source in frontend/css/)
 frontend/dist/css/
+frontend/dist/assets/
+frontend/dist/react.html
+frontend/dist/*.pdf
 
 # Private user data
 private/
