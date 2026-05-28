@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
 import StockCard from '../components/StockCard'
 import type { BuySignalItem } from '../lib/types'
@@ -36,16 +36,31 @@ export default function StockAnalysis() {
   const [btLoading, setBtLoading] = useState(false)
   const [error, setError] = useState('')
   const [btError, setBtError] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
   const lastCode = useRef('')
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>()
 
-  async function search() {
-    if (!q.trim()) return
-    setLoading(true); setError(''); setAnalysis(null)
+  // 自动补全搜索（支持代码/名称/拼音首字母）
+  useEffect(() => {
+    clearTimeout(searchTimer.current)
+    if (!q || q.length < 1) { setSearchResults([]); return }
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/watchlist/search?q=${encodeURIComponent(q)}`)
+        const data = await r.json()
+        setSearchResults(data.results || [])
+      } catch { setSearchResults([]) }
+    }, 200)
+    return () => clearTimeout(searchTimer.current)
+  }, [q])
+
+  async function doSearch(code?: string) {
+    const query = code || q.trim()
+    if (!query) return
+    setLoading(true); setError(''); setAnalysis(null); setSearchResults([])
     try {
-      const url = `/api/stock-analysis?q=${encodeURIComponent(q.trim())}`
-      console.log('🔍 fetching:', url)
+      const url = `/api/stock-analysis?q=${encodeURIComponent(query)}`
       const r = await fetch(url, { method: 'GET', credentials: 'same-origin' })
-      console.log('🔍 response status:', r.status, r.statusText)
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`)
       let d
       try { d = await r.json() } catch (e) { throw new Error(`JSON解析失败: ${await r.text().catch(()=>'')}`) }
@@ -53,7 +68,6 @@ export default function StockAnalysis() {
       lastCode.current = d.code
       setAnalysis(d)
     } catch (err: any) {
-      console.error('🔍 fetch error:', err)
       setError(`请求失败: ${err.message}`)
     } finally { setLoading(false) }
   }
@@ -168,14 +182,32 @@ export default function StockAnalysis() {
       <div className="container">
         {/* Search Box */}
         <div className="search-box">
-          <input
-            type="text"
-            placeholder="股票代码（如 688126）或名称（如 沪硅产业）"
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') search() }}
-          />
-          <button onClick={search} disabled={loading}>分析</button>
+          <div className="search-box-input" style={{ position: 'relative', flex: 1 }}>
+            <input
+              type="text"
+              placeholder="股票代码（如 688126）或名称（如 沪硅产业）"
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') doSearch() }}
+              onBlur={() => setTimeout(() => setSearchResults([]), 200)}
+              style={{ width: '100%' }}
+            />
+            {searchResults.length > 0 && (
+              <div className="sa-search-results">
+                {searchResults.map((st: any, i) => (
+                  <div key={i} className="sa-search-item"
+                    onMouseDown={() => {
+                      setQ(st.code)
+                      doSearch(st.code)
+                    }}>
+                    <span><span className="sr-name">{st.name}</span> <span className="sr-code">{st.code}</span></span>
+                    <span className="sr-ind">{st.direction || ''}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={() => doSearch()} disabled={loading}>分析</button>
           <button className="bt-btn" onClick={runBacktest} disabled={btLoading}>📊 回测</button>
         </div>
 

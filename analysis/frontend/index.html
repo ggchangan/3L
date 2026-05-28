@@ -62,6 +62,23 @@ body {
   font-size: 14px;
 }
 .search-box button:hover { opacity: 0.85; }
+
+/* 自动补全搜索下拉 */
+.sa-search-wrap { position: relative; flex: 1; }
+.sa-search-wrap input { width: 100%; }
+.sa-search-results {
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: #1a1a30; border: 1px solid #2a2a4e; border-radius: 6px;
+  margin-top: 4px; max-height: 260px; overflow-y: auto; z-index: 100;
+}
+.sa-search-item {
+  padding: 6px 10px; font-size: 12px; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.sa-search-item:hover { background: #2a2a4e; }
+.sa-search-item .code { color: #666; margin-left: 6px; font-size: 11px; }
+.sa-search-item .dir { color: #555; font-size: 11px; }
+
 .main {
   max-width: 900px;
   margin: 0 auto;
@@ -147,7 +164,10 @@ body {
 <div class="header">
   <h1>📈 3L 个股分析</h1>
   <div class="search-box">
-    <input id="q" placeholder="股票代码或名称 (如 300750)" onkeydown="if(event.key==='Enter') search()">
+    <div class="sa-search-wrap">
+      <input id="q" placeholder="股票代码或名称 (如 300750)" onkeydown="if(event.key==='Enter') search()" onblur="setTimeout(()=>hideResults(),200)">
+      <div id="saResults" class="sa-search-results" style="display:none"></div>
+    </div>
     <button onclick="search()">分析</button>
   </div>
 </div>
@@ -156,6 +176,38 @@ body {
 </div>
 <script>
 const API = '/api/stock-analysis';
+let searchTimer = null;
+
+// 自动补全
+document.getElementById('q').addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  const q = this.value.trim();
+  if (!q || q.length < 1) { document.getElementById('saResults').style.display = 'none'; return; }
+  searchTimer = setTimeout(async () => {
+    try {
+      const r = await fetch('/api/watchlist/search?q=' + encodeURIComponent(q));
+      const data = await r.json();
+      const results = data.results || [];
+      const el = document.getElementById('saResults');
+      if (results.length === 0) { el.style.display = 'none'; return; }
+      el.innerHTML = results.map(s =>
+        `<div class="sa-search-item" onmousedown="pickStock('${s.code}')">
+          <span>${s.name} <span class="code">${s.code}</span></span>
+          <span class="dir">${s.direction || ''}</span>
+        </div>`
+      ).join('');
+      el.style.display = 'block';
+    } catch(e) { document.getElementById('saResults').style.display = 'none'; }
+  }, 200);
+});
+
+function hideResults() { document.getElementById('saResults').style.display = 'none'; }
+
+function pickStock(code) {
+  document.getElementById('q').value = code;
+  hideResults();
+  search();
+}
 
 async function search() {
   const q = document.getElementById('q').value.trim();

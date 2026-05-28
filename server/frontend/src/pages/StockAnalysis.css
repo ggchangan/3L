@@ -58,6 +58,18 @@
 .search-box .bt-btn { background: #4ecdc4; color: #000; }
 .search-box .bt-btn:hover { background: #3dbdb5; }
 
+/* 自动补全搜索下拉 */
+.sa-search-results {
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: #1a1a30; border: 1px solid #2a2a4e; border-radius: 6px;
+  margin-top: 4px; max-height: 300px; overflow-y: auto; z-index: 100;
+}
+.sa-search-item {
+  padding: 6px 10px; font-size: 12px; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.sa-search-item:hover { background: #2a2a4e; }
+
 /* Loading */
 .loading { text-align: center; padding: 40px 20px; color: #888; font-size: 14px; }
 .spinner {
