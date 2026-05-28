@@ -1,5 +1,49 @@
 # Changelog
 
+## [v3.3.0] — 2026-05-29
+
+### 重构：Monorepo 结构重组（extract-core）
+
+**将原本扁平的仓库重组为 server/core/analysis 三层 monorepo，核心逻辑抽为共享包，新增独立个股分析服务。**
+
+#### 仓库结构
+
+- **server/** Web 主服务（原代码移入）
+- **core/** 3l-core 共享逻辑包（data_layer / cache_layer / buy_point_detection / trend_trading / ema_utils）
+  - 转发层模式：旧 `backend/core/__init__.py` 自动转发到 `threel_core`
+- **analysis/** 独立个股分析 Docker 服务（:9090）
+
+#### 新增
+
+- **独立个股分析页面** `/stock-analysis`：轻量级纯 HTML 页面，不含导航栏，可 `?q=300750` 直达
+- **Docker 部署**：3l-analysis 容器，数据卷只读挂载
+- **Nginx 路由**：`/stock-analysis` + `/api/stock-analysis` → :9090
+- **架构设计文档** `docs/architecture-v2.md`
+- **使用指南** `docs/usage-guide.md`
+
+#### 修复
+
+- 个股分析页面初始状态去 spinner 误导
+- `fetch_momentum.py` 路径修正（market_service + review_service）
+- 复盘页买点信号丢失（路径重构导致 import 失败）
+
+#### 样式
+
+- 趋势候选搜索框统一个股分析渐变面板样式
+- 趋势候选面板扩展包裹搜索+Tab+卡片+分页整个区域
+
+#### 功能
+
+- 个股分析两个页面支持拼音首字母自动补全搜索
+- 独立页面搜索框居中 + 增加 K 线图 + 完整交易系统信息
+
+#### 测试
+
+- 前端 95 项 + 后端 20 项 CRITICAL 全部通过
+- 全回归脚本 `scripts/run_full_regression.py`
+
+---
+
 ## [v3.2.0] — 2026-05-28
 
 ### 改进：PlanLayer 报警拆分为两区块
