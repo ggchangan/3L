@@ -560,20 +560,16 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
 
     if buy_signals_review:
         for bs in buy_signals_review[:5]:
-            name = f"{bs.get('name', bs['code'])} ({bs['code']})"
-            reason_parts = []
-            bp = bs.get('buy_point', '')
-            if bp:
-                reason_parts.append(bp)
-            fl = bs.get('flags', '')
-            if fl:
-                reason_parts.append(fl)
-            reason = ' '.join(reason_parts)
             plan['buy_priority'].append({
-                'stock': name,
-                'reason': reason or '买点信号',
+                'name': bs.get('name', bs.get('code', '')),
+                'code': bs.get('code', ''),
+                'buy_point': bs.get('buy_point', '') or bs.get('flags', '') or '买点信号',
+                'change': bs.get('change'),
+                'is_main': bs.get('mainline_level', '') in ('主线', '次级主线'),
+                'profit_model1': bs.get('profit_model1', False),
+                'trend_stock': bs.get('trend_stock', False),
                 'structure': bs.get('structure', ''),
-                'priority': '高' if bp in ('中继买点', '突破买点') else '中',
+                'priority': '高' if bs.get('buy_point', '') in ('中继买点', '突破买点') else '中',
             })
 
     pk_score = market_cycle.get('pk_score', 0)
