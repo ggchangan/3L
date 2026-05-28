@@ -54,6 +54,63 @@ export interface MarketLeaderItem {
   price: number
 }
 
+/** 龙头观测新面板API返回类型 */
+export interface LeaderDashboardData {
+  watched: WatchedIndustryItem[]
+  anomalies: AnomalyData
+  error?: string
+}
+
+export interface WatchedIndustryItem {
+  industry: string
+  leader_name: string
+  leader_code: string
+  chg: number
+  price: number
+  mcap: number
+  marks: string[]
+  switching: SwitchingInfo | null
+  divergence: DivergenceInfo | null
+  source_tags: string[]
+}
+
+export interface SwitchingInfo {
+  runner_up_name: string
+  runner_up_chg: number
+  leader_chg: number
+  diff: number
+}
+
+export interface DivergenceInfo {
+  leader_chg: number
+  sector_avg_chg: number
+}
+
+export interface AnomalyData {
+  surge: AnomalyItem[]
+  plunge: AnomalyItem[]
+  switching: SwitchingEvent[]
+}
+
+export interface AnomalyItem {
+  industry: string
+  name: string
+  code: string
+  chg: number
+  price: number
+  turnover_rate: number
+}
+
+export interface SwitchingEvent {
+  industry: string
+  leader_name: string
+  leader_chg: number
+  challenger_name: string
+  challenger_chg: number
+  diff: number
+  direction: string
+}
+
 /** 买点信号API返回类型 */
 export interface BuySignalsData {
   signals?: BuySignalItem[]
