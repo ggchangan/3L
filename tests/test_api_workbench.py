@@ -143,11 +143,7 @@ class TestHandleList:
 class TestHandleSuggestions:
 
     def test_suggestions_reads_review_data(self, monkeypatch, mock_handler):
-        """suggestions 从 REVIEW_DATA_PATH 读取复盘数据"""
-        import backend.api.workbench as mod
-        import os as os_mod
-        import json as json_mod
-        # mock json.load 直接返回测试数据
+        """suggestions 从实时复盘获取操作建议"""
         mock_review = {
             'trading_plan': {
                 'holdings_action': [
@@ -157,16 +153,12 @@ class TestHandleSuggestions:
                 'buy_priority': [
                     {'name': '广钢气体', 'code': '688548', 'buy_point': '中继买点', 'priority': 4},
                 ],
-                'risk_items': [
-                    '大盘偏波谷，积极寻找买点机会',
-                    '雷赛智能触发卖出信号',
-                ],
+                'risk_items': [],
             }
         }
-        monkeypatch.setattr(mod, 'json', type(sys)('fake_json'))
-        mod.json.load = lambda f: mock_review
-        monkeypatch.setattr(os_mod.path, 'isfile', lambda p: True)
+        monkeypatch.setattr('backend.services.review_service.compute_review_real_time', lambda: mock_review)
 
+        import backend.api.workbench as mod
         mod._handle_suggestions(mock_handler, '/api/workbench/suggestions')
         data = mock_handler.send_json.call_args[0][0]
         assert len(data['holdings_action']) == 2
@@ -174,28 +166,24 @@ class TestHandleSuggestions:
         assert data['holdings_action'][1]['action'] == '卖出'
         assert len(data['buy_priority']) == 1
         assert data['buy_priority'][0]['name'] == '广钢气体'
-        assert len(data['risk_items']) == 2
+        assert len(data['risk_items']) == 0
 
     def test_suggestions_empty_review(self, monkeypatch, mock_handler):
         """复盘数据为空时返回空列表"""
-        import backend.api.workbench as mod
-        import os as os_mod
-        monkeypatch.setattr(mod, 'json', type(sys)('fake_json'))
-        mod.json.load = lambda f: {}
-        monkeypatch.setattr(os_mod.path, 'isfile', lambda p: True)
+        monkeypatch.setattr('backend.services.review_service.compute_review_real_time', lambda: {})
 
+        import backend.api.workbench as mod
         mod._handle_suggestions(mock_handler, '/api/workbench/suggestions')
         data = mock_handler.send_json.call_args[0][0]
         assert data['holdings_action'] == []
         assert data['buy_priority'] == []
         assert data['risk_items'] == []
 
-    def test_suggestions_no_review_file(self, monkeypatch, mock_handler):
-        """复盘文件不存在时返回空列表"""
-        import backend.api.workbench as mod
-        import os as os_mod
-        monkeypatch.setattr(os_mod.path, 'isfile', lambda p: False)
+    def test_suggestions_exception(self, monkeypatch, mock_handler):
+        """compute_review_real_time抛异常时返回空列表"""
+        monkeypatch.setattr('backend.services.review_service.compute_review_real_time', lambda: (_ for _ in ()).throw(Exception('模拟错误')))
 
+        import backend.api.workbench as mod
         mod._handle_suggestions(mock_handler, '/api/workbench/suggestions')
         data = mock_handler.send_json.call_args[0][0]
         assert data['holdings_action'] == []

@@ -352,6 +352,15 @@ def get_stock_card(code, date_str, market_position='波中',
             signal_text = signal_text or f'{stage}·建议减仓'
 
     # 6. 止损
+    sl_result = _calc_stop_loss(klines, idx)
+    if sl_result and sl_result[0]:
+        stop_loss, stop_loss_pct = sl_result
+    elif signal == 'buy' and close > 0:
+        # 有买点但算不出支撑位，用EMA20兜底
+        ema20_sl = round(ema20_val * 0.97, 2) if ema20_val and ema20_val > 0 else None
+        if ema20_sl:
+            stop_loss = ema20_sl
+            stop_loss_pct = round((close - ema20_sl) / close * 100, 2)
 
     # 7. 主线定位
     mainline_level = _get_mainline_level(sector, main_line_names, sub_main_names)

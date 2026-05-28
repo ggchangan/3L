@@ -1,21 +1,19 @@
-"""
-工作台 API 路由
-"""
+"""工作台 API 路由"""
 import json
-import os
 from urllib.parse import urlparse, parse_qs
+from datetime import date, timedelta
 
 from backend.services.workbench_service import get_log, save_log, list_logs
-from backend.config import REVIEW_DATA_PATH
 
 
 def _handle_suggestions(h, path):
-    """GET /api/workbench/suggestions — 从复盘拉取操作建议"""
-    review = {}
-    if os.path.isfile(REVIEW_DATA_PATH):
-        with open(REVIEW_DATA_PATH, 'r', encoding='utf-8') as f:
-            review = json.load(f)
-    trading_plan = review.get('trading_plan', {})
+    """GET /api/workbench/suggestions — 从复盘拉取操作建议（实时计算）"""
+    from backend.services.review_service import compute_review_real_time
+    try:
+        review = compute_review_real_time()
+        trading_plan = review.get('trading_plan', {})
+    except Exception:
+        trading_plan = {}
     h.send_json({
         'holdings_action': trading_plan.get('holdings_action', []),
         'buy_priority': trading_plan.get('buy_priority', []),
@@ -49,9 +47,29 @@ def _handle_list(h, path):
     h.send_json({'dates': list_logs()})
 
 
+def _handle_check_alerts(h, path):
+    """GET /api/workbench/check-alerts?date=2026-05-27
+
+    检查今日计划中的价格报警（默认昨日 -> 今日计划）
+    """
+    qs = parse_qs(urlparse(path).query)
+    dt = qs.get('date', [None])[0]
+    if not dt:
+        dt = (date.today() - timedelta(days=1)).isoformat()
+    from backend.services.check_alerts import check_all_alerts
+    try:
+        # 同时检查昨天和今天的计划（昨天的是明天计划，今天的是当日快速配置）
+        yst = (date.today() - timedelta(days=1)).isoformat()
+        result = check_all_alerts(merge_dates=[yst, date.today().isoformat()])
+        h.send_json(result)
+    except Exception as e:
+        h.send_json({'triggered': [], 'count': 0, 'error': str(e)})
+
+
 def register_routes(routes):
     routes.exact('/api/workbench/get', func=_handle_get)
     routes.exact('/api/workbench/list', func=_handle_list)
     routes.exact('/api/workbench/save', func=_handle_save)  # POST handled separately
     routes.exact('/api/workbench/suggestions', func=_handle_suggestions)
+    routes.exact('/api/workbench/check-alerts', func=_handle_check_alerts)
     return routes

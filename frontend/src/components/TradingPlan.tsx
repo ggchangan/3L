@@ -56,6 +56,7 @@ export default function TradingPlan({ plan }: Props) {
               {s.profit_model1 && <span className="tag" style={{ background: '#e94560', fontSize: 10, padding: '1px 6px' }}>🏆</span>}
               {s.trend_stock && <span className="tag" style={{ background: '#2196f3', fontSize: 10, padding: '1px 6px' }}>📈</span>}
               <span style={{ color: (s.change || 0) >= 0 ? '#ff4444' : '#44aa44' }}> {(s.change || 0) >= 0 ? '+' : ''}{s.change}%</span>
+              {s.stop_loss != null && <span style={{ color: '#ff9800', fontSize: 10 }}> 止损{s.stop_loss}{s.stop_loss_pct != null ? `(${s.stop_loss_pct}%)` : ''}</span>}
             </div>
           ))}
         </>

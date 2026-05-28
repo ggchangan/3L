@@ -114,6 +114,16 @@ export interface PlanItem {
   qty?: string
   status?: 'executed' | 'triggered' | 'not_triggered' | 'pending'
   focus?: string
+  stop_loss?: number
+  stop_loss_pct?: number
+  alert?: AlertItem | null
+}
+
+export interface AlertItem {
+  type: 'price' | 'deviation' | 'time'
+  stock?: string
+  condition: string
+  enabled: boolean
 }
 
 /** 外围关联API返回类型 */
