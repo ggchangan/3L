@@ -5,28 +5,65 @@ import type { VolumeData } from '../lib/types'
 
 Chart.register(...registerables)
 
+interface MarketHealth {
+  structure: string
+  stage: string
+  pk_score: number
+  vl_score: number
+  position: string
+  position_advice: string
+  bias20: number
+  last_close: number
+  volume: {
+    latest_volume: number
+    avg5_volume: number
+    avg20_volume: number
+    vs_5day_pct: number
+    vs_20day_pct: number
+  }
+  mainline: {
+    top3: { name: string; days: number }[]
+    gap_pct: number
+  }
+  updated: string
+}
+
+function fetchMarketHealth(): Promise<MarketHealth | null> {
+  return fetch('/api/market-health')
+    .then(r => r.json())
+    .catch(() => null)
+}
+
+// 结构颜色
+const STRUCT_COLORS: Record<string, string> = {
+  '上涨趋势': '#4CAF50',
+  '区间震荡': '#ffd700',
+  '下降趋势': '#e94560',
+}
+
 export default function MarketQuote() {
-  const [data, setData] = useState<VolumeData | null>(null)
+  const [health, setHealth] = useState<MarketHealth | null>(null)
+  const [volumeData, setVolumeData] = useState<VolumeData | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef = useRef<Chart | null>(null)
-  const [showIndexChart, setShowIndexChart] = useState(false)
-  const chartTs = useRef(Date.now())
 
   useEffect(() => {
-    fetchVolume().then(d => {
-      setData(d)
-      // 初次加载后更新图表
-      setTimeout(() => updateChart(d), 50)
-    })
-    // 每30秒刷新
-    const timer = setInterval(() => {
-      fetchVolume().then(d => {
-        setData(d)
-        updateChart(d)
-      })
-    }, 30000)
+    loadAll()
+    const timer = setInterval(loadAll, 30000)
     return () => clearInterval(timer)
   }, [])
+
+  async function loadAll() {
+    const [mh, vol] = await Promise.all([
+      fetchMarketHealth(),
+      fetchVolume(),
+    ])
+    if (mh) setHealth(mh)
+    if (vol) {
+      setVolumeData(vol)
+      setTimeout(() => updateChart(vol), 50)
+    }
+  }
 
   function updateChart(d: VolumeData) {
     if (!canvasRef.current) return
@@ -63,87 +100,149 @@ export default function MarketQuote() {
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: {
-            display: true,
-            labels: { color: '#a0a0b0', font: { size: 10 }, boxWidth: 12, padding: 8 },
-          },
-          tooltip: {
-            callbacks: {
-              label: ctx => `今日: ${fmtAmountYuan(ctx.raw as number)}`,
-            },
-          },
+          legend: { display: true, labels: { color: '#a0a0b0', font: { size: 10 }, boxWidth: 12, padding: 8 } },
+          tooltip: { callbacks: { label: ctx => `今日: ${fmtAmountYuan(ctx.raw as number)}` } },
         },
         scales: {
-          x: {
-            display: true,
-            ticks: { color: '#555', maxTicksLimit: 10, font: { size: 9 }, callback: (_, i) => labels[i] || '' },
-            grid: { display: false },
-          },
-          y: {
-            display: true,
-            ticks: { color: '#555', font: { size: 9 }, callback: v => fmtAmountYuan(v as number) },
-            grid: { color: 'rgba(255,255,255,0.03)' },
-          },
+          x: { display: true, ticks: { color: '#555', maxTicksLimit: 10, font: { size: 9 }, callback: (_, i) => labels[i] || '' }, grid: { display: false } },
+          y: { display: true, ticks: { color: '#555', font: { size: 9 }, callback: v => fmtAmountYuan(v as number) }, grid: { color: 'rgba(255,255,255,0.03)' } },
         },
         animation: { duration: 0 },
       },
     })
   }
 
-  const price = data?.current_price
-  const change = data?.current_change || 0
-  const priceClass = change >= 0 ? 'qvalue up' : 'qvalue down'
-  const ratioClass = (data?.amount_ratio || 0) >= 100 ? 'qvalue up' : 'qvalue down'
-  const ratioColor = (data?.amount_ratio || 0) > 100 ? '#e94560' : '#4ecdc4'
-
-  const yAmt = data?.yesterday_amount_yuan || 0
-  const yIsEst = data?.yesterday_is_estimated
+  // 关键数值
+  const structColor = STRUCT_COLORS[health?.structure || ''] || '#888'
+  const price = volumeData?.current_price || health?.last_close || 0
+  const change = volumeData?.current_change ?? null
 
   return (
     <>
-      <div className="block-title">📡 大盘观测</div>
-      <div className="quote-grid">
-        <div className="quote-item">
-          <div className="qlabel">中证全指 000985</div>
-          <div className={priceClass}>{price ? price.toFixed(2) : '--'}</div>
-        </div>
-        <div className="quote-item">
-          <div className="qlabel">涨跌幅</div>
-          <div className={priceClass}>{change ? `${change >= 0 ? '+' : ''}${change.toFixed(2)}%` : '--'}</div>
-        </div>
-        <div className="quote-item">
-          <div className="qlabel">今日成交额</div>
-          <div className="qvalue">{fmtAmountYuan(data?.today_amount_yuan)}</div>
-        </div>
-        <div className="quote-item">
-          <div className="qlabel">较昨日同期</div>
-          <div className={ratioClass}>{data?.amount_ratio ? `${data.amount_ratio.toFixed(1)}%` : '--'}</div>
-        </div>
+      {/* 顶部状态栏 */}
+      <div
+        className="block-title"
+        style={{
+          borderLeft: `4px solid ${structColor}`,
+          paddingLeft: 8,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <span>
+          📡 大盘观测
+          <span style={{ color: structColor, fontWeight: 700, marginLeft: 8, fontSize: 13 }}>
+            {health?.structure || '加载中'}
+          </span>
+          {health?.stage && (
+            <span style={{ color: '#888', marginLeft: 6, fontSize: 12 }}>
+              · {health.stage} · {health.position}
+              <span style={{ color: '#ffd700', marginLeft: 6, fontSize: 11 }}>
+                仓位建议 {health.position_advice}
+              </span>
+            </span>
+          )}
+        </span>
+        <span style={{ fontSize: 12, color: '#999' }}>
+          {health?.updated ? `更新 ${health.updated}` : ''}
+        </span>
       </div>
-      <div className="chart-container volume-chart-wrap">
-        <canvas ref={canvasRef} id="volumeChart"></canvas>
-      </div>
-      <div className="chart-footer">
-        今日累计 <span id="todayVolLabel">{fmtAmountYuan(data?.today_amount_yuan)}</span>&nbsp;&nbsp;|&nbsp;&nbsp;
-        昨日全天 <span id="yesterdayVolLabel">{yAmt > 0 ? fmtAmountYuan(yAmt) : '待积累'}</span>&nbsp;&nbsp;
-        <span id="yesterdayDateLabel" style={{ color: '#555' }}>{data?.yesterday_date ? `(${data.yesterday_date})${yIsEst ? ' *估算' : ''}` : ''}</span>&nbsp;&nbsp;|&nbsp;&nbsp;
-        <span style={{ fontWeight: 'bold', color: ratioColor }}>{data?.amount_ratio ? `较昨日 ${data.amount_ratio}%` : ''}</span>
-      </div>
-      <div className="info-actions">
-        <span className="action-link" onClick={() => setShowIndexChart(v => !v)}>📈 中证全指关键点图</span>
-        <span className="action-link">⚠️ 异常事件</span>
-      </div>
-      {showIndexChart && (
-        <div style={{ marginTop: 8 }}>
-          <div style={{ width: '100%', height: 550, overflow: 'hidden', borderRadius: 8 }}>
-            <img
-              src={`/api/index-chart?mode=monitor&t=${chartTs.current}`}
-              alt="中证全指关键点图"
-              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-            />
+
+      {/* 4 卡片网格 */}
+      <div className="mh-card-grid">
+        {/* 卡片1：结构·阶段 */}
+        <div className="mh-card">
+          <div className="mh-card-title">📐 结构·阶段</div>
+          <div className="mh-card-body">
+            <div className="mh-row">
+              <span className="mh-label">结构</span>
+              <span className="mh-val" style={{ color: structColor }}>{health?.structure || '—'}</span>
+            </div>
+            <div className="mh-row">
+              <span className="mh-label">阶段</span>
+              <span className="mh-val">{health?.stage || '—'}</span>
+            </div>
+            <div className="mh-row">
+              <span className="mh-label">BIAS20</span>
+              <span className="mh-val" style={{ color: (health?.bias20 || 0) >= 0 ? '#e94560' : '#4CAF50' }}>
+                {(health?.bias20 ?? 0) >= 0 ? '+' : ''}{health?.bias20?.toFixed(2) || '—'}%
+              </span>
+            </div>
+            <div className="mh-row">
+              <span className="mh-label">仓位建议</span>
+              <span className="mh-val" style={{ color: '#ffd700' }}>{health?.position_advice || '—'}</span>
+            </div>
           </div>
         </div>
-      )}
+
+        {/* 卡片2：量能分析 */}
+        <div className="mh-card">
+          <div className="mh-card-title">📊 量能分析</div>
+          <div className="mh-card-body">
+            <div className="mh-row">
+              <span className="mh-label">中证全指</span>
+              <span className="mh-val">{price ? price.toFixed(2) : '—'}</span>
+            </div>
+            {change !== null && (
+              <div className="mh-row">
+                <span className="mh-label">涨跌幅</span>
+                <span className="mh-val" style={{ color: change >= 0 ? '#e94560' : '#4CAF50' }}>
+                  {change >= 0 ? '▲' : '▼'} {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+                </span>
+              </div>
+            )}
+            <div className="mh-row">
+              <span className="mh-label">较5日均量</span>
+              <span className="mh-val" style={{ color: (health?.volume?.vs_5day_pct || 0) > 0 ? '#e94560' : '#4CAF50' }}>
+                {(health?.volume?.vs_5day_pct ?? 0) > 0 ? '+' : ''}{health?.volume?.vs_5day_pct?.toFixed(1) || '—'}%
+              </span>
+            </div>
+            <div className="mh-row">
+              <span className="mh-label">今日成交</span>
+              <span className="mh-val">{volumeData?.today_amount_yuan ? fmtAmountYuan(volumeData.today_amount_yuan) : '—'}</span>
+            </div>
+          </div>
+          {/* 成交额曲线 */}
+          <div className="mh-chart-wrap">
+            <canvas ref={canvasRef} id="volumeChart"></canvas>
+          </div>
+        </div>
+
+        {/* 卡片3：主线强度 */}
+        <div className="mh-card">
+          <div className="mh-card-title">🎯 主线强度</div>
+          <div className="mh-card-body">
+            {(health?.mainline?.top3 || []).length > 0 ? (
+              health!.mainline!.top3.map((item, i) => (
+                <div className="mh-row" key={i}>
+                  <span className="mh-label">{['①', '②', '③'][i]}</span>
+                  <span className="mh-val">
+                    {item.name}
+                    <span className="mh-days"> {item.days}天</span>
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="mh-empty">暂无主线数据</div>
+            )}
+            {health?.mainline?.gap_pct ? (
+              <div className="mh-row" style={{ marginTop: 4 }}>
+                <span className="mh-label">TOP1-5差</span>
+                <span className="mh-val" style={{ fontSize: 11, color: '#888' }}>{health.mainline.gap_pct}%</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* 卡片4：异常事件（占位） */}
+        <div className="mh-card">
+          <div className="mh-card-title">⚡ 异常事件</div>
+          <div className="mh-card-body">
+            <div className="mh-empty">暂无异常</div>
+          </div>
+        </div>
+      </div>
     </>
   )
 }

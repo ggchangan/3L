@@ -464,6 +464,76 @@
   gap: 4px;
 }
 
+/* 市场健康卡片 */
+.mh-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 900px) {
+  .mh-card-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.mh-card {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #2a2a4e;
+  border-radius: 8px;
+  padding: 10px;
+  min-height: 100px;
+}
+
+.mh-card-title {
+  font-size: 12px;
+  color: #2196f3;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.mh-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mh-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.mh-label {
+  color: #888;
+  min-width: 60px;
+}
+
+.mh-val {
+  color: #ddd;
+  font-weight: 500;
+  text-align: right;
+}
+
+.mh-days {
+  font-size: 9px;
+  color: #666;
+  margin-left: 4px;
+}
+
+.mh-empty {
+  font-size: 11px;
+  color: #555;
+  text-align: center;
+  padding: 12px 0;
+}
+
+.mh-chart-wrap {
+  height: 50px;
+  margin-top: 6px;
+}
+
 .action-btn {
   display: inline-block;
   padding: 2px 8px;

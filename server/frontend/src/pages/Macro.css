@@ -128,3 +128,88 @@
 .risk-item .label { font-size: 11px; color: #888; }
 .risk-item .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
 .risk-item .sub { font-size: 11px; color: #555; margin-top: 2px; }
+
+/* ── 外围映射─亚洲指数 ───────────────────── */
+.ext-index-grid {
+  display: flex; gap: 12px;
+}
+.ext-index-col {
+  flex: 1; min-width: 0;
+}
+.ext-index-col .idx-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px; margin-bottom: 2px;
+  border-radius: 4px; background: rgba(255,255,255,0.02);
+  font-size: 12px;
+}
+.ext-index-col .idx-flag { font-size: 14px; min-width: 18px; text-align: center; }
+.ext-index-col .idx-name { color: #bbb; min-width: 70px; font-weight: 500; }
+.ext-index-col .idx-region { color: #666; font-size: 10px; margin-left: auto; }
+.ext-index-col .idx-code-sm { color: #444; font-size: 10px; min-width: 50px; text-align: right; }
+
+/* ── 外围映射─美股分类 ───────────────────── */
+.ext-cat-block {
+  margin-bottom: 4px;
+}
+.ext-cat-header {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: #888;
+  padding: 6px 10px; margin: 4px 0;
+  cursor: pointer; border-radius: 6px;
+  user-select: none; background: rgba(255,255,255,0.02);
+}
+.ext-cat-header:hover { background: rgba(255,255,255,0.06); }
+.ext-cat-arrow { font-size: 10px; min-width: 14px; color: #555; }
+.badge-sm {
+  font-size: 10px; background: #2a2a4e; color: #888;
+  padding: 1px 6px; border-radius: 8px; margin-left: 4px;
+}
+
+/* 美股列表 */
+.ext-stock-list {
+  padding-left: 20px;
+  border-left: 1px solid #2a2a4e;
+  margin-left: 10px;
+}
+.ext-stock-item { margin-bottom: 2px; }
+.ext-stock-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 4px; cursor: pointer;
+  font-size: 12px; background: rgba(255,255,255,0.01);
+}
+.ext-stock-row:hover { background: rgba(255,255,255,0.04); }
+.ext-stock-code { color: #666; min-width: 55px; font-size: 11px; }
+.ext-stock-name { color: #ddd; min-width: 80px; font-weight: 500; }
+.ext-stock-price { color: #999; min-width: 60px; text-align: right; font-size: 11px; }
+.ext-stock-chg { min-width: 55px; font-weight: 600; text-align: right; font-size: 11px; }
+.ext-stock-chg.up { color: #e94560; }
+.ext-stock-chg.down { color: #4CAF50; }
+.ext-stock-impact {
+  color: #777; font-size: 10px;
+  margin-left: auto; min-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ext-expand-icon { font-size: 8px; color: #555; min-width: 12px; text-align: center; }
+
+/* 美股详情 */
+.ext-stock-detail {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid #2a2a4e; border-radius: 6px;
+  padding: 8px 12px; margin: 2px 0 4px 20px;
+}
+.ext-detail-row {
+  display: flex; gap: 8px; margin-bottom: 4px; font-size: 11px;
+  line-height: 1.6;
+}
+.ext-detail-row:last-child { margin-bottom: 0; }
+.ext-detail-label {
+  color: #666; white-space: nowrap; min-width: 56px;
+  flex-shrink: 0;
+}
+.ext-detail-val { color: #aaa; }
+
+/* 外围数据来源 */
+.ext-source {
+  text-align: center; padding: 8px; font-size: 11px; color: #555;
+}
+.ext-source a { color: #4a9eff; text-decoration: none; }
+.ext-source a:hover { text-decoration: underline; }
