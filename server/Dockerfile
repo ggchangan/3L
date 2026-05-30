@@ -28,6 +28,9 @@ RUN python3 -m pip install --no-cache-dir -r requirements.txt -i https://pypi.tu
 
 # ====== 应用代码 ======
 COPY server/ .
+# 安装本地 threel_core 包（位于 repo 根目录 core/）
+COPY core/ /app/core/
+RUN pip install -e /app/core/ --no-cache-dir
 # 种子数据（从 repo 根目录复制）
 COPY all_a_stocks.json pinyin_initials.json /app/
 
