@@ -106,8 +106,12 @@ EOF
 echo "   数据目录: ${DATA_DIR}"
 echo "   配置:      ${COMPOSE_FILE}"
 
-# ==== 6. 拉取镜像 ====
+# ==== 6. 登录腾讯云镜像仓库 + 拉取镜像 ====
 echo ""
+echo "=> 登录镜像仓库..."
+echo "   (账号: 100048956351)"
+sudo docker login ccr.ccs.tencentyun.com -u 100048956351 -p ygys30ds
+
 echo "=> 拉取镜像..."
 sudo docker pull ${IMAGE}
 
