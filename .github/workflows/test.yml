@@ -44,4 +44,4 @@ jobs:
         env:
           DATA_DIR: $HOME/data/3l
         run: |
-          cd server && python -m pytest tests/ --ignore=tests/test_api.py -v
+          cd server && python -m pytest backend/tests/ -v
