@@ -51,8 +51,8 @@ read -p "WXPUSHER_UID (UID_xxx，留空跳过): " WX_UID
 
 # ==== 3. 选择访问端口 ====
 echo ""
-read -p "访问端口 (默认 8080，用 80 则访问不用输端口号): " PORT
-PORT="${PORT:-8080}"
+read -p "访问端口 (默认 80): " PORT
+PORT="${PORT:-80}"
 
 # ==== 4. 打开防火墙 ====
 echo ""
