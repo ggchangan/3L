@@ -1,0 +1,11 @@
+.venv/
+node_modules/
+.git/
+__pycache__/
+*.pyc
+.env
+.tox/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+.hermes/
