@@ -2,15 +2,18 @@
 
 ## [v3.5.2] — 2026-05-30
 
-### 修复：Docker 部署前端 404 问题
+### 修复：Docker 目录结构对齐原生开发（根治所有路径问题）
 
-**根因：** Docker 镜像缺少前端构建产物 + FE_DIR 路径不兼容 Docker 布局。
-`COPY server/ .` 将 `frontend/dist/` 放到 `/app/frontend/dist/`，但代码硬编码找 `/app/server/frontend/dist/`。
+**根因：** `COPY server/ .` 将 `server/` 展平到 `/app/` 下，所有 `os.path.join(WWW_DIR, 'server', ...)` 路径全错。
+之前打了 FE_DIR、scan_buy_signals 等多候选路径补丁，治标不治本。
+
+**根治方案：** `COPY server/ /app/server/` 保持目录结构一致。
+回退所有 Docker 路径补丁。保留的必须修复见下方。
 
 **改动：**
-- **`server/server.py`** — FE_DIR 改为多候选路径探测（原生开发 / Docker 布局）
-- **`server/Dockerfile`** — 改为多阶段构建：Stage 1 node:20 编译前端 → Stage 2 python 运行，前端产物编入镜像
-- **`server/.dockerignore`** — 移除 `frontend/src/` 等排除规则（多阶段构建的 build stage 需要）
+- **`server/Dockerfile`** — COPY 目标改为 `/app/server/`，WORKDIR 改为 `/app/server`，cron cd 路径同步更新
+- **`server/docker-entrypoint.sh`** — 入口脚本路径对齐；`directions.json` 初始格式改为正确格式
+- **`server/.dockerignore`** — 恢复前端源码排除（镜像瘦身）
 - **`deploy/deploy.sh`** — 密码输入加两次确认循环；支持端口选择(80/8080)；自动开 ufw 防火墙；每次交互运行强制弹密码输入（不依赖环境变量遗留值）；已有数据跳过初始化
 - **`server/backend/core/monitor_data.py`** — review_archive 目录不存在时自动创建
 - **`server/backend/services/monitor_service.py`** — 扫描脚本路径兼容 Docker 布局
