@@ -4,4 +4,4 @@ Version: 0.1.0
 Summary: 3L 交易系统 — 核心逻辑共享包
 Author: 3L
 Requires-Python: >=3.10
-Requires-Dist: requests>=2.28
+Requires-Dist: requests<3,>=2.28

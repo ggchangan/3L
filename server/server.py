@@ -22,7 +22,7 @@ if not AUTH_USER or not AUTH_PASS:
 
 PROTECTED_PREFIX = '/private/'
 
-# 前端构建输出目录（优先使用，回退到 WWW_DIR）
+# 前端构建输出目录（结构对齐原生开发：WWW_DIR/server/frontend/dist）
 FE_DIR = os.path.join(WWW_DIR, 'server', 'frontend', 'dist')
 if not os.path.isdir(FE_DIR):
     FE_DIR = WWW_DIR
@@ -245,7 +245,7 @@ class Handler(SimpleHTTPRequestHandler):
             path = self.path
 
         # --- 静态文件（HTML/JS 不缓存）---
-        if path.endswith('.html') or path.endswith('.js'):
+        if path.endswith('.sh') or path.endswith('.html') or path.endswith('.js'):
             # 优先 FE_DIR（构建输出），不存在则回退 WWW_DIR（项目根）
             fp = os.path.join(FE_DIR, path.lstrip('/'))
             if not os.path.isfile(fp) and FE_DIR != WWW_DIR:

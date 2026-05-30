@@ -23,8 +23,15 @@ DIRECTIONS_FILE = os.environ.get('DIRECTIONS_PATH',
 def _load():
     if os.path.isfile(DIRECTIONS_FILE):
         with open(DIRECTIONS_FILE, 'r') as f:
-            return json.load(f)
-    return {'all': [], 'active': []}
+            data = json.load(f)
+    else:
+        data = {}
+    # 兼容旧格式（老 directions.json 可能没有 all/active key）
+    if 'all' not in data:
+        data['all'] = []
+    if 'active' not in data:
+        data['active'] = []
+    return data
 
 
 def _save(data):
