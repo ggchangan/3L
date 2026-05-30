@@ -21,13 +21,19 @@ echo "=============================================="
 if [ $# -ge 1 ]; then
     AUTH_PASS="$1"
 elif [ -z "${AUTH_PASS:-}" ]; then
-    read -s -p "请输入登录密码: " AUTH_PASS
-    echo
-fi
-
-if [ -z "${AUTH_PASS:-}" ]; then
-    echo "错误：密码不能为空" >&2
-    exit 1
+    while true; do
+        read -s -p "请输入登录密码: " AUTH_PASS
+        echo
+        read -s -p "请再次输入密码确认: " AUTH_CONFIRM
+        echo
+        if [ "${AUTH_PASS}" != "${AUTH_CONFIRM}" ]; then
+            echo "错误：两次输入的密码不一致，请重新输入" >&2
+        elif [ -z "${AUTH_PASS}" ]; then
+            echo "错误：密码不能为空" >&2
+        else
+            break
+        fi
+    done
 fi
 
 # ==== 2. 获取 WxPusher 配置（微信报警） ====
