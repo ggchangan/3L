@@ -1,0 +1,251 @@
+/* ═══════════════════════════════════════
+   操作计划追踪页面样式
+   ═══════════════════════════════════════ */
+
+/* 统计卡片行 */
+.card-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.stat-card {
+  background: #15152a;
+  border: 1px solid #2a2a4e;
+  border-radius: 8px;
+  padding: 14px 10px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.stat-sub {
+  font-size: 10px;
+  color: #666;
+  margin-top: 1px;
+}
+
+/* 方向分类行 */
+.type-row {
+  display: flex;
+  gap: 10px;
+}
+
+.type-chip {
+  flex: 1;
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid #2a2a4e;
+}
+
+/* 条件类型网格 */
+.cond-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.cond-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+}
+
+/* 计划表格 */
+.plan-table-wrap {
+  border: 1px solid #2a2a4e;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.plan-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.plan-table th {
+  background: #1a1a30;
+  color: #888;
+  font-weight: 500;
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid #2a2a4e;
+  white-space: nowrap;
+}
+
+.plan-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(42, 42, 78, 0.5);
+  color: #c0c0c0;
+}
+
+.plan-table tr:last-child td {
+  border-bottom: none;
+}
+
+.plan-table tr:hover td {
+  background: rgba(78, 205, 196, 0.03);
+}
+
+.cell-date {
+  color: #888;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.cell-stock {
+  font-weight: 500;
+  color: #e0e0e0;
+  white-space: nowrap;
+}
+
+.cell-code {
+  font-size: 9px;
+  color: #666;
+  margin-left: 4px;
+}
+
+.cell-cond {
+  font-size: 10px;
+  color: #a0a0a0;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-num {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cell-change {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cell-change.up {
+  color: #4ecdc4;
+}
+
+.cell-change.down {
+  color: #e94560;
+}
+
+.cell-note {
+  font-size: 10px;
+  color: #888;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 方向标签 */
+.type-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.type-badge.buy {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.type-badge.sell {
+  background: rgba(233, 69, 96, 0.15);
+  color: #e94560;
+}
+
+.type-badge.watch {
+  background: rgba(255, 215, 0, 0.15);
+  color: #ffd700;
+}
+
+/* 执行状态标签 */
+.exec-badge {
+  font-size: 10px;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.exec-badge.yes {
+  color: #22c55e;
+}
+
+.exec-badge.no {
+  color: #e94560;
+}
+
+.exec-badge.unk {
+  color: #666;
+}
+
+.exec-badge:hover {
+  opacity: 0.8;
+}
+
+/* 响应式 */
+@media (max-width: 700px) {
+  .card-row {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+  }
+  .stat-value {
+    font-size: 20px;
+  }
+  .type-row {
+    flex-direction: column;
+  }
+}
+
+/* 按钮样式 */
+.action-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.action-btn:hover {
+  opacity: 0.85;
+}
+
+.action-btn.green {
+  background: #22c55e;
+  color: #000;
+}
+
+.action-btn.sec {
+  background: #2a2a4e;
+  color: #e0e0e0;
+}

@@ -85,6 +85,7 @@ def register_api_routes(routes):
         'backend.api.alarms',
         'backend.api.wxpush',
         'backend.api.logic_tracking',
+        'backend.api.plan_tracking',
     ]
     for mod_name in api_modules:
         mod = importlib.import_module(mod_name)
@@ -215,6 +216,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/watchlist.html': '/watchlist',
             '/trend_candidates.html': '/trend_candidates',
             '/workbench.html': '/workbench',
+            '/plan-tracking.html': '/plan-tracking',
         }
         if path in html_redirects:
             self.send_response(302)
@@ -230,6 +232,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/skills', '/journal', '/workbench',
             '/watchlist', '/trend_candidates',
             '/logic-tracking', '/alarm-sounds',
+            '/plan-tracking',
         }
         if path in spa_routes:
             self.path = '/react.html'
@@ -321,6 +324,8 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/logic-tracking/feed/save': ('backend.api.logic_tracking', '_handle_feed_save'),
             '/api/logic-tracking/verify/run': ('backend.api.logic_tracking', '_handle_trigger_verify'),
             '/api/wxpush/config': ('backend.api.wxpush', '_handle_config'),
+            '/api/plan-tracking/annotate': ('backend.api.plan_tracking', '_handle_annotate'),
+            '/api/plan-tracking/refresh': ('backend.api.plan_tracking', '_handle_refresh'),
         }
         if self.path in post_routes:
             mod_name, func_name = post_routes[self.path]

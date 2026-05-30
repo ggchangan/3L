@@ -11,6 +11,7 @@ const MAIN_NAV = [
   { label: '🔬 行业追踪',  href: '/industry.html',    id: 'industry' },
   { label: '📈 涨幅榜',    href: '/top_gainers.html',  id: 'gainers' },
   { label: '🌍 宏观环境',  href: '/macro.html',        id: 'macro' },
+  { label: '📊 计划追踪',  href: '/plan-tracking.html', id: 'plan-tracking' },
   { label: '📝 交易技巧',  href: '/tips.html',         id: 'tips' },
   { label: '💡 逻辑追踪',  href: '/logic-tracking',    id: 'logic' },
 ]
@@ -20,6 +21,7 @@ const TOP_COLORS: Record<string, string> = {
   watchlist: '#22c55e', stock_analysis: '#e94560',
   trend: '#4ecdc4', industry: '#22c55e', gainers: '#e94560',
   macro: '#2196f3', tips: '#f59e0b', logic: '#a855f7',
+  'plan-tracking': '#4ecdc4',
 }
 
 const FOOTER_LINKS = [
