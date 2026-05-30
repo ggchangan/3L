@@ -18,6 +18,11 @@
 - **`server/backend/core/monitor_data.py`** — review_archive 目录不存在时自动创建
 - **`server/backend/services/monitor_service.py`** — 扫描脚本路径兼容 Docker 布局
 - **`server/backend/core/update_stock_data.py`** — 在 import akshare 前设置 TQDM_DISABLE，消除脏进度条
+- **`server/backend/core/update_stock_data.py`** — 新增 `update_industry_map()`，用 push2test.eastmoney.com `f100` 字段全量拉取4680只A股申万二级行业映射，每日全量替换
+- **`server/backend/core/data_layer.py`** — 新增 `save_industry_map()` 配合行业映射写入
+- **`server/backend/services/check_alerts.py`** — 大盘指数报警增加 dismiss 检查，用户标记"已处理"后不再重复推送（与个股报警逻辑一致）
+- **`docs/deployment-guide.md`** — 修正部署文档：明确部署后需手动添加自选股+持仓股再拉数据，
+  删除"首次数据初始化自动完成"的误导描述
 - **`server/backend/services/direction_service.py`** — _load 兼容旧格式 directions.json，修复 KeyError: 'all' 导致新建方向失败
 
 ### 🔧 部署验证

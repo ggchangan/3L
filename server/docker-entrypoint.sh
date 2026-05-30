@@ -17,9 +17,22 @@ if [ ! -f /data/all_a_stocks.json ]; then
     cp /app/pinyin_initials.json /data/pinyin_initials.json 2>/dev/null || true
 fi
 # 从 all_a_stocks.json 生成 all_stock_codes.json（搜索时需要）
-if [ ! -f /data/all_stock_codes.json ] && [ -f /data/all_a_stocks.json ]; then
-    echo "Generating all_stock_codes.json from seed data..."
-    cp /data/all_a_stocks.json /data/all_stock_codes.json
+# 注：不能直接 cp，格式不同。由 watchlist_service 首次搜索时自动从 akshare 生成
+# 此处预生成加速首次搜索
+if [ ! -f /data/all_stock_codes.json ]; then
+    echo "Pre-generating all_stock_codes.json from akshare..."
+    python3 -c "
+import json
+try:
+    import akshare as ak
+    df = ak.stock_info_a_code_name()
+    codes = dict(zip(df['code'], df['name']))
+    with open('/data/all_stock_codes.json', 'w') as f:
+        json.dump(codes, f, ensure_ascii=False)
+    print(f'OK: {len(codes)} stocks')
+except Exception as e:
+    print(f'SKIP: {e}')
+" 2>&1 | tail -1
 fi
 
 # 创建空配置文件（如果不存在）

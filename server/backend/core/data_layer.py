@@ -151,6 +151,11 @@ def get_industry_map():
     """返回 {code: {name, ths_industry, ...}}（走缓存，TTL=60s）"""
     return cache.get('industry_map', lambda: _load_json(INDUSTRY_MAP_PATH, {}), ttl=60)
 
+def save_industry_map(data):
+    """原子保存行业映射，清缓存"""
+    _atomic_save_json(INDUSTRY_MAP_PATH, data)
+    cache.invalidate('industry_map')
+
 
 # ====== 股票搜索 ======
 def resolve_stock(query, stocks=None):

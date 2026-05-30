@@ -14,12 +14,13 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 # ⚠️ 注意: file 在 server/backend/core/ 下
 # dirname×1=core/  ×2=backend/  ×3=server/（backend 包所在位置）
-from backend.config import DATA_DIR
+from backend.config import DATA_DIR, ALL_CODES_PATH
 from backend.core.data_layer import (
     get_watchlist,
     load_all_stocks_uncached,
     get_last_updated,
     get_industry_map,
+    save_industry_map,
     save_all_stocks,
     load_index_data_uncached,
     save_index_data,
@@ -362,11 +363,6 @@ def _fetch_sector_klines_akshare(sector_type, name):
 
 def update_sectors():
     """更新行业+概念板块日K线"""
-    # 在 import akshare 之前关闭 tqdm，确保生效
-    import os
-    os.environ['TQDM_DISABLE'] = '1'
-    os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
-
     import akshare as ak
     import warnings
     warnings.filterwarnings('ignore')
@@ -478,6 +474,64 @@ def update_sectors():
 
 
 # ════════════════════════════════════════════════════════════════
+# 行业映射（push2test.eastmoney.com → 申万二级行业）
+# ════════════════════════════════════════════════════════════════
+
+def _normalize_industry(name):
+    """去掉申万二级分类的'Ⅱ'后缀（如'电机Ⅱ'→'电机'）"""
+    if not name:
+        return name
+    return name.replace('Ⅱ', '').strip()
+
+def update_industry_map():
+    """从 push2test 拉全量A股行业映射，写入 stock_industry_map.json
+
+    数据源：push2test.eastmoney.com → f100=申万二级行业名
+    格式：{code: {code, name, ths_industry}}
+    返回：写入的股票数量
+    """
+    import requests as _requests
+
+    url = 'https://push2test.eastmoney.com/api/qt/clist/get'
+    params = {
+        'pn': '1', 'pz': '5000',
+        'po': '1', 'np': '1',
+        'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+        'fltt': '2', 'invt': '2',
+        'fs': 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23',
+        'fields': 'f12,f14,f100',
+    }
+    headers = {
+        'User-Agent': 'Mozilla/5.0',
+        'Referer': 'https://quote.eastmoney.com/',
+    }
+
+    try:
+        r = _requests.get(url, params=params, headers=headers, timeout=30)
+        data = r.json()
+        items = data.get('data', {}).get('diff', [])
+        if not items:
+            log(f'⚠️  push2test返回空数据: {data.get("data","?")}')
+            return 0
+    except Exception as e:
+        log(f'⚠️  push2test请求失败: {e}')
+        return 0
+
+    result = {}
+    for item in items:
+        code = item.get('f12', '')
+        name = (item.get('f14', '') or '').strip()
+        industry = _normalize_industry(item.get('f100', ''))
+        if code and name and industry and industry != '-':
+            result[code] = {'code': code, 'name': name, 'ths_industry': industry}
+
+    if result:
+        save_industry_map(result)
+        log(f'🏭  行业映射: 已全量更新 ({len(result)}只, {len(items)-len(result)}只无行业)')
+    return len(result)
+
+
+# ════════════════════════════════════════════════════════════════
 # 主入口
 # ════════════════════════════════════════════════════════════════
 
@@ -525,8 +579,29 @@ def _create_mootdx_client(max_retries=3, delay=5):
 def main():
     t0 = time.time()
 
+    # 全局关闭 tqdm 进度条（在 akshare 首次导入前生效）
+    os.environ['TQDM_DISABLE'] = '1'
+    os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
+
     # 启动前确保 mootdx 配置有效（避免空BESTIP导致连接失败）
     _ensure_mootdx_config()
+
+    # 确保 all_stock_codes.json 存在（搜索用）
+    if not os.path.isfile(ALL_CODES_PATH):
+        log('📋  生成 all_stock_codes.json（全量A股代码表）...')
+        try:
+            import akshare as ak
+            df = ak.stock_info_a_code_name()
+            codes = dict(zip(df['code'], df['name']))
+            with open(ALL_CODES_PATH, 'w', encoding='utf-8') as f:
+                json.dump(codes, f, ensure_ascii=False)
+            log(f'✅  已生成 ({len(codes)}只)')
+        except Exception as e:
+            log(f'⚠️  生成失败: {e}')
+
+    # 行业映射（全量更新，～1-2秒）
+    log('━━━ 行业映射 ━━━')
+    update_industry_map()
 
     client = _create_mootdx_client()
 
