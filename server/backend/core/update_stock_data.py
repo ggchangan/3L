@@ -362,12 +362,14 @@ def _fetch_sector_klines_akshare(sector_type, name):
 
 def update_sectors():
     """更新行业+概念板块日K线"""
+    # 在 import akshare 之前关闭 tqdm，确保生效
+    import os
+    os.environ['TQDM_DISABLE'] = '1'
+    os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
+
     import akshare as ak
     import warnings
     warnings.filterwarnings('ignore')
-    # 关掉 tqdm progress bar
-    os.environ['TQDM_DISABLE'] = '1'
-    os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
 
     existing = load_sector_daily_uncached()
     last_updated = existing.get('last_updated', '')

@@ -22,7 +22,7 @@ if not AUTH_USER or not AUTH_PASS:
 
 PROTECTED_PREFIX = '/private/'
 
-# 前端构建输出目录（优先使用，回退到 WWW_DIR）
+# 前端构建输出目录（结构对齐原生开发：WWW_DIR/server/frontend/dist）
 FE_DIR = os.path.join(WWW_DIR, 'server', 'frontend', 'dist')
 if not os.path.isdir(FE_DIR):
     FE_DIR = WWW_DIR

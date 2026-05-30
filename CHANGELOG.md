@@ -1,5 +1,32 @@
 # Changelog
 
+## [v3.5.2] — 2026-05-30
+
+### 修复：Docker 目录结构对齐原生开发（根治所有路径问题）
+
+**根因：** `COPY server/ .` 将 `server/` 展平到 `/app/` 下，所有 `os.path.join(WWW_DIR, 'server', ...)` 路径全错。
+之前打了 FE_DIR、scan_buy_signals 等多候选路径补丁，治标不治本。
+
+**根治方案：** `COPY server/ /app/server/` 保持目录结构一致。
+回退所有 Docker 路径补丁。保留的必须修复见下方。
+
+**改动：**
+- **`server/Dockerfile`** — COPY 目标改为 `/app/server/`，WORKDIR 改为 `/app/server`，cron cd 路径同步更新
+- **`server/docker-entrypoint.sh`** — 入口脚本路径对齐；`directions.json` 初始格式改为正确格式
+- **`server/.dockerignore`** — 恢复前端源码排除（镜像瘦身）
+- **`deploy/deploy.sh`** — 密码输入加两次确认循环；支持端口选择(80/8080)；自动开 ufw 防火墙；每次交互运行强制弹密码输入（不依赖环境变量遗留值）；已有数据跳过初始化
+- **`server/backend/core/monitor_data.py`** — review_archive 目录不存在时自动创建
+- **`server/backend/services/monitor_service.py`** — 扫描脚本路径兼容 Docker 布局
+- **`server/backend/core/update_stock_data.py`** — 在 import akshare 前设置 TQDM_DISABLE，消除脏进度条
+- **`server/backend/services/direction_service.py`** — _load 兼容旧格式 directions.json，修复 KeyError: 'all' 导致新建方向失败
+
+### 🔧 部署验证
+- `GET /` → 200（返回 react SPA）
+- SPA 路由 `/monitor` → 200
+- 静态资源 JS/CSS → 200
+- API `/api/market-health` → 200
+- Docker 健康检查通过
+
 ## [v3.5.1] — 2026-05-30
 
 ### 修复：数据管线 cron 反复失败（第3次根治）
