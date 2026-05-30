@@ -17,16 +17,8 @@ __pycache__
 .env
 .env.*
 
-# 构建输出（运行时不需要）
-node_modules/
+# 前端构建产出（运行时从 build stage 复制，不追踪 node_modules）
 frontend/node_modules/
-frontend/src/
-frontend/tsconfig.json
-frontend/tsconfig.node.json
-frontend/vite.config.ts
-frontend/package.json
-frontend/package-lock.json
-frontend/css/
 
 # 运行时数据（通过 -v 挂载）
 data/
