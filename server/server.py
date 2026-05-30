@@ -85,6 +85,7 @@ def register_api_routes(routes):
         'backend.api.alarms',
         'backend.api.wxpush',
         'backend.api.logic_tracking',
+        'backend.api.market_health',
     ]
     for mod_name in api_modules:
         mod = importlib.import_module(mod_name)
