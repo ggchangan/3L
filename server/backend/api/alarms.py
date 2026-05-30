@@ -14,8 +14,10 @@ from backend.services.alarm_service import (
 from backend.config import DATA_DIR
 
 
-SOUNDS_SRC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                              'frontend', 'src', 'assets', 'sounds')
+# 用户上传的报警音乐存到 public/（Vite 开发时直接服务）和 dist/（构建后）
+# 不要存到 src/ — src/ 下的文件会被 git 跟踪
+SOUNDS_PUBLIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                                 'frontend', 'public', 'assets', 'sounds')
 SOUNDS_DIST_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
                                'frontend', 'dist', 'assets', 'sounds')
 
@@ -71,8 +73,8 @@ def _handle_upload(h, path, body):
             h.send_json({'success': False, 'error': '无效的报警类型: ' + alarm_type})
             return
 
-        # 保存到项目源目录 + dist目录
-        for d in [SOUNDS_SRC_DIR, SOUNDS_DIST_DIR]:
+        # 保存到 public/ + dist/（不再存 src/，避免 git 跟踪）
+        for d in [SOUNDS_PUBLIC_DIR, SOUNDS_DIST_DIR]:
             os.makedirs(d, exist_ok=True)
             fp = os.path.join(d, file_name)
             with open(fp, 'wb') as f:
