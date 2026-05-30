@@ -9,7 +9,7 @@ import traceback
 from datetime import datetime
 
 # 确保可导入项目模块
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def _get_store():

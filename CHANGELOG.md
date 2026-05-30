@@ -1,22 +1,5 @@
 # Changelog
 
-## [v3.5.1] — 2026-05-30
-
-### 修复：数据管线 cron 反复失败（第3次根治）
-
-**根因：** `update_stock_data.py` 在 `server/backend/core/` 下，sys.path 用
-4 层 dirname 指向项目根目录，但 `backend` 包在 `server/` 子目录下。
-cron 始终找不到 `backend` 模块，数据停留在旧日期。
-
-**改动：**
-- **`update_stock_data.py`** — sys.path 改为 3 层 dirname 指向 `server/`，加注释注明
-- **5 个 logic service 文件** — 同一类 sys.path 问题修复（logic_high_scanner / feed / zt / verify / p1）
-- **crontab** — cd 目录从项目根改为 `server/`（匹配 `-m backend.core.update_stock_data`）
-- **`docs/usage-guide.md`** — 数据更新章节全面重写：准确 cron 配置、手动执行指南、新鲜度检查、失效排查步骤、已知坑
-- **`data-pipeline` skill** — 新增"cron 反复失败"陷阱文档
-
-**手动修复（已执行）：** 数据已手动更新到 2026-05-29（周五），全部三项数据（个股/指数/板块）最新。
-
 ## [v3.5.0] — 2026-05-29
 
 ### 重构：微信推送去 Hermes 依赖，改用 WxPusher 直推

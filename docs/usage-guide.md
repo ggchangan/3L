@@ -26,121 +26,27 @@
 
 ### 2.1 自动更新（cron）
 
-每天 17:00（交易日周一至周五）自动执行数据更新管线：
+每天 17:00 自动执行数据更新管线：
 
-| 阶段 | 内容 | 执行方式（都在 update_stock_data.py 内） |
+| 阶段 | 内容 | 执行方式 |
 |:-----|:-----|:---------|
-| 1 | 个股 K 线 | mootdx → `data_layer.save_all_stocks()` |
-| 2 | 中证全指 + 上证 + 科创50 | mootdx → `data_layer.save_index_data()` |
-| 3 | 同花顺行业/概念板块 K 线 | akshare → `data_layer.save_sector_daily()` |
+| 1 | 拉取全量个股 K 线数据 | `scripts/fetch_all_stocks.py` |
+| 2 | 更新中证全指 | 内置定时器 |
+| 3 | 更新行业/概念板块 K 线 | `scripts/refresh_sectors.py` |
+| 4 | 主线数据计算 + 动量数据 | `generate_review_data.py` + `fetch_momentum.py` |
 
-**cron 只拉原始数据，不做计算。** 所有计算（主线排名、个股卡片、复盘分析）由页面首次加载时按需完成。
+cron 路径：`/home/ubuntu/3l-server/server`，使用项目自带 venv。
 
-**cron 配置：**
-```cron
-0 17 * * 1-5 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 \
-  /home/ubuntu/3l-server/.venv/bin/python3 \
-  -m backend.core.update_stock_data >> /home/ubuntu/3l-server/logs/update.log 2>&1
-```
-
-关键路径：
-- 工作目录：`/home/ubuntu/3l-server/server`（必须，因为 `backend` 包在此目录下）
-- Python：项目自带 venv（`/home/ubuntu/3l-server/.venv/bin/python3`）
-- 日志：`/home/ubuntu/3l-server/logs/update.log`
-
-### 2.2 手动触发（cron 失败时用）
-
-当 cron 失效、数据停留在旧日期时，手动执行：
+### 2.2 手动触发
 
 ```bash
-# 方式一：完整管线（推荐）
+# 方式一：通过系统状态 API
+curl -X POST http://localhost:8080/api/system/update
+
+# 方式二：直接跑脚本
 cd /home/ubuntu/3l-server/server
-TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data
-
-# 方式二：仅更新板块（如果个股/指数已最新但板块旧）
-cd /home/ubuntu/3l-server/server
-TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -c "
-from backend.core.update_stock_data import update_sectors
-update_sectors()
-"
-
-# 方式三：仅更新指数
-cd /home/ubuntu/3l-server/server
-TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -c "
-from backend.core.update_stock_data import update_index
-from mootdx.quotes import Quotes
-client = Quotes.factory(market='std')
-update_index(client)
-"
+../.venv/bin/python scripts/fetch_all_stocks.py 2>&1
 ```
-
-### 2.3 数据新鲜度检查
-
-```bash
-# 查看各数据文件的最新日期
-python3 -c "
-import json, os
-files = {
-    'all_stocks_60d.json': '个股K线',
-    'sector_daily.json': '板块日K',
-    'index_sh_data.json': '中证全指',
-}
-for f, label in files.items():
-    p = f'/home/ubuntu/data/3l/{f}'
-    if os.path.isfile(p):
-        d = json.load(open(p))
-        print(f'{label}: {d.get(\"last_updated\",\"?\")}')
-"
-
-# 查看 cron 日志
-tail -50 /home/ubuntu/3l-server/logs/update.log
-```
-
-### 2.4 cron 失效排查步骤
-
-当数据过期时，按顺序排查：
-
-1. **检查 cron 日志**
-   ```bash
-   tail -50 /home/ubuntu/3l-server/logs/update.log
-   ```
-
-2. **检查 crontab 配置**
-   ```bash
-   crontab -l
-   ```
-
-3. **模拟 cron 环境测试**
-   ```bash
-   PATH=/usr/bin:/bin HOME=/home/ubuntu \
-     /home/ubuntu/3l-server/.venv/bin/python3 \
-     -c "from backend.config import DATA_DIR; print('OK:', DATA_DIR)"
-   ```
-
-4. **验证 mootdx 连接**
-   ```bash
-   PATH=/usr/bin:/bin HOME=/home/ubuntu \
-     /home/ubuntu/3l-server/.venv/bin/python3 -c "
-   from backend.core.update_stock_data import _ensure_mootdx_config, _create_mootdx_client
-   _ensure_mootdx_config()
-   c = _create_mootdx_client()
-   print('mootdx OK:', c.server)
-   "
-   ```
-
-5. **如果全部失败，走手动触发（见 2.2）**
-
-### 2.5 已知坑：目录/路径问题
-
-**cron 反复失败历史（2026-05-30 修复）：** `update_stock_data.py` 在 `server/backend/core/` 下，
-sys.path 的 `dirname` 层数必须与文件位置匹配。如果将来文件挪位置，必须同步更新
-`sys.path.insert(0, ...)` 中的 `dirname` 层数。
-
-**审计方法：**
-```bash
-grep -rn 'sys.path.insert.*dirname.*__file__' server/ --include='*.py'
-```
-逐文件确认：文件位置 → sys.path 目标目录，层数是否正确。
 
 ---
 
@@ -371,17 +277,10 @@ sudo docker logs 3l-analysis --tail 50 -f  # 分析服务实时日志
 ├── all_a_stocks.json            ← 全 A 股代码/名称映射（用于搜索）
 ├── stock_industry_map.json      ← 个股行业映射
 ├── stock_on_demand_cache.json   ← 按需拉取缓存（独立于 cron）
-├── sector_daily.json            ← 同花顺行业+概念板块日 K 线（cron 更新）
-├── index_sh_data.json           ← 中证全指+上证+科创50 K 线（cron 更新）
 ├── all_sections.json            ← 板块概要
 ├── watchlist.json               ← 自选股
-├── directions.json              ← 方向配置
-├── .cache/                      ← 计算缓存（主线排名等）
 └── private/                     ← 私有配置
-    ├── alarms.json               ← 报警数据
     ├── manual_trend_stocks.json  ← 手动趋势股
-    ├── holdings.json             ← 持仓数据
-    ├── trades.json               ← 交易记录
     ├── review_data.json          ← 复盘缓存
     └── review_archive/           ← 历史复盘
 ```
