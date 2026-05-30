@@ -74,6 +74,15 @@ echo "🔐 [5/8] 创建 .env 配置文件..."
 if [ ! -f "${INSTALL_DIR}/.env" ]; then
     # 生成随机密码
     ADMIN_PASS=$(openssl rand -base64 12 2>/dev/null || echo "change_me_$(date +%s)")
+
+    # 询问微信报警配置
+    echo ""
+    echo "  微信报警配置（WxPusher，可跳过）："
+    echo "    注册: https://wxpusher.zjiecode.com"
+    echo "    创建应用 → 获取 APP_TOKEN → 用户管理获取 UID"
+    read -p "  WXPUSHER_TOKEN (AT_xxx，留空跳过): " WX_TOKEN
+    read -p "  WXPUSHER_UID (UID_xxx，留空跳过): " WX_UID
+
     cat > "${INSTALL_DIR}/.env" << EOF
 # 3L 交易系统配置
 WWW_DIR=${INSTALL_DIR}
@@ -84,6 +93,8 @@ LOG_LEVEL=INFO
 LOG_DIR=${INSTALL_DIR}/logs
 AUTH_USER=admin
 AUTH_PASS=${ADMIN_PASS}
+$(if [ -n "${WX_TOKEN}" ]; then echo "WXPUSHER_TOKEN=${WX_TOKEN}"; fi)
+$(if [ -n "${WX_UID}" ]; then echo "WXPUSHER_UID=${WX_UID}"; fi)
 EOF
     echo "  ✅ .env 已创建（密码: ${ADMIN_PASS}）"
     echo "  ⚠️  请保存密码并修改 AUTH_PASS"
@@ -141,8 +152,17 @@ HEALTH=$(curl -s http://127.0.0.1:8080/api/health 2>/dev/null | python3 -c "impo
 
 echo ""
 echo "════════════════════════════════════════════"
-echo "  🎉 部署完成！"
+echo "  服务已就绪（API: ${HEALTH}）"
 echo "════════════════════════════════════════════"
+
+# ── 9. 首次数据初始化 ──────────────────────────
+echo ""
+echo "📊 [9/9] 首次数据初始化（拉取 A股 K线数据，约 3-5 分钟）..."
+echo "  包含: 个股60天 / 中证全指200天 / 行业板块90天"
+echo "  请耐心等待，不要中断..."
+cd "${INSTALL_DIR}" && cd server && python3 -m backend.core.update_stock_data 2>&1 && \
+    echo "  ✅ 数据初始化完成" || \
+    echo "  ⚠️ 数据拉取未完全成功，可稍后手动执行"
 echo ""
 echo "  管理地址: https://${SERVER_IP}"
 echo "  API健康:  http://127.0.0.1:8080/api/health"

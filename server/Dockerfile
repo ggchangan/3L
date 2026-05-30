@@ -28,6 +28,8 @@ RUN python3 -m pip install --no-cache-dir -r requirements.txt -i https://pypi.tu
 
 # ====== 应用代码 ======
 COPY server/ .
+# 种子数据（从 repo 根目录复制）
+COPY all_a_stocks.json pinyin_initials.json /app/
 
 # ====== 运行时目录 ======
 RUN mkdir -p /data/private /data/cache /data/charts /app/logs
