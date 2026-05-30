@@ -43,5 +43,7 @@ jobs:
       - name: Test (all except API)
         env:
           DATA_DIR: $HOME/data/3l
+          AUTH_USER: ci_test
+          AUTH_PASS: ci_test_pass123
         run: |
           cd server && python -m pytest backend/tests/ -v
