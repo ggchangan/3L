@@ -3,7 +3,6 @@ import './Monitor.css'
 import NavBar, { BottomNav } from '../components/NavBar'
 import RuleLayer from '../components/RuleLayer'
 import PlanLayer from '../components/PlanLayer'
-import ExternalLayer from '../components/ExternalLayer'
 import MarketQuote from '../components/MarketQuote'
 import SectorMonitor from '../components/SectorMonitor'
 import LeaderMonitor from '../components/LeaderMonitor'
@@ -92,8 +91,12 @@ export default function Monitor() {
         {/* ② 计划层 */}
         <PlanLayer />
 
-        {/* ②.5 外围关联 */}
-        <ExternalLayer />
+        {/* ②.5 外围关联（已移到宏观页面） */}
+        <div className="layer" style={{ padding: '8px 16px', borderBottom: '1px solid #2a2a4e' }}>
+          <a href="/macro.html" style={{ color: '#2196f3', fontSize: 12, textDecoration: 'none' }}>
+            🌍 外围关联 → 查看宏观环境
+          </a>
+        </div>
 
         {/* ③ 信息层 */}
         <div className="layer info-layer">

@@ -36,6 +36,8 @@ def get_macro_data():
         'sh000985': '中证全指', 'us.INX': '标普500',
         'us.IXIC': '纳斯达克', 'us.DJI': '道琼斯',
         'sh000688': '科创50',
+        # 外围更多指数
+        'us.SOX': '费城半导体', 'us.RUT': '罗素2000',
     }
     q_str = ','.join(symbols.keys())
     indices = {}
@@ -141,10 +143,55 @@ def get_macro_data():
     except Exception:
         ppi = []
 
+    # ── 美股实时行情（腾讯） ────────────────────────────
+    us_stocks = {}
+    us_codes = {
+        'us.NVDA': '英伟达', 'us.AMD': '超威半导体', 'us.INTC': '英特尔',
+        'us.AVGO': '博通', 'us.ARM': 'Arm Holdings', 'us.TSM': '台积电',
+        'us.MU': '美光科技', 'us.WDC': '西部数据', 'us.STX': '希捷',
+        'us.GLW': '康宁', 'us.VRT': 'Vertiv', 'us.ASML': '阿斯麦',
+        'us.GOOGL': '谷歌', 'us.MSFT': '微软', 'us.ORCL': '甲骨文',
+        'us.META': 'Meta',
+    }
+    try:
+        r_us = requests.get(
+            f'https://qt.gtimg.cn/q={",".join(us_codes.keys())}',
+            headers=headers, timeout=10
+        )
+        for line in r_us.text.strip().split(';'):
+            if '="' not in line:
+                continue
+            key = line.split('=')[0].strip()
+            parts = line.split('"')[1].split('~') if '"' in line else []
+            if len(parts) < 10:
+                continue
+            name = us_codes.get(key, parts[1] if len(parts) > 1 else '')
+            price = float(parts[3]) if parts[3] else 0
+            prev = float(parts[4]) if parts[4] else price
+            chg_pct = round((price - prev) / prev * 100, 2) if prev > 0 else 0
+            us_stocks[name] = {
+                'price': price, 'change_pct': chg_pct,
+                'name': name, 'code': parts[2] if len(parts) > 2 else '',
+                'time': parts[31] if len(parts) > 31 else '',
+            }
+    except Exception:
+        pass
+
+    # ── 外围供应链映射数据 ────────────────────────────
+    external_mapping = {}
+    ext_path = os.path.join(os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'public', 'external_mapping.json')
+    if os.path.isfile(ext_path):
+        try:
+            external_mapping = json.load(open(ext_path, encoding='utf-8'))
+        except Exception:
+            pass
+
     return {
         'indices': indices,
         'fx': fx,
         'cpi': cpi or [],
         'ppi': ppi or [],
+        'us_stocks': us_stocks,
+        'external': external_mapping,
         'updated': datetime.now().strftime('%Y-%m-%d %H:%M'),
     }

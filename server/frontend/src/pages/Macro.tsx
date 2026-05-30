@@ -19,9 +19,34 @@ interface PpiData {
   date: string; value: number | null
 }
 
+interface UsStockData {
+  price: number; change_pct: number; name: string; code?: string; time?: string
+}
+
+interface ExternalAsiaIndex {
+  code: string; name: string; region: string; flag?: string
+}
+
+interface ExternalStock {
+  code: string; name: string; impact?: string; sectors?: string
+  suppliers?: string; potential?: string; counterparts?: string
+}
+
+interface ExternalCategory {
+  name: string; stocks: ExternalStock[]
+}
+
+interface ExternalData {
+  updated?: string; source?: string; source_url?: string
+  asia_indices?: ExternalAsiaIndex[]
+  categories?: ExternalCategory[]
+}
+
 interface MacroData {
   updated?: string; indices?: Record<string, IndexData>
   fx?: Record<string, FxData>; cpi?: CpiData[]; ppi?: PpiData[]
+  us_stocks?: Record<string, UsStockData>
+  external?: ExternalData
 }
 
 export default function Macro() {
@@ -29,6 +54,8 @@ export default function Macro() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const [catOpen, setCatOpen] = useState<Record<string, boolean>>({})
+  const [stockExpand, setStockExpand] = useState<Record<string, boolean>>({})
 
   useEffect(() => { loadData(); return () => clearTimeout(timerRef.current) }, [])
 
@@ -40,7 +67,6 @@ export default function Macro() {
       if ((d as any).error) throw new Error((d as any).error)
       setData(d)
       setLoading(false)
-      // Auto-refresh every 30 seconds
       clearTimeout(timerRef.current)
       timerRef.current = setTimeout(loadData, 30000)
     } catch (err: any) {
@@ -53,6 +79,9 @@ export default function Macro() {
   const fx = data?.fx || {}
   const cpi = data?.cpi || []
   const ppi = data?.ppi || []
+  const usStocks = data?.us_stocks || {}
+  const extAsia = data?.external?.asia_indices || []
+  const extCats = data?.external?.categories || []
 
   function renderIndexCard(name: string, idx: IndexData | undefined, showHighLow: boolean) {
     if (!idx) return null
@@ -63,13 +92,12 @@ export default function Macro() {
         <div className="name">{name}</div>
         <div className="price">{idx.price.toFixed(2)}</div>
         <div className={`change ${cls}`}>{arrow} {idx.change_pct >= 0 ? '+' : ''}{idx.change_pct.toFixed(2)}%</div>
-        {showHighLow && (
+        {showHighLow ? (
           <div className="highlow">
             <span>高 <span className="hl-up">{idx.high ? idx.high.toFixed(2) : '-'}</span></span>
             <span>低 <span className="hl-down">{idx.low ? idx.low.toFixed(2) : '-'}</span></span>
           </div>
-        )}
-        {!showHighLow && (
+        ) : (
           <div className="range">前收 {idx.prev_close?.toFixed(2)}</div>
         )}
         <div className="time">{idx.time || ''}</div>
@@ -82,9 +110,7 @@ export default function Macro() {
       <div className="cpi-bars">
         {dataArr.map((d, i) => {
           const v = d.value
-          if (v === null || v === undefined) {
-            return <div key={i} className="cpi-bar-empty" title="无数据" />
-          }
+          if (v === null || v === undefined) return <div key={i} className="cpi-bar-empty" title="无数据" />
           const barH = Math.max(4, Math.abs(v) * scale)
           const barBg = v >= 0 ? '#e94560' : '#4CAF50'
           return (
@@ -98,29 +124,15 @@ export default function Macro() {
     )
   }
 
-  function renderCpiDateLabels(dataArr: { date: string }[], format: 'mm' | 'mon') {
-    return (
-      <div className="cpi-date-labels">
-        {dataArr.map((d, i) => (
-          <span key={i}>{format === 'mm' ? (d.date || '').slice(5, 7) + '月' : (d.date || '').slice(-2)}</span>
-        ))}
-      </div>
-    )
-  }
-
   // A股大盘
   const aShares = ['上证指数', '深证成指', '创业板指', '沪深300', '中证全指', '科创50']
-  // 全球市场
-  const globals = ['标普500', '纳斯达克', '道琼斯']
-  // 汇率
-  const fxPairs = [
-    { key: '在岸人民币', cn: '美元/人民币', symbol: 'USDCNY' },
-    { key: '欧元', cn: '欧元/人民币', symbol: 'EURCNY' },
-    { key: '英镑', cn: '英镑/人民币', symbol: 'GBPCNY' },
-    { key: '日元', cn: '100日元/人民币', symbol: 'JPYCNY' },
-  ]
+  // 全球市场（含外围指数）
+  const globals = ['标普500', '纳斯达克', '道琼斯', '费城半导体', '罗素2000']
 
   const aCount = aShares.filter(n => indices[n]).length
+
+  // 亚洲指数仿真数据（显示静态信息，不含实时行情）
+  const asiaIndices = extAsia
 
   return (
     <div className="page-container">
@@ -128,7 +140,7 @@ export default function Macro() {
 
       <div className="header">
         <h1>🌍 宏观环境监控</h1>
-        <div className="subtitle">A股大盘 · 全球指数 · 宏观数据 · 汇率</div>
+        <div className="subtitle">A股大盘 · 全球指数 · 宏观数据 · 汇率 · 外围映射</div>
         <div className="update-time">{data?.updated ? `更新于 ${data.updated}` : '—'}</div>
       </div>
 
@@ -161,7 +173,7 @@ export default function Macro() {
             {/* 2. 全球市场 */}
             <div className="section">
               <div className="section-title">
-                🌎 全球市场 <span className="badge">美股</span>
+                🌎 全球市场 <span className="badge">美股指数</span>
               </div>
               <div className="grid-3">
                 {globals.map(name => renderIndexCard(name, indices[name], false))}
@@ -171,7 +183,134 @@ export default function Macro() {
               )}
             </div>
 
-            {/* 3. CPI */}
+            {/* 3. 亚洲市场参考 */}
+            {asiaIndices.length > 0 && (
+              <div className="section">
+                <div className="section-title">
+                  🌏 亚洲市场参考
+                </div>
+                <div className="ext-index-grid">
+                  <div className="ext-index-col">
+                    {asiaIndices.slice(0, Math.ceil(asiaIndices.length / 2)).map((idx, i) => (
+                      <div key={i} className="idx-row">
+                        <span className="idx-flag">{idx.flag || '🌏'}</span>
+                        <span className="idx-name">{idx.name}</span>
+                        <span className="idx-region">{idx.region}</span>
+                        <span className="idx-code-sm">{idx.code}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="ext-index-col">
+                    {asiaIndices.slice(Math.ceil(asiaIndices.length / 2)).map((idx, i) => (
+                      <div key={i} className="idx-row">
+                        <span className="idx-flag">{idx.flag || '🌏'}</span>
+                        <span className="idx-name">{idx.name}</span>
+                        <span className="idx-region">{idx.region}</span>
+                        <span className="idx-code-sm">{idx.code}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: '#555', marginTop: 6 }}>实时行情待接入 · 仅供参考</div>
+              </div>
+            )}
+
+            {/* 4. 外围美股供应链映射 */}
+            {extCats.length > 0 && (
+              <div className="section">
+                <div className="section-title">
+                  🔗 外围美股映射 <span className="badge">{extCats.length}类</span>
+                </div>
+                {extCats.map((cat, ci) => {
+                  const catKey = `cat_${ci}`
+                  const isOpen = catOpen[catKey] ?? false
+                  return (
+                    <div key={catKey} className="ext-cat-block">
+                      <div
+                        className="ext-cat-header"
+                        onClick={() => setCatOpen(prev => ({ ...prev, [catKey]: !prev[catKey] }))}
+                      >
+                        <span className="ext-cat-arrow">{isOpen ? '▼' : '▶'}</span>
+                        {cat.name}
+                        <span className="badge-sm">{(cat.stocks || []).length}</span>
+                      </div>
+                      {isOpen && (
+                        <div className="ext-stock-list">
+                          {(cat.stocks || []).map((s, si) => {
+                            const sk = `${ci}_${si}`
+                            const usPrice = usStocks[s.name]
+                            const isExpanded = stockExpand[sk] ?? false
+                            const chgCls = usPrice ? (usPrice.change_pct >= 0 ? 'up' : 'down') : ''
+                            const arrow = usPrice ? (usPrice.change_pct >= 0 ? '▲' : '▼') : ''
+                            return (
+                              <div key={sk} className="ext-stock-item">
+                                <div
+                                  className="ext-stock-row"
+                                  onClick={() => setStockExpand(prev => ({ ...prev, [sk]: !prev[sk] }))}
+                                >
+                                  <span className="ext-stock-code">{s.code}</span>
+                                  <span className="ext-stock-name">{s.name}</span>
+                                  {usPrice ? (
+                                    <>
+                                      <span className="ext-stock-price">{usPrice.price.toFixed(2)}</span>
+                                      <span className={`ext-stock-chg ${chgCls}`}>
+                                        {arrow} {usPrice.change_pct >= 0 ? '+' : ''}{usPrice.change_pct.toFixed(2)}%
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="ext-stock-price">--</span>
+                                      <span className="ext-stock-chg" style={{ color: '#555' }}>--</span>
+                                    </>
+                                  )}
+                                  <span className="ext-stock-impact">→ {s.impact || ''}</span>
+                                  <span className="ext-expand-icon">{isExpanded ? '▲' : '▼'}</span>
+                                </div>
+                                {isExpanded && (
+                                  <div className="ext-stock-detail">
+                                    {s.sectors && (
+                                      <div className="ext-detail-row">
+                                        <span className="ext-detail-label">影响板块</span>
+                                        <span className="ext-detail-val">{s.sectors}</span>
+                                      </div>
+                                    )}
+                                    {s.suppliers && s.suppliers !== '暂无直接供应商' && (
+                                      <div className="ext-detail-row">
+                                        <span className="ext-detail-label">A股供应商</span>
+                                        <span className="ext-detail-val">{s.suppliers}</span>
+                                      </div>
+                                    )}
+                                    {s.counterparts && (
+                                      <div className="ext-detail-row">
+                                        <span className="ext-detail-label">A股对标</span>
+                                        <span className="ext-detail-val">{s.counterparts}</span>
+                                      </div>
+                                    )}
+                                    {s.potential && (
+                                      <div className="ext-detail-row">
+                                        <span className="ext-detail-label">潜在受益</span>
+                                        <span className="ext-detail-val">{s.potential}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                {data?.external?.source_url && (
+                  <div className="ext-source">
+                    📎 <a href={data.external.source_url} target="_blank" rel="noreferrer">{data.external.source || '数据来源'}</a>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 5. CPI */}
             <div className="section">
               <div className="section-title">
                 📊 宏观数据 <span className="badge">CPI</span>
@@ -191,7 +330,6 @@ export default function Macro() {
                     <div className="risk-item" style={{ flex: 2 }}>
                       <div className="label">近12个月走势</div>
                       {renderCpiBars(cpi, 12)}
-                      {renderCpiDateLabels(cpi, 'short')}
                     </div>
                   </div>
                   <table className="cpi-table">
@@ -218,7 +356,7 @@ export default function Macro() {
               )}
             </div>
 
-            {/* 4. PPI */}
+            {/* 6. PPI */}
             <div className="section">
               <div className="section-title">
                 📊 宏观数据 <span className="badge">PPI</span>
@@ -276,7 +414,7 @@ export default function Macro() {
               )}
             </div>
 
-            {/* 5. 汇率 */}
+            {/* 7. 汇率 */}
             <div className="section">
               <div className="section-title">
                 💱 汇率 <span className="badge">人民币中间价</span>
@@ -333,3 +471,11 @@ export default function Macro() {
     </div>
   )
 }
+
+// 汇率常量
+const fxPairs = [
+  { key: '在岸人民币', cn: '美元/人民币', symbol: 'USDCNY' },
+  { key: '欧元', cn: '欧元/人民币', symbol: 'EURCNY' },
+  { key: '英镑', cn: '英镑/人民币', symbol: 'GBPCNY' },
+  { key: '日元', cn: '100日元/人民币', symbol: 'JPYCNY' },
+]
