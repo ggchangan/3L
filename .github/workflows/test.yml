@@ -38,6 +38,7 @@ jobs:
           python -m pip install --upgrade pip -q
           pip install -r server/requirements.txt -q
           pip install pytest pytest-mock httpx -q
+          pip install -e core/ -q
 
       - name: Test (all except API)
         env:
