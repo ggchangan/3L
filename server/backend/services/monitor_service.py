@@ -52,7 +52,16 @@ def get_buy_signals():
         except Exception:
             log.warning('买点信号缓存读取失败，重新扫描')
     # 超过1小时重新扫描
-    scan_file = os.path.join(WWW_DIR, 'server', 'scripts', 'scan_buy_signals.py')
+    # 扫描脚本路径（兼容原生开发 / Docker 布局）
+    scan_file_candidates = [
+        os.path.join(WWW_DIR, 'server', 'scripts', 'scan_buy_signals.py'),  # 原生开发
+        os.path.join(WWW_DIR, 'scripts', 'scan_buy_signals.py'),            # Docker COPY
+    ]
+    scan_file = WWW_DIR
+    for c in scan_file_candidates:
+        if os.path.isfile(c):
+            scan_file = c
+            break
     log.info('买点信号缓存过期，启动扫描...')
     try:
         r = subprocess.run(

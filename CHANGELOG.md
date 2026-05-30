@@ -11,7 +11,7 @@
 - **`server/server.py`** — FE_DIR 改为多候选路径探测（原生开发 / Docker 布局）
 - **`server/Dockerfile`** — 改为多阶段构建：Stage 1 node:20 编译前端 → Stage 2 python 运行，前端产物编入镜像
 - **`server/.dockerignore`** — 移除 `frontend/src/` 等排除规则（多阶段构建的 build stage 需要）
-- **`deploy/deploy.sh`** — 密码输入加两次确认循环；支持端口选择(80/8080)；自动开 ufw 防火墙
+- **`deploy/deploy.sh`** — 密码输入加两次确认循环；支持端口选择(80/8080)；自动开 ufw 防火墙；每次交互运行强制弹密码输入（不依赖环境变量遗留值）
 
 ### 🔧 部署验证
 - `GET /` → 200（返回 react SPA）
