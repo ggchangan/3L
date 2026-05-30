@@ -40,7 +40,26 @@ echo ""
 read -p "WXPUSHER_TOKEN (AT_xxx，留空跳过): " WX_TOKEN
 read -p "WXPUSHER_UID (UID_xxx，留空跳过): " WX_UID
 
-# ==== 3. 检查 Docker ====
+# ==== 3. 选择访问端口 ====
+echo ""
+read -p "访问端口 (默认 8080，用 80 则访问不用输端口号): " PORT
+PORT="${PORT:-8080}"
+
+# ==== 4. 打开防火墙 ====
+echo ""
+echo "=> 检查防火墙..."
+if command -v ufw &>/dev/null; then
+    if sudo ufw status | grep -q "Status: active"; then
+        if ! sudo ufw status | grep -q "${PORT}"; then
+            echo "   开放端口 ${PORT}/tcp..."
+            sudo ufw allow "${PORT}/tcp"
+        else
+            echo "   端口 ${PORT} 已开放"
+        fi
+    fi
+fi
+
+# ==== 5. 检查 Docker ====
 echo ""
 echo "=> 检查 Docker..."
 if ! command -v docker &>/dev/null; then
@@ -52,13 +71,13 @@ if ! command -v docker &>/dev/null; then
     echo "Docker 安装完成"
 fi
 
-# ==== 4. 准备数据目录 ====
+# ==== 6. 准备数据目录 ====
 echo ""
 echo "=> 创建数据目录..."
 mkdir -p "${DATA_DIR}"/{private,cache,charts}
 mkdir -p "${LOG_DIR}"
 
-# ==== 5. 拉取镜像 ====
+# ==== 7. 拉取镜像 ====
 echo ""
 echo "=> 登录镜像仓库..."
 echo "   (账号: 100048956351)"
@@ -67,13 +86,13 @@ sudo docker login ccr.ccs.tencentyun.com -u 100048956351 -p ygys30ds
 echo "=> 拉取镜像..."
 sudo docker pull ${IMAGE}
 
-# ==== 6. 停止旧容器 ====
+# ==== 8. 停止旧容器 ====
 echo ""
 echo "=> 停止旧容器..."
 sudo docker stop 3l-server 2>/dev/null || true
 sudo docker rm 3l-server 2>/dev/null || true
 
-# ==== 7. 构建环境变量 ====
+# ==== 9. 构建环境变量 ====
 ENV_OPTS=""
 ENV_OPTS="${ENV_OPTS} -e AUTH_USER=admin"
 ENV_OPTS="${ENV_OPTS} -e AUTH_PASS=${AUTH_PASS}"
@@ -88,9 +107,12 @@ if [ -n "${WX_UID:-}" ]; then
     ENV_OPTS="${ENV_OPTS} -e WXPUSHER_UID=${WX_UID}"
 fi
 
-# ==== 8. 启动容器 ====
+# ==== 10. 启动容器 ====
 echo ""
 echo "=> 启动服务..."
+
+# 端口映射: ${PORT}:8080（容器内固定8080，宿主机端口可选）
+PORT_MAP="${PORT}:8080"
 
 # 优先使用 docker compose / docker-compose
 USE_COMPOSE=""
@@ -98,39 +120,13 @@ COMPOSE_FILE="${HOME}/3l-server/docker-compose.yml"
 
 if docker compose version &>/dev/null; then
     USE_COMPOSE="docker compose"
-    # 生成 docker-compose.yml
     cat > "${COMPOSE_FILE}" <<EOF
 services:
   server:
     image: ${IMAGE}
     container_name: 3l-server
     ports:
-      - "8080:8080"
-    volumes:
-      - ${DATA_DIR}:/data
-      - ${LOG_DIR}:/app/logs
-    environment:
-      - AUTH_USER=admin
-      - AUTH_PASS=${AUTH_PASS}
-      - PORT=8080
-      - LOG_DIR=/app/logs
-      - LOG_LEVEL=INFO
-EOF
-    echo "   使用 docker compose 启动"
-    cd "$(dirname "${COMPOSE_FILE}")"
-    sudo ${USE_COMPOSE} up -d
-
-elif command -v docker-compose &>/dev/null; then
-    USE_COMPOSE="docker-compose"
-    # 生成 docker-compose.yml（旧版格式）
-    cat > "${COMPOSE_FILE}" <<EOF
-version: '3.8'
-services:
-  server:
-    image: ${IMAGE}
-    container_name: 3l-server
-    ports:
-      - "8080:8080"
+      - "${PORT_MAP}"
     volumes:
       - ${DATA_DIR}:/data
       - ${LOG_DIR}:/app/logs
@@ -142,26 +138,50 @@ services:
       - LOG_LEVEL=INFO
     restart: unless-stopped
 EOF
-    echo "   使用 docker-compose 启动"
+    echo "   使用 docker compose 启动 (宿主机端口 ${PORT})"
+    cd "$(dirname "${COMPOSE_FILE}")"
+    sudo ${USE_COMPOSE} up -d
+
+elif command -v docker-compose &>/dev/null; then
+    USE_COMPOSE="docker-compose"
+    cat > "${COMPOSE_FILE}" <<EOF
+version: '3.8'
+services:
+  server:
+    image: ${IMAGE}
+    container_name: 3l-server
+    ports:
+      - "${PORT_MAP}"
+    volumes:
+      - ${DATA_DIR}:/data
+      - ${LOG_DIR}:/app/logs
+    environment:
+      - AUTH_USER=admin
+      - AUTH_PASS=${AUTH_PASS}
+      - PORT=8080
+      - LOG_DIR=/app/logs
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+EOF
+    echo "   使用 docker-compose 启动 (宿主机端口 ${PORT})"
     cd "$(dirname "${COMPOSE_FILE}")"
     sudo ${USE_COMPOSE} up -d
 
 else
-    echo "   未检测到 docker compose，使用 docker run 直接启动"
-    echo "   (建议安装: sudo apt-get install -y docker-compose)"
+    echo "   使用 docker run 直接启动 (宿主机端口 ${PORT})"
     sudo docker run -d --restart unless-stopped \
       --name 3l-server \
-      -p 8080:8080 \
+      -p "${PORT_MAP}" \
       -v "${DATA_DIR}:/data" \
       -v "${LOG_DIR}:/app/logs" \
       ${ENV_OPTS} \
       ${IMAGE}
 fi
 
-# ==== 9. 等待服务就绪 ====
+# ==== 11. 等待服务就绪 ====
 echo "=> 等待服务就绪..."
 for i in $(seq 1 30); do
-    if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ 2>/dev/null | grep -q 200; then
+    if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:${PORT}/ 2>/dev/null | grep -q 200; then
         echo "   ✅ 服务已就绪 ($((i * 2))s)"
         break
     fi
@@ -176,7 +196,7 @@ else
     echo "   ⚠️ 容器可能未正常运行，查看日志: sudo docker logs 3l-server"
 fi
 
-# ==== 10. 首次数据初始化 ====
+# ==== 12. 首次数据初始化 ====
 echo ""
 echo "=> 首次数据初始化（拉取 A股 K线数据，约 3-5 分钟）..."
 echo "   包含: 个股60天 / 中证全指200天 / 行业板块90天"
@@ -190,12 +210,16 @@ fi
 
 # ==== 完成 ====
 IP_ADDR=$(curl -s ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
+ACCESS_URL="http://${IP_ADDR}"
+if [ "${PORT}" != "80" ]; then
+    ACCESS_URL="http://${IP_ADDR}:${PORT}"
+fi
 echo ""
 echo "=============================================="
 echo "  ✅ 部署完成！"
 echo "=============================================="
 echo ""
-echo "  访问地址: http://${IP_ADDR}:8080"
+echo "  访问地址: ${ACCESS_URL}"
 echo "  登录账号: admin"
 echo "  密码:     (你设置的)"
 echo ""
@@ -212,6 +236,6 @@ echo ""
 echo "  查看日志: sudo docker logs -f 3l-server"
 echo "  重启服务: sudo docker restart 3l-server"
 echo "  升级服务: sudo docker pull ${IMAGE} && sudo docker stop 3l-server && sudo docker rm 3l-server"
-echo "  升级后启动（复用 docker compose 配置即可）"
+echo "  升级后按同样方式重新启动即可"
 echo ""
 echo "=============================================="
