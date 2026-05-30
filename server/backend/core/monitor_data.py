@@ -367,6 +367,7 @@ def get_existing_holdings():
     holdings_file = os.path.join(REVIEW_ARCHIVE_DIR, today_str() + '.json')
     if not os.path.isfile(holdings_file):
         archive_dir = REVIEW_ARCHIVE_DIR
+        os.makedirs(archive_dir, exist_ok=True)
         files = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')], reverse=True)
         if not files:
             return []
