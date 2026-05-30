@@ -18,9 +18,12 @@ echo "  3L 交易系统 — 一键部署"
 echo "=============================================="
 
 # ==== 1. 获取密码 ====
+# 优先使用命令行参数，否则强制交互输入（忽略环境变量，防止重复运行跳过）
 if [ $# -ge 1 ]; then
     AUTH_PASS="$1"
-elif [ -z "${AUTH_PASS:-}" ]; then
+else
+    # 清除可能残留的环境变量，确保每次都弹密码输入
+    unset AUTH_PASS
     while true; do
         read -s -p "请输入登录密码: " AUTH_PASS
         echo
