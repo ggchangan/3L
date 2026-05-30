@@ -15,6 +15,7 @@
 - **`server/backend/core/monitor_data.py`** — review_archive 目录不存在时自动创建
 - **`server/backend/services/monitor_service.py`** — 扫描脚本路径兼容 Docker 布局
 - **`server/backend/core/update_stock_data.py`** — 在 import akshare 前设置 TQDM_DISABLE，消除脏进度条
+- **`server/backend/services/direction_service.py`** — _load 兼容旧格式 directions.json，修复 KeyError: 'all' 导致新建方向失败
 
 ### 🔧 部署验证
 - `GET /` → 200（返回 react SPA）
