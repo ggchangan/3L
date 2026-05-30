@@ -12,6 +12,8 @@ import json, os, sys, time
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# ⚠️ 注意: file 在 server/backend/core/ 下
+# dirname×1=core/  ×2=backend/  ×3=server/（backend 包所在位置）
 from backend.config import DATA_DIR
 from backend.core.data_layer import (
     get_watchlist,
