@@ -22,16 +22,10 @@ if not AUTH_USER or not AUTH_PASS:
 
 PROTECTED_PREFIX = '/private/'
 
-# 前端构建输出目录（支持多种布局：原生开发、Docker COPY 等）
-FE_DIR_CANDIDATES = [
-    os.path.join(WWW_DIR, 'server', 'frontend', 'dist'),  # 原生开发 (WWW_DIR=项目根)
-    os.path.join(WWW_DIR, 'frontend', 'dist'),              # Docker (COPY server/ → /app/ 后)
-]
-FE_DIR = WWW_DIR
-for candidate in FE_DIR_CANDIDATES:
-    if os.path.isdir(candidate):
-        FE_DIR = candidate
-        break
+# 前端构建输出目录（结构对齐原生开发：WWW_DIR/server/frontend/dist）
+FE_DIR = os.path.join(WWW_DIR, 'server', 'frontend', 'dist')
+if not os.path.isdir(FE_DIR):
+    FE_DIR = WWW_DIR
 
 REVIEW_DATA = {}
 DATA_FILE = config.REVIEW_DATA_PATH
