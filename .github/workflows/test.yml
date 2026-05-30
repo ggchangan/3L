@@ -28,15 +28,22 @@ jobs:
 
       - name: Create data directory
         run: |
-          mkdir -p /home/ubuntu/data/3l/private
-          mkdir -p /home/ubuntu/data/3l/knowledge_base
+          mkdir -p $HOME/data/3l/private
+          mkdir -p $HOME/data/3l/knowledge_base
 
       - name: Install Python dependencies
+        env:
+          DATA_DIR: $HOME/data/3l
         run: |
           python -m pip install --upgrade pip -q
-          pip install -r requirements.txt -q
-          pip install -r requirements-dev.txt -q
+          pip install -r server/requirements.txt -q
+          pip install pytest pytest-mock httpx -q
+          pip install -e core/ -q
 
       - name: Test (all except API)
+        env:
+          DATA_DIR: $HOME/data/3l
+          AUTH_USER: ci_test
+          AUTH_PASS: ci_test_pass123
         run: |
-          python -m pytest tests/ --ignore=tests/test_api.py -v
+          cd server && python -m pytest backend/tests/ -v
