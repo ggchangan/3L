@@ -80,6 +80,19 @@ def inject_preload():
     print(f'✅ 注入 {preload_links.count("modulepreload")} 个 modulepreload 链接')
 
 
+def copy_assets():
+    """将静态资源（WAV 音效等）复制到 dist 目录"""
+    src = os.path.join(FE_DIR, 'src', 'assets', 'sounds')
+    dst = os.path.join(DIST_DIR, 'assets', 'sounds')
+    if os.path.isdir(src):
+        os.makedirs(dst, exist_ok=True)
+        for f in os.listdir(src):
+            if f.endswith('.wav') or f.endswith('.mp3'):
+                import shutil
+                shutil.copy2(os.path.join(src, f), os.path.join(dst, f))
+        print(f'✅ 复制 {len(os.listdir(src))} 个音效文件到 dist')
+
+
 def main():
     print('═══════════════════════════════════')
     print('    3L 前端构建+部署')
@@ -89,6 +102,7 @@ def main():
     if not run_npm_build():
         sys.exit(1)
     inject_preload()
+    copy_assets()
     print('\n✅ 构建完整，dist 就绪')
     sys.exit(0)
 

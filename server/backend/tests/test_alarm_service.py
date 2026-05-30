@@ -145,7 +145,7 @@ class TestAlarmService:
                 {'stock': '飞沃科技(301232)', 'stop_loss': 128.88, 'stop_loss_pct': 7.66,
                  'alert': {'type': 'price', 'enabled': True, 'condition': ''}},
                 {'stock': '北方华创(002371)', 'stop_loss': 614.63, 'stop_loss_pct': 6.13,
-                 'alert': None},  # 无报警，不应同步
+                 'alert': None},  # 无显式alert但有stop_loss → 自动创建
                 {'stock': '兴森科技(002436)', 'stop_loss': 35.68, 'stop_loss_pct': 3.62,
                  'alert': {'type': 'deviation', 'enabled': True, 'condition': '5'}},
             ],
@@ -157,20 +157,20 @@ class TestAlarmService:
         }
         from backend.services.alarm_service import sync_alarms_from_plan
         result = sync_alarms_from_plan(plan)
-        assert result['synced'] == 3  # 3个有报警的
-        # 原有的 (002371,price) 和 (301232,deviation) 都不在当前计划中
-        # (002371,price) 没有了，(301232,deviation) 变成了 (301232,price) 覆盖
-        assert result['removed'] == 2
+        # 4项进入current_keys: (301232,p) (002371,p) (002436,d) (300390,p)
+        # 旧(301232,deviation)不在→移除；旧(002371,price)在→保留更新
+        assert result['synced'] == 4
+        assert result['removed'] == 1
 
         from backend.services.alarm_service import get_alarms
         alarms = get_alarms()
-        # 北方华创没有alert → 被移除
         codes = {(a['stock_code'], a['type']) for a in alarms}
-        assert ('002371', 'price') not in codes  # 被移除
-        assert ('301232', 'deviation') not in codes  # 旧类型被移除
-        assert ('301232', 'price') in codes  # 新增price类型
+        assert len(alarms) == 4  # 4条报警（新增3+保留1）
+        assert ('002371', 'price') in codes      # 原price保留更新
+        assert ('301232', 'price') in codes      # 显式alert新增
+        assert ('301232', 'deviation') not in codes  # 旧偏差被移除
         assert ('002436', 'deviation') in codes  # 新增
-        assert ('300390', 'price') in codes  # 新增
+        assert ('300390', 'price') in codes      # 新增
 
     def test_remove_alarm(self, mock_alarm_file_with_data):
         """删除指定报警"""
@@ -190,7 +190,7 @@ class TestAlarmService:
         assert result['success'] is False
 
     def test_mark_triggered(self, mock_alarm_file_with_data):
-        """报警触发后标记状态"""
+        """报警触发后标记（保持 active，记录触发时间）"""
         from backend.services.alarm_service import mark_alarm_triggered
         result = mark_alarm_triggered('alarm_002371_1745800000')
         assert result['success'] is True
@@ -199,22 +199,72 @@ class TestAlarmService:
         alarms = get_alarms()
         match = [a for a in alarms if a['id'] == 'alarm_002371_1745800000']
         assert len(match) == 1
-        assert match[0]['status'] == 'triggered'
-        assert 'triggered_at' in match[0]
+        assert match[0]['status'] == 'active'  # 保持 active 可继续被检查
+        assert 'triggered_at' in match[0]      # 记录触发时间
 
     def test_plan_items_without_alert_get_removed(self, mock_alarm_file_with_data):
         """计划项删除报警后，同步时应移除对应报警"""
         plan = {
             'buy': [{'stock': '北方华创(002371)', 'stop_loss': 614.63,
-                     'alert': None}],  # 之前有price报警，现在没了
+                     'alert': None}],  # 有stop_loss，自动创建price
             'sell': [],
             'watch': [],
         }
         from backend.services.alarm_service import sync_alarms_from_plan
         result = sync_alarms_from_plan(plan)
-        # 之前2条报警（002371, 301232）全部不在计划中 → 全部移除
-        assert result['removed'] == 2
+        # 旧(002371,price)在current_keys中→保留更新，(301232,deviation)不在→移除
+        assert result['removed'] == 1
+        assert result['synced'] == 1
 
         from backend.services.alarm_service import get_alarms
         alarms = get_alarms()
-        assert len(alarms) == 0  # 全部被移除
+        assert len(alarms) == 1  # 北方华创price报警保留
+        assert alarms[0]['stock_code'] == '002371'
+        assert alarms[0]['type'] == 'price'
+
+    def test_dismiss_handled_status(self, mock_alarm_file_with_data):
+        """dismiss 报警后 status 变为 handled"""
+        from backend.services.alarm_service import dismiss_alarm, get_alarms
+        result = dismiss_alarm('alarm_002371_1745800000')
+        assert result['success'] is True
+        assert result['status'] == 'handled'
+
+        alarms = get_alarms()
+        match = [a for a in alarms if a['id'] == 'alarm_002371_1745800000']
+        assert len(match) == 1
+        assert match[0]['status'] == 'handled'
+        assert 'dismissed_at' in match[0]
+
+    def test_reenable_restores_active(self, mock_alarm_file_with_data):
+        """重新启用报警后 status 变回 active"""
+        from backend.services.alarm_service import (
+            dismiss_alarm, reenable_alarm, get_alarms, get_active_alarms
+        )
+        # 先 dismiss
+        dismiss_alarm('alarm_002371_1745800000')
+        active_before = get_active_alarms()
+        assert len(active_before) == 1  # 只剩飞沃科技还 active
+
+        # 再 reenable
+        result = reenable_alarm('alarm_002371_1745800000')
+        assert result['success'] is True
+        assert result['status'] == 'active'
+
+        active_after = get_active_alarms()
+        assert len(active_after) == 2  # 两个都恢复了
+
+    def test_dismiss_reenable_toggle_cycle(self, mock_alarm_file_with_data):
+        """多次 dismiss-reenable 循环不丢失数据"""
+        from backend.services.alarm_service import (
+            dismiss_alarm, reenable_alarm, get_alarms
+        )
+        alarm_id = 'alarm_002371_1745800000'
+        for _ in range(3):
+            dismiss_alarm(alarm_id)
+            reenable_alarm(alarm_id)
+
+        alarms = get_alarms()
+        match = [a for a in alarms if a['id'] == alarm_id]
+        assert len(match) == 1
+        assert match[0]['status'] == 'active'
+        assert match[0]['stop_loss'] == 614.63  # 数据不丢失

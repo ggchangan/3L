@@ -15,6 +15,7 @@ Thumbs.db
 # Test artifacts
 test_snapshots/
 .pytest_cache/
+server/tests/reports/
 
 # Server
 server.pid
@@ -27,6 +28,11 @@ server.pid
 .env.*
 .venv/
 .hermes/
+
+# Audio files — only keep the 3 active alarm wavs
+server/frontend/src/assets/sounds/
+server/frontend/public/assets/sounds/*.mp3
+server/frontend/public/assets/sounds/test_*.wav
 
 # Build output copies (source in server/frontend/css/)
 server/frontend/dist/css/

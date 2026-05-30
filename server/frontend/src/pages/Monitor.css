@@ -441,6 +441,12 @@
   margin-top: 6px;
 }
 
+/* 报警浮动弹窗动画 */
+@keyframes alarmSlideIn {
+  from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
 /* Tab按钮 */
 @media (max-width: 600px) {
   .monitor-layout { padding: 10px; }
@@ -472,3 +478,27 @@
 .action-btn:hover {
   background: #3a3a5a;
 }
+
+/* 搜索框面板 — 与 StockAnalysis/TrendCandidates 一致 */
+.search-box {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #2a2a4e;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 10px;
+}
+.search-box input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #2a2a4e;
+  background: rgba(255,255,255,0.05);
+  color: #e0e0e0;
+  font-size: 15px;
+  outline: none;
+  transition: border 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.search-box input:focus { border-color: #4ecdc4; }
+.search-box input::placeholder { color: #555; }

@@ -1,6 +1,6 @@
 # 3L交易系统 — 使用指南
 
-> 版本: v2.1 | 最后更新: 2026-05-29
+> 版本: v3.0 | 最后更新: 2026-05-29
 
 ---
 
@@ -134,6 +134,51 @@ GET /api/stock-analysis?q=<代码或名称>
 | `diagnosis.detail.trend` | 趋势评分 |
 | `diagnosis.detail.risk` | 风险评分（含风险项列表） |
 | `diagnosis.cost_ms` | 诊断计算耗时 ms |
+
+---
+
+## 九、报警与微信通知
+
+### 9.1 报警类型
+
+| 等级 | 触发条件 | 说明 |
+|:-----|:---------|:------|
+| 🔴 止损 | 持仓跌破止损价 | 自动绑定持仓止损价 |
+| 🟡 异动 | 核心股涨跌 > 阈值 | 方向管理中配置的核心股 |
+| 🟠 大盘预警 | 指数跌 > 3% 或跌破 EMA | 上证/科创50/中证全指 |
+| 🔴 系统风险 | 跌 > 3% 且跌破 EMA | 双重确认的风险信号 |
+
+### 9.2 微信通知配置（WxPusher）
+
+系统使用 **WxPusher** 推送到微信，**不依赖 Hermes agent / cron job**。
+后端检测到报警触发时直接通过 HTTP API 发送。
+
+**首次配置步骤：**
+
+1. 访问 [wxpusher.zjiecode.com](https://wxpusher.zjiecode.com) 注册
+2. 创建一个应用 → 获取 `APP_TOKEN`
+3. 将 `APP_TOKEN` 写入 `server/.env`：`WXPUSHER_TOKEN=AT_xxx`
+4. 用微信扫应用二维码关注
+5. 在用户管理中找到你的 `UID`
+6. 打开系统报警音乐配置页 `/alarm-sounds`
+7. 在「微信通知配置」区域填写 UID → 保存 → 点「发送测试」验证
+8. 验证成功后，所有报警触发时自动推送到你的微信
+
+### 9.3 API 接口
+
+```bash
+GET  /api/wxpush/status    # 查看配置状态
+POST /api/wxpush/config    # 配置 UID/Token
+GET  /api/wxpush/test      # 发送测试消息到微信
+```
+
+### 9.4 报警音乐配置
+
+报警音乐配置页 `/alarm-sounds` 支持：
+
+- ▶ 试听各报警类型音乐
+- 📁 上传自定义 MP3/WAV 文件替换
+- 四种报警独立配置：止损 / 个股异动 / 大盘预警 / 系统风险
 
 ---
 

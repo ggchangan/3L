@@ -103,11 +103,10 @@ export default function BuySignalsArea() {
         })}
       </div>
 
-      <div style={{ marginBottom: 8 }}>
+      <div className="search-box">
         <input className="search-input" placeholder="🔍 输入代码/名称/首字母搜索..."
           value={searchQ}
-          onChange={e => { setSearchQ(e.target.value); setPage(1) }}
-          style={{ width: '100%', boxSizing: 'border-box' }} />
+          onChange={e => { setSearchQ(e.target.value); setPage(1) }} />
       </div>
 
       {filtered.length === 0 ? (

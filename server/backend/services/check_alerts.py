@@ -33,6 +33,14 @@ def _get_core_stocks() -> dict:
     return get_core_stocks()
 
 
+def _norm_code(code: str) -> str:
+    """为腾讯行情接口添加交易所前缀"""
+    c = code.strip().upper().replace('SH', '').replace('SZ', '').replace('sh', '').replace('sz', '')
+    if c.startswith('6') or c.startswith('9'):
+        return f'sh{c}'
+    return f'sz{c}'
+
+
 def _get_realtime_data(code: str) -> tuple:
     """通过腾讯行情接口获取实时数据
 
@@ -43,9 +51,10 @@ def _get_realtime_data(code: str) -> tuple:
         'User-Agent': 'Mozilla/5.0',
         'Referer': 'https://finance.qq.com'
     }
+    qcode = _norm_code(code)
     try:
         r = requests.get(
-            f'https://qt.gtimg.cn/q={code}',
+            f'https://qt.gtimg.cn/q={qcode}',
             headers=headers,
             timeout=5
         )
@@ -60,7 +69,7 @@ def _get_realtime_data(code: str) -> tuple:
         return (0, 0)
 
 
-def _has_recently_triggered(alarm: dict, minutes: int = 5) -> bool:
+def _has_recently_triggered(alarm: dict, minutes: int = 0.5) -> bool:
     """检查报警是否在最近 minutes 分钟内已触发过"""
     triggered_at = alarm.get('triggered_at')
     if not triggered_at:
@@ -75,6 +84,257 @@ def _has_recently_triggered(alarm: dict, minutes: int = 5) -> bool:
 # ── 外部接口 ──────────────────────────────────────────
 
 
+# ── 指数监测 ──────────────────────────────────────────
+
+# 指数代码 → 腾讯行情 qcode 映射
+INDEX_CODES = {
+    '000001': ('sh000001', '上证指数'),
+    '000688': ('sh000688', '科创50'),
+    '000985': ('sh000985', '中证全指'),
+}
+
+# 指数报警去重缓存：{(code, condition): triggered_timestamp}
+_index_alert_cache: dict = {}
+
+INDEX_DATA_PATH = os.path.join(
+    os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'public', 'index_data.json'
+)
+
+
+def _read_index_data() -> dict:
+    """读取统一指数数据文件"""
+    if not os.path.isfile(INDEX_DATA_PATH):
+        return {}
+    try:
+        with open(INDEX_DATA_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _get_index_realtime(qcode: str) -> tuple:
+    """获取指数实时行情，返回 (price, change_pct)
+
+    与个股接口相同，但 qcode 直接传 sh000688 格式
+    """
+    headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'}
+    try:
+        r = requests.get(f'https://qt.gtimg.cn/q={qcode}', headers=headers, timeout=5)
+        line = r.text.strip()
+        fields = line.split('"')[1].split('~') if '"' in line else []
+        if len(fields) > 3:
+            price = float(fields[3]) if fields[3] else 0
+            change_pct = float(fields[32]) if len(fields) > 32 and fields[32] else 0
+            return (price, change_pct)
+        return (0, 0)
+    except Exception:
+        return (0, 0)
+
+
+# 指数报警去重缓存：{(code, condition): triggered_timestamp}
+_index_alert_cache: dict = {}
+
+INDEX_DATA_PATH = os.path.join(
+    os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'public', 'index_data.json'
+)
+
+
+def _check_index_dedup(code: str, condition: str, alarm_type: str) -> bool:
+    """检查指数报警是否在频次限制内已触发过
+
+    按类型使用不同去重窗口：
+      - market/market_critical: 3 分钟
+    """
+    window_minutes = 3  # 大盘预警每3分钟可重报一次
+    key = (code, condition)
+    now = datetime.now().timestamp()
+    last_ts = _index_alert_cache.get(key)
+    if last_ts and (now - last_ts) < window_minutes * 60:
+        return True  # 窗口期内已触发，跳过
+    _index_alert_cache[key] = now
+    # 清理过期缓存
+    expired = [k for k, v in _index_alert_cache.items() if (now - v) > window_minutes * 60]
+    for k in expired:
+        _index_alert_cache.pop(k, None)
+    return False
+
+
+def check_index_alerts() -> list:
+    """检查三只指数的报警条件
+
+    条件:
+      - 日涨跌 > 3% → type=market
+      - 跌破 EMA10 → type=market (短期破位)
+      - 跌破 EMA20 → type=market (中期破位)
+      - 跌>3% + 破EMA10/20 → type=market_critical (双重确认)
+
+    Returns:
+      triggered list (同 check_all_alerts 格式)
+    """
+    from backend.services.alarm_service import save_alarm
+    index_data = _read_index_data()
+    indices = index_data.get('indices', {})
+    now_ts = datetime.now().timestamp()
+    triggered = []
+
+    for code, (qcode, name) in INDEX_CODES.items():
+        info = indices.get(code)
+        if not info:
+            continue
+
+        ema10 = info.get('ema10')
+        ema20 = info.get('ema20')
+        if not ema10 or not ema20:
+            continue
+
+        # 拉实时价（腾讯 API 直接返回涨跌幅）
+        price, change_pct = _get_index_realtime(qcode)
+        if price <= 0:
+            continue
+
+        is_big_drop = change_pct < -3
+        is_break_10 = price < ema10
+        is_break_20 = price < ema20
+
+        if is_big_drop and (is_break_10 or is_break_20):
+            level = 'EMA10' if is_break_10 else 'EMA20'
+            if not _check_index_dedup(code, 'critical', 'market_critical'):
+                alarm_type = 'market_critical'
+                msg = f'{name} 跌{abs(change_pct):.1f}% 且跌破{level}({ema10 if is_break_10 else ema20:.0f})，风险警告！'
+                triggered.append({
+                    'type': alarm_type, 'stock': name, 'code': code,
+                    'current_price': price, 'daily_change': round(change_pct, 2),
+                    'ema_break': level, 'msg': msg, 'ts': now_ts,
+                })
+                _save_index_alarm(code, name, alarm_type, msg)
+        elif is_big_drop:
+            if not _check_index_dedup(code, 'drop', 'market'):
+                alarm_type = 'market'
+                msg = f'{name} 今日大跌{abs(change_pct):.1f}%！超过3%预警线！'
+                triggered.append({
+                    'type': alarm_type, 'stock': name, 'code': code,
+                    'current_price': price, 'daily_change': round(change_pct, 2),
+                    'msg': msg, 'ts': now_ts,
+                })
+                _save_index_alarm(code, name, alarm_type, msg)
+        elif is_break_10:
+            if not _check_index_dedup(code, 'break10', 'market'):
+                alarm_type = 'market'
+                msg = f'{name} 跌破EMA10({ema10:.0f})短期支撑，现价{price}！'
+                triggered.append({
+                    'type': alarm_type, 'stock': name, 'code': code,
+                    'current_price': price, 'ema10': ema10, 'msg': msg, 'ts': now_ts,
+                })
+                _save_index_alarm(code, name, alarm_type, msg)
+        elif is_break_20:
+            if not _check_index_dedup(code, 'break20', 'market'):
+                alarm_type = 'market'
+                msg = f'{name} 跌破EMA20({ema20:.0f})中期支撑，现价{price}！'
+                triggered.append({
+                    'type': alarm_type, 'stock': name, 'code': code,
+                    'current_price': price, 'ema20': ema20, 'msg': msg, 'ts': now_ts,
+                })
+                _save_index_alarm(code, name, alarm_type, msg)
+
+    return triggered
+
+
+def _save_index_alarm(code: str, name: str, alarm_type: str, msg: str):
+    """将指数报警写入 alarms.json，供前端 /api/alarms/list 读取"""
+    from backend.services.alarm_service import save_alarm, mark_alarm_triggered
+    result = save_alarm({
+        'stock': f'{name}({code})',
+        'stock_code': code,
+        'type': alarm_type,  # market 或 market_critical
+        'enabled': False,
+        'condition': '',
+        'source': 'index_monitor',
+    })
+    if result.get('id'):
+        # 直接更新 triggered_at 并附带 msg
+        import json, os
+        alarms_path = os.path.join(
+            os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'private', 'alarms.json'
+        )
+        try:
+            with open(alarms_path) as f:
+                data = json.load(f)
+            for a in data['alarms']:
+                if a.get('id') == result['id']:
+                    a['triggered_at'] = datetime.now().isoformat()
+                    a['msg'] = msg  # 附带消息文本
+                    a['status'] = 'active'  # 保持 active 让 list 接口返回
+                    break
+            with open(alarms_path, 'w') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+
+def _sync_holdings_to_alarms():
+    """将持仓止损自动同步到 alarms.json
+
+    读取 holdings.json，将带 stop_loss_price 的持仓自动创建 price 报警。
+    如果该股已有手动报警（source != holdings_auto），保留手动配置。
+    """
+    try:
+        holdings_path = os.path.join(DATA_DIR, 'private', 'holdings.json')
+        if not os.path.exists(holdings_path):
+            return
+        with open(holdings_path) as f:
+            hdata = json.load(f)
+        items = hdata.get('holdings', []) if isinstance(hdata, dict) else hdata
+        if not isinstance(items, list):
+            return
+
+        from backend.services.alarm_service import save_alarm, get_active_alarms
+        existing = get_active_alarms()
+        manual_keys = {
+            (a['stock_code'], a['type'])
+            for a in existing if a.get('source') != 'holdings_auto'
+        }
+
+        for item in items:
+            code = item.get('code', '')
+            name = item.get('name', '')
+            stop_loss = item.get('stop_loss_price') or item.get('stop_loss')
+            if not code or not stop_loss:
+                continue
+            if (code, 'price') in manual_keys:
+                continue  # 手动报警优先
+            save_alarm({
+                'stock': f'{name}({code})',
+                'stock_code': code,
+                'type': 'price',
+                'enabled': True,
+                'stop_loss': stop_loss,
+                'stop_loss_pct': item.get('stop_loss_pct'),
+                'condition': '',
+                'source': 'holdings_auto',
+            })
+    except Exception:
+        pass  # 同步失败不影响报警检查
+
+
+# 偏离报警去重缓存（30分钟）
+_deviation_cache: dict = {}
+
+
+def _check_deviation_dedup(code: str) -> bool:
+    """检查偏离报警是否在30分钟内已触发过"""
+    window_minutes = 30
+    now = datetime.now().timestamp()
+    last_ts = _deviation_cache.get(code)
+    if last_ts and (now - last_ts) < window_minutes * 60:
+        return True
+    _deviation_cache[code] = now
+    # 清理过期
+    expired = [k for k, v in _deviation_cache.items() if (now - v) > window_minutes * 60]
+    for k in expired:
+        _deviation_cache.pop(k, None)
+    return False
+
+
 def check_all_alerts() -> dict:
     """检查所有报警（价格+偏差）
 
@@ -86,10 +346,13 @@ def check_all_alerts() -> dict:
     """
     now_ts = datetime.now().timestamp()
 
-    # ① 从 alarms.json 读取用户手动设置的报警
+    # ① 自动同步持仓止损到 alarms.json
+    _sync_holdings_to_alarms()
+
+    # ② 从 alarms.json 读取用户手动设置的报警
     user_alarms = get_active_alarms()
 
-    # ② 核心股自动偏差
+    # ③ 核心股自动偏差
     core_stocks = _get_core_stocks()
 
     triggered = []
@@ -102,12 +365,12 @@ def check_all_alerts() -> dict:
         if not code:
             continue
 
-        # 刚触发过的（5分钟内），跳过避免重复弹
-        if _has_recently_triggered(alarm):
-            continue
-
         alarm_type = alarm.get('type', '')
         stock_str = alarm.get('stock', '')
+
+        # 刚触发过的跳过（默认0.5分钟），用户未标记处理就一直报
+        if _has_recently_triggered(alarm):
+            continue
 
         if alarm_type == 'price':
             stop_loss = alarm.get('stop_loss')
@@ -120,6 +383,7 @@ def check_all_alerts() -> dict:
                 loss_pct = round((price - stop_loss) / stop_loss * 100, 2)
                 triggered.append({
                     'type': 'price',
+                    'id': alarm.get('id', ''),  # 报警 ID，前端"已处理"用
                     'stock': stock_str,
                     'code': code,
                     'current_price': price,
@@ -168,6 +432,8 @@ def check_all_alerts() -> dict:
             continue
 
         if abs(change_pct) > max_dev:
+            if _check_deviation_dedup(code):
+                continue
             direction = '上涨' if change_pct > 0 else '下跌'
             triggered.append({
                 'type': 'deviation',
@@ -179,4 +445,80 @@ def check_all_alerts() -> dict:
                 'ts': now_ts,
             })
 
+    # ④ 指数监测（大盘/破位报警）
+    index_triggered = check_index_alerts()
+    triggered.extend(index_triggered)
+
     return {'triggered': triggered, 'count': len(triggered)}
+
+
+# ── WxPusher 微信推送（直接发送，不依赖 Hermes）───
+
+from backend.services.wxpush_sender import send_alert
+
+
+def _push_wechat(triggered: list):
+    """按类型分组推送微信，每类一条独立消息"""
+    if not triggered:
+        return
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # 按类型分组
+    market_alarms = [t for t in triggered if t.get('type') in ('market', 'market_critical')]
+    price_alarms = [t for t in triggered if t.get('type') in ('price', 'stop')]
+    deviation_alarms = [t for t in triggered if t.get('type') in ('deviation', 'warn', 'stock')]
+
+    try:
+        if market_alarms:
+            items = '\n'.join(f'• {t.get("msg", t.get("stock", ""))}' for t in market_alarms)
+            send_alert(f'🔴 大盘预警 ({len(market_alarms)}条)', items, alarm_type='market')
+
+        if price_alarms:
+            items = '\n'.join(
+                f'• {t.get("stock", t.get("code", ""))} 止损{t.get("stop_loss", "?")} 现价{t.get("current_price", "?")}（{t.get("loss_pct", "")}%）'
+                for t in price_alarms
+            )
+            send_alert(f'🔴 跌破止损 ({len(price_alarms)}只)', items, alarm_type='price')
+
+        if deviation_alarms:
+            items = '\n'.join(
+                f'• {t.get("stock", t.get("code", ""))} {t.get("change_pct", "")}%'
+                for t in deviation_alarms
+            )
+            send_alert(f'🟡 异动偏离 ({len(deviation_alarms)}只)', items, alarm_type='deviation')
+    except Exception:
+        logger.exception('微信推送失败')
+
+
+# ── 后端独立检测线程 ─────────────────────────────────
+
+
+def start_alert_checker(interval: int = 30) -> 'threading.Thread':
+    """启动后端独立报警检测线程
+
+    在 server.py 启动时调用，每 interval 秒自动检查一次报警条件。
+    不依赖前端轮询触发。
+
+    Args:
+        interval: 检测间隔（秒），默认 30
+
+    Returns:
+        threading.Thread 对象（daemon=True）
+    """
+    import threading
+
+    def _loop():
+        while True:
+            try:
+                result = check_all_alerts()
+                if result['count'] > 0:
+                    _push_wechat(result['triggered'])
+            except Exception:
+                pass
+            import time
+            time.sleep(interval)
+
+    thread = threading.Thread(target=_loop, daemon=True, name='alert-checker')
+    thread.start()
+    return thread

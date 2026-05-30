@@ -10,7 +10,7 @@ import json
 import os
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from backend.config import DATA_DIR
 
@@ -78,8 +78,8 @@ def save_alarm(alarm: dict) -> dict:
             break
 
     if found:
-        # 更新
-        for k in ('stock', 'type', 'enabled', 'stop_loss', 'stop_loss_pct', 'condition'):
+        # 更新（保留 source 不被覆盖）
+        for k in ('stock', 'type', 'enabled', 'stop_loss', 'stop_loss_pct', 'condition', 'source'):
             if k in alarm:
                 found[k] = alarm[k]
         found['updated'] = datetime.now().isoformat()
@@ -96,6 +96,7 @@ def save_alarm(alarm: dict) -> dict:
             'stop_loss': alarm.get('stop_loss'),
             'stop_loss_pct': alarm.get('stop_loss_pct'),
             'condition': alarm.get('condition', ''),
+            'source': alarm.get('source', 'manual'),
             'created': datetime.now().isoformat(),
             'status': 'active',
             'expires_days': 7,
@@ -118,15 +119,46 @@ def remove_alarm(alarm_id: str) -> dict:
 
 
 def mark_alarm_triggered(alarm_id: str) -> dict:
-    """标记报警为已触发"""
+    """标记报警为已触发（仅更新触发时间，不改状态，保持活跃可继续检查）"""
     data = _load()
     for a in data['alarms']:
         if a.get('id') == alarm_id:
-            a['status'] = 'triggered'
             a['triggered_at'] = datetime.now().isoformat()
+            a['status'] = 'active'  # 保持 active，让 get_active_alarms 继续返回
             _save(data)
             return {'success': True}
     return {'success': False}
+
+
+def dismiss_alarm(alarm_id: str) -> dict:
+    """标记报警为「已处理」— 不再触发推送，手动重新启用前保持沉默
+
+    设置 status=handled + silenced_until=明日15:00（市场收盘）
+    """
+    data = _load()
+    for a in data['alarms']:
+        if a.get('id') == alarm_id:
+            a['status'] = 'handled'
+            a['dismissed_at'] = datetime.now().isoformat()
+            # 沉默到明日收盘（避免收盘后触发）
+            tomorrow = date.today() + timedelta(days=1)
+            a['silenced_until'] = f'{tomorrow.strftime("%Y%m%d")}150000'
+            _save(data)
+            return {'success': True, 'id': alarm_id, 'status': 'handled'}
+    return {'success': False, 'error': '报警不存在'}
+
+
+def reenable_alarm(alarm_id: str) -> dict:
+    """重新启用已处理的报警"""
+    data = _load()
+    for a in data['alarms']:
+        if a.get('id') == alarm_id:
+            a['status'] = 'active'
+            a.pop('silenced_until', None)
+            a.pop('dismissed_at', None)
+            _save(data)
+            return {'success': True, 'id': alarm_id, 'status': 'active'}
+    return {'success': False, 'error': '报警不存在'}
 
 
 def sync_alarms_from_plan(plan: dict) -> dict:
@@ -143,39 +175,58 @@ def sync_alarms_from_plan(plan: dict) -> dict:
     current_keys = set()
     for category in ('buy', 'sell', 'watch'):
         for item in plan.get(category, []):
-            alert = item.get('alert')
-            if not alert or not alert.get('enabled'):
-                continue
             stock_str = item.get('stock', '')
             code = _parse_stock_code(stock_str)
             if not code:
                 continue
-            alarm_type = alert.get('type', 'price')
-            current_keys.add((code, alarm_type))
 
-            # 同步：有报警且启用
-            alarm = {
-                'stock': stock_str,
-                'stock_code': code,
-                'type': alarm_type,
-                'enabled': True,
-                'stop_loss': item.get('stop_loss'),
-                'stop_loss_pct': item.get('stop_loss_pct'),
-                'condition': alert.get('condition', ''),
-            }
-            save_alarm(alarm)
+            alert = item.get('alert')
+            has_explicit_alert = alert and alert.get('enabled')
+            has_stop_loss = item.get('stop_loss') is not None
+
+            if has_explicit_alert:
+                # 有显式报警 → 按用户配置
+                alarm_type = alert.get('type', 'price')
+                current_keys.add((code, alarm_type))
+                alarm = {
+                    'stock': stock_str,
+                    'stock_code': code,
+                    'type': alarm_type,
+                    'enabled': True,
+                    'stop_loss': item.get('stop_loss'),
+                    'stop_loss_pct': item.get('stop_loss_pct'),
+                    'condition': alert.get('condition', ''),
+                }
+                save_alarm(alarm)
+            elif has_stop_loss:
+                # 有止损价但没有显式报警 → 自动创建价格报警
+                alarm_type = 'price'
+                current_keys.add((code, alarm_type))
+                alarm = {
+                    'stock': stock_str,
+                    'stock_code': code,
+                    'type': 'price',
+                    'enabled': True,
+                    'stop_loss': item.get('stop_loss'),
+                    'stop_loss_pct': item.get('stop_loss_pct'),
+                    'condition': '',
+                }
+                save_alarm(alarm)
 
     # 移除已失效的报警：扫描 alarms.json 中所有 active 的报警，
-    # 如果不在 current_keys 中则移除
+    # 如果不在 current_keys 中则移除（但保留 source=holdings_auto 的）
     data = _load()
     removed = 0
     remaining = []
     for a in data['alarms']:
         key = (a.get('stock_code', ''), a.get('type', ''))
-        if a.get('status') == 'active' and key not in current_keys:
+        if a.get('source') == 'holdings_auto':
+            remaining.append(a)  # 持仓自动报警不被计划同步删除
+        elif a.get('status') == 'active' and key not in current_keys:
             removed += 1
             continue  # 丢弃
-        remaining.append(a)
+        else:
+            remaining.append(a)
     data['alarms'] = remaining
     _save(data)
 

@@ -234,3 +234,163 @@ class TestCheckAlertsFromAlarmService:
             # 华天科技(002185) deviation 5%，实际 -6.5% > 5%
             hit = [t for t in dev if '华天科技' in t['stock']]
             assert len(hit) >= 1
+
+
+# ── 后端独立检测 + 微信推送 ──────────────────────────────
+
+
+class TestWeChatPush:
+    """报警触发时微信推送格式化"""
+
+    def test_push_wechat_not_called_when_no_trigger(self, mock_empty_alarms, mock_real_time):
+        """没有触发报警时不调用 _push_wechat"""
+        from backend.services.check_alerts import check_all_alerts
+        result = check_all_alerts()
+        assert result['count'] == 0
+
+    def test_send_alert_batch_handles_triggered(self):
+        """send_alert_batch 处理触发报警（验证函数可调用，不发送）"""
+        from backend.services.wxpush_sender import send_alert_batch
+        from unittest.mock import patch
+
+        triggered = [
+            {'type': 'price', 'stock': '飞沃科技(301232)', 'code': '301232',
+             'stop_loss': 128.88, 'current_price': 120.0, 'loss_pct': -6.89},
+            {'type': 'price', 'stock': '兴森科技(002436)', 'code': '002436',
+             'stop_loss': 35.68, 'current_price': 33.0, 'loss_pct': -7.51},
+        ]
+        with patch('backend.services.wxpush_sender.send_alert') as mock_send:
+            send_alert_batch(triggered)
+            mock_send.assert_called_once()
+            args, _ = mock_send.call_args
+            title, body = args
+            assert '飞沃科技' in body
+            assert '兴森科技' in body
+            assert '2只' in body
+
+
+class TestAlertCheckerThread:
+    """后端独立检测线程"""
+
+    def test_start_alert_checker_creates_daemon_thread(self):
+        """start_alert_checker 创建 daemon=True 的线程"""
+        from backend.services.check_alerts import start_alert_checker
+        thread = start_alert_checker()
+        assert thread is not None
+        assert thread.daemon is True
+        assert thread.name == 'alert-checker'
+
+    def test_start_alert_checker_runs_check_all_alerts(self):
+        """线程首次启动时调用 check_all_alerts"""
+        from backend.services.check_alerts import start_alert_checker
+        with patch('backend.services.check_alerts.check_all_alerts') as mock_check:
+            thread = start_alert_checker()
+            # 线程刚开始 run，需要等一小段时间
+            import time
+            time.sleep(0.3)
+            mock_check.assert_called_once()
+            thread.join(timeout=2)
+
+
+# ── 频次控制（去重）────────────────────────────────
+# 以下测试用纯函数直接测，不依赖 mock
+
+
+class TestDeviationDedup:
+    """偏离报警30分钟去重"""
+
+    def test_deviation_dedup_first_call_returns_false(self):
+        """首次调用 _check_deviation_dedup 返回 False（不跳过）"""
+        from backend.services.check_alerts import _check_deviation_dedup
+        # 清理缓存
+        import backend.services.check_alerts as m
+        m._deviation_cache.clear()
+        assert _check_deviation_dedup('000001') is False
+
+    def test_deviation_dedup_second_call_within_window_returns_true(self):
+        """同一股票30分钟内再次调用返回 True（跳过）"""
+        from backend.services.check_alerts import _check_deviation_dedup
+        import backend.services.check_alerts as m
+        m._deviation_cache.clear()
+        _check_deviation_dedup('000001')  # 第一次
+        assert _check_deviation_dedup('000001') is True  # 第二次
+
+    def test_deviation_dedup_different_codes_independent(self):
+        """不同股票的去重缓存互相独立"""
+        from backend.services.check_alerts import _check_deviation_dedup
+        import backend.services.check_alerts as m
+        m._deviation_cache.clear()
+        _check_deviation_dedup('000001')
+        assert _check_deviation_dedup('000002') is False  # 不同代码，不跳过
+
+
+class TestIndexDedup:
+    """大盘报警3分钟去重"""
+
+    def test_index_dedup_first_call_returns_false(self):
+        """首次调用 _check_index_dedup 返回 False"""
+        from backend.services.check_alerts import _check_index_dedup
+        import backend.services.check_alerts as m
+        m._index_alert_cache.clear()
+        assert _check_index_dedup('000001', 'critical', 'market_critical') is False
+
+    def test_index_dedup_second_call_within_window_returns_true(self):
+        """同一条件3分钟内再次调用返回 True"""
+        from backend.services.check_alerts import _check_index_dedup
+        import backend.services.check_alerts as m
+        m._index_alert_cache.clear()
+        _check_index_dedup('000001', 'critical', 'market_critical')  # 第一次
+        assert _check_index_dedup('000001', 'critical', 'market_critical') is True  # 第二次
+
+    def test_index_dedup_different_condition_not_blocked(self):
+        """不同条件不受影响"""
+        from backend.services.check_alerts import _check_index_dedup
+        import backend.services.check_alerts as m
+        m._index_alert_cache.clear()
+        _check_index_dedup('000001', 'critical', 'market_critical')
+        assert _check_index_dedup('000001', 'drop', 'market') is False  # 不同条件，不跳过
+
+
+class TestPushWechatSplit:
+    """_push_wechat 按类型分开发送"""
+
+    def test_push_wechat_sends_market_separately(self):
+        """大盘预警单独发一条"""
+        from backend.services.check_alerts import _push_wechat
+        from unittest.mock import patch
+        triggered = [
+            {'type': 'market', 'stock': '上证指数', 'msg': '上证指数大跌3.2%'},
+        ]
+        with patch('backend.services.check_alerts.send_alert') as mock_send:
+            _push_wechat(triggered)
+            assert mock_send.call_count == 1
+            args, _ = mock_send.call_args
+            assert '大盘' in args[0]
+
+    def test_push_wechat_sends_three_types_separately(self):
+        """三种类型各发一条，不合并"""
+        from backend.services.check_alerts import _push_wechat
+        from unittest.mock import patch
+        triggered = [
+            {'type': 'market', 'stock': '上证指数', 'msg': '大盘大跌'},
+            {'type': 'price', 'stock': '飞沃科技(301232)', 'stop_loss': 128.88,
+             'current_price': 120.0, 'loss_pct': -6.89},
+            {'type': 'deviation', 'stock': '北方华创', 'change_pct': 6.5},
+        ]
+        with patch('backend.services.check_alerts.send_alert') as mock_send:
+            _push_wechat(triggered)
+            assert mock_send.call_count == 3  # 三条独立消息
+
+    def test_push_wechat_skips_empty_types(self):
+        """只有部分类型触发时，只发有数据的类型"""
+        from backend.services.check_alerts import _push_wechat
+        from unittest.mock import patch
+        triggered = [
+            {'type': 'price', 'stock': '兴森科技(002436)', 'stop_loss': 35.68,
+             'current_price': 33.0, 'loss_pct': -7.51},
+        ]
+        with patch('backend.services.check_alerts.send_alert') as mock_send:
+            _push_wechat(triggered)
+            assert mock_send.call_count == 1  # 只发了price
+            args, _ = mock_send.call_args
+            assert '止损' in args[0]

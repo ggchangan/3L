@@ -1,5 +1,29 @@
 # Changelog
 
+## [v3.5.0] — 2026-05-29
+
+### 重构：微信推送去 Hermes 依赖，改用 WxPusher 直推
+
+**报警消息不再依赖 Hermes agent / cron job，后端检测到触发时直接通过 WxPusher API 推送微信。**
+
+#### 改动
+
+- **新模块 `wxpush_sender.py`**：WxPusher HTTP API 对接，`send_alert()` / `send_alert_batch()` 直推微信
+- **`check_alerts.py` 重构**：删除 `_format_wechat_msg()` / `WECHAT_PUSH_PATH`，`_push_wechat()` 直接用 `send_alert_batch()` 发微信
+- **`.env` 新增**：`WXPUSHER_TOKEN=AT_SazEHFvo4fy6EYk1rCDCx31bWhzB12MP`, `WXPUSHER_UID=UID_LPkG96qVOpg2teQgnqbeG7SpzdHM`
+- **新 API**：`GET /api/wxpush/status`、`POST /api/wxpush/config`、`GET /api/wxpush/test`
+- **前端配置页**：报警音乐配置页新增「微信通知配置」区块，支持在线配置 UID + 发送测试
+- **Hermes cron job 已删除**：`92952344f75f`（报警微信投递，每3分钟）
+- **测试已更新**：`test_format_wechat_msg_contains_all_alarms` → `test_send_alert_batch_handles_triggered`
+- 64 项全回归通过
+
+#### 架构变化
+
+```
+之前: 检测触发 → 写文件 → hermes cron run → 微信
+现在: 检测触发 → requests.post(WxPusher) → 微信（零依赖）
+```
+
 ## [v3.4.0] — 2026-05-29
 
 ### 新增：按需个股数据拉取 + 三维度诊断系统

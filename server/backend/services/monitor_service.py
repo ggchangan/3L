@@ -52,7 +52,7 @@ def get_buy_signals():
         except Exception:
             log.warning('买点信号缓存读取失败，重新扫描')
     # 超过1小时重新扫描
-    scan_file = os.path.join(WWW_DIR, 'scripts', 'scan_buy_signals.py')
+    scan_file = os.path.join(WWW_DIR, 'server', 'scripts', 'scan_buy_signals.py')
     log.info('买点信号缓存过期，启动扫描...')
     try:
         r = subprocess.run(
@@ -83,17 +83,18 @@ def get_stop_loss_triggered():
     }
     for h in holdings:
         code = h.get('code', '')
-        sl = h.get('stop_loss', '')
+        sl = h.get('stop_loss_price') or h.get('stop_loss', '')
         if not code or not sl:
             continue
         try:
             sl_price = float(sl.replace('元', '').strip())
         except Exception:
             continue
-        # 取实时行情
+        # 取实时行情（加交易所前缀）
+        qcode = f"sh{code}" if code.startswith(('6', '9')) else f"sz{code}"
         try:
             r = requests.get(
-                f'https://qt.gtimg.cn/q={code}',
+                f'https://qt.gtimg.cn/q={qcode}',
                 headers=headers,
                 timeout=5
             )
