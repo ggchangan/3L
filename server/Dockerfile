@@ -1,4 +1,5 @@
-# 3L交易系统 — Docker 镜像
+# =============================================
+# 3L交易系统 — Docker 镜像（多阶段构建）
 # 用途：给同学部署用，无需源码可执行
 #
 # 构建: docker build -t 3l-server:latest -f server/Dockerfile .
@@ -7,10 +8,25 @@
 #           -e AUTH_USER=xxx -e AUTH_PASS=xxx \
 #           --name 3l-server \
 #           3l-server:latest
+# =============================================
 
+# ── Stage 1: 前端构建 ──
+FROM node:20-bookworm AS build-fe
+
+WORKDIR /build
+
+# 先装依赖（利用 Docker 缓存层）
+COPY server/frontend/package.json server/frontend/package-lock.json ./
+RUN npm ci
+
+# 复制源码并构建
+COPY server/frontend/ ./
+RUN npm run build
+
+# ── Stage 2: 运行环境 ──
 FROM python:3.12-slim-bookworm
 
-# ====== 系统依赖（使用国内 Debian 镜像加速） ======
+# ====== 系统依赖（使用国内镜像加速） ======
 RUN sed -i 's|URIs: http://deb.debian.org/debian|URIs: http://mirrors.tuna.tsinghua.edu.cn/debian|g' /etc/apt/sources.list.d/debian.sources && \
     sed -i 's|URIs: http://deb.debian.org/debian-security|URIs: http://mirrors.tuna.tsinghua.edu.cn/debian-security|g' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -22,7 +38,7 @@ RUN sed -i 's|URIs: http://deb.debian.org/debian|URIs: http://mirrors.tuna.tsing
 
 WORKDIR /app
 
-# ====== Python 依赖（先 copy requirements 利用 Docker 缓存） ======
+# ====== Python 依赖（利用 Docker 缓存） ======
 COPY server/requirements.txt .
 RUN python3 -m pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
 
@@ -31,8 +47,11 @@ COPY server/ .
 # 安装本地 threel_core 包（位于 repo 根目录 core/）
 COPY core/ /app/core/
 RUN pip install -e /app/core/ --no-cache-dir
-# 种子数据（从 repo 根目录复制）
+# 种子数据
 COPY all_a_stocks.json pinyin_initials.json /app/
+
+# ====== 前端构建产物（从 Stage 1 复制） ======
+COPY --from=build-fe /build/dist/ /app/frontend/dist/
 
 # ====== 运行时目录 ======
 RUN mkdir -p /data/private /data/cache /data/charts /app/logs
