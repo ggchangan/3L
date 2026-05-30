@@ -16,6 +16,11 @@ if [ ! -f /data/all_a_stocks.json ]; then
     cp /app/all_a_stocks.json /data/all_a_stocks.json 2>/dev/null || true
     cp /app/pinyin_initials.json /data/pinyin_initials.json 2>/dev/null || true
 fi
+# 从 all_a_stocks.json 生成 all_stock_codes.json（搜索时需要）
+if [ ! -f /data/all_stock_codes.json ] && [ -f /data/all_a_stocks.json ]; then
+    echo "Generating all_stock_codes.json from seed data..."
+    cp /data/all_a_stocks.json /data/all_stock_codes.json
+fi
 
 # 创建空配置文件（如果不存在）
 mkdir -p /data/private /data/cache /data/charts
