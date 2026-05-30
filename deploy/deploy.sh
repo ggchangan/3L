@@ -205,16 +205,21 @@ else
     echo "   ⚠️ 容器可能未正常运行，查看日志: sudo docker logs 3l-server"
 fi
 
-# ==== 12. 首次数据初始化 ====
+# ==== 12. 数据初始化（已有则跳过） ====
 echo ""
-echo "=> 首次数据初始化（拉取 A股 K线数据，约 3-5 分钟）..."
-echo "   包含: 个股60天 / 中证全指200天 / 行业板块90天"
-echo "   请耐心等待，不要中断..."
-if sudo docker exec 3l-server python3 -m backend.core.update_stock_data; then
-    echo "   ✅ 数据初始化完成"
+if [ -f "${DATA_DIR}/all_stocks_60d.json" ]; then
+    echo "   已有数据文件，跳过初始化。如需强制更新:"
+    echo "   sudo docker exec 3l-server python3 -m backend.core.update_stock_data"
 else
-    echo "   ⚠️ 数据拉取未完全成功"
-    echo "   可稍后手动执行: sudo docker exec 3l-server python3 -m backend.core.update_stock_data"
+    echo "=> 首次数据初始化（拉取 A股 K线数据，约 3-5 分钟）..."
+    echo "   包含: 个股60天 / 中证全指200天 / 行业板块90天"
+    echo "   请耐心等待，不要中断..."
+    if sudo docker exec 3l-server python3 -m backend.core.update_stock_data; then
+        echo "   ✅ 数据初始化完成"
+    else
+        echo "   ⚠️ 数据拉取未完全成功"
+        echo "   可稍后手动执行: sudo docker exec 3l-server python3 -m backend.core.update_stock_data"
+    fi
 fi
 
 # ==== 完成 ====
