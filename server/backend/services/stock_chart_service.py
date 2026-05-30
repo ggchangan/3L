@@ -1253,4 +1253,13 @@ def generate_trend_stock_chart(code, mode='review'):
         except Exception:
             pass
 
+    # monitor 模式：注入实时标注（今日虚线+实时量文字）
+    if mode == 'monitor':
+        now = datetime.now()
+        now_total = now.hour * 60 + now.minute
+        is_trading = (9 * 60 + 30) <= now_total < (15 * 60)
+        if is_trading:
+            label = '<text x="685" y="18" font-family="sans-serif" font-size="9" fill="#ffd700" opacity="0.8">📊 今日(虚线)</text>'
+            svg_str = svg_str.replace('</svg>', label + '</svg>')
+
     return svg_str, None

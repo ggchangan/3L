@@ -83,6 +83,7 @@ def register_api_routes(routes):
         'backend.api.top_gainers', 'backend.api.macro',
         'backend.api.directions', 'backend.api.workbench',
         'backend.api.alarms',
+        'backend.api.wxpush',
         'backend.api.logic_tracking',
     ]
     for mod_name in api_modules:
@@ -228,7 +229,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/top_gainers', '/tips', '/simulation',
             '/skills', '/journal', '/workbench',
             '/watchlist', '/trend_candidates',
-            '/logic-tracking',
+            '/logic-tracking', '/alarm-sounds',
         }
         if path in spa_routes:
             self.path = '/react.html'
@@ -303,8 +304,11 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/directions/reorder': ('backend.api.directions', '_handle_reorder'),
             '/api/workbench/save': ('backend.api.workbench', '_handle_save'),
             '/api/alarms/remove': ('backend.api.alarms', '_handle_remove'),
+            '/api/alarms/dismiss': ('backend.api.alarms', '_handle_dismiss'),
+            '/api/alarms/reenable': ('backend.api.alarms', '_handle_reenable'),
             '/api/monitor/add-watched-industry': ('backend.api.monitor', '_handle_add_watched'),
             '/api/monitor/remove-watched-industry': ('backend.api.monitor', '_handle_remove_watched'),
+            '/api/alarm-sounds/upload': ('backend.api.alarms', '_handle_upload'),
             '/api/holdings/save': ('backend.api.holdings', '_handle_save'),
             '/api/logic-tracking/tags/add': ('backend.api.logic_tracking', '_handle_add_tag'),
             '/api/logic-tracking/tags/update': ('backend.api.logic_tracking', '_handle_update_tag'),
@@ -316,6 +320,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/logic-tracking/feed/process': ('backend.api.logic_tracking', '_handle_feed_process'),
             '/api/logic-tracking/feed/save': ('backend.api.logic_tracking', '_handle_feed_save'),
             '/api/logic-tracking/verify/run': ('backend.api.logic_tracking', '_handle_trigger_verify'),
+            '/api/wxpush/config': ('backend.api.wxpush', '_handle_config'),
         }
         if self.path in post_routes:
             mod_name, func_name = post_routes[self.path]
@@ -356,6 +361,15 @@ def main():
 
     load_review_data()
     config.cleanup_cache()  # 启动时清理过期缓存
+
+    # 启动后端独立报警检测线程（30秒间隔，浏览器关闭时仍可推微信）
+    try:
+        from backend.services.check_alerts import start_alert_checker
+        start_alert_checker(interval=30)
+        log.info('报警检测线程已启动（30秒间隔）')
+    except Exception:
+        log.warning('报警检测线程启动失败', exc_info=True)
+
     os.chdir(FE_DIR)
     server = ThreadingHTTPServer((host, PORT), Handler)
     log.info('服务启动 http://%s:%d', host, PORT)

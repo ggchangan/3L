@@ -42,7 +42,7 @@ TESTS = [
     {
         'id': 'backend-pytest-unit',
         'name': '后端单元测试',
-        'cmd': [VENV_PYTHON, '-m', 'pytest', 'tests/', '--ignore=tests/test_api.py', '-v', '--tb=short'],
+        'cmd': [VENV_PYTHON, '-m', 'pytest', 'backend/tests/', '-v', '--tb=short'],
         'cwd': PROJECT_DIR,
         'tier': 'CRITICAL',
         'timeout': 60,

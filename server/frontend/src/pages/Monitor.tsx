@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './Monitor.css'
 import NavBar, { BottomNav } from '../components/NavBar'
 import RuleLayer from '../components/RuleLayer'
@@ -9,7 +9,7 @@ import SectorMonitor from '../components/SectorMonitor'
 import LeaderMonitor from '../components/LeaderMonitor'
 import BuySignalsArea from '../components/BuySignalsArea'
 import StopLossArea from '../components/StopLossArea'
-import AlarmLayer, { pushAlarm } from '../components/AlarmLayer'
+import AlarmLayer, { pushAlarm, setFullAlarmPanel } from '../components/AlarmLayer'
 
 export default function Monitor() {
   const [updateTime, setUpdateTime] = useState('等待数据...')
@@ -28,19 +28,48 @@ export default function Monitor() {
     return () => clearInterval(timer)
   }, [])
 
-  // 报警轮询：每30秒检查价格报警
+  // 报警轮询：每30秒检查是否有新触发报警
+  // 后端有独立线程检测，前端只读展示结果
+  const shownRef = useRef<Set<string>>(new Set())
+
   useEffect(() => {
     const checkAlerts = async () => {
       try {
-        const r = await fetch('/api/workbench/check-alerts')
+        const r = await fetch('/api/alarms/list-all')
         const data = await r.json()
-        if (data.triggered && data.triggered.length > 0) {
-          data.triggered.forEach((t: any) => {
-            const alarmType = t.type === 'deviation' ? 'warn' : 'stop'
-            const msg = t.msg || `${t.stock} 跌破止损 ${t.stop_loss}，现价 ${t.current_price}`
-            pushAlarm(msg, alarmType)
-          })
-        }
+        const alarms: any[] = data.alarms || []
+
+        // 同步全部报警到报警层面板（含已处理的）
+        setFullAlarmPanel(alarms)
+
+        // 找新触发的（待处理状态、且还没展示过的）
+        const newTriggered = alarms.filter((a: any) => {
+          const id = a.id || `${a.stock_code}_${a.type}`
+          const isActive = a.status === 'active'
+          return isActive && !shownRef.current.has(id)
+        })
+        if (newTriggered.length === 0) return
+
+        // 逐个弹窗，间隔1.5秒
+        ;(async () => {
+          for (const a of newTriggered) {
+            await new Promise(r => setTimeout(r, 1500))
+            const id = a.id || `${a.stock_code}_${a.type}`
+            shownRef.current.add(id)
+            // 报警类型映射
+            let alarmType = 'info'
+            let typeLabel = ''
+            if (a.type === 'price') { alarmType = 'stop'; typeLabel = '止损' }
+            else if (a.type === 'deviation') { alarmType = 'warn'; typeLabel = '异动' }
+            else if (a.type === 'market') { alarmType = 'market'; typeLabel = '大盘' }
+            else if (a.type === 'market_critical') { alarmType = 'market_critical'; typeLabel = '系统风险' }
+            // 优先用后端返回的消息，否则构造详细消息
+            const msg = a.msg || (a.stock ? `${a.stock} ${typeLabel}`
+                          : a.index_name ? `${a.index_name} ${typeLabel}`
+                          : `${typeLabel}报警触发`)
+            pushAlarm(msg, alarmType, 12000, a.id)
+          }
+        })()
       } catch {}
     }
     checkAlerts()

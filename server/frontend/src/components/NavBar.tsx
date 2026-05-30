@@ -26,6 +26,7 @@ const FOOTER_LINKS = [
   { label: '📋 每日成果',  href: '/index.html',      id: 'home' },
   { label: '📖 Skills',   href: '/skills.html',      id: 'skills' },
   { label: '📊 模拟交易', href: '/simulation.html',  id: 'simulation' },
+  { label: '🎵 报警音乐', href: '/alarm-sounds',     id: 'alarm-sounds' },
 ]
 
 export default function NavBar() {
