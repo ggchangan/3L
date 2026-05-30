@@ -90,6 +90,232 @@ def _categorize_condition(condition: str) -> tuple:
     return (cat, detail)
 
 
+def _filter_plans_by_date(plans: list, start_date: str = None, end_date: str = None) -> list:
+    """按日期范围筛选计划，最多30天
+    
+    Args:
+        plans: 完整计划列表
+        start_date: 起始日期 'YYYY-MM-DD' 或 None（不限）
+        end_date: 结束日期 'YYYY-MM-DD' 或 None（不限）
+    Returns:
+        筛选后的计划列表
+    """
+    if not start_date and not end_date:
+        # 默认最近30天
+        end = datetime.now()
+        start = end - timedelta(days=30)
+        start_date = start.strftime('%Y-%m-%d')
+        end_date = end.strftime('%Y-%m-%d')
+    
+    # 后端兜底：最多30天
+    if start_date and end_date:
+        sd = datetime.strptime(start_date, '%Y-%m-%d')
+        ed = datetime.strptime(end_date, '%Y-%m-%d')
+        if (ed - sd).days > 30:
+            start_date = (ed - timedelta(days=30)).strftime('%Y-%m-%d')
+    
+    filtered = []
+    for p in plans:
+        pd_str = p.get('plan_date', '')
+        if not pd_str:
+            continue
+        # plan_date 可能是 '2026-05-28' 或 '20260528'
+        pd_clean = pd_str.replace('-', '')
+        if start_date:
+            sd_clean = start_date.replace('-', '')
+            if pd_clean < sd_clean:
+                continue
+        if end_date:
+            ed_clean = end_date.replace('-', '')
+            if pd_clean > ed_clean:
+                continue
+        filtered.append(p)
+    return filtered
+
+
+def _compute_summary(plans: list) -> dict:
+    """从计划列表计算统计摘要"""
+    buy_sell = [p for p in plans if p['type'] in ('buy', 'sell') and p['result'] in ('success', 'failure', 'flat')]
+    success_list = [p for p in buy_sell if p['result'] == 'success']
+    failure_list = [p for p in buy_sell if p['result'] == 'failure']
+    flat_list = [p for p in buy_sell if p['result'] == 'flat']
+    
+    total = len(buy_sell)
+    success_count = len(success_list)
+    failure_count = len(failure_list)
+    
+    avg_gain = round(sum(p['change_pct'] for p in success_list) / success_count, 2) if success_count > 0 else 0
+    avg_loss = round(sum(p['change_pct'] for p in failure_list) / failure_count, 2) if failure_count > 0 else 0
+    best = max((p['change_pct'] for p in buy_sell if p['change_pct'] is not None), default=0)
+    worst = min((p['change_pct'] for p in buy_sell if p['change_pct'] is not None), default=0)
+    wl_ratio = round(avg_gain / abs(avg_loss), 2) if avg_loss != 0 else 0
+    
+    # 按条件大类分组
+    by_condition = {}
+    for p in buy_sell:
+        cat = p.get('condition_category', '') or '未分类'
+        if cat not in by_condition:
+            by_condition[cat] = {'total': 0, 'success': 0, 'failure': 0, 'flat': 0}
+        by_condition[cat]['total'] += 1
+        if p['result'] == 'success':
+            by_condition[cat]['success'] += 1
+        elif p['result'] == 'failure':
+            by_condition[cat]['failure'] += 1
+        else:
+            by_condition[cat]['flat'] += 1
+    
+    # 按类型分组
+    by_type = {'buy': {'total': 0, 'success': 0, 'failure': 0, 'flat': 0},
+               'sell': {'total': 0, 'success': 0, 'failure': 0, 'flat': 0}}
+    for p in buy_sell:
+        t = p['type']
+        if t in by_type:
+            by_type[t]['total'] += 1
+            if p['result'] == 'success':
+                by_type[t]['success'] += 1
+            elif p['result'] == 'failure':
+                by_type[t]['failure'] += 1
+            else:
+                by_type[t]['flat'] += 1
+    
+    summary = {
+        'total_plans': total,
+        'success': success_count,
+        'failure': failure_count,
+        'flat': len(flat_list),
+        'pending': len([p for p in plans if p['result'] == 'pending']),
+        'no_data': len([p for p in plans if p['result'] == 'no_data']),
+        'success_rate': round(success_count / total * 100, 1) if total > 0 else 0,
+        'avg_gain_pct': avg_gain,
+        'avg_loss_pct': avg_loss,
+        'best_gain': best,
+        'worst_loss': worst,
+        'win_loss_ratio': wl_ratio,
+    }
+    
+    return summary, by_condition, by_type
+
+
+def _generate_suggestions(plans: list, summary: dict, by_condition: dict) -> list:
+    """根据追踪数据生成自动建议"""
+    suggestions = []
+    
+    # 只分析有结果的 buy/sell 计划
+    buy_sell = [p for p in plans if p['type'] in ('buy', 'sell') and p['result'] in ('success', 'failure')]
+    if len(buy_sell) < 3:
+        return suggestions  # 数据太少不生成建议
+    
+    overall_rate = summary.get('success_rate', 0)
+    
+    # 1. 条件成功率偏低
+    for cat, stats in by_condition.items():
+        if cat == '未分类':
+            continue
+        if stats['total'] >= 3:
+            rate = round(stats['success'] / stats['total'] * 100, 1) if stats['total'] > 0 else 0
+            if rate < 50:
+                suggestions.append({
+                    'type': 'warning',
+                    'dimension': 'condition',
+                    'category': cat,
+                    'rate_current': rate,
+                    'rate_overall': overall_rate,
+                    'count': stats['total'],
+                    'message': f'条件「{cat}」{stats["total"]}次仅{rate}%成功率（整体{overall_rate}%），建议检查该条件筛选逻辑',
+                })
+            elif rate > 70 and stats['total'] >= 5:
+                suggestions.append({
+                    'type': 'best',
+                    'dimension': 'condition',
+                    'category': cat,
+                    'rate_current': rate,
+                    'rate_overall': overall_rate,
+                    'count': stats['total'],
+                    'message': f'条件「{cat}」{stats["total"]}次{rate}%成功率，表现优秀，继续保持',
+                })
+    
+    # 2. 止损偏紧分析
+    with_stop = [p for p in buy_sell if p.get('stop_loss') is not None]
+    if len(with_stop) >= 5:
+        hit = sum(1 for p in with_stop if p.get('hit_stop_loss'))
+        hit_rate = hit / len(with_stop) * 100
+        if hit_rate > 25:
+            suggestions.append({
+                'type': 'warning',
+                'dimension': 'stop_loss',
+                'category': '止损设置',
+                'rate_current': round(hit_rate, 1),
+                'rate_overall': 0,
+                'count': len(with_stop),
+                'message': f'止损偏紧：{len(with_stop)}笔中{hit}笔盘中止损被触发（{round(hit_rate,1)}%），建议适当放宽止损幅度',
+            })
+    
+    # 3. 个股频繁失败
+    stock_stats = {}
+    for p in buy_sell:
+        stock = p.get('stock', '')
+        code = p.get('code', '')
+        key = f'{stock}({code})' if code else stock
+        if key not in stock_stats:
+            stock_stats[key] = {'total': 0, 'fail': 0}
+        stock_stats[key]['total'] += 1
+        if p['result'] == 'failure':
+            stock_stats[key]['fail'] += 1
+    
+    for stock, st in stock_stats.items():
+        if st['total'] >= 3 and st['fail'] >= 3:
+            suggestions.append({
+                'type': 'warning',
+                'dimension': 'stock',
+                'category': stock,
+                'rate_current': round(st['fail'] / st['total'] * 100, 1),
+                'rate_overall': 0,
+                'count': st['total'],
+                'message': f'{stock} {st["total"]}次计划中{st["fail"]}次失败，注意识别该股买点有效性',
+            })
+    
+    # 4. 类型对比分析
+    by_type_analysis = {}
+    for p in buy_sell:
+        t = p.get('type', '')
+        if t not in by_type_analysis:
+            by_type_analysis[t] = {'total': 0, 'success': 0}
+        by_type_analysis[t]['total'] += 1
+        if p['result'] == 'success':
+            by_type_analysis[t]['success'] += 1
+    
+    for t, st in by_type_analysis.items():
+        if st['total'] >= 5:
+            rate = round(st['success'] / st['total'] * 100, 1)
+            label = '买入' if t == 'buy' else '卖出'
+            if rate < 50:
+                suggestions.append({
+                    'type': 'warning',
+                    'dimension': 'type',
+                    'category': label,
+                    'rate_current': rate,
+                    'rate_overall': overall_rate,
+                    'count': st['total'],
+                    'message': f'{label}计划{st["total"]}次仅{rate}%成功率，低于整体（{overall_rate}%），需重点优化',
+                })
+            elif rate > 70:
+                suggestions.append({
+                    'type': 'best',
+                    'dimension': 'type',
+                    'category': label,
+                    'rate_current': rate,
+                    'rate_overall': overall_rate,
+                    'count': st['total'],
+                    'message': f'{label}计划{st["total"]}次{rate}%成功率，表现稳定',
+                })
+    
+    # 按严重程度排序：warning > best > info
+    type_order = {'warning': 0, 'best': 1, 'info': 2}
+    suggestions.sort(key=lambda x: type_order.get(x['type'], 9))
+    
+    return suggestions
+
+
 def compute_tracking(force=False) -> dict:
     """扫描所有工作台计划，计算追踪结果
     
@@ -296,69 +522,15 @@ def compute_tracking(force=False) -> dict:
     all_plans = existing_plans + new_plans
     
     # 计算统计摘要
-    buy_sell = [p for p in all_plans if p['type'] in ('buy', 'sell') and p['result'] in ('success', 'failure', 'flat')]
-    success_list = [p for p in buy_sell if p['result'] == 'success']
-    failure_list = [p for p in buy_sell if p['result'] == 'failure']
-    flat_list = [p for p in buy_sell if p['result'] == 'flat']
-    
-    total = len(buy_sell)
-    success_count = len(success_list)
-    failure_count = len(failure_list)
-    
-    avg_gain = round(sum(p['change_pct'] for p in success_list) / success_count, 2) if success_count > 0 else 0
-    avg_loss = round(sum(p['change_pct'] for p in failure_list) / failure_count, 2) if failure_count > 0 else 0
-    best = max((p['change_pct'] for p in buy_sell if p['change_pct'] is not None), default=0)
-    worst = min((p['change_pct'] for p in buy_sell if p['change_pct'] is not None), default=0)
-    wl_ratio = round(avg_gain / abs(avg_loss), 2) if avg_loss != 0 else 0
-    
-    # 按条件大类分组
-    by_condition = {}
-    for p in buy_sell:
-        cat = p.get('condition_category', '') or '未分类'
-        if cat not in by_condition:
-            by_condition[cat] = {'total': 0, 'success': 0, 'failure': 0, 'flat': 0}
-        by_condition[cat]['total'] += 1
-        if p['result'] == 'success':
-            by_condition[cat]['success'] += 1
-        elif p['result'] == 'failure':
-            by_condition[cat]['failure'] += 1
-        else:
-            by_condition[cat]['flat'] += 1
-    
-    # 按类型(买入/卖出)分组
-    by_type = {'buy': {'total': 0, 'success': 0, 'failure': 0, 'flat': 0},
-               'sell': {'total': 0, 'success': 0, 'failure': 0, 'flat': 0}}
-    for p in buy_sell:
-        t = p['type']
-        if t in by_type:
-            by_type[t]['total'] += 1
-            if p['result'] == 'success':
-                by_type[t]['success'] += 1
-            elif p['result'] == 'failure':
-                by_type[t]['failure'] += 1
-            else:
-                by_type[t]['flat'] += 1
-    
-    summary = {
-        'total_plans': total,
-        'success': success_count,
-        'failure': failure_count,
-        'flat': len(flat_list),
-        'pending': len([p for p in all_plans if p['result'] == 'pending']),
-        'no_data': len([p for p in all_plans if p['result'] == 'no_data']),
-        'success_rate': round(success_count / total * 100, 1) if total > 0 else 0,
-        'avg_gain_pct': avg_gain,
-        'avg_loss_pct': avg_loss,
-        'best_gain': best,
-        'worst_loss': worst,
-        'win_loss_ratio': wl_ratio,
-    }
+    summary, by_condition, by_type = _compute_summary(all_plans)
+    suggestions = _generate_suggestions(all_plans, summary, by_condition)
     
     result = {
         'plans': all_plans,
         'summary': summary,
         'by_condition': by_condition,
         'by_type': by_type,
+        'suggestions': suggestions,
         'last_updated': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
     }
     
@@ -370,15 +542,39 @@ def compute_tracking(force=False) -> dict:
     return result
 
 
-def get_tracking() -> dict:
-    """获取追踪结果（优先缓存）"""
+def get_tracking(start_date: str = None, end_date: str = None) -> dict:
+    """获取追踪结果（优先缓存），支持日期范围筛选
+    
+    Args:
+        start_date: 起始日期 'YYYY-MM-DD'，默认30天前
+        end_date: 结束日期 'YYYY-MM-DD'，默认今天
+    Returns:
+        筛选后的追踪结果（含 suggestions）
+    """
     if os.path.exists(PLAN_TRACKING_PATH):
         try:
             with open(PLAN_TRACKING_PATH) as f:
-                return json.load(f)
+                data = json.load(f)
         except Exception:
-            pass
-    return compute_tracking()
+            data = compute_tracking()
+    else:
+        data = compute_tracking()
+    
+    # 日期筛选
+    filtered_plans = _filter_plans_by_date(data.get('plans', []), start_date, end_date)
+    
+    # 重算摘要和建议
+    summary, by_condition, by_type = _compute_summary(filtered_plans)
+    suggestions = _generate_suggestions(filtered_plans, summary, by_condition)
+    
+    data['plans'] = filtered_plans
+    data['summary'] = summary
+    data['by_condition'] = by_condition
+    data['by_type'] = by_type
+    data['suggestions'] = suggestions
+    data['last_updated'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    
+    return data
 
 
 def annotate_plan(plan_date: str, type_: str, stock: str, executed: bool = None, user_note: str = '') -> dict:
@@ -396,13 +592,13 @@ def annotate_plan(plan_date: str, type_: str, stock: str, executed: bool = None,
             break
     if found:
         data['last_updated'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-        # 重算摘要
-        buy_sell = [p for p in plans if p['type'] in ('buy', 'sell') and p['result'] in ('success', 'failure', 'flat')]
-        success_list = [p for p in buy_sell if p['result'] == 'success']
-        failure_list = [p for p in buy_sell if p['result'] == 'failure']
-        data['summary']['success'] = len(success_list)
-        data['summary']['failure'] = len(failure_list)
-        data['summary']['success_rate'] = round(len(success_list) / len(buy_sell) * 100, 1) if buy_sell else 0
+        # 重算摘要和建议
+        summary, by_condition, by_type = _compute_summary(plans)
+        suggestions = _generate_suggestions(plans, summary, by_condition)
+        data['summary'] = summary
+        data['by_condition'] = by_condition
+        data['by_type'] = by_type
+        data['suggestions'] = suggestions
         os.makedirs(os.path.dirname(PLAN_TRACKING_PATH), exist_ok=True)
         with open(PLAN_TRACKING_PATH, 'w') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)

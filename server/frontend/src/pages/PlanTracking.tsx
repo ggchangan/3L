@@ -26,6 +26,16 @@ interface PlanEntry {
   user_note: string
 }
 
+interface Suggestion {
+  type: string        // warning | best | info
+  dimension: string   // condition | stock | stop_loss | type
+  category: string
+  rate_current: number
+  rate_overall: number
+  count: number
+  message: string
+}
+
 interface PlanData {
   plans: PlanEntry[]
   summary: {
@@ -44,6 +54,7 @@ interface PlanData {
   }
   by_condition: Record<string, { total: number; success: number; failure: number; flat: number }>
   by_type: Record<string, { total: number; success: number; failure: number; flat: number }>
+  suggestions: Suggestion[]
   last_updated: string
 }
 
@@ -61,43 +72,86 @@ const TYPE_LABELS: Record<string, string> = {
   watch: '👁️ 观察',
 }
 
+function fmtDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function todayStr(): string {
+  return fmtDate(new Date())
+}
+
+function daysAgo(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return fmtDate(d)
+}
+
 export default function PlanTracking() {
   const [data, setData] = useState<PlanData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [condCollapsed, setCondCollapsed] = useState(false)
+  const [sugCollapsed, setSugCollapsed] = useState(false)
   const [typeFilter, setTypeFilter] = useState('all')
   const [resultFilter, setResultFilter] = useState('all')
+  const [startDate, setStartDate] = useState(daysAgo(30))
+  const [endDate, setEndDate] = useState(todayStr())
 
   useEffect(() => {
     loadData()
   }, [])
 
-  async function loadData() {
+  function loadData(sd?: string, ed?: string) {
+    const s = sd || startDate
+    const e = ed || endDate
     setLoading(true)
     setError('')
-    try {
-      const r = await fetch('/api/plan-tracking')
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
-      setData(d)
-    } catch (e: any) {
-      setError(e.message || '加载失败')
-    } finally {
-      setLoading(false)
-    }
+    const params = new URLSearchParams()
+    if (s) params.set('start_date', s)
+    if (e) params.set('end_date', e)
+    fetch(`/api/plan-tracking?${params.toString()}`)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then(d => setData(d))
+      .catch(e => setError(e.message || '加载失败'))
+      .finally(() => setLoading(false))
   }
 
-  async function handleRefresh() {
+  function handleRefresh() {
     setLoading(true)
-    try {
-      const r = await fetch('/api/plan-tracking/refresh', { method: 'POST' })
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      await loadData()
-    } catch (e: any) {
-      setError(e.message || '刷新失败')
-      setLoading(false)
+    fetch('/api/plan-tracking/refresh', { method: 'POST' })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then(() => loadData())
+      .catch(e => { setError(e.message || '刷新失败'); setLoading(false) })
+  }
+
+  function setStartDateSafe(v: string) {
+    const sd = new Date(v)
+    const ed = new Date(endDate)
+    if ((ed.getTime() - sd.getTime()) / (1000 * 86400) > 30) {
+      // 超过30天，自动调整结束日期为起始+30天
+      const newEnd = new Date(sd)
+      newEnd.setDate(newEnd.getDate() + 30)
+      if (newEnd > new Date()) {
+        setEndDate(todayStr())
+      } else {
+        setEndDate(fmtDate(newEnd))
+      }
     }
+    setStartDate(v)
+    loadData(v, endDate)
+  }
+
+  function setEndDateSafe(v: string) {
+    const sd = new Date(startDate)
+    const ed = new Date(v)
+    if ((ed.getTime() - sd.getTime()) / (1000 * 86400) > 30) {
+      return // 超过30天不予选择
+    }
+    setEndDate(v)
+    loadData(startDate, v)
   }
 
   async function toggleExecuted(entry: PlanEntry) {
@@ -125,21 +179,18 @@ export default function PlanTracking() {
           ),
         }
       })
-    } catch {
-      // silent
-    }
+    } catch { /* silent */ }
   }
 
   const s = data?.summary
   const allPlans = data?.plans || []
   const trackingPlans = allPlans.filter(p => p.type !== 'watch')
-  const buySellPlans = trackingPlans.filter(p => p.result === 'success' || p.result === 'failure' || p.result === 'flat')
+  const suggestions = data?.suggestions || []
 
   // 过滤
   let filteredPlans = [...trackingPlans]
   if (typeFilter !== 'all') filteredPlans = filteredPlans.filter(p => p.type === typeFilter)
   if (resultFilter !== 'all') filteredPlans = filteredPlans.filter(p => p.result === resultFilter)
-  // 倒序：最新日期排最上面
   filteredPlans.sort((a, b) => b.plan_date.localeCompare(a.plan_date))
 
   const hasData = allPlans.length > 0
@@ -152,6 +203,19 @@ export default function PlanTracking() {
           <div className="section-title">
             <span className="step">📊</span>
             操作计划追踪
+          </div>
+
+          {/* 日期选择器 */}
+          <div className="info-card" style={{ marginTop: 8, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: '#888' }}>📅</span>
+            <input type="date" value={startDate} max={todayStr()}
+              onChange={e => setStartDateSafe(e.target.value)}
+              style={{ background: '#1a1a30', border: '1px solid #2a2a4e', borderRadius: 4, padding: '3px 6px', color: '#e0e0e0', fontSize: 11 }} />
+            <span style={{ color: '#555' }}>—</span>
+            <input type="date" value={endDate} min={startDate} max={todayStr()}
+              onChange={e => setEndDateSafe(e.target.value)}
+              style={{ background: '#1a1a30', border: '1px solid #2a2a4e', borderRadius: 4, padding: '3px 6px', color: '#e0e0e0', fontSize: 11 }} />
+            <span style={{ fontSize: 10, color: '#666' }}>（最多30天）</span>
           </div>
 
           {!hasData && !loading && (
@@ -193,6 +257,40 @@ export default function PlanTracking() {
                 </div>
               </div>
 
+              {/* 📋 系统建议 */}
+              {suggestions.length > 0 && (
+                <div className="info-card" style={{ marginTop: 12, padding: 10 }}>
+                  <div
+                    style={{ fontSize: 12, color: '#888', marginBottom: 6, cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => setSugCollapsed(v => !v)}
+                  >
+                    📋 系统建议 ({suggestions.length}) {sugCollapsed ? '▶' : '▼'}
+                  </div>
+                  {!sugCollapsed && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {suggestions.map((sg, i) => {
+                        const icon = sg.type === 'warning' ? '⚠️' : sg.type === 'best' ? '💡' : 'ℹ️'
+                        const bg = sg.type === 'warning' ? 'rgba(233,69,96,0.08)' : 'rgba(78,205,196,0.08)'
+                        const borderColor = sg.type === 'warning' ? 'rgba(233,69,96,0.3)' : 'rgba(78,205,196,0.3)'
+                        return (
+                          <div key={i} style={{
+                            background: bg, border: `1px solid ${borderColor}`,
+                            borderRadius: 6, padding: '6px 10px', fontSize: 11, lineHeight: 1.5
+                          }}>
+                            <span style={{ marginRight: 4 }}>{icon}</span>
+                            {sg.message}
+                            <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
+                              样本数: {sg.count} | 当前成功率: {sg.rate_current}%
+                              {sg.rate_overall > 0 && ` | 整体: ${sg.rate_overall}%`}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* 按买入/卖出分类 */}
               {data.by_type && (
                 <div className="info-card" style={{ marginTop: 12, padding: 10 }}>
@@ -213,7 +311,7 @@ export default function PlanTracking() {
               )}
 
               {/* 按条件类型统计 */}
-              {Object.keys(data.by_condition).length > 0 && (
+              {data.by_condition && Object.keys(data.by_condition).length > 0 && (
                 <div className="info-card" style={{ marginTop: 12, padding: 10 }}>
                   <div
                     style={{ fontSize: 12, color: '#888', marginBottom: 6, cursor: 'pointer', userSelect: 'none' }}
