@@ -1,5 +1,25 @@
 # Changelog
 
+## [v3.5.2] — 2026-05-30
+
+### 修复：Docker 部署前端 404 问题
+
+**根因：** Docker 镜像缺少前端构建产物 + FE_DIR 路径不兼容 Docker 布局。
+`COPY server/ .` 将 `frontend/dist/` 放到 `/app/frontend/dist/`，但代码硬编码找 `/app/server/frontend/dist/`。
+
+**改动：**
+- **`server/server.py`** — FE_DIR 改为多候选路径探测（原生开发 / Docker 布局）
+- **`server/Dockerfile`** — 改为多阶段构建：Stage 1 node:20 编译前端 → Stage 2 python 运行，前端产物编入镜像
+- **`server/.dockerignore`** — 移除 `frontend/src/` 等排除规则（多阶段构建的 build stage 需要）
+- **`deploy/deploy.sh`** — 密码输入加两次确认循环；支持端口选择(80/8080)；自动开 ufw 防火墙
+
+### 🔧 部署验证
+- `GET /` → 200（返回 react SPA）
+- SPA 路由 `/monitor` → 200
+- 静态资源 JS/CSS → 200
+- API `/api/market-health` → 200
+- Docker 健康检查通过
+
 ## [v3.5.1] — 2026-05-30
 
 ### 修复：数据管线 cron 反复失败（第3次根治）
