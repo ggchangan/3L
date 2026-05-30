@@ -159,6 +159,33 @@ def _check_index_dedup(code: str, condition: str, alarm_type: str) -> bool:
     return False
 
 
+def _is_index_dismissed(code: str) -> bool:
+    """检查指数报警是否已被用户标记为已处理（status=handled 且沉默期未过）"""
+    alarms_path = os.path.join(
+        os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'private', 'alarms.json'
+    )
+    try:
+        with open(alarms_path) as f:
+            data = json.load(f)
+        now = datetime.now()
+        for a in data.get('alarms', []):
+            if a.get('stock_code') == code and a.get('status') == 'handled':
+                silenced = a.get('silenced_until', '')
+                if silenced:
+                    try:
+                        silenced_dt = datetime.strptime(silenced, '%Y%m%d%H%M%S')
+                        if now < silenced_dt:
+                            return True  # 沉默期未过，不报
+                    except (ValueError, TypeError):
+                        pass
+                # 没有 silenced_until 但有 handled → 永不清零，也跳过
+                if not silenced:
+                    return True
+    except (FileNotFoundError, json.JSONDecodeError, Exception):
+        pass
+    return False
+
+
 def check_index_alerts() -> list:
     """检查三只指数的报警条件
 
@@ -185,6 +212,10 @@ def check_index_alerts() -> list:
         ema10 = info.get('ema10')
         ema20 = info.get('ema20')
         if not ema10 or not ema20:
+            continue
+
+        # 检查用户是否已标记该指数为已处理（跟个股报警逻辑一致）
+        if _is_index_dismissed(code):
             continue
 
         # 拉实时价（腾讯 API 直接返回涨跌幅）

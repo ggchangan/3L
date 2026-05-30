@@ -52,6 +52,7 @@ def get_buy_signals():
         except Exception:
             log.warning('买点信号缓存读取失败，重新扫描')
     # 超过1小时重新扫描
+    # 扫描脚本路径（结构对齐原生开发）
     scan_file = os.path.join(WWW_DIR, 'server', 'scripts', 'scan_buy_signals.py')
     log.info('买点信号缓存过期，启动扫描...')
     try:
