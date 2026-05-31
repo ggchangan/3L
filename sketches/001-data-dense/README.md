@@ -1,5 +1,11 @@
 ## Variant A: 数据密集型
 
+### 在浏览器打开原型
+
+[🗂️ 打开原型 →](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ggchangan/3L/feature/concept-wave-tracking/sketches/001-data-dense/index.html)
+
+点击上方链接在浏览器中预览可交互原型。概念卡片可点击▶展开详情。
+
 ### Design stance
 完整功能型 — 所有信息都在页面上，适合日常分析用。
 
