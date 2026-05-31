@@ -7,7 +7,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#13141f;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#c8c9d4;padding:24px 16px;display:flex;justify-content:center}
-.container{width:960px;max-width:100%}
+.container{width:980px;max-width:100%}
 .title-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 0 12px;border-bottom:1px solid #2a2b3d;flex-wrap:wrap;gap:8px}
 .title-bar h1{font-size:20px;font-weight:700;color:#e8e9f0;letter-spacing:1px}
 .title-actions{display:flex;align-items:center;gap:10px}
@@ -26,32 +26,38 @@ body{background:#13141f;font-family:-apple-system,"PingFang SC","Microsoft YaHei
 .tag-red{background:#2a0b0b;color:#ef4444;border:1px solid #4a1515}
 .group-header .group-count{font-weight:400;color:#7a7b92;font-size:11px}
 .chart-rows{position:relative;padding:4px 0}
-.concept-row{display:flex;align-items:center;padding:6px 0;border-bottom:1px solid #2a2b3d;min-height:60px}
+.concept-row{display:flex;align-items:flex-start;padding:8px 0 6px;border-bottom:1px solid #2a2b3d;min-height:72px}
 .concept-row:last-child{border-bottom:none}
-.concept-info{width:150px;flex-shrink:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px}
+.concept-info{width:140px;flex-shrink:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px;padding-top:14px}
 .concept-name{font-size:15px;font-weight:500;color:#e67700;text-decoration:none;cursor:pointer}
 .concept-name:hover{text-decoration:underline}
 .concept-vl{font-size:12px;color:#7a7b92}
 .concept-vl .hl{color:#fbbf24;font-weight:600}
 .prefix-gold{color:#e67700;font-weight:700;font-size:13px}
 .prefix-silver{color:#9a9bb0;font-weight:700;font-size:13px}
-.concept-chart{position:relative;flex:1;min-width:80px;height:48px;margin:0 6px}
+.concept-chart{position:relative;flex:1;min-width:80px;height:52px;margin:0 8px}
 .concept-chart svg{width:100%;height:100%;display:block}
 .chart-label{position:absolute;pointer-events:none;white-space:nowrap;line-height:1}
-.concept-metrics{width:220px;flex-shrink:0;display:flex;flex-wrap:wrap;gap:2px 10px;padding:0 6px;font-size:11px;line-height:1.6}
-.metric-label{color:#7a7b92}
-.metric-val{font-weight:600}
-.metric-val.up{color:#34d399}
-.metric-val.dn{color:#ef4444}
-.metric-val.hot{color:#fbbf24}
-.metric-stocks{color:#fbbf24;font-weight:600;cursor:pointer;text-decoration:none}
-.metric-stocks:hover{text-decoration:underline}
-.metric-detail{color:#e67700;text-decoration:none;font-weight:500;font-size:11px}
-.metric-detail:hover{text-decoration:underline}
-.concept-badge{width:60px;flex-shrink:0;text-align:center;font-size:11px;padding:3px 0;border-radius:4px}
-.badge-green{background:#0b2e1a;color:#34d399}
-.badge-yellow{background:#2a2000;color:#fbbf24}
-.badge-red{background:#2a0b0b;color:#ef4444}
+.concept-metrics{width:300px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;padding:8px 6px 0;font-size:11px;line-height:1}
+.m-line1{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.m-line2{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:2px}
+.m-label{color:#7a7b92}
+.m-val{font-weight:600}
+.m-val.r{color:#ef4444}
+.m-val.g{color:#34d399}
+.m-strg{color:#34d399;font-weight:600}
+.m-strg.wk{color:#ef4444;font-weight:600}
+.m-link{color:#fbbf24;font-weight:500;text-decoration:none;cursor:pointer}
+.m-link:hover{text-decoration:underline}
+.m-link2{color:#e67700;text-decoration:none;cursor:pointer;font-weight:500}
+.m-link2:hover{text-decoration:underline}
+.m-stk{color:#c8c9d4}
+.m-more{color:#7a7b92;font-size:10px;cursor:pointer}
+.m-more:hover{color:#fbbf24}
+.concept-badge{width:60px;flex-shrink:0;text-align:center;font-size:11px;padding:14px 0 0;border-radius:4px}
+.badge-green{color:#34d399}
+.badge-yellow{color:#fbbf24}
+.badge-red{color:#ef4444}
 .section-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:#e8e9f0;margin:20px 0 10px;padding:0 4px}
 .section-title .count{font-weight:400;color:#7a7b92;font-size:12px}
 .alert-card{display:flex;align-items:flex-start;gap:10px;background:#1a1b2e;border:1px solid #2a2b3d;border-radius:8px;padding:12px 16px}
@@ -114,15 +120,24 @@ body{background:#13141f;font-family:-apple-system,"PingFang SC","Microsoft YaHei
       <circle cx="270" cy="6" r="4" fill="#34d399" stroke="#13141f" stroke-width="1.5"/>
     </svg>
     <span class="chart-label" style="left:50%;top:0;"><span>💧</span><span style="color:#7a7b92;font-size:9px">缩量</span></span>
-    <span class="chart-label" style="left:85%;top:-3px;"><span style="color:#34d399;font-size:13px;">●</span><span style="color:#7a7b92;font-size:9px;">波谷</span></span>
-    <span class="chart-label" style="left:48%;top:32px;"><span style="color:#34d399;font-size:10px;font-weight:600;">↓切入窗口</span></span>
+    <span class="chart-label" style="left:85%;top:-3px;"><span style="color:#34d399;font-size:13px;">●</span><span style="color:#434;font-size:9px;">波谷</span></span>
+    <span class="chart-label" style="left:48%;top:34px;"><span style="color:#34d399;font-size:10px;font-weight:600;">↓切入窗口</span></span>
   </div>
   <div class="concept-metrics">
-    <span><span class="metric-label">近5日</span> <span class="metric-val dn">-1.2%</span></span>
-    <span><span class="metric-label">BIAS20</span> <span class="metric-val dn">-6.3%</span></span>
-    <span><a href="#" class="metric-stocks">关联5只 ›</a></span>
-    <span><span class="metric-label">历史谷→峰</span> <span class="metric-val" style="color:#e8e9f0;">+18%</span></span>
-    <span><a href="#" class="metric-detail">成份股 ›</a></span>
+    <div class="m-line1">
+      <span><span class="m-label">近5日</span> <span class="m-val r">-1.2%</span></span>
+      <span><span class="m-label">BIAS20</span> <span class="m-val r">-6.3%</span></span>
+      <span><span class="m-label">vs大盘</span> <span class="m-strg">+3.2%</span></span>
+      <span style="color:#7a7b92;">|</span>
+      <span class="m-label">历史</span><span style="color:#e8e9f0;font-weight:600;">+18%</span>
+    </div>
+    <div class="m-line2">
+      <span class="m-label">关联自选:</span>
+      <span class="m-stk">中际旭创</span><span style="color:#555">/</span>
+      <span class="m-stk">寒武纪</span><span style="color:#555">/</span>
+      <span class="m-stk">光迅科技</span>
+      <a href="#" class="m-link">+2更多 ›</a>
+    </div>
   </div>
   <div class="concept-badge badge-green"><span>🟢</span> 波谷</div>
 </div>
@@ -141,14 +156,22 @@ body{background:#13141f;font-family:-apple-system,"PingFang SC","Microsoft YaHei
       <circle cx="270" cy="8" r="4" fill="#fb923c" stroke="#13141f" stroke-width="1.5"/>
     </svg>
     <span class="chart-label" style="left:85%;top:-3px;"><span style="color:#fb923c;font-size:13px;">●</span><span style="color:#7a7b92;font-size:9px;">波谷</span></span>
-    <span class="chart-label" style="left:52%;top:32px;"><span style="color:#fbbf24;font-size:10px;">↘轮动（算力→HBM）</span></span>
+    <span class="chart-label" style="left:52%;top:34px;"><span style="color:#fbbf24;font-size:10px;">↘轮动（算力→HBM）</span></span>
   </div>
   <div class="concept-metrics">
-    <span><span class="metric-label">近5日</span> <span class="metric-val up">+3.1%</span></span>
-    <span><span class="metric-label">BIAS20</span> <span class="metric-val dn">-2.1%</span></span>
-    <span><a href="#" class="metric-stocks">关联3只 ›</a></span>
-    <span><span class="metric-label">历史谷→峰</span> <span class="metric-val" style="color:#e8e9f0;">+12%</span></span>
-    <span><a href="#" class="metric-detail">成份股 ›</a></span>
+    <div class="m-line1">
+      <span><span class="m-label">近5日</span> <span class="m-val g">+3.1%</span></span>
+      <span><span class="m-label">BIAS20</span> <span class="m-val r">-2.1%</span></span>
+      <span><span class="m-label">vs大盘</span> <span class="m-strg">+1.8%</span></span>
+      <span style="color:#7a7b92;">|</span>
+      <span class="m-label">历史</span><span style="color:#e8e9f0;font-weight:600;">+12%</span>
+    </div>
+    <div class="m-line2">
+      <span class="m-label">关联自选:</span>
+      <span class="m-stk">华海诚科</span><span style="color:#555">/</span>
+      <span class="m-stk">通富微电</span>
+      <a href="#" class="m-link">+1更多 ›</a>
+    </div>
   </div>
   <div class="concept-badge badge-yellow"><span>🟡</span> 波中</div>
 </div>
@@ -166,10 +189,16 @@ body{background:#13141f;font-family:-apple-system,"PingFang SC","Microsoft YaHei
     <span class="chart-label" style="left:55%;top:0;"><span>🔥</span><span style="color:#7a7b92;font-size:9px">放量</span></span>
   </div>
   <div class="concept-metrics">
-    <span><span class="metric-label">近5日</span> <span class="metric-val up">+0.5%</span></span>
-    <span><span class="metric-label">BIAS20</span> <span class="metric-val dn">-0.8%</span></span>
-    <span><a href="#" class="metric-stocks">关联2只 ›</a></span>
-    <span><a href="#" class="metric-detail">成份股 ›</a></span>
+    <div class="m-line1">
+      <span><span class="m-label">近5日</span> <span class="m-val g">+0.5%</span></span>
+      <span><span class="m-label">BIAS20</span> <span class="m-val r">-0.8%</span></span>
+      <span><span class="m-label">vs大盘</span> <span class="m-strg wk">-1.2%</span></span>
+    </div>
+    <div class="m-line2">
+      <span class="m-label">关联自选:</span>
+      <span class="m-stk">汇川技术</span><span style="color:#555">/</span>
+      <span class="m-stk">绿的谐波</span>
+    </div>
   </div>
   <div class="concept-badge badge-yellow"><span>🟡</span> 波中</div>
 </div>
@@ -186,13 +215,19 @@ body{background:#13141f;font-family:-apple-system,"PingFang SC","Microsoft YaHei
       <polyline points="0,20 30,18 60,16 90,14 120,12 150,10 180,8 210,6 240,4 270,2 300,0" fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"/>
       <polyline points="0,18 30,20 60,22 90,24 120,26 150,28 180,30 210,32 240,34 270,36 300,38" fill="none" stroke="#ef4444" stroke-width="2"/>
     </svg>
-    <span class="chart-label" style="left:58%;top:32px;"><span>⚠️</span><span style="color:#7a7b92;font-size:9px">天量滞涨</span></span>
+    <span class="chart-label" style="left:58%;top:34px;"><span>⚠️</span><span style="color:#7a7b92;font-size:9px">天量滞涨</span></span>
   </div>
   <div class="concept-metrics">
-    <span><span class="metric-label">近5日</span> <span class="metric-val dn">-2.8%</span></span>
-    <span><span class="metric-label">BIAS20</span> <span class="metric-val dn">-9.5%</span></span>
-    <span><a href="#" class="metric-stocks">关联1只 ›</a></span>
-    <span><a href="#" class="metric-detail">成份股 ›</a></span>
+    <div class="m-line1">
+      <span><span class="m-label">近5日</span> <span class="m-val r">-2.8%</span></span>
+      <span><span class="m-label">BIAS20</span> <span class="m-val r">-9.5%</span></span>
+      <span><span class="m-label">vs大盘</span> <span class="m-strg wk">-4.1%</span></span>
+    </div>
+    <div class="m-line2">
+      <span class="m-label">关联自选:</span>
+      <span class="m-stk">宁德时代</span>
+      <span class="m-more">查看 ›</span>
+    </div>
   </div>
   <div class="concept-badge badge-red"><span>🔴</span> 下跌</div>
 </div>
@@ -211,11 +246,20 @@ body{background:#13141f;font-family:-apple-system,"PingFang SC","Microsoft YaHei
     <span class="chart-label" style="left:50%;top:-3px;"><span style="color:#ef4444;font-size:13px;">●</span><span style="color:#7a7b92;font-size:9px;">波峰</span></span>
   </div>
   <div class="concept-metrics">
-    <span><span class="metric-label">近5日</span> <span class="metric-val dn">-1.5%</span></span>
-    <span><span class="metric-label">BIAS20</span> <span class="metric-val dn">-4.2%</span></span>
-    <span><a href="#" class="metric-stocks">关联4只 ›</a></span>
-    <span><span class="metric-label">历史谷→峰</span> <span class="metric-val" style="color:#e8e9f0;">+22%</span></span>
-    <span><a href="#" class="metric-detail">成份股 ›</a></span>
+    <div class="m-line1">
+      <span><span class="m-label">近5日</span> <span class="m-val r">-1.5%</span></span>
+      <span><span class="m-label">BIAS20</span> <span class="m-val r">-4.2%</span></span>
+      <span><span class="m-label">vs大盘</span> <span class="m-strg">+0.5%</span></span>
+      <span style="color:#7a7b92;">|</span>
+      <span class="m-label">历史</span><span style="color:#e8e9f0;font-weight:600;">+22%</span>
+    </div>
+    <div class="m-line2">
+      <span class="m-label">关联自选:</span>
+      <span class="m-stk">中芯国际</span><span style="color:#555">/</span>
+      <span class="m-stk">北方华创</span><span style="color:#555">/</span>
+      <span class="m-stk">韦尔股份</span>
+      <a href="#" class="m-link">+1更多 ›</a>
+    </div>
   </div>
   <div class="concept-badge badge-red"><span>🔴</span> 下跌</div>
 </div>
