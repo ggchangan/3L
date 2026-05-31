@@ -709,37 +709,11 @@ cron 17:00 update_stock_data.py
 
 ## 5. 执行计划
 
-### 阶段一：数据基建（P0）
+执行计划已拆分为独立文件，含任务状态追踪、实际耗时、阻塞项等动态信息：
 
-| # | 任务 | 文件 | 预估 |
-|:-:|:----|:----|:----:|
-| 1 | `update_concept_maps()` → 从 push2test f103 拉取个股→概念映射 | `update_stock_data.py` | 1h |
-| 2 | `update_concept_klines()` → 拉概念板块K线 | `update_stock_data.py` | 1.5h |
-| 3 | SQLite 表结构 + `_init_db()` | `concept_wave_service.py` | 0.5h |
-| 4 | data_layer 新增概念板块读取函数 | `data_layer.py` | 0.5h |
+👉 [概念板块波谷追踪 — 执行计划](concept-wave-tracking-plan.md)
 
-### 阶段二：波谷判断逻辑（P0）
-
-| # | 任务 | 文件 | 预估 |
-|:-:|:----|:----|:----:|
-| 5 | `judge_concept_wave()` 波谷评分函数 | `concept_wave_service.py` | 1.5h |
-| 6 | 波谷信号检测 + 告警生成 | `concept_wave_service.py` | 1h |
-| 7 | 单元测试 | `test_concept_wave.py` | 1h |
-
-### 阶段三：API + 前端（P1）
-
-| # | 任务 | 文件 | 预估 |
-|:-:|:----|:----|:----:|
-| 8 | 后端 API 路由 `/api/concept-wave/*` | `api/concept_wave.py` | 0.5h |
-| 9 | 前端页面 ConceptWaveTracking.tsx | `frontend/src/pages/` | 1.5h |
-| 10 | 微信推送集成 | `concept_wave_service.py` | 1h |
-
-### 阶段四：数据架构重构（P2）
-
-| # | 任务 | 文件 | 预估 |
-|:-:|:----|:----|:----:|
-| 11 | 新目录结构实现 + 迁移脚本 | `config.py` | 1h |
-| 12 | 全回归 + 验证生产数据一致性 | — | 1h |
+设计文档不再维护执行进度，所有状态更新请操作上述文件。
 
 ## 6. 附录
 
