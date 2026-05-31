@@ -310,6 +310,59 @@
     line-height: 1;
   }
 
+  /* ── Data Table ── */
+  .data-table-wrap {
+    background: #1a1b2e;
+    border: 1px solid #2a2b3d;
+    border-radius: 8px;
+    padding: 0;
+    overflow-x: auto;
+    margin: 8px 0;
+  }
+  .data-table-wrap table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .data-table-wrap th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #7a7b92;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #2a2b3d;
+    white-space: nowrap;
+  }
+  .data-table-wrap td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #2a2b3d;
+    color: #c8c9d4;
+    white-space: nowrap;
+  }
+  .data-table-wrap tr:last-child td {
+    border-bottom: none;
+  }
+  .data-table-wrap .td-stage { font-weight: 500; }
+  .data-table-wrap .td-vl { font-weight: 600; color: #e8e9f0; }
+  .data-table-wrap .td-chg-up { color: #34d399; font-weight: 600; }
+  .data-table-wrap .td-chg-down { color: #ef4444; font-weight: 600; }
+  .data-table-wrap .td-bias { font-weight: 600; }
+  .data-table-wrap .td-bias-neg { color: #ef4444; }
+  .data-table-wrap .td-bias-pos { color: #34d399; }
+  .data-table-wrap .td-stocks {
+    color: #fbbf24;
+    font-weight: 500;
+  }
+  .data-table-wrap .td-link {
+    color: #e67700;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 12px;
+  }
+  .data-table-wrap .td-link:hover { text-decoration: underline; }
+
   /* ── Responsive ── */
   @media (max-width: 720px) {
     .stats-row { grid-template-columns: repeat(2, 1fr); }
@@ -522,6 +575,73 @@
     </div>
   </div>
 
+  <!-- ─── DATA TABLE: 核心追踪概念 ─── -->
+  <div class="section-title">
+    📋 核心追踪概念（52个） <span class="count">· 全部概念</span>
+  </div>
+  <div class="data-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>概念</th>
+          <th>阶段</th>
+          <th>vl评分</th>
+          <th>近5日涨跌</th>
+          <th>BIAS20</th>
+          <th>关联自选股</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong style="color:#e8e9f0;">AI算力</strong></td>
+          <td><span class="td-stage" style="color:#34d399;">🟢 波谷</span></td>
+          <td><span class="td-vl">4</span></td>
+          <td><span class="td-chg-down">-1.2%</span></td>
+          <td><span class="td-bias td-bias-neg">-6.3%</span></td>
+          <td><span class="td-stocks">5只</span></td>
+          <td><a class="td-link" href="#">查看 ›</a></td>
+        </tr>
+        <tr>
+          <td><strong style="color:#e8e9f0;">HBM概念</strong></td>
+          <td><span class="td-stage" style="color:#fbbf24;">🟡 波中</span></td>
+          <td><span class="td-vl">2</span></td>
+          <td><span class="td-chg-up">+3.1%</span></td>
+          <td><span class="td-bias td-bias-neg">-2.1%</span></td>
+          <td><span class="td-stocks">3只</span></td>
+          <td><a class="td-link" href="#">查看 ›</a></td>
+        </tr>
+        <tr>
+          <td><strong style="color:#e8e9f0;">机器人</strong></td>
+          <td><span class="td-stage" style="color:#fbbf24;">🟡 波中</span></td>
+          <td><span class="td-vl">1</span></td>
+          <td><span class="td-chg-up">+0.5%</span></td>
+          <td><span class="td-bias td-bias-neg">-0.8%</span></td>
+          <td><span class="td-stocks">2只</span></td>
+          <td><a class="td-link" href="#">查看 ›</a></td>
+        </tr>
+        <tr>
+          <td><strong style="color:#e8e9f0;">固态电池</strong></td>
+          <td><span class="td-stage" style="color:#ef4444;">🔴 下跌</span></td>
+          <td><span class="td-vl">0</span></td>
+          <td><span class="td-chg-down">-2.8%</span></td>
+          <td><span class="td-bias td-bias-neg">-9.5%</span></td>
+          <td><span class="td-stocks">1只</span></td>
+          <td><a class="td-link" href="#">查看 ›</a></td>
+        </tr>
+        <tr>
+          <td><strong style="color:#e8e9f0;">国产芯片</strong></td>
+          <td><span class="td-stage" style="color:#ef4444;">🔴 下跌</span></td>
+          <td><span class="td-vl">1</span></td>
+          <td><span class="td-chg-down">-1.5%</span></td>
+          <td><span class="td-bias td-bias-neg">-4.2%</span></td>
+          <td><span class="td-stocks">4只</span></td>
+          <td><a class="td-link" href="#">查看 ›</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
   <!-- ─── ALERT SECTION ─── -->
   <div class="section-title">
     ⚡ 信号预警 <span class="count">· 1 条新信号</span>
@@ -529,10 +649,11 @@
   <div class="alert-card">
     <div class="alert-icon">💡</div>
     <div class="alert-body">
-      <strong>AI算力</strong> <span class="dim">vl:4</span>
+      <strong>⚠️ 波谷告警（1条）</strong><br>
+      <strong>AI算力</strong> <span class="dim">vl_score=4</span>
       <span class="bias">BIAS20=-6.3%</span>
       <span class="dim">缩量至EMA60 →</span>
-      <span class="highlight">关注切入机会</span>
+      <span class="highlight">关注切入机会（中际旭创/寒武纪/光迅科技）</span>
     </div>
   </div>
 
@@ -541,9 +662,9 @@
     🔍 新概念扫描 <span class="count">· 本周新发现</span>
   </div>
   <div class="scan-card">
-    <span class="scan-name">时空大数据</span>
-    <span class="scan-stat">+18%</span>
-    <span class="scan-label">20日涨幅</span>
+    <span class="scan-name">💡 时空大数据</span>
+    <span class="scan-stat">20日涨幅+18%</span>
+    <span class="scan-label">不在核心关注列表</span>
     <span style="float:right;background:#2a2b4e;color:#e0e0e0;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;">+ 添加追踪</span>
   </div>
 
