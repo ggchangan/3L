@@ -47,20 +47,22 @@ body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;backgroun
 .concept-left .vl.high{color:#e67700;font-weight:600}
 
 .concept-chart{flex:1;min-width:0;height:38px;position:relative;margin:0 8px}
-
 .concept-chart svg{width:100%;height:100%}
 .concept-chart .wave-line{fill:none;stroke:#2b8a3e;stroke-width:1.5;vector-effect:non-scaling-stroke}
 .concept-chart .index-line{fill:none;stroke:#555;stroke-width:1;stroke-dasharray:4,3;vector-effect:non-scaling-stroke}
-.concept-chart .marker{font-size:9px;font-family:inherit;text-anchor:middle}
-.marker.shrink{fill:#2b8a3e}
-.marker.volume{fill:#e8590c}
-.marker.warn{fill:#e03131}
-.marker.entry{fill:#2b8a3e}
 .concept-chart .peak-dot{fill:#e03131;r:3}
 .concept-chart .trough-dot{fill:#2b8a3e;r:3}
 .concept-chart .rotation-arrow{stroke:#e67700;stroke-width:1;stroke-dasharray:3,2;fill:none}
 .concept-chart .rotation-label{fill:#e67700;font-size:8px;font-family:inherit}
 .concept-chart .history-ref{fill:#666;font-size:8px;font-family:inherit}
+.concept-chart .marker-text{font-size:9px;font-family:inherit}
+
+/* 💧🔥⚠️ as SVG text with emoji font */
+.emoji{font-size:11px}
+.shrink{fill:#2b8a3e}
+.volume{fill:#e8590c}
+.warn{fill:#e03131}
+.entry{fill:#2b8a3e}
 
 .concept-right{width:60px;flex-shrink:0;text-align:center}
 .concept-right .badge{font-size:11px;padding:2px 8px;border-radius:4px;display:inline-block}
@@ -80,7 +82,6 @@ body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;backgroun
 .legend .dot.gold{background:#e67700}
 .legend .dot.silver{background:#868e96}
 .legend .line{width:16px;height:2px;display:inline-block}
-.legend .line.green{background:#2b8a3e}
 .legend .line.dashed{background:transparent;border-top:2px dashed #555}
 </style>
 </head>
@@ -88,15 +89,15 @@ body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;backgroun
 <div class="container">
 
 <div class="header">
-  <h1>概念板块波谷追踪</h1>
+  <h1>📊 概念板块波谷追踪</h1>
   <div class="date-row">
-    <span>2026-05-01 — 2026-05-31</span>
-    <button class="btn">按阶段排序 &#x25BC;</button>
+    <span>📅 2026-05-01 — 2026-05-31</span>
+    <button class="btn">按阶段排序 ▼</button>
   </div>
 </div>
 
 <div class="subtitle">
-  核心概念堆叠走势 <span>|</span> 竖线=今天 <span>|</span> [金]主线 [银]次线 <span>|</span> --大盘 <span>|</span> 切入窗口 <span>|</span> 轮动 <span>|</span> 历史谷峰涨幅
+  核心概念堆叠走势 <span>|</span> 竖线=今天 <span>|</span> 【金】主线 【银】次线 <span>|</span> --大盘 <span>|</span> ↓切入窗口 <span>|</span> 轮动↘ <span>|</span> 历史谷峰涨幅
 </div>
 
 <div class="chart-section" id="chartSection">
@@ -105,13 +106,13 @@ body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;backgroun
 <div class="today-line"></div>
 <div class="today-label">今天</div>
 
-<!-- ============ 波谷组 ============ -->
+<!-- ════════════ 🟢 波谷组 ════════════ -->
 <div class="group-header trough">
-  [ 波谷组 ]
+  🟢 [ 波谷组 ]
   <div class="bar"></div>
 </div>
 
-<!-- Row 1: AI算力 [金] vl:4 波谷 -->
+<!-- Row 1: AI算力 【金】 vl:4 🟢波谷 -->
 <div class="concept-row">
   <div class="concept-left">
     <div class="tag gold"></div>
@@ -120,33 +121,35 @@ body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;backgroun
   </div>
   <div class="concept-chart">
     <svg viewBox="0 0 440 38" preserveAspectRatio="none">
-      <!-- Index dashed line -->
+      <!-- 虚线：大盘走势 -->
       <polyline class="index-line" points="0,18 40,16 80,19 120,15 160,18 200,14 240,17 280,13 320,16 360,12 400,15 440,11"/>
-      <!-- Wave line -->
+      <!-- 实线：概念走势 -->
       <polyline class="wave-line" points="0,26 20,24 40,28 60,22 80,30 100,18 120,10 140,12 160,8 180,14 200,6 220,10 240,4 260,8 280,3 300,9 320,5 340,11 360,7 380,13 400,9 420,15 440,12"/>
-      <!-- 缩量 marker -->
-      <text class="marker shrink" x="150" y="20">缩量</text>
-      <!-- 波谷 dot -->
+      <!-- 💧 缩量 -->
+      <text class="emoji shrink" x="148" y="14">💧</text>
+      <text class="marker-text shrink" x="148" y="26">缩量</text>
+      <!-- ● 波谷 -->
       <circle class="trough-dot" cx="280" cy="3" r="3.5"/>
-      <text class="marker shrink" x="280" y="0" font-size="7">波谷</text>
-      <!-- 切入窗口 -->
-      <text class="marker entry" x="280" y="16" font-size="8">切入窗口</text>
+      <text class="marker-text shrink" x="270" y="0">波谷</text>
+      <!-- ↓ 切入窗口 -->
+      <text class="emoji entry" x="278" y="16">↓</text>
+      <text class="marker-text entry" x="285" y="16">切入窗口</text>
       <!-- 历史参考 -->
-      <text class="history-ref" x="8" y="37" font-size="7">历史: 上次谷到峰 +18%</text>
+      <text class="history-ref" x="8" y="37">历史: 上次谷到峰 +18%</text>
     </svg>
   </div>
   <div class="concept-right">
-    <span class="badge trough">波谷</span>
+    <span class="badge trough">🟢波谷</span>
   </div>
 </div>
 
-<!-- ============ 波中组 ============ -->
+<!-- ════════════ 🟡 波中组 ════════════ -->
 <div class="group-header mid">
-  [ 波中组 ]
+  🟡 [ 波中组 ]
   <div class="bar"></div>
 </div>
 
-<!-- Row 2: HBM概念 [银] vl:2 波中 -->
+<!-- Row 2: HBM概念 【银】 vl:2 🟡波中 -->
 <div class="concept-row">
   <div class="concept-left">
     <div class="tag silver"></div>
@@ -158,21 +161,20 @@ body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;backgroun
       <polyline class="index-line" points="0,18 40,16 80,19 120,15 160,18 200,14 240,17 280,13 320,16 360,12 400,15 440,11"/>
       <polyline class="wave-line" points="0,24 20,22 40,26 60,18 80,12 100,8 120,14 140,6 160,10 180,4 200,8 220,12 240,6 260,10 280,4 300,8 320,12 340,6 360,10 380,14 400,8 420,12 440,6" stroke="#e67700"/>
       <circle class="trough-dot" cx="140" cy="6" r="3.5"/>
-      <text class="marker shrink" x="140" y="4" font-size="7">波谷</text>
-      <!-- 轮动箭头 -->
+      <text class="marker-text shrink" x="130" y="4">波谷</text>
+      <!-- 轮动箭头：算力→HBM -->
       <line class="rotation-arrow" x1="220" y1="0" x2="220" y2="18"/>
       <polygon points="216,16 220,22 224,16" fill="#e67700"/>
-      <text class="rotation-label" x="221" y="12" font-size="7">算力&gt;HBM</text>
-      <!-- 历史参考 -->
-      <text class="history-ref" x="8" y="37" font-size="7">历史: 上次谷到峰 +12%</text>
+      <text class="rotation-label" x="221" y="12">算力↘HBM</text>
+      <text class="history-ref" x="8" y="37">历史: 上次谷到峰 +12%</text>
     </svg>
   </div>
   <div class="concept-right">
-    <span class="badge mid">波中</span>
+    <span class="badge mid">🟡波中</span>
   </div>
 </div>
 
-<!-- Row 3: 机器人 vl:1 波中 -->
+<!-- Row 3: 机器人 vl:1 🟡波中 -->
 <div class="concept-row">
   <div class="concept-left">
     <span class="name">机器人</span>
@@ -182,22 +184,23 @@ body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;backgroun
     <svg viewBox="0 0 440 38" preserveAspectRatio="none">
       <polyline class="index-line" points="0,18 40,16 80,19 120,15 160,18 200,14 240,17 280,13 320,16 360,12 400,15 440,11"/>
       <polyline class="wave-line" points="0,28 20,26 40,22 60,18 80,14 100,10 120,8 140,6 160,4 180,8 200,4 220,8 240,6 260,10 280,8 300,12 320,10 340,14 360,12 380,16 400,14 420,18 440,16" stroke="#868e96"/>
-      <!-- 放量 marker -->
-      <text class="marker volume" x="340" y="22">放量</text>
+      <!-- 🔥 放量 -->
+      <text class="emoji volume" x="338" y="22">🔥</text>
+      <text class="marker-text volume" x="348" y="22">放量</text>
     </svg>
   </div>
   <div class="concept-right">
-    <span class="badge mid">波中</span>
+    <span class="badge mid">🟡波中</span>
   </div>
 </div>
 
-<!-- ============ 下跌组 ============ -->
+<!-- ════════════ 🔴 下跌组 ════════════ -->
 <div class="group-header down">
-  [ 下跌组 ]
+  🔴 [ 下跌组 ]
   <div class="bar"></div>
 </div>
 
-<!-- Row 4: 固态电池 vl:0 下跌 -->
+<!-- Row 4: 固态电池 vl:0 🔴下跌 -->
 <div class="concept-row">
   <div class="concept-left">
     <span class="name">固态电池</span>
@@ -207,16 +210,17 @@ body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;backgroun
     <svg viewBox="0 0 440 38" preserveAspectRatio="none">
       <polyline class="index-line" points="0,14 40,12 80,15 120,11 160,14 200,10 240,13 280,9 320,12 360,8 400,11 440,7"/>
       <polyline class="wave-line" points="0,22 20,24 40,26 60,28 80,24 100,20 120,24 140,28 160,30 180,32 200,28 220,30 240,34 260,30 280,32 300,36 320,32 340,34 360,30 380,32 400,28 420,30 440,26" stroke="#e03131"/>
-      <!-- 天量滞涨 -->
-      <text class="marker warn" x="220" y="36">天量滞涨</text>
+      <!-- ⚠️ 天量滞涨 -->
+      <text class="emoji warn" x="218" y="36">⚠️</text>
+      <text class="marker-text warn" x="230" y="36">天量滞涨</text>
     </svg>
   </div>
   <div class="concept-right">
-    <span class="badge down">下跌</span>
+    <span class="badge down">🔴下跌</span>
   </div>
 </div>
 
-<!-- Row 5: 国产芯片 vl:1 下跌 -->
+<!-- Row 5: 国产芯片 vl:1 🔴下跌 -->
 <div class="concept-row">
   <div class="concept-left">
     <span class="name">国产芯片</span>
@@ -227,12 +231,12 @@ body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;backgroun
       <polyline class="index-line" points="0,16 40,14 80,17 120,13 160,16 200,12 240,15 280,11 320,14 360,10 400,13 440,9"/>
       <polyline class="wave-line" points="0,28 20,26 40,22 60,18 80,14 100,10 120,8 140,6 160,10 180,6 200,10 220,14 240,18 260,22 280,26 300,30 320,28 340,24 360,20 380,16 400,12 420,8 440,4" stroke="#e03131"/>
       <circle class="peak-dot" cx="300" cy="30" r="3.5"/>
-      <text class="marker warn" x="300" y="34" font-size="7">波峰</text>
-      <text class="history-ref" x="8" y="37" font-size="7">历史: 上次谷到峰 +22%</text>
+      <text class="marker-text warn" x="292" y="34">波峰</text>
+      <text class="history-ref" x="8" y="37">历史: 上次谷到峰 +22%</text>
     </svg>
   </div>
   <div class="concept-right">
-    <span class="badge down">下跌</span>
+    <span class="badge down">🔴下跌</span>
   </div>
 </div>
 
@@ -243,21 +247,21 @@ body{font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;backgroun
 </div>
 
 <div class="axis-row">
-  <span>&#8592; 30天前</span>
+  <span>← 30天前</span>
   <span class="today-ax">今天</span>
-  <span>当前位 &#8594;</span>
+  <span>当前位 →</span>
 </div>
 
 <div class="legend">
-  <span><span class="dot gold"></span> 主线前5</span>
-  <span><span class="dot silver"></span> 主线6-10</span>
-  <span><span class="line dashed"></span> 大盘水位线</span>
-  <span style="color:#2b8a3e">&#9660; 缩量</span>
-  <span style="color:#e8590c">&#9650; 放量</span>
-  <span style="color:#e03131">&#9888; 天量滞涨</span>
-  <span style="color:#2b8a3e">切入窗口</span>
-  <span style="color:#e67700">轮动&#8599;</span>
-  <span style="color:#868e96">历史谷峰涨幅</span>
+  <span><span class="dot gold"></span> 【金】主线前5</span>
+  <span><span class="dot silver"></span> 【银】主线6-10</span>
+  <span><span class="line dashed"></span> --大盘水位线</span>
+  <span>💧 缩量</span>
+  <span>🔥 放量</span>
+  <span>⚠️ 天量滞涨</span>
+  <span>↓ 切入窗口</span>
+  <span style="color:#e67700">↘ 轮动关联</span>
+  <span style="color:#666">📈 历史谷峰涨幅</span>
 </div>
 
 </div><!-- container -->
