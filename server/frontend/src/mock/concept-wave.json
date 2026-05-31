@@ -1,0 +1,227 @@
+{
+  "success": true,
+  "date": "2026-05-31",
+  "data_timestamp": "2026-05-31 17:05:00",
+  "stats": {
+    "total": 32,
+    "valley": 5,
+    "mid": 18,
+    "declining": 9,
+    "alerts_count": 3,
+    "new_this_week": 2
+  },
+  "grouped": {
+    "valley": [
+      {
+        "code": "BK1682",
+        "name": "AI算力",
+        "stage": "波谷",
+        "vl_score": 4,
+        "pk_score": 0,
+        "bias20": -6.3,
+        "change_5d": -1.2,
+        "change_1d": -0.5,
+        "volume_ratio": 0.52,
+        "mainline_rank": 3,
+        "mainline_badge": "gold",
+        "volume_signal": "shrink",
+        "entry_window": true,
+        "vs_market_5d": 3.2,
+        "vs_market_20d": -2.1,
+        "historical_gain": 18.5,
+        "last_peak_date": "2026-05-15",
+        "last_trough_date": "2026-05-28",
+        "cycle_days": 23,
+        "cycle_count": 2,
+        "related_stocks": ["中际旭创", "寒武纪", "光迅科技"],
+        "related_count": 3,
+        "related_codes": ["000308", "688256", "002281"],
+        "stock_count": 35,
+        "wave_data": [
+          {"date": "2026-05-01", "normalized": 80.5, "change_pct": -0.5, "volume_ratio": 0.95},
+          {"date": "2026-05-08", "normalized": 72.3, "change_pct": -2.1, "volume_ratio": 0.72},
+          {"date": "2026-05-15", "normalized": 58.0, "change_pct": -3.5, "volume_ratio": 0.55},
+          {"date": "2026-05-22", "normalized": 52.1, "change_pct": -1.8, "volume_ratio": 0.48},
+          {"date": "2026-05-29", "normalized": 55.3, "change_pct": 0.8, "volume_ratio": 0.52}
+        ],
+        "annotations": [
+          {"date": "2026-05-10", "type": "valley", "score": 3, "label": "●波谷"},
+          {"date": "2026-05-28", "type": "entry", "score": 4, "label": "↓切入窗口"}
+        ]
+      }
+    ],
+    "mid": [
+      {
+        "code": "BK1477",
+        "name": "HBM概念",
+        "stage": "波中",
+        "vl_score": 2,
+        "pk_score": 0,
+        "bias20": -2.1,
+        "change_5d": 3.1,
+        "change_1d": 1.2,
+        "volume_ratio": 1.15,
+        "mainline_rank": 7,
+        "mainline_badge": "silver",
+        "volume_signal": "surge",
+        "entry_window": false,
+        "vs_market_5d": 1.8,
+        "vs_market_20d": 5.3,
+        "historical_gain": 12.0,
+        "last_peak_date": "2026-05-20",
+        "last_trough_date": "2026-05-10",
+        "cycle_days": 18,
+        "cycle_count": 3,
+        "related_stocks": ["华海诚科", "通富微电"],
+        "related_count": 2,
+        "related_codes": ["688071", "002156"],
+        "stock_count": 28,
+        "wave_data": [
+          {"date": "2026-05-01", "normalized": 75.0, "change_pct": 0.5, "volume_ratio": 0.90},
+          {"date": "2026-05-08", "normalized": 70.2, "change_pct": -1.0, "volume_ratio": 0.85},
+          {"date": "2026-05-15", "normalized": 65.8, "change_pct": -0.8, "volume_ratio": 0.78},
+          {"date": "2026-05-22", "normalized": 72.5, "change_pct": 2.0, "volume_ratio": 1.10},
+          {"date": "2026-05-29", "normalized": 78.3, "change_pct": 1.5, "volume_ratio": 1.15}
+        ],
+        "annotations": [
+          {"date": "2026-05-10", "type": "valley", "score": 3, "label": "●波谷"},
+          {"date": "2026-05-20", "type": "peak", "score": 2, "label": "●波峰"}
+        ]
+      },
+      {
+        "code": "BK1155",
+        "name": "机器人",
+        "stage": "波中",
+        "vl_score": 1,
+        "pk_score": 0,
+        "bias20": -0.8,
+        "change_5d": 0.5,
+        "change_1d": -0.1,
+        "volume_ratio": 1.30,
+        "mainline_rank": null,
+        "mainline_badge": null,
+        "volume_signal": "surge",
+        "entry_window": false,
+        "vs_market_5d": -1.2,
+        "vs_market_20d": -3.5,
+        "historical_gain": null,
+        "last_peak_date": null,
+        "last_trough_date": "2026-05-18",
+        "cycle_days": null,
+        "cycle_count": 1,
+        "related_stocks": ["汇川技术", "绿的谐波"],
+        "related_count": 2,
+        "related_codes": ["300124", "688017"],
+        "stock_count": 42,
+        "wave_data": [
+          {"date": "2026-05-01", "normalized": 80.0, "change_pct": 1.0, "volume_ratio": 1.05},
+          {"date": "2026-05-08", "normalized": 76.5, "change_pct": -0.5, "volume_ratio": 0.95},
+          {"date": "2026-05-15", "normalized": 72.0, "change_pct": -1.2, "volume_ratio": 0.88},
+          {"date": "2026-05-22", "normalized": 70.5, "change_pct": 0.3, "volume_ratio": 1.20},
+          {"date": "2026-05-29", "normalized": 71.0, "change_pct": 0.1, "volume_ratio": 1.30}
+        ],
+        "annotations": []
+      }
+    ],
+    "declining": [
+      {
+        "code": "BK0963",
+        "name": "固态电池",
+        "stage": "下跌",
+        "vl_score": 0,
+        "pk_score": 1,
+        "bias20": -9.5,
+        "change_5d": -2.8,
+        "change_1d": -1.5,
+        "volume_ratio": 0.85,
+        "mainline_rank": null,
+        "mainline_badge": null,
+        "volume_signal": "overheat",
+        "entry_window": false,
+        "vs_market_5d": -4.1,
+        "vs_market_20d": -8.2,
+        "historical_gain": null,
+        "last_peak_date": "2026-05-08",
+        "last_trough_date": null,
+        "cycle_days": null,
+        "cycle_count": 0,
+        "related_stocks": ["宁德时代"],
+        "related_count": 1,
+        "related_codes": ["300750"],
+        "stock_count": 38,
+        "wave_data": [
+          {"date": "2026-05-01", "normalized": 92.0, "change_pct": 2.5, "volume_ratio": 1.50},
+          {"date": "2026-05-08", "normalized": 88.0, "change_pct": -1.0, "volume_ratio": 1.80},
+          {"date": "2026-05-15", "normalized": 75.0, "change_pct": -3.5, "volume_ratio": 1.10},
+          {"date": "2026-05-22", "normalized": 62.0, "change_pct": -4.0, "volume_ratio": 0.90},
+          {"date": "2026-05-29", "normalized": 55.0, "change_pct": -2.0, "volume_ratio": 0.85}
+        ],
+        "annotations": [
+          {"date": "2026-05-08", "type": "peak", "score": 3, "label": "●波峰"},
+          {"date": "2026-05-15", "type": "entry", "score": 0, "label": "⚠️天量滞涨"}
+        ]
+      },
+      {
+        "code": "BK0811",
+        "name": "国产芯片",
+        "stage": "下跌",
+        "vl_score": 1,
+        "pk_score": 2,
+        "bias20": -4.2,
+        "change_5d": -1.5,
+        "change_1d": -0.8,
+        "volume_ratio": 1.05,
+        "mainline_rank": 15,
+        "mainline_badge": null,
+        "volume_signal": null,
+        "entry_window": false,
+        "vs_market_5d": 0.5,
+        "vs_market_20d": 3.1,
+        "historical_gain": 22.0,
+        "last_peak_date": "2026-05-10",
+        "last_trough_date": "2026-04-20",
+        "cycle_days": 35,
+        "cycle_count": 4,
+        "related_stocks": ["中芯国际", "北方华创", "韦尔股份"],
+        "related_count": 3,
+        "related_codes": ["688981", "002371", "603501"],
+        "stock_count": 55,
+        "wave_data": [
+          {"date": "2026-05-01", "normalized": 95.0, "change_pct": 1.5, "volume_ratio": 1.20},
+          {"date": "2026-05-08", "normalized": 90.0, "change_pct": -0.5, "volume_ratio": 1.05},
+          {"date": "2026-05-15", "normalized": 78.0, "change_pct": -3.0, "volume_ratio": 0.95},
+          {"date": "2026-05-22", "normalized": 73.0, "change_pct": -1.5, "volume_ratio": 0.90},
+          {"date": "2026-05-29", "normalized": 70.0, "change_pct": -1.0, "volume_ratio": 1.05}
+        ],
+        "annotations": [
+          {"date": "2026-05-10", "type": "peak", "score": 3, "label": "●波峰"}
+        ]
+      }
+    ]
+  },
+  "alerts": [
+    {
+      "code": "BK1682",
+      "name": "AI算力",
+      "vl_score": 4,
+      "reason": "BIAS20=-6.3%, 量比0.52, EMA10斜率转平, 缩量至EMA60",
+      "date": "2026-05-31"
+    }
+  ],
+  "new_hot": [
+    {
+      "code": "BK2015",
+      "name": "时空大数据",
+      "gain_20d": 18.5,
+      "stock_count": 25,
+      "source": "scan"
+    },
+    {
+      "code": "BK2016",
+      "name": "新型工业化",
+      "gain_20d": 15.2,
+      "stock_count": 30,
+      "source": "scan"
+    }
+  ]
+}

@@ -234,6 +234,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/watchlist', '/trend_candidates',
             '/logic-tracking', '/alarm-sounds',
             '/plan-tracking',
+            '/concept-wave',
         }
         if path in spa_routes:
             self.path = '/react.html'

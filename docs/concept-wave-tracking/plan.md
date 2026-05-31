@@ -26,7 +26,7 @@
 
 | 阶段 | 内容 | 依赖 | 状态 |
 |:----|:-----|:----|:----:|
-| 一 | 前端页面 `ConceptWaveTracking.tsx` | 设计文档API Schema（已定稿） | ⏳ |
+| 一 | 前端页面 `ConceptWaveTracking.tsx` | 设计文档API Schema（已定稿） | ✅ |
 | 二 | API层 handler + 注册路由 | 无 | ⏳ |
 | 三 | 波谷评分 `judge_concept_wave()` + 回测报告 | 无（合成测试数据） | ⏳ |
 | 四 | 数据基建管线（概念映射+K线） | data_layer与评分逻辑协商好的接口 | ⏳ |
@@ -39,10 +39,10 @@
 
 | # | 任务 | 文件 | 预估 | 状态 |
 |:-:|:----|:----|:----:|:----:|
-| 1 | `ConceptWaveTracking.tsx` 主页面（折叠卡片+堆叠走势+统计卡+告警+扫描） | `frontend/src/pages/` | 1.5h | ⏳ |
-| 2 | `ConceptWaveTracking.css` 样式（暗色主题，对齐现有设计系统） | `frontend/src/pages/` | 0.5h | ⏳ |
-| 3 | Mock JSON（按设计文档API Schema生成） | `frontend/src/mock/` | 0.5h | ⏳ |
-| 4 | 页面路由注册（spa_routes + html_redirects） | `server.py` | 0.5h | ⏳ |
+| 1 | `ConceptWaveTracking.tsx` 主页面（折叠卡片+堆叠走势+统计卡+告警+扫描） | `frontend/src/pages/` | 1.5h | 1.5h | ✅ |
+| 2 | `ConceptWaveTracking.css` 样式（暗色主题，对齐现有设计系统） | `frontend/src/pages/` | 0.5h | 0.3h | ✅ |
+| 3 | Mock JSON（按设计文档API Schema生成） | `server/frontend/src/mock/` | 0.5h | 0.2h | ✅ |
+| 4 | 页面路由注册（spa_routes + App.tsx） | `server.py` + `App.tsx` | 0.5h | 0.2h | ✅ |
 
 **验证方式：** 浏览器打开页面，Mock数据渲染正确、展开折叠交互正常
 
