@@ -1,5 +1,28 @@
 # Changelog
 
+## [v3.6.0] — 2026-05-31
+
+### 重构：操作计划追踪 v2 — 数据源改为复盘 trading_plan + SQLite 存储
+
+**背景：** 旧版从工作台（workbench）提取计划，数据经过人工筛选，无法追踪系统本身判断质量。
+
+**v2 方案：**
+- **数据源**：复盘 `compute_review_real_time()` 的 `trading_plan.holdings_action` + `trading_plan.buy_priority`，不再依赖 workbench 文件
+- **存储**：JSON 文件 → SQLite（`plan_tracking.db`），零外部依赖，SQL 直接 GROUP BY 做多维统计
+- **归类维度**：买点类型、结构·阶段、是否主线、来源(持仓/关注)、操作方向
+- **自动建议**：新增主线 vs 非主线对比建议
+
+**改动：**
+- **`docs/plan-tracking-design.md`** — 更新为 v2 设计文档（含 PDF）
+- **`server/backend/services/plan_tracking_service.py`** — 重写：SQLite 存储、review trading_plan 数据源、多维统计
+- **`server/backend/api/plan_tracking.py`** — 适配新数据模型（date+code 标识取代 plan_date+type+stock）
+- **`server/backend/tests/test_plan_tracking.py`** — 29 个新测试
+- **`server/frontend/src/pages/PlanTracking.tsx`** — 适配新字段（source/buy_point/structure/is_main）
+
+### 修复：大盘报警 dismiss 逻辑
+
+- `check_index_alerts()` 中跳过 status=handled 的报警条目，大盘报警与个股报警保持一致的 dismiss/reenable 逻辑
+
 ## [v3.5.2] — 2026-05-30
 
 ### 修复：Docker 目录结构对齐原生开发（根治所有路径问题）
