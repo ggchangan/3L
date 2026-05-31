@@ -79,6 +79,10 @@ def _make_response(handler, path):
                 related_stocks.append(sinfo.get('name', scode))
                 related_codes.append(scode)
 
+        # ★ 核心筛选：只展示有自选股关联的概念，"波谷组"=真正的"重点关注"
+        if not related_stocks:
+            continue
+
         # 近5日涨跌
         if len(klines) >= 5:
             close_now = klines[-1]['close']

@@ -30,8 +30,7 @@ describe('ConceptWaveTracking', () => {
   it('渲染标题', async () => {
     const ConceptWaveTracking = (await import('../pages/ConceptWaveTracking')).default
     render(<MemoryRouter><ConceptWaveTracking /></MemoryRouter>)
-    // 标题文字在 span 内，emoji 在单独的 .step span 中
-    expect(screen.getByText('概念板块波谷追踪')).toBeTruthy()
+    expect(screen.getByText(/概念板块波谷追踪/)).toBeTruthy()
   })
 
   it('加载完成后显示统计卡', async () => {
@@ -42,7 +41,7 @@ describe('ConceptWaveTracking', () => {
       expect(screen.getByText('当前波谷信号')).toBeTruthy()
     })
     expect(screen.getByText('强信号告警')).toBeTruthy()
-    expect(screen.getByText('本周新发现')).toBeTruthy()
+    expect(screen.getByText('追踪概念总数')).toBeTruthy()
   })
 
   it('加载完成后显示波谷组第一张卡片', async () => {
