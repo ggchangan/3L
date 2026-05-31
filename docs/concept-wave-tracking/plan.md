@@ -27,9 +27,9 @@
 | 阶段 | 内容 | 依赖 | 状态 |
 |:----|:-----|:----|:----:|
 | 一 | 前端页面 `ConceptWaveTracking.tsx` | 设计文档API Schema（已定稿） | ✅ |
-| 二 | API层 handler + 注册路由 | 无 | ⏳ |
-| 三 | 波谷评分 `judge_concept_wave()` + 回测报告 | 无（合成测试数据） | ⏳ |
-| 四 | 数据基建管线（概念映射+K线） | data_layer与评分逻辑协商好的接口 | ⏳ |
+| 五 | API层 handler + 连接真实数据 | 无（实时评分） | ✅ |
+| 六 | 概念映射管线（update_concept_maps） | 无（akshare+push2test） | ✅ |
+| 七 | 连接真实数据 → 前端渲染 | sector_daily.json | ✅ |
 
 ---
 

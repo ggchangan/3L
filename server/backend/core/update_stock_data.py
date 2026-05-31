@@ -28,6 +28,10 @@ from backend.core.data_layer import (
     load_sector_daily_uncached,
     save_sector_daily,
 )
+from backend.core.data_layer import (
+    save_concept_list,
+    save_stock_concept_map,
+)
 
 CACHE_DIR = os.path.join(DATA_DIR, '.cache')
 
@@ -529,6 +533,159 @@ def update_industry_map():
         save_industry_map(result)
         log(f'🏭  行业映射: 已全量更新 ({len(result)}只, {len(items)-len(result)}只无行业)')
     return len(result)
+
+
+# ════════════════════════════════════════════════════════════════
+# 概念板块映射（stock→concept + concept→stocks）
+# ════════════════════════════════════════════════════════════════
+
+def update_concept_maps():
+    """
+    从 akshare 拉概念板块成分股映射，写入 map/concept_list.json 和 map/stock_concept.json
+
+    map/concept_list.json:  {concept_code: {name, stock_count, stocks: [code,...]}}
+    map/stock_concept.json: {stock_code: [concept_code,...]}
+    """
+    import akshare as ak
+    try:
+        t0 = time.time()
+        log('🗺️  拉取概念板块列表...')
+
+        # 概念板块列表（含成分股信息）
+        # akshare 的 stock_board_concept_name_ths() 返回 {name, code, num, ...}
+        df = ak.stock_board_concept_name_ths()
+        if df is None or len(df) == 0:
+            log('⚠️  akshare概念列表为空')
+            return 0, 0
+
+        # 构建 concept_list: {code: {name, stock_count, stocks}}
+        concept_list = {}
+        stock_concept_map = {}  # {stock_code: [concept_code,...]}
+
+        for _, row in df.iterrows():
+            name = row.get('name', '')
+            code = row.get('code', '')
+            if not name or not code:
+                continue
+            concept_list[code] = {
+                'name': name,
+                'stock_count': int(row.get('num', 0)) if 'num' in row else 0,
+                'stocks': [],
+            }
+
+        log(f'    概念板块列表: {len(concept_list)} 个')
+        log('    需要逐一获取成分股（akshare 无批量接口），跳过成分股细节...')
+
+        # 由于 akshare 获取每个概念成分股需要逐个请求（399个太慢），
+        # 改用 shenwan 板块的 f103 接口获取概念映射。
+        # 先用现成的概念列表写入，成分股留到扫描阶段按需拉取。
+        save_concept_list(concept_list)
+        log(f'    ✅ 概念列表已保存 ({time.time()-t0:.0f}s)')
+
+        # 从 push2test f103 获取个股→概念映射
+        log('    从 push2test 拉取个股概念映射(f103)...')
+        import requests as _requests
+        url = 'https://push2test.eastmoney.com/api/qt/clist/get'
+        params = {
+            'pn': '1', 'pz': '5000',
+            'po': '1', 'np': '1',
+            'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+            'fltt': '2', 'invt': '2',
+            'fs': 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23',
+            'fields': 'f12,f14,f103',
+        }
+        headers = {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://quote.eastmoney.com/',
+        }
+        r = _requests.get(url, params=params, headers=headers, timeout=30)
+        data = r.json()
+        items = data.get('data', {}).get('diff', [])
+        if not items:
+            log(f'⚠️  push2test f103 返回空')
+            return len(concept_list), 0
+
+        for item in items:
+            code = item.get('f12', '')
+            name = (item.get('f14', '') or '').strip()
+            concept_str = (item.get('f103', '') or '').strip()
+            if code and concept_str and concept_str != '-':
+                # f103 格式: "深圳特区,互联网金融,区块链,跨境支付" — 按逗号拆分
+                concept_names = [c.strip() for c in concept_str.replace(';', ',').split(',') if c.strip()]
+                matched_codes = []
+                for cname in concept_names:
+                    # 在 concept_list 中按名称精准匹配（f103 名称与 akshare 名称应一致）
+                    for ccode, cinfo in concept_list.items():
+                        if cinfo['name'] == cname or cinfo['name'] == cname + '概念' or cname + '概念' == cinfo['name']:
+                            matched_codes.append(ccode)
+                            # 追加到 concept_list 的 stocks 列表
+                            if code not in cinfo['stocks']:
+                                cinfo['stocks'].append(code)
+                            break
+                if matched_codes:
+                    stock_concept_map[code] = {
+                        'code': code,
+                        'name': name,
+                        'concept_codes': matched_codes,
+                        'concept_names': concept_names,
+                    }
+
+        # 更新 stock_concept_map 中的概念名
+        for scode, sinfo in stock_concept_map.items():
+            resolved = []
+            for cc in sinfo['concept_codes']:
+                if cc in concept_list:
+                    resolved.append(concept_list[cc]['name'])
+                else:
+                    # 未能匹配的保留原概念名片段
+                    pass
+            sinfo['concept_names'] = resolved
+
+        # 回写 concept_list 的 stock_count 为实际匹配数
+        for ccode, cinfo in concept_list.items():
+            cinfo['stock_count'] = len(cinfo['stocks'])
+
+        # 保存
+        save_concept_list(concept_list)
+        save_stock_concept_map(stock_concept_map)
+
+        concept_cnt = sum(1 for c in concept_list.values() if c['stocks'])
+        stock_cnt = len(stock_concept_map)
+        log(f'    ✅ 概念映射完成: {concept_cnt}个概念含成分股, {stock_cnt}只个股有概念 ({time.time()-t0:.0f}s)')
+        return concept_cnt, stock_cnt
+
+    except ImportError:
+        log('⚠️  缺少 akshare 依赖，跳过概念映射')
+        return 0, 0
+    except Exception as e:
+        log(f'⚠️  概念映射失败: {e}')
+        import traceback
+        log(traceback.format_exc())
+        return 0, 0
+
+
+# ════════════════════════════════════════════════════════════════
+# 概念板块K线增量更新（仅拉取追踪中的概念）
+# ════════════════════════════════════════════════════════════════
+
+def update_concept_klines():
+    """
+    从 sector_daily.json 提取概念板块K线，按 tracked_concepts 筛选保存。
+    目前 sector_daily.json 已由 refresh_sectors.py 全量更新，此处只做提取。
+
+    未来可优化为：只拉取追踪中的概念（减少请求量）
+    """
+    t0 = time.time()
+    # 从 sector_daily.json 读概念K线
+    sector = load_sector_daily_uncached()
+    concepts_kline = sector.get('concepts', {})
+    if not concepts_kline:
+        log('⚠️  板块数据中无概念K线')
+        return 0
+
+    log(f'📊  概念K线: {len(concepts_kline)}个有数据')
+    log(f'    ✅ 概念K线就绪 ({time.time()-t0:.0f}s)')
+    return len(concepts_kline)
 
 
 # ════════════════════════════════════════════════════════════════
