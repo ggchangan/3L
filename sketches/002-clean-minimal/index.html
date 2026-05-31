@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>概念板块波谷追踪 | 简洁干净型</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #13141f;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #c8c9d4;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .container {
+    width: 900px;
+    max-width: 100%;
+  }
+
+  /* ── Title Bar ── */
+  .title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 0 12px;
+    border-bottom: 1px solid #2a2b3d;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .title-bar h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #e8e9f0;
+    letter-spacing: 1px;
+  }
+  .title-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .date-range {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #1a1b2e;
+    border: 1px solid #2f3045;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 13px;
+    color: #9a9bb0;
+  }
+  .date-range span { color: #c8c9d4; }
+  .btn-sort {
+    background: #2a6eff;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: default;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Group Header ── */
+  .group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 0 8px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    border-bottom: 1px solid #2a2b3d;
+  }
+  .group-header .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .tag-green { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+  .tag-yellow { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+  .tag-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+  .group-count {
+    font-size: 12px;
+    color: #7a7b92;
+    font-weight: 400;
+    margin-left: auto;
+  }
+
+  /* ── Concept Row ── */
+  .concept-row {
+    background: #1a1b2e;
+    border: 1px solid #2a2b3d;
+    border-radius: 8px;
+    margin: 6px 0;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .concept-info {
+    flex: 0 0 130px;
+    min-width: 0;
+  }
+  .concept-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e8e9f0;
+  }
+  .concept-name .prefix-gold {
+    font-size: 12px;
+    color: #f59e0b;
+    margin-right: 4px;
+  }
+  .concept-name .prefix-silver {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-right: 4px;
+  }
+  .concept-vl {
+    font-size: 12px;
+    color: #7a7b92;
+    margin-top: 2px;
+  }
+  .concept-vl .vl-val {
+    color: #c8c9d4;
+    font-weight: 600;
+  }
+
+  /* ── Chart Container (taller: 60px) ── */
+  .concept-chart {
+    flex: 1;
+    position: relative;
+    height: 60px;
+    min-width: 0;
+  }
+  .concept-chart svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ── Absolute-positioned chart labels ── */
+  .chart-label {
+    position: absolute;
+    top: 0;
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+    line-height: 1;
+  }
+  .chart-label .emoji { font-size: 12px; }
+  .chart-label .dot { font-size: 14px; line-height: 1; }
+  .chart-label .marker-text { color: #7a7b92; font-size: 10px; }
+
+  /* ── Badge on the right side ── */
+  .concept-badge {
+    flex: 0 0 72px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+  .badge-green { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+  .badge-yellow { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+  .badge-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 16px 0 8px;
+    margin-top: 16px;
+    border-top: 1px solid #2a2b3d;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: #7a7b92;
+  }
+  .legend-line {
+    width: 22px;
+    height: 2px;
+    border-radius: 1px;
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .legend-marker {
+    font-size: 13px;
+    line-height: 1;
+  }
+  .legend-dash {
+    display: inline-block;
+    width: 14px;
+    height: 0;
+    border-top: 1px dashed #3a3b50;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 720px) {
+    .concept-info { flex: 0 0 100px; }
+    .concept-badge { flex: 0 0 56px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ─── TITLE BAR ─── -->
+  <div class="title-bar">
+    <h1>📊 概念板块波谷追踪</h1>
+    <div class="title-actions">
+      <div class="date-range">
+        📅 <span>2026-05-18</span> ~ <span>2026-05-31</span>
+      </div>
+      <div class="btn-sort">按阶段排序</div>
+    </div>
+  </div>
+
+  <!-- ─── GROUP 1: 波谷组 ─── -->
+  <div class="group-header">
+    <span class="tag tag-green">波谷组</span>
+    <span class="group-count">2 个概念处于波谷阶段</span>
+  </div>
+
+  <!-- ROW 1: AI算力 (波谷) -->
+  <div class="concept-row">
+    <div class="concept-info">
+      <div class="concept-name"><span class="prefix-gold">[金]</span> AI算力</div>
+      <div class="concept-vl">vl: <span class="vl-val">4</span></div>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 60" preserveAspectRatio="none">
+        <!-- Dashed index line -->
+        <polyline
+          points="0,34 30,32 60,30 90,29 120,28 150,26 180,27 210,24 240,25 270,23 300,22"
+          fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"
+        />
+        <!-- Green wave line -->
+        <polyline
+          points="0,46 30,44 60,42 90,38 120,34 150,26 180,22 210,18 240,20 270,14 300,12"
+          fill="none" stroke="#34d399" stroke-width="2"
+        />
+        <!-- Today line (vertical dashed) -->
+        <line x1="270" y1="0" x2="270" y2="60" stroke="#4a4b60" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>
+        <!-- 波谷 dot -->
+        <circle cx="270" cy="14" r="4" fill="#34d399" stroke="#13141f" stroke-width="1.5"/>
+        <!-- Axis labels (minimal) -->
+        <text x="2" y="10" fill="#5a5b70" font-size="8">高</text>
+        <text x="2" y="56" fill="#5a5b70" font-size="8">低</text>
+      </svg>
+      <!-- HTML labels overlaid -->
+      <span class="chart-label" style="left:62%;top:2px;"><span class="emoji">💧</span><span class="marker-text">缩量</span></span>
+      <span class="chart-label" style="left:88%;top:-2px;"><span class="dot" style="color:#34d399;">●</span></span>
+      <span class="chart-label" style="left:88%;top:48px;font-size:9px;color:#4a4b60;">今日</span>
+    </div>
+    <div class="concept-badge badge-green">
+      <span>🟢</span> 波谷
+    </div>
+  </div>
+
+  <!-- ROW 2: HBM概念 (波中) -->
+  <div class="concept-row">
+    <div class="concept-info">
+      <div class="concept-name"><span class="prefix-silver">[银]</span> HBM概念</div>
+      <div class="concept-vl">vl: <span class="vl-val">2</span></div>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 60" preserveAspectRatio="none">
+        <!-- Dashed index line -->
+        <polyline
+          points="0,34 30,32 60,30 90,29 120,28 150,26 180,27 210,24 240,25 270,23 300,22"
+          fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"
+        />
+        <!-- Orange wave line -->
+        <polyline
+          points="0,44 30,42 60,40 90,36 120,32 150,28 180,24 210,20 240,22 270,16 300,14"
+          fill="none" stroke="#fb923c" stroke-width="2"
+        />
+        <!-- Today line -->
+        <line x1="270" y1="0" x2="270" y2="60" stroke="#4a4b60" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>
+        <!-- 波谷 dot -->
+        <circle cx="270" cy="16" r="4" fill="#fb923c" stroke="#13141f" stroke-width="1.5"/>
+        <text x="2" y="10" fill="#5a5b70" font-size="8">高</text>
+        <text x="2" y="56" fill="#5a5b70" font-size="8">低</text>
+      </svg>
+      <span class="chart-label" style="left:88%;top:-2px;"><span class="dot" style="color:#fb923c;">●</span></span>
+      <span class="chart-label" style="left:88%;top:48px;font-size:9px;color:#4a4b60;">今日</span>
+    </div>
+    <div class="concept-badge badge-yellow">
+      <span>🟡</span> 波中
+    </div>
+  </div>
+
+  <!-- ─── GROUP 2: 波中组 ─── -->
+  <div class="group-header">
+    <span class="tag tag-yellow">波中组</span>
+    <span class="group-count">1 个概念处于波中阶段</span>
+  </div>
+
+  <!-- ROW 3: 机器人 (波中) -->
+  <div class="concept-row">
+    <div class="concept-info">
+      <div class="concept-name">机器人</div>
+      <div class="concept-vl">vl: <span class="vl-val">1</span></div>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 60" preserveAspectRatio="none">
+        <!-- Dashed index line -->
+        <polyline
+          points="0,32 30,30 60,28 90,29 120,26 150,24 180,25 210,22 240,23 270,21 300,20"
+          fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"
+        />
+        <!-- Gray wave line (flat-ish) -->
+        <polyline
+          points="0,40 30,38 60,36 90,37 120,34 150,32 180,33 210,30 240,31 270,28 300,29"
+          fill="none" stroke="#9ca3af" stroke-width="2"
+        />
+        <!-- Today line -->
+        <line x1="270" y1="0" x2="270" y2="60" stroke="#4a4b60" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>
+        <text x="2" y="10" fill="#5a5b70" font-size="8">高</text>
+        <text x="2" y="56" fill="#5a5b70" font-size="8">低</text>
+      </svg>
+      <span class="chart-label" style="left:55%;top:2px;"><span class="emoji">🔥</span><span class="marker-text">放量</span></span>
+      <span class="chart-label" style="left:88%;top:48px;font-size:9px;color:#4a4b60;">今日</span>
+    </div>
+    <div class="concept-badge badge-yellow">
+      <span>🟡</span> 波中
+    </div>
+  </div>
+
+  <!-- ─── GROUP 3: 下跌组 ─── -->
+  <div class="group-header">
+    <span class="tag tag-red">下跌组</span>
+    <span class="group-count">2 个概念处于下跌阶段</span>
+  </div>
+
+  <!-- ROW 4: 固态电池 (下跌) -->
+  <div class="concept-row">
+    <div class="concept-info">
+      <div class="concept-name">固态电池</div>
+      <div class="concept-vl">vl: <span class="vl-val">0</span></div>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 60" preserveAspectRatio="none">
+        <!-- Dashed index line (rising) -->
+        <polyline
+          points="0,20 30,22 60,24 90,26 120,28 150,30 180,32 210,34 240,36 270,38 300,40"
+          fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"
+        />
+        <!-- Red wave line (declining) -->
+        <polyline
+          points="0,16 30,18 60,20 90,24 120,28 150,34 180,38 210,42 240,44 270,46 300,48"
+          fill="none" stroke="#ef4444" stroke-width="2"
+        />
+        <!-- Today line -->
+        <line x1="270" y1="0" x2="270" y2="60" stroke="#4a4b60" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>
+        <text x="2" y="10" fill="#5a5b70" font-size="8">高</text>
+        <text x="2" y="56" fill="#5a5b70" font-size="8">低</text>
+      </svg>
+      <span class="chart-label" style="left:60%;top:2px;"><span class="emoji">⚠️</span><span class="marker-text">天量滞涨</span></span>
+      <span class="chart-label" style="left:88%;top:48px;font-size:9px;color:#4a4b60;">今日</span>
+    </div>
+    <div class="concept-badge badge-red">
+      <span>🔴</span> 下跌
+    </div>
+  </div>
+
+  <!-- ROW 5: 国产芯片 (下跌) -->
+  <div class="concept-row">
+    <div class="concept-info">
+      <div class="concept-name">国产芯片</div>
+      <div class="concept-vl">vl: <span class="vl-val">1</span></div>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 60" preserveAspectRatio="none">
+        <!-- Dashed index line (rising) -->
+        <polyline
+          points="0,20 30,22 60,24 90,26 120,28 150,30 180,32 210,34 240,36 270,38 300,40"
+          fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"
+        />
+        <!-- Red wave line (peaked then declining) -->
+        <polyline
+          points="0,34 30,30 60,24 90,18 120,14 150,16 180,22 210,28 240,34 270,38 300,42"
+          fill="none" stroke="#ef4444" stroke-width="2"
+        />
+        <!-- Today line -->
+        <line x1="270" y1="0" x2="270" y2="60" stroke="#4a4b60" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>
+        <!-- 波峰 dot -->
+        <circle cx="120" cy="14" r="4" fill="#ef4444" stroke="#13141f" stroke-width="1.5"/>
+        <text x="2" y="10" fill="#5a5b70" font-size="8">高</text>
+        <text x="2" y="56" fill="#5a5b70" font-size="8">低</text>
+      </svg>
+      <span class="chart-label" style="left:37%;top:-2px;"><span class="dot" style="color:#ef4444;">●</span></span>
+      <span class="chart-label" style="left:88%;top:48px;font-size:9px;color:#4a4b60;">今日</span>
+    </div>
+    <div class="concept-badge badge-red">
+      <span>🔴</span> 下跌
+    </div>
+  </div>
+
+  <!-- ─── LEGEND ─── -->
+  <div class="legend">
+    <div class="legend-item">
+      <span class="legend-line" style="background:#34d399;"></span>
+      波谷线
+    </div>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#fb923c;"></span>
+      波中线
+    </div>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#ef4444;"></span>
+      下跌线
+    </div>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#9ca3af;"></span>
+      横盘线
+    </div>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#3a3b50;"></span>
+      基准指数
+      <span class="legend-dash"></span>
+    </div>
+    <div class="legend-item">
+      <span class="legend-dot" style="background:#34d399;"></span>
+      波谷
+    </div>
+    <div class="legend-item">
+      <span class="legend-dot" style="background:#ef4444;"></span>
+      波峰
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">💧</span>
+      缩量
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">🔥</span>
+      放量
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">⚠️</span>
+      天量滞涨
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">🟢</span>
+      波谷
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">🟡</span>
+      波中
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">🔴</span>
+      下跌
+    </div>
+    <div class="legend-item">
+      <span class="legend-dash" style="width:18px;"></span>
+      今日
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:20px 0 8px;font-size:11px;color:#4a4b60;">
+    简洁干净型 · 概念板块波谷追踪 v1.0
+  </div>
+
+</div>
+</body>
+</html>

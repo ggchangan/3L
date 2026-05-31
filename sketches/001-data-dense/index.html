@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>概念板块波谷追踪 | 数据密集型</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #13141f;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #c8c9d4;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .container {
+    width: 900px;
+    max-width: 100%;
+  }
+
+  /* ── Title Bar ── */
+  .title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 0 12px;
+    border-bottom: 1px solid #2a2b3d;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .title-bar h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #e8e9f0;
+    letter-spacing: 1px;
+  }
+  .title-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .date-range {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #1a1b2e;
+    border: 1px solid #2f3045;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 13px;
+    color: #9a9bb0;
+  }
+  .date-range span { color: #c8c9d4; }
+  .btn-sort {
+    background: #2a6eff;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: default;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Stats Row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 16px 0;
+  }
+  .stat-card {
+    background: #1a1b2e;
+    border: 1px solid #2a2b3d;
+    border-radius: 8px;
+    padding: 14px 12px;
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #e8e9f0;
+    line-height: 1.3;
+  }
+  .stat-value .up { color: #34d399; }
+  .stat-label {
+    font-size: 12px;
+    color: #7a7b92;
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Group Header ── */
+  .group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 0 8px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    border-bottom: 1px solid #2a2b3d;
+  }
+  .group-header .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .tag-green { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+  .tag-yellow { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+  .tag-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+  .group-count {
+    font-size: 12px;
+    color: #7a7b92;
+    font-weight: 400;
+    margin-left: auto;
+  }
+
+  /* ── Concept Row ── */
+  .concept-row {
+    background: #1a1b2e;
+    border: 1px solid #2a2b3d;
+    border-radius: 8px;
+    margin: 6px 0;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .concept-info {
+    flex: 0 0 180px;
+    min-width: 0;
+  }
+  .concept-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e8e9f0;
+  }
+  .concept-name .prefix {
+    font-size: 12px;
+    color: #fbbf24;
+    margin-right: 4px;
+  }
+  .concept-name .prefix-silver {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-right: 4px;
+  }
+  .concept-name .prefix-gold {
+    font-size: 12px;
+    color: #f59e0b;
+    margin-right: 4px;
+  }
+  .concept-vl {
+    font-size: 12px;
+    color: #7a7b92;
+    margin-top: 2px;
+  }
+  .concept-vl .vl-val {
+    color: #c8c9d4;
+    font-weight: 600;
+  }
+
+  /* ── Chart Container ── */
+  .concept-chart {
+    flex: 1;
+    position: relative;
+    height: 52px;
+    min-width: 0;
+  }
+  .concept-chart svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ── Absolute-positioned chart labels ── */
+  .chart-label {
+    position: absolute;
+    top: 0;
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+    line-height: 1;
+  }
+  .chart-label .emoji { font-size: 12px; }
+  .chart-label .dot { font-size: 14px; line-height: 1; }
+
+  /* Badge on the right side */
+  .concept-badge {
+    flex: 0 0 72px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+  .badge-green { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+  .badge-yellow { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+  .badge-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+  .concept-extra {
+    flex: 0 0 80px;
+    text-align: right;
+    font-size: 12px;
+    color: #7a7b92;
+  }
+  .concept-extra .num { color: #e8e9f0; font-weight: 600; }
+  .concept-extra .arrow { color: #fbbf24; }
+
+  /* ── Special markers (arrows, text) ── */
+  .chart-label .arrow-text { color: #fbbf24; font-size: 11px; }
+  .chart-label .action-text { color: #34d399; font-size: 11px; font-weight: 600; }
+
+  /* ── Alert Section ── */
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 20px 0 10px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #e8e9f0;
+  }
+  .section-title .count {
+    font-size: 12px;
+    color: #7a7b92;
+    font-weight: 400;
+  }
+  .alert-card {
+    background: #1a1b2e;
+    border: 1px solid #2a2b3d;
+    border-left: 3px solid #34d399;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .alert-icon {
+    font-size: 16px;
+    flex: 0 0 20px;
+  }
+  .alert-body { flex: 1; font-size: 13px; line-height: 1.6; }
+  .alert-body strong { color: #e8e9f0; }
+  .alert-body .dim { color: #7a7b92; }
+  .alert-body .highlight { color: #34d399; font-weight: 600; }
+  .alert-body .bias { color: #ef4444; }
+
+  /* ── New Concept Scan ── */
+  .scan-card {
+    background: #1a1b2e;
+    border: 1px solid #2a2b3d;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .scan-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e8e9f0;
+  }
+  .scan-stat {
+    font-size: 13px;
+    color: #34d399;
+    font-weight: 600;
+  }
+  .scan-label {
+    font-size: 12px;
+    color: #7a7b92;
+    margin-left: auto;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 16px 0 8px;
+    margin-top: 16px;
+    border-top: 1px solid #2a2b3d;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: #7a7b92;
+  }
+  .legend-line {
+    width: 22px;
+    height: 2px;
+    border-radius: 1px;
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .legend-marker {
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 720px) {
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .concept-info { flex: 0 0 120px; }
+    .concept-badge { flex: 0 0 60px; }
+    .concept-extra { flex: 0 0 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ─── TITLE BAR ─── -->
+  <div class="title-bar">
+    <h1>📊 概念板块波谷追踪</h1>
+    <div class="title-actions">
+      <div class="date-range">
+        📅 <span>2026-05-18</span> ~ <span>2026-05-31</span>
+      </div>
+      <div class="btn-sort">按阶段排序</div>
+    </div>
+  </div>
+
+  <!-- ─── STATS ROW ─── -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">67%</div>
+      <div class="stat-label">波谷准确率</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">3 <span style="font-size:14px;color:#7a7b92">个</span></div>
+      <div class="stat-label">当前波谷信号</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">52</div>
+      <div class="stat-label">追踪概念</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value"><span class="up">↑</span> 14%</div>
+      <div class="stat-label">上周新发现</div>
+    </div>
+  </div>
+
+  <!-- ─── GROUP 1: 波谷组 ─── -->
+  <div class="group-header">
+    <span class="tag tag-green">波谷组</span>
+    <span class="group-count">2 个概念处于波谷阶段</span>
+  </div>
+
+  <!-- ROW 1: AI算力 (波谷) -->
+  <div class="concept-row">
+    <div class="concept-info">
+      <div class="concept-name"><span class="prefix-gold">[金]</span> AI算力</div>
+      <div class="concept-vl">vl: <span class="vl-val">4</span></div>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 52" preserveAspectRatio="none">
+        <!-- Dashed index line -->
+        <polyline
+          points="0,30 30,28 60,26 90,25 120,24 150,22 180,23 210,20 240,21 270,19 300,18"
+          fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"
+        />
+        <!-- Green wave line -->
+        <polyline
+          points="0,40 30,38 60,36 90,32 120,28 150,20 180,16 210,12 240,14 270,8 300,6"
+          fill="none" stroke="#34d399" stroke-width="2"
+        />
+        <!-- 波谷 dot -->
+        <circle cx="270" cy="8" r="4" fill="#34d399" stroke="#13141f" stroke-width="1.5"/>
+      </svg>
+      <!-- HTML labels overlaid -->
+      <span class="chart-label" style="left:62%;top:2px;"><span class="emoji">💧</span><span style="color:#7a7b92;font-size:10px;">缩量</span></span>
+      <span class="chart-label" style="left:88%;top:-2px;"><span class="dot" style="color:#34d399;">●</span></span>
+      <span class="chart-label" style="left:50%;top:38px;"><span class="action-text">切入窗口</span></span>
+    </div>
+    <div class="concept-extra">
+      <div>历史 <span class="num">+18%</span></div>
+    </div>
+    <div class="concept-badge badge-green">
+      <span>🟢</span> 波谷
+    </div>
+  </div>
+
+  <!-- ROW 2: HBM概念 (波中) — placed under 波谷组 for layout but badge says 波中 -->
+  <div class="concept-row">
+    <div class="concept-info">
+      <div class="concept-name"><span class="prefix-silver">[银]</span> HBM概念</div>
+      <div class="concept-vl">vl: <span class="vl-val">2</span></div>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 52" preserveAspectRatio="none">
+        <!-- Gray dashed index -->
+        <polyline
+          points="0,30 30,28 60,26 90,25 120,24 150,22 180,23 210,20 240,21 270,19 300,18"
+          fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"
+        />
+        <!-- Orange wave line -->
+        <polyline
+          points="0,38 30,36 60,34 90,30 120,26 150,22 180,18 210,14 240,16 270,10 300,8"
+          fill="none" stroke="#fb923c" stroke-width="2"
+        />
+        <!-- 波谷 dot -->
+        <circle cx="270" cy="10" r="4" fill="#fb923c" stroke="#13141f" stroke-width="1.5"/>
+      </svg>
+      <span class="chart-label" style="left:88%;top:-2px;"><span class="dot" style="color:#fb923c;">●</span></span>
+      <span class="chart-label" style="left:52%;top:38px;"><span class="arrow-text">↘ 轮动(算力→HBM)</span></span>
+    </div>
+    <div class="concept-extra">
+      <div>历史 <span class="num">+12%</span></div>
+    </div>
+    <div class="concept-badge badge-yellow">
+      <span>🟡</span> 波中
+    </div>
+  </div>
+
+  <!-- ─── GROUP 2: 波中组 ─── -->
+  <div class="group-header">
+    <span class="tag tag-yellow">波中组</span>
+    <span class="group-count">1 个概念处于波中阶段</span>
+  </div>
+
+  <!-- ROW 3: 机器人 (波中) -->
+  <div class="concept-row">
+    <div class="concept-info">
+      <div class="concept-name">机器人</div>
+      <div class="concept-vl">vl: <span class="vl-val">1</span></div>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 52" preserveAspectRatio="none">
+        <!-- Gray dashed index -->
+        <polyline
+          points="0,28 30,26 60,24 90,25 120,22 150,20 180,21 210,18 240,19 270,17 300,16"
+          fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"
+        />
+        <!-- Gray wave line (flat-ish) -->
+        <polyline
+          points="0,34 30,32 60,30 90,31 120,28 150,26 180,27 210,24 240,25 270,22 300,23"
+          fill="none" stroke="#9ca3af" stroke-width="2"
+        />
+      </svg>
+      <span class="chart-label" style="left:55%;top:2px;"><span class="emoji">🔥</span><span style="color:#7a7b92;font-size:10px;">放量</span></span>
+    </div>
+    <div class="concept-extra" style="visibility:hidden;">&nbsp;</div>
+    <div class="concept-badge badge-yellow">
+      <span>🟡</span> 波中
+    </div>
+  </div>
+
+  <!-- ─── GROUP 3: 下跌组 ─── -->
+  <div class="group-header">
+    <span class="tag tag-red">下跌组</span>
+    <span class="group-count">2 个概念处于下跌阶段</span>
+  </div>
+
+  <!-- ROW 4: 固态电池 (下跌) -->
+  <div class="concept-row">
+    <div class="concept-info">
+      <div class="concept-name">固态电池</div>
+      <div class="concept-vl">vl: <span class="vl-val">0</span></div>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 52" preserveAspectRatio="none">
+        <!-- Gray dashed index -->
+        <polyline
+          points="0,16 30,18 60,20 90,22 120,24 150,26 180,28 210,30 240,32 270,34 300,36"
+          fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"
+        />
+        <!-- Red wave line (declining) -->
+        <polyline
+          points="0,12 30,14 60,16 90,20 120,24 150,30 180,34 210,38 240,40 270,42 300,44"
+          fill="none" stroke="#ef4444" stroke-width="2"
+        />
+      </svg>
+      <span class="chart-label" style="left:60%;top:2px;"><span class="emoji">⚠️</span><span style="color:#7a7b92;font-size:10px;">天量滞涨</span></span>
+    </div>
+    <div class="concept-extra" style="visibility:hidden;">&nbsp;</div>
+    <div class="concept-badge badge-red">
+      <span>🔴</span> 下跌
+    </div>
+  </div>
+
+  <!-- ROW 5: 国产芯片 (下跌) -->
+  <div class="concept-row">
+    <div class="concept-info">
+      <div class="concept-name">国产芯片</div>
+      <div class="concept-vl">vl: <span class="vl-val">1</span></div>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 52" preserveAspectRatio="none">
+        <!-- Gray dashed index -->
+        <polyline
+          points="0,16 30,18 60,20 90,22 120,24 150,26 180,28 210,30 240,32 270,34 300,36"
+          fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"
+        />
+        <!-- Red wave line (peaked then declining) -->
+        <polyline
+          points="0,30 30,26 60,20 90,14 120,10 150,12 180,18 210,24 240,30 270,34 300,38"
+          fill="none" stroke="#ef4444" stroke-width="2"
+        />
+        <!-- 波峰 dot -->
+        <circle cx="120" cy="10" r="4" fill="#ef4444" stroke="#13141f" stroke-width="1.5"/>
+      </svg>
+      <span class="chart-label" style="left:37%;top:-2px;"><span class="dot" style="color:#ef4444;">●</span></span>
+    </div>
+    <div class="concept-extra">
+      <div>历史 <span class="num">+22%</span></div>
+    </div>
+    <div class="concept-badge badge-red">
+      <span>🔴</span> 下跌
+    </div>
+  </div>
+
+  <!-- ─── ALERT SECTION ─── -->
+  <div class="section-title">
+    ⚡ 信号预警 <span class="count">· 1 条新信号</span>
+  </div>
+  <div class="alert-card">
+    <div class="alert-icon">💡</div>
+    <div class="alert-body">
+      <strong>AI算力</strong> <span class="dim">vl:4</span>
+      <span class="bias">BIAS20=-6.3%</span>
+      <span class="dim">缩量至EMA60 →</span>
+      <span class="highlight">关注切入机会</span>
+    </div>
+  </div>
+
+  <!-- ─── NEW CONCEPT SCAN ─── -->
+  <div class="section-title">
+    🔍 新概念扫描 <span class="count">· 本周新发现</span>
+  </div>
+  <div class="scan-card">
+    <span class="scan-name">时空大数据</span>
+    <span class="scan-stat">+18%</span>
+    <span class="scan-label">20日涨幅</span>
+  </div>
+
+  <!-- ─── LEGEND ─── -->
+  <div class="legend">
+    <div class="legend-item">
+      <span class="legend-line" style="background:#34d399;"></span>
+      波谷线
+    </div>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#fb923c;"></span>
+      波中线
+    </div>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#ef4444;"></span>
+      下跌线
+    </div>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#9ca3af;"></span>
+      横盘线
+    </div>
+    <div class="legend-item">
+      <span class="legend-line" style="background:#3a3b50;border-top:1px dashed transparent;"></span>
+      基准指数
+      <span style="display:inline-block;width:14px;height:0;border-top:1px dashed #3a3b50;margin-left:2px;"></span>
+    </div>
+    <div class="legend-item">
+      <span class="legend-dot" style="background:#34d399;"></span>
+      波谷
+    </div>
+    <div class="legend-item">
+      <span class="legend-dot" style="background:#ef4444;"></span>
+      波峰
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">💧</span>
+      缩量
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">🔥</span>
+      放量
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">⚠️</span>
+      天量滞涨
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">🟢</span>
+      波谷
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">🟡</span>
+      波中
+    </div>
+    <div class="legend-item">
+      <span class="legend-marker">🔴</span>
+      下跌
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:20px 0 8px;font-size:11px;color:#4a4b60;">
+    数据密集型版 · 概念板块波谷追踪 v1.0
+  </div>
+
+</div>
+</body>
+</html>
