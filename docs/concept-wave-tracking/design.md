@@ -2,7 +2,7 @@
 
 ## 0. 前端原型总览
 
-![概念板块波谷追踪 — 折叠卡片堆叠走势图（AI算力已展开）](concept-prototype.jpg)
+![概念板块波谷追踪 — 折叠卡片堆叠走势图（AI算力已展开）](prototype.jpg)
 
 *图0-1：概念板块波谷追踪页面原型。AI算力已展开详情显示近5日/BIAS20/vs大盘/历史谷峰涨幅/关联自选股（中际旭创、寒武纪、光迅科技）。其余卡片默认折叠状态。上→下：统计卡 / 🟢波谷组 / 🟡波中组 / 🔴下跌组 / ⚠️波谷告警 / 🔍新概念扫描*
 
@@ -703,7 +703,7 @@ cron 17:00 update_stock_data.py
 
 #### 原型链接
 
-[打开折叠卡片原型](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ggchangan/3L/feature/concept-wave-tracking/sketches/001-data-dense/index.html)
+[打开折叠卡片原型](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ggchangan/3L/feature/concept-wave-tracking/docs/concept-wave-tracking/sketch/index.html)
 
 （打开后点击▶展开详情查看完整交互）
 
@@ -711,7 +711,7 @@ cron 17:00 update_stock_data.py
 
 执行计划已拆分为独立文件，含任务状态追踪、实际耗时、阻塞项等动态信息：
 
-👉 [概念板块波谷追踪 — 执行计划](concept-wave-tracking-plan.md)
+👉 [概念板块波谷追踪 — 执行计划](plan.md)
 
 设计文档不再维护执行进度，所有状态更新请操作上述文件。
 
@@ -731,7 +731,11 @@ cron 17:00 update_stock_data.py
 
 ```
 新增:
-  docs/concept-wave-tracking-design.md           — 本设计文档
+  docs/concept-wave-tracking/design.md           — 本设计文档
+  docs/concept-wave-tracking/plan.md             — 执行计划
+  docs/concept-wave-tracking/prototype.jpg       — 原型截图
+  docs/concept-wave-tracking/sketch/index.html   — 折叠卡片原型
+  docs/pdf-template.html                         — PDF生成模板
   server/backend/services/concept_wave_service.py — 概念波谷追踪服务
   server/backend/api/concept_wave.py              — API 路由
   server/backend/tests/test_concept_wave.py       — 测试
@@ -748,9 +752,6 @@ cron 17:00 update_stock_data.py
   data/3l/map/concept_list.json                   — 概念板块列表
   data/3l/raw/concepts/concept_daily.json         — 概念板块K线
   data/3l/track/concept_wave.db                   — 波谷追踪SQLite
-
-原型:
-  sketches/001-data-dense/index.html              — 折叠卡片原型
 ```
 
 ### 6.3 变更日志

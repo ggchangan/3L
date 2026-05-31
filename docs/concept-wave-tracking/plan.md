@@ -4,8 +4,8 @@
 > 本文件回答"做到哪了/下一步做什么"。
 
 **分支：** `feature/concept-wave-tracking`
-**设计文档：** [concept-wave-tracking-design.md](concept-wave-tracking-design.md)
-**原型预览：** [打开原型](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ggchangan/3L/feature/concept-wave-tracking/sketches/001-data-dense/index.html)
+**设计文档：** [design.md](design.md)
+**原型预览：** [打开原型](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ggchangan/3L/feature/concept-wave-tracking/docs/concept-wave-tracking/sketch/index.html)
 
 ---
 
