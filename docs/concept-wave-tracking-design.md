@@ -316,8 +316,8 @@ POST /api/concept-wave/remove?code=BKxxxx
 
 ### 5.1 页面布局
 
-Excalidraw 线框图：https://github.com/ggchangan/3L/blob/feature/concept-wave-tracking/docs/concept-wave-wireframe.excalidraw
-（下载 .excalidraw 文件拖到 excalidraw.com 打开）
+Excalidraw 线框图：https://excalidraw.com/#import_url=https://raw.githubusercontent.com/ggchangan/3L/feature/concept-wave-tracking/docs/concept-wave-wireframe.excalidraw
+（一键打开，无需下载拖拽）
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
