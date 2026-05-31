@@ -1,383 +1,325 @@
-# 操作计划追踪系统 — 设计文档
+# 操作计划追踪系统 — 设计文档 v2
 
 ## 1. 背景与目标
 
-工作台(Workbench)每日生成"明日计划"(buy/sell/watch)，但目前没有系统追踪这些计划的实际执行效果。
-目标是**自动追踪每个计划第二天(下一个交易日)的涨跌表现，统计成功率，辅助优化3L买卖点体系**。
+工作台(Workbench)依赖用户手动填写"明日计划"，数据源经过人工筛选，不适合追踪**系统本身的判断质量**。
+
+**v2 目标：** 复盘页面每天17:00实时计算的 `trading_plan`（每日交易计划）中的个股操作数据，自动追踪次日涨跌表现。
 
 ### 核心问题
-- 我们制定的买入/卖出计划，实际第二天涨了还是跌了？
-- 哪些类型的条件成功率更高？（上涨趋势上行 vs 缩量整理 vs 区底企稳）
-- 整体成功率和平均盈亏比是多少？
+- 系统说"中继买点" → 第二天实际涨了还是跌了？各买点类型成功率多少？
+- 系统说"上涨趋势·上行" → 这个结构+阶段判断准不准？
+- 主线板块的股票 vs 非主线，成功率差别多大？
+- 持仓操作建议的准确率 vs 关注买入建议的准确率？
 
 ## 2. 数据源
 
-### 现有数据
-- **工作台计划**: `data/private/workbench/{date}.json`
-  - `plan.buy[]` / `plan.sell[]` / `plan.watch[]`
-  - 每个 item: `{stock: "杭齿前进(601177)", condition: "上涨趋势·上行", stop_loss: 17.6, ...}`
-- **股票代码映射**: `data/all_a_stocks.json` → `{code: name}` 双向映射
-- **个股K线**: 通过 `on_demand_stock.py` 按需拉取（或从已有的 all_stocks 缓存中读取）
+### 数据来源
 
-### 关键观察
-- 计划中的 `stock` 字段已包含股票代码，格式为 `股票名(股票代码)`
-- 可通过 `resolve_stock()` 或正则提取代码
-- 个股日K线数据可通过腾讯接口按需获取
+不再依赖工作台文件（`workbench/{date}.json`），改为直接从复盘实时计算结果中提取：
 
-## 3. 设计方案
+```python
+from backend.services.review_service import compute_review_real_time
+data = compute_review_real_time(date_str)
+trading_plan = data['trading_plan']
+```
 
-### 3.1 数据模型
+`trading_plan` 包含两个个股操作列表：
+
+**`holdings_action[]`** — 持仓股操作建议
+| 字段 | 类型 | 示例 |
+|------|------|------|
+| stock | str | "国际复材(301526)" |
+| action | str | "执行突破买点" / "持有不动" / "卖出" |
+| reason | str | "上涨趋势·上行"（structure·stage） |
+| priority | str | "高" / "中" / "低" |
+| stop_loss | float | 止损价（如果有） |
+| stop_loss_pct | float | 止损百分比 |
+| change | float | 当日涨跌幅 |
+
+**`buy_priority[]`** — 关注买入信号
+| 字段 | 类型 | 示例 |
+|------|------|------|
+| name | str | "广钢气体" |
+| code | str | "688548" |
+| sector | str | "电子化学品" |
+| buy_point | str | "中继买点" / "涨停回踩" / "趋势回踩EMA5" |
+| is_main | bool | 是否主线板块 |
+| profit_model1 | bool | 是否盈利模式1 |
+| trend_stock | bool | 是否趋势股 |
+| structure | str | "上涨趋势" |
+| stage | str | "上行" |
+| change | float | 当日涨跌幅 |
+| stop_loss | float | 止损价 |
+| stop_loss_pct | float | 止损百分比 |
+| priority | int | 优先级排序 |
+
+**注意：** 数据源是实时计算的 `compute_review_real_time(date_str)`，不依赖任何存档文件。
+
+## 3. 数据模型与存储
+
+### 存储方案：SQLite
+
+使用 Python 标准库 `sqlite3`，零外部依赖，适合多维度聚合统计。
+
+**数据库路径：** `{DATA_DIR}/private/plan_tracking.db`
+
+### 表结构
+
+```sql
+CREATE TABLE IF NOT EXISTS plan_records (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    date            TEXT    NOT NULL,    -- 计划日期 '2026-05-28'
+    code            TEXT    NOT NULL,    -- 股票代码
+    name            TEXT,                -- 股票名称
+
+    -- 来源分类
+    source          TEXT,    -- 'holdings_action' 或 'buy_priority'
+    action          TEXT,    -- 系统建议操作
+    reason          TEXT,    -- 结构·阶段：'上涨趋势·上行'
+    structure       TEXT,    -- 结构：上涨趋势/区间震荡/下降趋势
+    stage           TEXT,    -- 阶段：上行/缩量整理/区底
+    buy_point       TEXT,    -- 买点类型
+    is_main         INTEGER, -- 0/1 是否主线
+    priority        TEXT,    -- 高/中/低
+
+    -- 止损
+    stop_loss       REAL,    -- 止损价
+    stop_loss_pct   REAL,    -- 止损百分比
+
+    -- 计划当天行情
+    plan_close      REAL,    -- 当日收盘价
+
+    -- 次日追踪
+    next_date       TEXT,    -- 下一个交易日
+    next_open       REAL,    -- 次日开盘
+    next_close      REAL,    -- 次日收盘
+    next_high       REAL,    -- 次日最高
+    next_low        REAL,    -- 次日最低
+
+    -- 计算结果
+    change_pct      REAL,    -- 次日涨跌幅
+    max_gain        REAL,    -- 盘中最大涨幅
+    max_loss        REAL,    -- 盘中最大跌幅
+    hit_stop_loss   INTEGER, -- 0/1 盘中是否跌破止损
+    result          TEXT,    -- success / failure / flat / pending / no_data
+
+    -- 用户标记
+    executed        INTEGER, -- NULL=未知 0=未执行 1=已执行
+    user_note       TEXT,    -- 用户备注
+
+    -- 时间戳
+    created_at      TEXT,    -- 首次写入时间
+    updated_at      TEXT,    -- 最后更新时间
+
+    UNIQUE(date, code)
+);
+
+-- 统计维度的索引
+CREATE INDEX idx_records_date      ON plan_records(date);
+CREATE INDEX idx_records_result    ON plan_records(result);
+CREATE INDEX idx_records_source    ON plan_records(source);
+CREATE INDEX idx_records_buy_point ON plan_records(buy_point);
+CREATE INDEX idx_records_structure ON plan_records(structure, stage);
+CREATE INDEX idx_records_is_main   ON plan_records(is_main);
+```
+
+### 多维度统计
+
+```sql
+-- 成功率统计（任意维度组合）
+SELECT buy_point, count(*) as total,
+       sum(CASE WHEN result='success' THEN 1 ELSE 0 END) as wins,
+       round(avg(change_pct), 2) as avg_chg
+FROM plan_records
+WHERE result IN ('success','failure')
+GROUP BY buy_point;
+
+-- 按结构·阶段
+SELECT structure, stage, count(*), avg(change_pct)
+FROM plan_records GROUP BY structure, stage;
+
+-- 按是否主线
+SELECT is_main, count(*) as total,
+       sum(CASE WHEN result='success' THEN 1 ELSE 0 END) as wins,
+       round(avg(CASE WHEN result='success' THEN 1.0 ELSE 0.0 END) * 100, 1) as rate
+FROM plan_records WHERE result IN ('success','failure')
+GROUP BY is_main;
+
+-- 交叉聚合：主线+买点
+SELECT is_main, buy_point, count(*) as total,
+       sum(CASE WHEN result='success' THEN 1 ELSE 0 END) as wins
+FROM plan_records WHERE result IN ('success','failure')
+GROUP BY is_main, buy_point;
+```
+
+### 成功/失败判定规则
+
+同 v1，保持不变：
+
+**买入方向（含 buy_priority + holdings_action 中买入建议）：**
+| 条件 | 判定 |
+|------|------|
+| 次日收盘 > 当日收盘 +0.5% | ✅ success |
+| 次日收盘 < 当日收盘 -0.5% | ❌ failure |
+| 介于 ±0.5% | ➖ flat |
+| 无次日数据 | ⏳ pending |
+
+**卖出方向：**
+| 条件 | 判定 |
+|------|------|
+| 次日收盘 < 当日收盘 -0.5% | ✅ success（卖对了） |
+| 次日收盘 > 当日收盘 +0.5% | ❌ failure（卖飞了） |
+
+**持有/观察方向：** 不参与成功率统计，仅展示次日涨跌。
+
+## 4. 系统架构
+
+```
+┌─────────────────────────────────────────────────────┐
+│  compute_review_real_time(date_str)                  │
+│    → trading_plan.holdings_action (持仓操作)          │
+│    → trading_plan.buy_priority     (关注买入)        │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│  plan_tracking_service.py                            │
+│  - scan_plan_data() : 从 review 提取个股操作数据      │
+│  - compute_tracking(): 计算次日涨跌并存入 SQLite      │
+│  - get_tracking(): 读取 + 日期筛选 + 多维度统计       │
+│  存储: plan_tracking.db (SQLite)                     │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│  API 路由 (plan_tracking.py)                         │
+│  GET  /api/plan-tracking           获取追踪结果       │
+│  POST /api/plan-tracking/annotate  标记执行状态       │
+│  POST /api/plan-tracking/refresh   强制重新计算       │
+└─────────────────────────────────────────────────────┘
+```
+
+## 5. API 设计
+
+### GET /api/plan-tracking
 
 ```json
 {
   "plans": [
     {
-      "plan_date": "2026-05-28",
-      "type": "buy",
-      "stock": "杭齿前进",
-      "code": "601177",
-      "condition": "上涨趋势·上行",
-      "condition_category": "上涨趋势",   // 条件大类（用于统计分组）
-      "condition_detail": "上行",          // 条件细类
-      "stop_loss": 17.6,
-      "stop_loss_pct": 5.22,
-
-      "plan_close": 18.56,     // 计划当天的收盘价
+      "id": 1,
+      "date": "2026-05-28",
+      "code": "301526",
+      "name": "国际复材",
+      "source": "holdings_action",
+      "action": "执行突破买点",
+      "reason": "上涨趋势·上行",
+      "structure": "上涨趋势",
+      "stage": "上行",
+      "buy_point": "突破买点",
+      "is_main": 1,
+      "priority": "高",
+      "plan_close": 12.50,
       "next_date": "2026-05-29",
-      "next_open": 18.70,
-      "next_close": 18.90,
-      "next_high": 19.20,
-      "next_low": 18.50,
-
-      "change_pct": 1.83,      // (next_close - plan_close) / plan_close * 100
-      "max_gain": 3.45,        // (next_high - plan_close) / plan_close * 100
-      "max_loss": -0.32,       // (next_low - plan_close) / plan_close * 100
-      "hit_stop_loss": false,  // 盘中是否跌破止损价
-
-      "result": "success",     // success | failure | flat(±0.5%内) | no_data
-      "executed": null,        // true | false | null(未知，需用户标记)
-      "user_note": ""          // 用户备注（为什么成功/失败）
+      "next_close": 13.20,
+      "change_pct": 5.6,
+      "result": "success",
+      "executed": null
     }
   ],
   "summary": {
-    "total_plans": 7,
-    "by_type": { "buy": 5, "sell": 1, "watch": 1 },
-    "success": 4,
-    "failure": 3,
-    "flat": 0,
-    "success_rate": 57.1,
-    "avg_gain_pct": 2.1,       // 成功计划的平均涨幅
-    "avg_loss_pct": -1.5,      // 失败计划的平均跌幅
-    "best_gain": 5.2,
-    "worst_loss": -3.1,
-    "win_loss_ratio": 1.4      // avg_gain / |avg_loss|
+    "total_plans": 22,
+    "success": 14,
+    "failure": 6,
+    "flat": 2,
+    "pending": 0,
+    "success_rate": 70.0,
+    "avg_gain_pct": 3.2,
+    "avg_loss_pct": -2.1,
+    "best_gain": 8.5,
+    "worst_loss": -4.3,
+    "win_loss_ratio": 1.52
   },
-  "by_condition": {
-    "上涨趋势": { "total": 4, "success": 3, "rate": 75.0 },
-    "区间震荡": { "total": 2, "success": 1, "rate": 50.0 },
-    ...
+  "by_buy_point": {
+    "中继买点": { "total": 8, "success": 6, "failure": 1, "flat": 1, "rate": 85.7 },
+    "涨停回踩": { "total": 5, "success": 3, "failure": 2, "flat": 0, "rate": 60.0 },
+    "趋势回踩EMA5": { "total": 4, "success": 2, "failure": 1, "flat": 1, "rate": 66.7 }
   },
+  "by_structure": {
+    "上涨趋势": { "total": 12, "success": 9, "failure": 2, "flat": 1, "rate": 81.8 },
+    "区间震荡": { "total": 8, "success": 4, "failure": 3, "flat": 1, "rate": 57.1 }
+  },
+  "by_is_main": {
+    "1": { "total": 10, "success": 8, "failure": 1, "flat": 1, "rate": 88.9 },
+    "0": { "total": 12, "success": 6, "failure": 5, "flat": 1, "rate": 54.5 }
+  },
+  "by_source": {
+    "holdings_action": { "total": 12, "success": 7, "failure": 4, "flat": 1 },
+    "buy_priority": { "total": 10, "success": 7, "failure": 2, "flat": 1 }
+  },
+  "suggestions": [
+    {
+      "type": "warning",
+      "dimension": "buy_point",
+      "category": "缩量整理",
+      "rate_current": 33.3,
+      "count": 3,
+      "message": "条件「缩量整理」3次仅33%成功率"
+    }
+  ],
   "last_updated": "2026-05-30T10:00:00"
 }
 ```
 
-### 3.2 成功/失败判定规则
+### POST /api/plan-tracking/annotate
+标记计划执行状态。
 
-**买入计划:**
-| 条件 | 判定 | 说明 |
-|------|------|------|
-| 次日收盘 > 计划日收盘+0.5% | ✅ success | 上涨超过摩擦成本 |
-| 次日收盘 < 计划日收盘-0.5% | ❌ failure | 下跌超过摩擦成本 |
-| 介于±0.5%之间 | ➖ flat | 基本平盘 |
-| 无次日数据（最后一交易日） | ❓ no_data | 待后续补充 |
+### POST /api/plan-tracking/refresh
+强制重新计算未完成的追踪。
 
-**卖出计划（反向）：**
-| 条件 | 判定 |
-|------|------|
-| 次日收盘 < 计划日收盘-0.5% | ✅ success（卖对了） |
-| 次日收盘 > 计划日收盘+0.5% | ❌ failure（卖飞了） |
+## 6. 前端页面
 
-**观察计划：** 不参与成功率统计，仅展示次日涨跌供参考
+复用 v1 的 PlanTracking.tsx，适配新数据模型：
+- 统计卡片行（成功率/平均盈利/盈亏比）保持不变
+- 按买点类型分组（替代原来的条件类型）
+- 按结构·阶段分组（新增）
+- 按是否主线分组（新增）
+- 自动建议逻辑更新为新维度
 
-### 3.3 系统架构
+## 7. 归类维度总结
 
-```
-┌──────────────────────────────────────────────────────┐
-│          独立页面 /plan-tracking.html                  │
-│  ┌────────────────────────────────────────────────┐  │
-│  │ 📊 计划追踪 · 操作执行力看板                    │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐      │  │
-│  │  │ 成功率N%  │ │ 平均盈N% │ │ 盈亏比N  │      │  │
-│  │  └──────────┘ └──────────┘ └──────────┘      │  │
-│  ├────────────────────────────────────────────────┤  │
-│  │ 按条件类型统计（可折叠）                         │  │
-│  ├────────────────────────────────────────────────┤  │
-│  │ 计划详情列表（表格）                             │  │
-│  │ 日期│类型│股票│条件│次日涨跌│结果│执行│备注    │  │
-│  │ ...                                            │  │
-│  └────────────────────────────────────────────────┘  │
-│  [刷新] [底部导航]                                    │
-└──────────────────────────────────────────────────────┘
-         ▲ fetch /api/plan-tracking
-         │
-┌────────┴─────────────────────────────────────────────┐
-│              plan_tracking_service.py                  │
-│  - scan_workbench_plans(): 扫描所有工作台文件          │
-│  - compute_next_day(): 找下一个交易日并计算涨跌         │
-│  - compute_summary(): 计算统计汇总                    │
-│  - _extract_code(): 从"股票名(代码)"提取代码           │
-│  - _resolve_stock(): 通过all_a_stocks.json查代码       │
-│  存储: data/private/plan_tracking.json                │
-└──────────────────────────────────────────────────────┘
-         ▲
-         │ 通过 on_demand_stock 或 data_layer 获取K线
-         ▼
-┌──────────────────────────────────────────────────────┐
-│          个股日K线数据（腾讯/akshare接口）             │
-└──────────────────────────────────────────────────────┘
-```
+| 维度 | 来源字段 | 统计示例 |
+|------|---------|---------|
+| 买点类型 | `buy_point` | 中继买点 85% | 涨停回踩 60% |
+| 结构 | `structure` | 上涨趋势 81% | 区间震荡 57% |
+| 结构+阶段 | `structure, stage` | 上涨趋势·上行 85% | 区间震荡·区底 60% |
+| 是否主线 | `is_main` | 主线 89% | 非主线 55% |
+| 数据来源 | `source` | 持仓操作 vs 关注买入 |
+| 操作方向 | `action` | 买入建议 70% | 卖出建议 80% |
 
-### 3.4 API 设计
+## 8. 不做（v1 范围内）
+
+- 第3天/第5天追踪 — v2 再扩展
+- 自动标记"已执行" — 需交易系统接入
+- 实盘成交价追踪 — 无券商API
+- 板块/大盘同期对比 — v2
+
+## 9. 文件清单
 
 ```
-GET /api/plan-tracking
-  返回: {
-    plans: PlanItem[],        // 所有计划 + 追踪结果
-    summary: Summary,          // 统计汇总
-    by_condition: {},          // 按条件类型分组统计
-    last_updated: "2026-05-30T10:00:00"
-  }
-
-POST /api/plan-tracking/annotate
-  参数: {
-    plan_id: "2026-05-28-buy-0",
-    executed: true/false,
-    user_note: "盘中触发买点，按计划执行"
-  }
-  返回: { success: true }
-
-POST /api/plan-tracking/refresh
-  触发重新计算所有未完成的计划追踪
-  返回: { updated: 5, no_data: 1 }
-```
-
-### 3.5 前端页面
-
-新增独立页面 `PlanTracking.tsx`，通过底部导航访问，路径 `/plan-tracking.html`。
-
-#### 页面结构：
-
-1. **顶部统计卡片行**（一行3个关键指标）:
-   | 成功率 | 平均盈利 | 盈亏比 |
-   |--------|---------|--------|
-   | 大号百分比数字 | ✅ +2.1% | 1.4 倍 |
-   | 成功N/总N | 最佳+5.2% | 最差-3.1% |
-
-2. **按条件类型分组统计**（可折叠）:
-   ```
-   📈 按条件类型
-   ▶ 上涨趋势·上行: 3/4=75%  +2.8%
-   ▶ 上涨趋势·缩量整理: 0/1=0%  -1.2%
-   ▶ 区间震荡·区间底部: 1/2=50%  +0.5%
-   ```
-
-3. **计划详情列表**（表格）:
-   ```
-   日期    | 类型 | 股票     | 条件          | 次日涨跌 | 结果    | 执行 | 备注
-   05-28  | buy  | 杭齿前进 | 上涨趋势·上行 | +1.83%   | ✅ 成功 | 待标记 |
-   05-28  | buy  | 中天科技 | 区间震荡·区底 | -2.10%   | ❌ 失败 | 待标记 |
-   05-26  | buy  | 广钢气体 | 中继买点       | +0.55%   | ➖ 平盘  | 待标记 |
-   ```
-
-4. **底部操作栏**：刷新数据、底部导航
-
-5. **无计划时的状态**：纯文字提示"暂无计划数据，请先在[工作台](/workbench.html)制定明日计划"
-
-### 3.6 日期范围筛选
-
-用户可自由选择统计的时间范围，后端全量存储，前端按日期过滤。
-
-```json
-// GET /api/plan-tracking?start_date=2026-05-01&end_date=2026-05-30
-```
-
-**规则：**
-- 默认：最近30个自然日（约22个交易日）
-- 前端日期选择器：上限30天，选择范围超过30天时自动截断
-- 后端兜底：传超过30天的范围也只返回30天内数据
-- 存储：全量保留，永不删除
-
-**界面：**
-```
-┌──────────────────────────┐
-│ 📅 统计范围              │
-│ [2026-05-01] ─ [2026-05-30]  [刷新] │
-│ (最多30天)               │
-└──────────────────────────┘
-```
-
-### 3.7 自动建议系统（v1）
-
-后端在返回追踪数据时，自动分析结果并生成可操作建议。
-
-**建议规则：**
-
-| 规则 | 触发条件 | 建议示例 |
-|:-----|:---------|:---------|
-| 条件成功率偏低 | 某条件大类成功率 < 50% 且次数 >= 3 | ⚠️ 关注：「缩量整理」3次仅33%成功率，低于整体 |
-| 条件成功率恶化 | 某条件近N次成功率比全部历史下降 > 15% | ⚠️ 恶化：「区间震荡」近10次40% vs 全部57%，下降17% |
-| 条件表现优秀 | 某条件成功率 > 70% 且次数 >= 5 | 💡 最佳：「上涨趋势·上行」8次88%成功率，继续保持 |
-| 止损设置偏紧 | 盘中跌破止损的比例 > 25% | 📊 止损偏紧：12笔中4笔盘中止损被触发（33%），建议放宽 |
-| 个股频繁失败 | 同一股票失败次数 >= 3 | ⚠️ 个股：XX股票5次计划中4次失败，注意识别 |
-
-**建议数据结构：**
-```json
-{
-  "suggestions": [
-    {
-      "type": "warning",        // warning | improving | best | info
-      "dimension": "condition",  // condition | stock | stop_loss | type
-      "category": "上涨趋势·缩量整理",
-      "rate_current": 33.3,
-      "rate_overall": 62.5,
-      "count": 3,
-      "message": "条件「缩量整理」3次仅33%成功率（整体62.5%），建议检查该条件筛选逻辑",
-      "action": "check_condition" // 预留：前端可点击跳转
-    }
-  ]
-}
-```
-
-**执行时机：** 每次 `compute_tracking()` 或 `get_tracking()` 时自动生成。
-
----
-
-## 4. 不做（v1范围外）
-
-| 项目 | 原因 |
-|------|------|
-| 第3天/第5天追踪 | 用户明确先看第2天 |
-| 自动标记"已执行" | 需要接入交易系统，超出v1范围 |
-| 实盘成交价追踪 | 没有券商API接入 |
-| watch/观察计划统计 | 观察计划不确定操作方向 |
-| 板块/大盘同期对比 | v2再扩展 |
-| 图表可视化（K线标注） | 文本表格足够，v2可加 |
-| 自动优化系统参数 | v2自动建议先做，人做决策 |
-
-## 5. v2规划：自动进化系统
-
-### 5.1 目标
-
-从"人看数据做优化"升级为"机器分析→给出建议→人确认→系统自动调整"的闭环。
-
-### 5.2 演进路径
-
-```
-v1（当前）:  数据展示 + 机器建议（人工决策）
-                ↓
-v2:        机器建议 → 人工确认 → 参数自动调整
-                ↓
-v3:        机器建议 → 自动调整（人工可回滚）
-```
-
-### 5.3 v2拟实现功能
-
-| 功能 | 说明 |
-|:-----|:------|
-| **条件参数建议** | 如果某条件成功率持续<40%，建议修改该条件的买点参数或停用 |
-| **止损阈值建议** | 基于历史止损触发率，建议放宽或收紧止损幅度 |
-| **买点信号建议** | 哪些买点信号综合表现好/差，建议调整信号权重 |
-| **个股黑名单** | 长期失败率高的股票自动标红提醒 |
-| **自动回测** | 对建议的改动进行历史回测，给出"如果改成X，历史成功率会变成Y%" |
-| **改进报告** | 每周/月自动生成系统优化建议报告（PDF） |
-
-### 5.4 数据依赖
-
-v2建议不再仅依赖计划追踪数据，还需要：
-- 个股完整K线（回测用）
-- 买点信号判断结果
-- 止损成交数据（如果接入实盘）
-
-### 5.5 技术方案
-
-```python
-# 建议引擎（伪代码）
-class SuggestionEngine:
-    def analyze(self, plans, klines):
-        suggestions = []
-        # 1. 条件表现分析
-        for condition, stats in self._group_by_condition(plans):
-            if stats.success_rate < 0.4:
-                # 模拟调整参数后的表现
-                backtest_result = self._backtest_new_params(condition, klines)
-                suggestions.append({
-                    'type': 'param_adjust',
-                    'condition': condition,
-                    'current_rate': stats.success_rate,
-                    'suggested_rate': backtest_result.projected_rate,
-                    'confidence': 'high' if backtest_result.samples > 10 else 'medium'
-                })
-        return suggestions
-```
-
-### 5.6 前端展示（v2）
-
-```
-┌─────────────────────────────────────┐
-│ 🔧 系统优化建议                     │
-│                                      │
-│ ⚠️ 高置信度 (3条)                    │
-│ ┌─ 条件「缩量整理」成功率仅33%      │
-│ │ 建议: 修改为仅在大盘上涨时使用     │
-│ │ [查看历史] [接受建议] [忽略]       │
-│ └───────────────────────────────────│
-│                                      │
-│ 💡 中置信度 (2条)                    │
-│ ┌─ 调整止损幅度从5%到7%             │
-│ │ 预期: 成功率57%→62%  | 回测验证   │
-│ └───────────────────────────────────│
-└─────────────────────────────────────┘
-```
-
-## 6. 数据流示例
-
-```
-用户在工作台制定计划（2026-05-28）
-  → plan.buy[]: [杭齿前进(601177), 光迅科技(002281), ...]
-  → 保存到 data/private/workbench/2026-05-28.json
-
-次日/以后查看追踪页面（2026-05-30）
-  → GET /api/plan-tracking
-  → plan_tracking_service:
-     1. 扫描所有工作台文件
-     2. 对每个计划的股票，找下一交易日的K线
-     3. 计算涨跌幅，判定成功/失败
-     4. 汇总统计
-  → 返回结果 → 前端渲染
-```
-
-## 6. 文件清单
-
-```
-新增:
-  server/backend/services/plan_tracking_service.py  — 追踪计算服务
-  server/backend/api/plan_tracking.py              — API路由
-  server/frontend/src/pages/PlanTracking.tsx        — 独立追踪页面
-  server/frontend/src/pages/PlanTracking.css        — 样式
-  docs/plan-tracking-design.md                     — 本设计文档
-
-修改:
-  server/server.py                                  — 注册路由 + HTML页路由
-  server/frontend/src/lib/NavBar.tsx                — 底部导航加"计划追踪"入口
+新增/修改:
+  docs/plan-tracking-design.md          — 本设计文档（v2更新）
+  server/backend/services/plan_tracking_service.py  — 重写：数据源从 workbench→review，存储从 JSON→SQLite
+  server/backend/api/plan_tracking.py               — 适配新数据模型
+  server/backend/tests/test_plan_tracking.py        — 重写测试（TDD）
 
 数据:
-  data/private/plan_tracking.json                    — 追踪结果缓存（自动生成）
+  data/private/plan_tracking.db         — SQLite数据库（自动生成，取代 plan_tracking.json）
 ```
 
-## 7. 分支策略
+## 10. 分支策略
 
-- 分支名: `feature/plan-tracking`
-- 基于 master 创建
-- 先这个设计文档 + PDF 审阅
-- 然后 TDD 开发
-- 完成后合并回 master
+- 分支: `feature/plan-tracking`
+- TDD 开发
+- 完成后 PR 合并 master

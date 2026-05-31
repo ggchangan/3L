@@ -1,12 +1,12 @@
-"""操作计划追踪 API 路由"""
+"""操作计划追踪 API 路由 — v2（SQLite + review数据源）"""
 
 import json
-from backend.services.plan_tracking_service import get_tracking, compute_tracking, annotate_plan, _filter_plans_by_date, _compute_summary, _generate_suggestions
+from backend.services.plan_tracking_service import get_tracking, compute_tracking, annotate_plan
 
 
 def _handle_get(h, path):
-    """GET /api/plan-tracking — 获取计划追踪结果，支持日期筛选
-    
+    """GET /api/plan-tracking — 获取计划追踪结果
+
     Query params:
         start_date: 起始日期 'YYYY-MM-DD'（默认30天前）
         end_date: 结束日期 'YYYY-MM-DD'（默认今天）
@@ -17,20 +17,11 @@ def _handle_get(h, path):
     force = 'refresh' in qs
     start_date = qs.get('start_date', [None])[0]
     end_date = qs.get('end_date', [None])[0]
-    
+
     if force:
-        data = compute_tracking(force=True)
-        # 强制计算后仍然应用日期筛选
-        filtered = _filter_plans_by_date(data.get('plans', []), start_date, end_date)
-        summary, by_condition, by_type = _compute_summary(filtered)
-        suggestions = _generate_suggestions(filtered, summary, by_condition)
-        data['plans'] = filtered
-        data['summary'] = summary
-        data['by_condition'] = by_condition
-        data['by_type'] = by_type
-        data['suggestions'] = suggestions
-    else:
-        data = get_tracking(start_date=start_date, end_date=end_date)
+        compute_tracking(force=True)
+
+    data = get_tracking(start_date=start_date, end_date=end_date)
     h.send_json(data)
 
 
@@ -38,19 +29,21 @@ def _handle_annotate(h, path, body):
     """POST /api/plan-tracking/annotate — 标记计划执行状态
 
     Body: {
-        "plan_date": "2026-05-28",
-        "type": "buy",
-        "stock": "杭齿前进",
+        "date": "2026-05-28",
+        "code": "601177",
         "executed": true,
         "user_note": "盘中触发买点"
     }
     """
     try:
         data = json.loads(body)
+        from backend.config import DATA_DIR
+        import os
+        db_path = os.path.join(DATA_DIR, 'private', 'plan_tracking.db')
         result = annotate_plan(
-            plan_date=data.get('plan_date', ''),
-            type_=data.get('type', ''),
-            stock=data.get('stock', ''),
+            db_path=db_path,
+            date_str=data.get('date', ''),
+            code=data.get('code', ''),
             executed=data.get('executed'),
             user_note=data.get('user_note', ''),
         )

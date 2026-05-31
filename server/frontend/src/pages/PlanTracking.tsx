@@ -3,13 +3,18 @@ import NavBar, { BottomNav } from '../components/NavBar'
 import './PlanTracking.css'
 
 interface PlanEntry {
-  plan_date: string
-  type: string
-  stock: string
+  id: number
+  date: string            // 原 plan_date
   code: string
-  condition: string
-  condition_category: string
-  condition_detail: string
+  name: string
+  source: string          // 'holdings_action' | 'buy_priority'
+  action: string
+  reason: string          // '上涨趋势·上行'
+  structure: string
+  stage: string
+  buy_point: string
+  is_main: number
+  priority: string
   stop_loss: number | null
   stop_loss_pct: number | null
   plan_close: number | null
@@ -21,14 +26,14 @@ interface PlanEntry {
   max_gain: number | null
   max_loss: number | null
   hit_stop_loss: boolean
-  result: string
+  result: string | null   // success|failure|flat|pending|no_data|null
   executed: boolean | null
   user_note: string
 }
 
 interface Suggestion {
-  type: string        // warning | best | info
-  dimension: string   // condition | stock | stop_loss | type
+  type: string
+  dimension: string
   category: string
   rate_current: number
   rate_overall: number
@@ -44,16 +49,17 @@ interface PlanData {
     failure: number
     flat: number
     pending: number
-    no_data: number
     success_rate: number
-    avg_gain_pct: number
-    avg_loss_pct: number
+    avg_gain: number
+    avg_loss: number
     best_gain: number
     worst_loss: number
     win_loss_ratio: number
   }
-  by_condition: Record<string, { total: number; success: number; failure: number; flat: number }>
-  by_type: Record<string, { total: number; success: number; failure: number; flat: number }>
+  by_buy_point: Record<string, { total: number; success: number; failure: number; flat: number; rate: number }>
+  by_structure: Record<string, { total: number; success: number; failure: number; flat: number; rate: number }>
+  by_is_main: Record<string, { total: number; success: number; failure: number; flat: number; rate: number }>
+  by_source: Record<string, { total: number; success: number; failure: number; flat: number }>
   suggestions: Suggestion[]
   last_updated: string
 }
@@ -66,10 +72,9 @@ const RESULT_LABELS: Record<string, string> = {
   no_data: '❓ 无数据',
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  buy: '🟢 买入',
-  sell: '🔴 卖出',
-  watch: '👁️ 观察',
+const SOURCE_LABELS: Record<string, string> = {
+  buy_priority: '🟢 关注买入',
+  holdings_action: '🔵 持仓操作',
 }
 
 function fmtDate(d: Date): string {
@@ -93,9 +98,11 @@ export default function PlanTracking() {
   const [data, setData] = useState<PlanData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [condCollapsed, setCondCollapsed] = useState(false)
   const [sugCollapsed, setSugCollapsed] = useState(false)
-  const [typeFilter, setTypeFilter] = useState('all')
+  const [bpCollapsed, setBpCollapsed] = useState(false)
+  const [structCollapsed, setStructCollapsed] = useState(false)
+  const [mainlineCollapsed, setMainlineCollapsed] = useState(false)
+  const [sourceFilter, setSourceFilter] = useState('all')
   const [resultFilter, setResultFilter] = useState('all')
   const [startDate, setStartDate] = useState(daysAgo(30))
   const [endDate, setEndDate] = useState(todayStr())
@@ -131,7 +138,6 @@ export default function PlanTracking() {
     const sd = new Date(v)
     const ed = new Date(endDate)
     if ((ed.getTime() - sd.getTime()) / (1000 * 86400) > 30) {
-      // 超过30天，自动调整结束日期为起始+30天
       const newEnd = new Date(sd)
       newEnd.setDate(newEnd.getDate() + 30)
       if (newEnd > new Date()) {
@@ -148,7 +154,7 @@ export default function PlanTracking() {
     const sd = new Date(startDate)
     const ed = new Date(v)
     if ((ed.getTime() - sd.getTime()) / (1000 * 86400) > 30) {
-      return // 超过30天不予选择
+      return
     }
     setEndDate(v)
     loadData(startDate, v)
@@ -161,9 +167,8 @@ export default function PlanTracking() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          plan_date: entry.plan_date,
-          type: entry.type,
-          stock: entry.stock,
+          date: entry.date,
+          code: entry.code,
           executed: newVal,
           user_note: entry.user_note,
         }),
@@ -173,7 +178,7 @@ export default function PlanTracking() {
         return {
           ...prev,
           plans: prev.plans.map(p =>
-            p.plan_date === entry.plan_date && p.type === entry.type && p.stock === entry.stock
+            p.date === entry.date && p.code === entry.code
               ? { ...p, executed: newVal }
               : p
           ),
@@ -184,14 +189,15 @@ export default function PlanTracking() {
 
   const s = data?.summary
   const allPlans = data?.plans || []
-  const trackingPlans = allPlans.filter(p => p.type !== 'watch')
+  // 持有类（result=null）不参与统计但展示
+  const trackingPlans = allPlans.filter(p => p.result === null || p.result !== null)
   const suggestions = data?.suggestions || []
 
   // 过滤
-  let filteredPlans = [...trackingPlans]
-  if (typeFilter !== 'all') filteredPlans = filteredPlans.filter(p => p.type === typeFilter)
+  let filteredPlans = [...allPlans]
+  if (sourceFilter !== 'all') filteredPlans = filteredPlans.filter(p => p.source === sourceFilter)
   if (resultFilter !== 'all') filteredPlans = filteredPlans.filter(p => p.result === resultFilter)
-  filteredPlans.sort((a, b) => b.plan_date.localeCompare(a.plan_date))
+  filteredPlans.sort((a, b) => b.date.localeCompare(a.date))
 
   const hasData = allPlans.length > 0
 
@@ -220,7 +226,7 @@ export default function PlanTracking() {
 
           {!hasData && !loading && (
             <div className="empty" style={{ padding: 40, textAlign: 'center' }}>
-              暂无计划数据，请先在<a href="/workbench" style={{ color: '#4ecdc4' }}>工作台</a>制定明日计划
+              暂无计划追踪数据，请先完成复盘（17:00 cron 自动生成）
             </div>
           )}
 
@@ -245,13 +251,13 @@ export default function PlanTracking() {
                 </div>
                 <div className="stat-card">
                   <div className="stat-value" style={{ color: '#4ecdc4' }}>
-                    +{s.avg_gain_pct}%
+                    +{s.avg_gain}%
                   </div>
                   <div className="stat-label">平均盈利</div>
                   <div className="stat-sub">最佳 +{s.best_gain}%</div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-value">{s.win_loss_ratio}</div>
+                  <div className="stat-value">{s.win_loss_ratio || '--'}</div>
                   <div className="stat-label">盈亏比</div>
                   <div className="stat-sub">最差 {s.worst_loss}%</div>
                 </div>
@@ -291,41 +297,22 @@ export default function PlanTracking() {
                 </div>
               )}
 
-              {/* 按买入/卖出分类 */}
-              {data.by_type && (
-                <div className="info-card" style={{ marginTop: 12, padding: 10 }}>
-                  <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>📂 按交易方向</div>
-                  <div className="type-row">
-                    {Object.entries(data.by_type).map(([t, st]) => {
-                      const rate = st.total > 0 ? (st.success / st.total * 100).toFixed(1) : '--'
-                      return (
-                        <div key={t} className="type-chip" style={{ background: t === 'buy' ? 'rgba(34,197,94,0.1)' : 'rgba(233,69,96,0.1)' }}>
-                          <span style={{ fontSize: 11 }}>{TYPE_LABELS[t] || t}</span>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: '#e0e0e0' }}>{rate}%</span>
-                          <span style={{ fontSize: 10, color: '#888' }}>{st.success}胜/{st.failure}败/{st.flat}平</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* 按条件类型统计 */}
-              {data.by_condition && Object.keys(data.by_condition).length > 0 && (
+              {/* 按买点类型统计 */}
+              {data.by_buy_point && Object.keys(data.by_buy_point).length > 0 && (
                 <div className="info-card" style={{ marginTop: 12, padding: 10 }}>
                   <div
                     style={{ fontSize: 12, color: '#888', marginBottom: 6, cursor: 'pointer', userSelect: 'none' }}
-                    onClick={() => setCondCollapsed(v => !v)}
+                    onClick={() => setBpCollapsed(v => !v)}
                   >
-                    📈 按条件类型 {condCollapsed ? '▶' : '▼'}
+                    📈 按买点类型 {bpCollapsed ? '▶' : '▼'}
                   </div>
-                  {!condCollapsed && (
+                  {!bpCollapsed && (
                     <div className="cond-grid">
-                      {Object.entries(data.by_condition).map(([cat, st]) => {
-                        const rate = st.total > 0 ? (st.success / st.total * 100).toFixed(1) : '--'
+                      {Object.entries(data.by_buy_point).map(([bp, st]) => {
+                        const rate = st.total > 0 ? st.rate.toFixed(1) : '--'
                         return (
-                          <div key={cat} className="cond-item">
-                            <span style={{ fontSize: 11, color: '#e0e0e0' }}>{cat}</span>
+                          <div key={bp} className="cond-item">
+                            <span style={{ fontSize: 11, color: '#e0e0e0' }}>{bp}</span>
                             <span style={{ fontSize: 12, fontWeight: 600, color: Number(rate) >= 50 ? '#4ecdc4' : '#e94560' }}>{rate}%</span>
                             <span style={{ fontSize: 10, color: '#888' }}>{st.success}/{st.total}</span>
                           </div>
@@ -336,14 +323,86 @@ export default function PlanTracking() {
                 </div>
               )}
 
+              {/* 按结构统计 */}
+              {data.by_structure && Object.keys(data.by_structure).length > 0 && (
+                <div className="info-card" style={{ marginTop: 12, padding: 10 }}>
+                  <div
+                    style={{ fontSize: 12, color: '#888', marginBottom: 6, cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => setStructCollapsed(v => !v)}
+                  >
+                    📊 按结构类型 {structCollapsed ? '▶' : '▼'}
+                  </div>
+                  {!structCollapsed && (
+                    <div className="cond-grid">
+                      {Object.entries(data.by_structure).map(([struct, st]) => {
+                        const rate = st.total > 0 ? st.rate.toFixed(1) : '--'
+                        return (
+                          <div key={struct} className="cond-item">
+                            <span style={{ fontSize: 11, color: '#e0e0e0' }}>{struct}</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: Number(rate) >= 50 ? '#4ecdc4' : '#e94560' }}>{rate}%</span>
+                            <span style={{ fontSize: 10, color: '#888' }}>{st.success}/{st.total}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 按主线/非主线统计 */}
+              {data.by_is_main && Object.keys(data.by_is_main).length > 0 && (
+                <div className="info-card" style={{ marginTop: 12, padding: 10 }}>
+                  <div
+                    style={{ fontSize: 12, color: '#888', marginBottom: 6, cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => setMainlineCollapsed(v => !v)}
+                  >
+                    🎯 按主线 {mainlineCollapsed ? '▶' : '▼'}
+                  </div>
+                  {!mainlineCollapsed && (
+                    <div className="cond-grid">
+                      {Object.entries(data.by_is_main).map(([isMain, st]) => {
+                        const label = isMain === '1' ? '主线' : '非主线'
+                        const rate = st.total > 0 ? st.rate.toFixed(1) : '--'
+                        return (
+                          <div key={isMain} className="cond-item">
+                            <span style={{ fontSize: 11, color: '#e0e0e0' }}>{label}</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: isMain === '1' ? '#4ecdc4' : '#e94560' }}>{rate}%</span>
+                            <span style={{ fontSize: 10, color: '#888' }}>{st.success}/{st.total}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 按来源统计 */}
+              {data.by_source && Object.keys(data.by_source).length > 0 && (
+                <div className="info-card" style={{ marginTop: 12, padding: 10 }}>
+                  <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>📂 按数据来源</div>
+                  <div className="type-row">
+                    {Object.entries(data.by_source).map(([src, st]) => {
+                      const rate = st.total > 0 ? (st.success / (st.success + st.failure) * 100).toFixed(1) : '--'
+                      return (
+                        <div key={src} className="type-chip" style={{ background: src === 'buy_priority' ? 'rgba(34,197,94,0.1)' : 'rgba(78,205,196,0.1)' }}>
+                          <span style={{ fontSize: 11 }}>{SOURCE_LABELS[src] || src}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#e0e0e0' }}>{rate}%</span>
+                          <span style={{ fontSize: 10, color: '#888' }}>{st.success}胜/{st.failure}败</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* 过滤栏 */}
               <div className="filter-bar" style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontSize: 11, color: '#888' }}>筛选：</span>
-                <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+                <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}
                   style={selectStyle}>
-                  <option value="all">全部方向</option>
-                  <option value="buy">买入</option>
-                  <option value="sell">卖出</option>
+                  <option value="all">全部来源</option>
+                  <option value="buy_priority">关注买入</option>
+                  <option value="holdings_action">持仓操作</option>
                 </select>
                 <select value={resultFilter} onChange={e => setResultFilter(e.target.value)}
                   style={selectStyle}>
@@ -365,11 +424,11 @@ export default function PlanTracking() {
                   <thead>
                     <tr>
                       <th>日期</th>
-                      <th>方向</th>
+                      <th>来源</th>
                       <th>股票</th>
-                      <th>条件</th>
-                      <th>计划收盘</th>
-                      <th>次日收盘</th>
+                      <th>买点/操作</th>
+                      <th>结构·阶段</th>
+                      <th>主线</th>
                       <th>涨跌幅</th>
                       <th>结果</th>
                       <th>执行</th>
@@ -381,20 +440,20 @@ export default function PlanTracking() {
                       <tr><td colSpan={10} style={{ textAlign: 'center', color: '#666', padding: 20 }}>无匹配计划</td></tr>
                     )}
                     {filteredPlans.map((p, i) => (
-                      <tr key={`${p.plan_date}-${p.type}-${p.stock}-${i}`}>
-                        <td className="cell-date">{p.plan_date.slice(5)}</td>
-                        <td><span className={`type-badge ${p.type}`}>{TYPE_LABELS[p.type] || p.type}</span></td>
+                      <tr key={`${p.date}-${p.code}-${i}`}>
+                        <td className="cell-date">{p.date.slice(5)}</td>
+                        <td><span className={`type-badge ${p.source}`}>{SOURCE_LABELS[p.source] || p.source}</span></td>
                         <td className="cell-stock">
-                          {p.stock}
+                          {p.name || p.code}
                           {p.code && <span className="cell-code">{p.code}</span>}
                         </td>
-                        <td className="cell-cond">{p.condition || '--'}</td>
-                        <td className="cell-num">{p.plan_close != null ? p.plan_close.toFixed(2) : '--'}</td>
-                        <td className="cell-num">{p.next_close != null ? p.next_close.toFixed(2) : '--'}</td>
+                        <td className="cell-cond">{p.buy_point || p.action || '--'}</td>
+                        <td className="cell-cond">{p.reason || '--'}</td>
+                        <td style={{ fontSize: 10 }}>{p.is_main ? '✅' : '--'}</td>
                         <td className={`cell-change ${p.change_pct != null ? (p.change_pct >= 0 ? 'up' : 'down') : ''}`}>
                           {p.change_pct != null ? `${p.change_pct >= 0 ? '+' : ''}${p.change_pct.toFixed(2)}%` : '--'}
                         </td>
-                        <td>{RESULT_LABELS[p.result] || p.result}</td>
+                        <td>{RESULT_LABELS[p.result || ''] || (p.result === undefined || p.result === null ? '📌 参考' : p.result)}</td>
                         <td>
                           {p.result === 'success' || p.result === 'failure' || p.result === 'flat' ? (
                             <span
