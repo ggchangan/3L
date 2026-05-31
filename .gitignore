@@ -39,6 +39,8 @@ server/frontend/dist/css/
 server/frontend/dist/assets/
 server/frontend/dist/react.html
 server/frontend/dist/*.pdf
+# 设计文档PDF（从.md源文件生成，不追踪）
+docs/*.pdf
 
 # Private user data
 private/
