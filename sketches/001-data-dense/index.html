@@ -29,7 +29,9 @@ body{background:#13141f;font-family:-apple-system,"PingFang SC","Microsoft YaHei
 .concept-row{display:flex;align-items:center;padding:4px 0;border-bottom:1px solid #2a2b3d;min-height:56px}
 .concept-row:last-child{border-bottom:none}
 .concept-info{width:150px;flex-shrink:0;display:flex;align-items:baseline;gap:6px}
-.concept-name{font-size:15px;font-weight:500;color:#e8e9f0}
+.concept-name{font-size:15px;font-weight:500;color:#e67700;text-decoration:none;cursor:pointer}
+.concept-name:hover{text-decoration:underline}
+.concept-vl{font-size:12px;color:#7a7b92}
 .concept-vl{font-size:12px;color:#7a7b92}
 .concept-vl .vl-high{color:#fbbf24;font-weight:600}
 .prefix-gold{color:#e67700;font-weight:700;font-size:13px}
@@ -109,7 +111,7 @@ tbody tr:last-child td{border-bottom:none}
 
 <div class="concept-row">
   <div class="concept-info">
-    <span class="prefix-gold">[金]</span><span class="concept-name">AI算力</span><span class="concept-vl">vl:<span class="vl-high">4</span></span>
+    <span class="prefix-gold">[金]</span><a href="#" class="concept-name">AI算力</a><span class="concept-vl">vl:<span class="vl-high">4</span></span>
   </div>
   <div class="concept-chart">
     <svg viewBox="0 0 300 52" preserveAspectRatio="none">
@@ -121,7 +123,7 @@ tbody tr:last-child td{border-bottom:none}
     <span class="chart-label" style="left:85%;top:-2px;"><span style="color:#34d399;font-size:14px;">●</span><span style="color:#7a7b92;font-size:9px;margin-left:2px;">波谷</span></span>
     <span class="chart-label" style="left:48%;top:36px;"><span style="color:#34d399;font-size:11px;font-weight:600;">↓切入窗口</span></span>
   </div>
-  <div class="concept-extra">历史 <span class="num">+18%</span></div>
+  <div class="concept-extra"><a href="#" style="color:#e67700;text-decoration:none;font-size:11px;">详情 ›</a> <span style="color:#7a7b92">历史 <span class="num">+18%</span></span></div>
   <div class="concept-badge badge-green"><span>🟢</span> 波谷</div>
 </div>
 
@@ -129,7 +131,7 @@ tbody tr:last-child td{border-bottom:none}
 
 <div class="concept-row">
   <div class="concept-info">
-    <span class="prefix-silver">[银]</span><span class="concept-name">HBM概念</span><span class="concept-vl">vl:2</span>
+    <span class="prefix-silver">[银]</span><a href="#" class="concept-name">HBM概念</a><span class="concept-vl">vl:2</span>
   </div>
   <div class="concept-chart">
     <svg viewBox="0 0 300 52" preserveAspectRatio="none">
@@ -140,13 +142,13 @@ tbody tr:last-child td{border-bottom:none}
     <span class="chart-label" style="left:85%;top:-2px;"><span style="color:#fb923c;font-size:14px;">●</span><span style="color:#7a7b92;font-size:9px;margin-left:2px;">波谷</span></span>
     <span class="chart-label" style="left:52%;top:36px;"><span style="color:#fbbf24;font-size:10px;">↘轮动（算力→HBM）</span></span>
   </div>
-  <div class="concept-extra">历史 <span class="num">+12%</span></div>
+  <div class="concept-extra"><a href="#" style="color:#e67700;text-decoration:none;font-size:11px;">详情 ›</a> <span style="color:#7a7b92">历史 <span class="num">+12%</span></span></div>
   <div class="concept-badge badge-yellow"><span>🟡</span> 波中</div>
 </div>
 
 <div class="concept-row">
   <div class="concept-info">
-    <span class="concept-name">机器人</span><span class="concept-vl">vl:1</span>
+    <a href="#" class="concept-name">机器人</a><span class="concept-vl">vl:1</span>
   </div>
   <div class="concept-chart">
     <svg viewBox="0 0 300 52" preserveAspectRatio="none">
@@ -155,7 +157,7 @@ tbody tr:last-child td{border-bottom:none}
     </svg>
     <span class="chart-label" style="left:55%;top:2px;"><span>🔥</span><span style="color:#7a7b92;font-size:10px;margin-left:2px">放量</span></span>
   </div>
-  <div class="concept-extra"></div>
+  <div class="concept-extra"><a href="#" style="color:#e67700;text-decoration:none;font-size:11px;">详情 ›</a></div>
   <div class="concept-badge badge-yellow"><span>🟡</span> 波中</div>
 </div>
 
@@ -163,7 +165,7 @@ tbody tr:last-child td{border-bottom:none}
 
 <div class="concept-row">
   <div class="concept-info">
-    <span class="concept-name">固态电池</span><span class="concept-vl" style="color:#666">vl:0</span>
+    <a href="#" class="concept-name">固态电池</a><span class="concept-vl" style="color:#666">vl:0</span>
   </div>
   <div class="concept-chart">
     <svg viewBox="0 0 300 52" preserveAspectRatio="none">
@@ -172,13 +174,13 @@ tbody tr:last-child td{border-bottom:none}
     </svg>
     <span class="chart-label" style="left:58%;top:36px;"><span>⚠️</span><span style="color:#7a7b92;font-size:10px;margin-left:2px">天量滞涨</span></span>
   </div>
-  <div class="concept-extra"></div>
+  <div class="concept-extra"><a href="#" style="color:#e67700;text-decoration:none;font-size:11px;">详情 ›</a></div>
   <div class="concept-badge badge-red"><span>🔴</span> 下跌</div>
 </div>
 
 <div class="concept-row">
   <div class="concept-info">
-    <span class="concept-name">国产芯片</span><span class="concept-vl">vl:1</span>
+    <a href="#" class="concept-name">国产芯片</a><span class="concept-vl">vl:1</span>
   </div>
   <div class="concept-chart">
     <svg viewBox="0 0 300 52" preserveAspectRatio="none">
@@ -188,7 +190,7 @@ tbody tr:last-child td{border-bottom:none}
     </svg>
     <span class="chart-label" style="left:50%;top:-2px;"><span style="color:#ef4444;font-size:14px;">●</span><span style="color:#7a7b92;font-size:9px;margin-left:2px;">波峰</span></span>
   </div>
-  <div class="concept-extra">历史 <span class="num">+22%</span></div>
+  <div class="concept-extra"><a href="#" style="color:#e67700;text-decoration:none;font-size:11px;">详情 ›</a> <span style="color:#7a7b92">历史 <span class="num">+22%</span></span></div>
   <div class="concept-badge badge-red"><span>🔴</span> 下跌</div>
 </div>
 
