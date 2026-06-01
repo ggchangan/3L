@@ -637,6 +637,9 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         '偏波谷': '偏波谷仓位五至八成，建仓10%/只。积极寻找买点，止损后换股补回',
     }.get(pos, '正常仓位管理')
 
+    # 大盘周期标签（注入原因链）
+    market_tag = f'大盘{pos}'
+
     if holdings_review:
         for h in holdings_review:
             name = f"{h['name']}({h['code']})"
@@ -656,6 +659,15 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                     sec_opp_reason = '无板块数据'
                 else:
                     sec_opp_reason = '暂无信号'
+            # 构建推理链：大盘→板块→个股
+            chain_parts = [market_tag]
+            if sec_name and sec_opp and sec_opp != '--':
+                chain_parts.append(f'{sec_name}·{sec_opp}')
+            elif sec_name and sec_opp_reason:
+                chain_parts.append(f'{sec_name}·{sec_opp_reason}')
+            elif sec_name:
+                chain_parts.append(f'{sec_name}')
+            chain = '→'.join(chain_parts)
             # 基础字段
             base = {
                 'stock': name,
@@ -665,17 +677,16 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'sector': sec_name,
                 'opportunity': sec_opp,
                 'opp_reason': sec_opp_reason,
+                'mainline_level': h.get('mainline_level', ''),
+                'is_main': h.get('mainline_level', '') in ('主线', '次级主线'),
+                'profit_model1': h.get('profit_model1', False),
+                'trend_stock': h.get('trend_stock', False),
             }
 
             # 根据个股阶段判定操作
-            def _make_hold_action(action, reason, priority):
-                """生成持仓操作（注入板块机会信息）"""
-                opp_tag = ''
-                if sec_opp and sec_opp != '--':
-                    opp_tag = f' | {sec_opp}'
-                elif sec_opp_reason:
-                    opp_tag = f' | {sec_opp_reason}'
-                return {**base, 'action': action, 'reason': f'{reason}{opp_tag}', 'priority': priority}
+            def _make_hold_action(action, reason_base, priority):
+                """生成持仓操作（注入推理链）"""
+                return {**base, 'action': action, 'reason': f'{chain}→{reason_base}', 'priority': priority}
 
             if sig == 'sell':
                 plan['holdings_action'].append(_make_hold_action('卖出', f'{struct}·{stage}', '高'))
@@ -734,6 +745,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'direction': direction,
                 'opportunity': bs_opp,
                 'opp_reason': opp_reason,
+                'reason': f'{market_tag}→{sec_name}·{bs_opp}→{bs.get("structure", "--")}·{bs.get("stage", "--")}' if bs_opp and bs_opp != '--' else f'{market_tag}→{opp_reason}' if opp_reason else '',
                 'priority': '高' if bs.get('buy_point', '') in ('中继买点', '突破买点') else '中',
             })
 
