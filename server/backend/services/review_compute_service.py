@@ -643,37 +643,63 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             sig = h.get('signal', 'hold')
             stage = h.get('stage', '')
             struct = h.get('structure', '')
-            # 所有持仓项共有的字段
+            # 查询所属板块的机会类型
+            sec_name = h.get('sector', '')
+            sec_opp = '--'
+            sec_opp_reason = ''
+            if opportunity_map and sec_name:
+                sec_opp = opportunity_map.get(sec_name, '--')
+            if sec_opp == '--':
+                if not sec_name:
+                    sec_opp_reason = '暂无行业数据'
+                elif sec_name not in opportunity_map:
+                    sec_opp_reason = '无板块数据'
+                else:
+                    sec_opp_reason = '暂无信号'
+            # 基础字段
             base = {
                 'stock': name,
                 'stop_loss': h.get('stop_loss'),
                 'stop_loss_pct': h.get('stop_loss_pct'),
                 'change': h.get('change'),
+                'sector': sec_name,
+                'opportunity': sec_opp,
+                'opp_reason': sec_opp_reason,
             }
 
+            # 根据个股阶段判定操作
+            def _make_hold_action(action, reason, priority):
+                """生成持仓操作（注入板块机会信息）"""
+                opp_tag = ''
+                if sec_opp and sec_opp != '--':
+                    opp_tag = f' | {sec_opp}'
+                elif sec_opp_reason:
+                    opp_tag = f' | {sec_opp_reason}'
+                return {**base, 'action': action, 'reason': f'{reason}{opp_tag}', 'priority': priority}
+
             if sig == 'sell':
-                plan['holdings_action'].append({**base, 'action': '卖出', 'reason': f'{struct}·{stage}', 'priority': '高'})
+                plan['holdings_action'].append(_make_hold_action('卖出', f'{struct}·{stage}', '高'))
             elif sig == 'buy':
                 buy_pt = h.get('buy_point', '买点')
-                plan['holdings_action'].append({**base, 'action': f'执行{buy_pt}', 'reason': f'{struct}·{stage}', 'priority': '高'})
+                plan['holdings_action'].append(_make_hold_action(f'执行{buy_pt}', f'{struct}·{stage}', '高'))
             elif stage == '加速':
-                plan['holdings_action'].append({**base, 'action': '持有·关注止盈', 'reason': f'{struct}·{stage}，关注放量滞涨/加速变缓', 'priority': '中'})
+                plan['holdings_action'].append(_make_hold_action('持有·关注止盈', f'{struct}·{stage}，关注放量滞涨/加速变缓', '中'))
             elif stage == '缩量整理':
-                plan['holdings_action'].append({**base, 'action': '持有·可加仓', 'reason': f'{struct}·{stage}，供应枯竭等待放量', 'priority': '中'})
+                plan['holdings_action'].append(_make_hold_action('持有·可加仓', f'{struct}·{stage}，供应枯竭等待放量', '中'))
             elif stage == '上行':
-                plan['holdings_action'].append({**base, 'action': '持有不动', 'reason': f'{struct}·{stage}，趋势健康', 'priority': '低'})
+                plan['holdings_action'].append(_make_hold_action('持有不动', f'{struct}·{stage}，趋势健康', '低'))
             elif stage == '滞涨':
-                plan['holdings_action'].append({**base, 'action': '警惕·考虑减仓', 'reason': f'{struct}·{stage}，EMA10走平', 'priority': '高'})
+                plan['holdings_action'].append(_make_hold_action('警惕·考虑减仓', f'{struct}·{stage}，EMA10走平', '高'))
             elif stage == '转弱':
-                plan['holdings_action'].append({**base, 'action': '关注·可换股', 'reason': f'{struct}·{stage}，EMA10拐头向下', 'priority': '高'})
+                plan['holdings_action'].append(_make_hold_action('关注·可换股', f'{struct}·{stage}，EMA10拐头向下', '高'))
             elif stage == '区间底部':
-                plan['holdings_action'].append({**base, 'action': '支撑位·可加仓', 'reason': f'{struct}·{stage}，区底企稳', 'priority': '中'})
+                plan['holdings_action'].append(_make_hold_action('支撑位·可加仓', f'{struct}·{stage}，区底企稳', '中'))
             elif stage == '区间顶部':
-                plan['holdings_action'].append({**base, 'action': '压力位·注意减仓', 'reason': f'{struct}·{stage}，区顶受阻', 'priority': '高'})
+                plan['holdings_action'].append(_make_hold_action('压力位·注意减仓', f'{struct}·{stage}，区顶受阻', '高'))
             elif stage == '区间中段':
-                plan['holdings_action'].append({**base, 'action': '持有·观望', 'reason': f'{struct}·{stage}，方向未明', 'priority': '低'})
+                plan['holdings_action'].append(_make_hold_action('持有·观望', f'{struct}·{stage}，方向未明', '低'))
             else:
-                plan['holdings_action'].append({**base, 'action': '持有', 'reason': f'{struct}·{stage}', 'priority': '中'})
+                plan['holdings_action'].append(_make_hold_action('持有', f'{struct}·{stage}', '中'))
 
     if buy_signals_review:
         for bs in buy_signals_review:

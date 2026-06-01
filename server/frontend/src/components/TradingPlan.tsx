@@ -45,12 +45,21 @@ export default function TradingPlan({ plan }: Props) {
           <div style={{ marginBottom: 8 }}><strong style={{ color: '#4ecdc4', fontSize: 13 }}>📦 个股操作</strong></div>
           {plan.holdings_action.map((item, i) => {
             const color = PRI_COLORS[item.priority] || '#888'
+            const oppColor: Record<string, string> = {
+              '主线回调': '#e94560', '次线机会': '#ffd700', '波谷观察': '#4ecdc4',
+              '趋势延续': '#44aa44', '见顶风险': '#ff6b00', '回调中': '#888',
+            }
+            const opp = (item as any).opportunity || ''
+            const oppC = oppColor[opp] || ''
             return (
               <div key={i} className="plan-item" style={{ borderLeft: `3px solid ${color}`, paddingLeft: 8, marginBottom: 4 }}>
-                <span style={{ fontWeight: 600 }}>{item.stock}</span>
-                <span style={{ color }}> → {item.action}</span>
-                <span style={{ color: '#888', fontSize: 11 }}> {item.reason}</span>
-                <span style={{ color, fontSize: 10, marginLeft: 6 }}>{item.priority}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 600 }}>{item.stock}</span>
+                  <span style={{ color }}> → {item.action}</span>
+                  {oppC && <span style={{ color: oppC, fontSize: 10, fontWeight: 600 }}>{opp}</span>}
+                  <span style={{ color, fontSize: 10, marginLeft: 'auto' }}>{item.priority}</span>
+                </div>
+                <div style={{ color: '#888', fontSize: 11, marginTop: 2 }}>{item.reason}</div>
               </div>
             )
           })}
