@@ -42,24 +42,57 @@ export default function TradingPlan({ plan }: Props) {
 
       {plan.holdings_action && plan.holdings_action.length > 0 && (
         <>
-          <div style={{ marginBottom: 8 }}><strong style={{ color: '#4ecdc4', fontSize: 13 }}>📦 个股操作</strong></div>
-          {plan.holdings_action.map((item, i) => {
-            const color = PRI_COLORS[item.priority] || '#888'
-            const oppColor: Record<string, string> = {
-              '主线回调': '#e94560', '次线机会': '#ffd700', '波谷观察': '#4ecdc4',
-              '趋势延续': '#44aa44', '见顶风险': '#ff6b00', '回调中': '#888',
-            }
-            const opp = (item as any).opportunity || ''
-            const oppC = oppColor[opp] || ''
+          <div style={{ marginBottom: 8 }}><strong style={{ color: '#4ecdc4', fontSize: 13 }}>📦 个股操作（按板块机会分组）</strong></div>
+          {groupedHoldingsAction(plan.holdings_action).map(([opp, secGroups]) => {
+            const cfg = OPP_CONFIG[opp] || { label: opp, emoji: '📋', color: '#888', order: 99 }
+            const total = secGroups.reduce((s, g) => s + g.items.length, 0)
             return (
-              <div key={i} className="plan-item" style={{ borderLeft: `3px solid ${color}`, paddingLeft: 8, marginBottom: 4 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 600 }}>{item.stock}</span>
-                  <span style={{ color }}> → {item.action}</span>
-                  {oppC && <span style={{ color: oppC, fontSize: 10, fontWeight: 600 }}>{opp}</span>}
-                  <span style={{ color, fontSize: 10, marginLeft: 'auto' }}>{item.priority}</span>
+              <div key={opp} style={{ marginBottom: 10 }}>
+                <div style={{ color: cfg.color, fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                  {cfg.emoji} {cfg.label} ({total})
                 </div>
-                <div style={{ color: '#888', fontSize: 11, marginTop: 2 }}>{item.reason}</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ color: '#555', fontSize: 10 }}>
+                      <th style={{ textAlign: 'left', padding: '2px 6px', borderBottom: '1px solid #333' }}>个股</th>
+                      <th style={{ textAlign: 'left', padding: '2px 6px', borderBottom: '1px solid #333' }}>操作</th>
+                      <th style={{ textAlign: 'left', padding: '2px 6px', borderBottom: '1px solid #333' }}>板块</th>
+                      <th style={{ textAlign: 'left', padding: '2px 6px', borderBottom: '1px solid #333' }}>原因</th>
+                      <th style={{ textAlign: 'center', padding: '2px 6px', borderBottom: '1px solid #333' }}>优先</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {secGroups.map((secGroup, gi) => (
+                      secGroup.items.map((item, i) => {
+                        const color = PRI_COLORS[item.priority] || '#888'
+                        const stockName = item.stock || ''
+                        const codeMatch = stockName.match(/\(([^)]+)\)/)
+                        const code = codeMatch ? codeMatch[1] : ''
+                        const name = stockName.replace(/\([^)]+\)/, '')
+                        return (
+                          <tr key={`${gi}-${i}`} style={{ borderBottom: '1px solid #222' }}>
+                            <td style={{ padding: '3px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                              {name}
+                              <span style={{ color: '#555', fontSize: 10, marginLeft: 2 }}>{code}</span>
+                            </td>
+                            <td style={{ padding: '3px 6px', color, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                              {item.action}
+                            </td>
+                            <td style={{ padding: '3px 6px', color: '#666', fontSize: 10, whiteSpace: 'nowrap' }}>
+                              {secGroup.sector !== '未分类' ? secGroup.sector : ''}
+                            </td>
+                            <td style={{ padding: '3px 6px', color: '#888', fontSize: 10 }}>
+                              {item.reason}
+                            </td>
+                            <td style={{ padding: '3px 6px', textAlign: 'center', color, fontSize: 10 }}>
+                              {item.priority}
+                            </td>
+                          </tr>
+                        )
+                      })
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )
           })}
@@ -77,23 +110,44 @@ export default function TradingPlan({ plan }: Props) {
                 <div style={{ color: cfg.color, fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
                   {cfg.emoji} {cfg.label} ({items.length})
                 </div>
-                {items.map((s, i) => (
-                  <div key={i} className="plan-item" style={{ fontSize: 12, paddingLeft: 8, borderLeft: `2px solid ${cfg.color}20`, marginBottom: 2 }}>
-                    <span style={{ color: '#e94560', fontWeight: 'bold' }}>#{i + 1}</span>
-                    <span style={{ fontWeight: 600 }}> {s.name}</span>
-                    <span style={{ color: '#888' }}> {s.buy_point}</span>
-                    {s.is_main && <span className="tag red" style={{ fontSize: 10 }}>主线</span>}
-                    {s.profit_model1 && <span className="tag" style={{ background: '#e94560', fontSize: 10, padding: '1px 6px' }}>🏆</span>}
-                    {s.trend_stock && <span className="tag" style={{ background: '#2196f3', fontSize: 10, padding: '1px 6px' }}>📈</span>}
-                    <span style={{ color: (s.change || 0) >= 0 ? '#ff4444' : '#44aa44' }}> {(s.change || 0) >= 0 ? '+' : ''}{s.change}%</span>
-                    {s.stop_loss != null && <span style={{ color: '#ff9800', fontSize: 10 }}> 止损{s.stop_loss}{s.stop_loss_pct != null ? `(${s.stop_loss_pct}%)` : ''}</span>}
-                    {/* 显示理由 */}
-                    {(opp === '其他') && (s as any).opp_reason && (
-                      <span style={{ color: '#555', fontSize: 10, marginLeft: 4 }}>· {(s as any).opp_reason}</span>
-                    )}
-                    {s.sector && <span style={{ color: '#555', fontSize: 10, marginLeft: 4 }}>· {s.sector}</span>}
-                  </div>
-                ))}
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ color: '#555', fontSize: 10 }}>
+                      <th style={{ textAlign: 'left', padding: '2px 6px', borderBottom: '1px solid #333' }}>个股</th>
+                      <th style={{ textAlign: 'left', padding: '2px 6px', borderBottom: '1px solid #333' }}>买点</th>
+                      <th style={{ textAlign: 'left', padding: '2px 6px', borderBottom: '1px solid #333' }}>涨跌</th>
+                      <th style={{ textAlign: 'left', padding: '2px 6px', borderBottom: '1px solid #333' }}>止损</th>
+                      <th style={{ textAlign: 'center', padding: '2px 6px', borderBottom: '1px solid #333' }}>标签</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((s, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #222' }}>
+                        <td style={{ padding: '3px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {s.name}
+                          {s.sector && <span style={{ color: '#555', fontSize: 10, marginLeft: 2 }}>·{s.sector}</span>}
+                        </td>
+                        <td style={{ padding: '3px 6px', color: '#aaa', fontSize: 10, whiteSpace: 'nowrap' }}>
+                          {s.buy_point}
+                        </td>
+                        <td style={{ padding: '3px 6px', color: (s.change || 0) >= 0 ? '#ff4444' : '#44aa44', whiteSpace: 'nowrap' }}>
+                          {(s.change || 0) >= 0 ? '+' : ''}{s.change}%
+                        </td>
+                        <td style={{ padding: '3px 6px', color: '#ff9800', fontSize: 10, whiteSpace: 'nowrap' }}>
+                          {s.stop_loss != null ? `${s.stop_loss}${s.stop_loss_pct != null ? `(${s.stop_loss_pct}%)` : ''}` : ''}
+                        </td>
+                        <td style={{ padding: '3px 6px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          {s.is_main && <span className="tag red" style={{ fontSize: 9 }}>主线</span>}
+                          {s.profit_model1 && <span className="tag" style={{ background: '#e94560', fontSize: 9, padding: '1px 4px' }}>🏆</span>}
+                          {s.trend_stock && <span className="tag" style={{ background: '#2196f3', fontSize: 9, padding: '1px 4px' }}>📈</span>}
+                          {(opp === '其他') && (s as any).opp_reason && (
+                            <span style={{ color: '#555', fontSize: 9 }}>{(s as any).opp_reason}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )
           })}
@@ -133,6 +187,34 @@ function groupedBuyPriority(items: NonNullable<NonNullable<Props['plan']>['buy_p
     '主线观察': 6, '次级观察': 7, '其他': 99,
   }
   return Object.entries(groups).sort(([a], [b]) => {
+    const oa = OPP_ORDER[a] ?? 99
+    const ob = OPP_ORDER[b] ?? 99
+    return oa - ob
+  })
+}
+
+/** 按机会类型→行业分组持仓操作 */
+function groupedHoldingsAction(items: NonNullable<NonNullable<Props['plan']>['holdings_action']>) {
+  // 先按 opp 分组
+  const oppGroups: Record<string, { sector: string; items: typeof items }[]> = {}
+  for (const item of items) {
+    let opp = (item as any).opportunity || '--'
+    if (opp === '--') opp = '其他'
+    const sec = (item as any).sector || '未分类'
+    if (!oppGroups[opp]) oppGroups[opp] = []
+    let secGroup = oppGroups[opp].find(g => g.sector === sec)
+    if (!secGroup) {
+      secGroup = { sector: sec, items: [] }
+      oppGroups[opp].push(secGroup)
+    }
+    secGroup.items.push(item)
+  }
+  const OPP_ORDER: Record<string, number> = {
+    '主线回调': 0, '次线机会': 1, '波谷观察': 2,
+    '趋势延续': 3, '回调中': 4, '见顶风险': 5,
+    '主线观察': 6, '次级观察': 7, '其他': 99,
+  }
+  return Object.entries(oppGroups).sort(([a], [b]) => {
     const oa = OPP_ORDER[a] ?? 99
     const ob = OPP_ORDER[b] ?? 99
     return oa - ob
