@@ -137,7 +137,7 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
           const opp = opportunityMap && secName ? opportunityMap[secName] : (s as any).opportunity
           if (!opp || opp === '--') return null
           const oppColors: Record<string, string> = {
-            '主线回调': '#e94560', '次线机会': '#ffd700', '潜在主线': '#4ecdc4',
+            '主线回调': '#e94560', '次线机会': '#ffd700', '波谷观察': '#4ecdc4',
             '趋势延续': '#44aa44', '见顶风险': '#ff6b00', '回调中': '#888',
           }
           const color = oppColors[opp] || '#888'

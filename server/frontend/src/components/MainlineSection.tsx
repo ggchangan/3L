@@ -23,7 +23,7 @@ const TAB_STYLE_BASE = { padding: '6px 16px', fontSize: 13, borderRadius: '6px 6
 const OPP_GROUPS: { key: string; label: string; emoji: string; color: string; bg: string }[] = [
   { key: '主线回调', label: '主线回调机会', emoji: '🎯', color: '#e94560', bg: 'rgba(233,69,96,0.12)' },
   { key: '次线机会', label: '次线机会', emoji: '🎯', color: '#ffd700', bg: 'rgba(255,215,0,0.1)' },
-  { key: '潜在主线', label: '潜在主线', emoji: '🔮', color: '#4ecdc4', bg: 'rgba(78,205,196,0.1)' },
+  { key: '波谷观察', label: '波谷观察', emoji: '🔮', color: '#4ecdc4', bg: 'rgba(78,205,196,0.1)' },
   { key: '趋势延续', label: '趋势延续', emoji: '📈', color: '#44aa44', bg: 'rgba(68,170,68,0.08)' },
   { key: '见顶风险', label: '见顶风险', emoji: '⚠️', color: '#ff6b00', bg: 'rgba(255,107,0,0.1)' },
   { key: '回调中', label: '回调中', emoji: '📉', color: '#888', bg: 'rgba(136,136,136,0.06)' },

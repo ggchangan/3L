@@ -297,9 +297,9 @@ def classify_opportunity(is_mainline, is_secondary, stage, vl_score):
         elif stage == '下跌':
             return '回调中'
         return '次级观察'
-    # 非榜板块：只有波谷+高评分才算潜在主线
+    # 非榜板块：只有波谷+高评分才算波谷观察
     if stage == '波谷' and (vl_score or 0) >= 3:
-        return '潜在主线'
+        return '波谷观察'
     return '--'
 
 
@@ -679,9 +679,18 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         for bs in buy_signals_review:
             # 通过 sector 名称在 opportunity_map 中查找该股票所属方向的机会类型
             sec_name = bs.get('sector', '')
+            direction = bs.get('direction', '')
             bs_opp = '--'
+            opp_reason = ''
             if opportunity_map and sec_name:
                 bs_opp = opportunity_map.get(sec_name, '--')
+            if not bs_opp or bs_opp == '--':
+                if not sec_name:
+                    opp_reason = direction if direction else '暂无行业数据'
+                elif sec_name not in opportunity_map:
+                    opp_reason = f'{sec_name}·无板块数据'
+                else:
+                    opp_reason = f'{sec_name}·暂无信号'
             plan['buy_priority'].append({
                 'name': bs.get('name', bs.get('code', '')),
                 'code': bs.get('code', ''),
@@ -696,7 +705,9 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'stop_loss': bs.get('stop_loss'),
                 'stop_loss_pct': bs.get('stop_loss_pct'),
                 'sector': sec_name,
+                'direction': direction,
                 'opportunity': bs_opp,
+                'opp_reason': opp_reason,
                 'priority': '高' if bs.get('buy_point', '') in ('中继买点', '突破买点') else '中',
             })
 

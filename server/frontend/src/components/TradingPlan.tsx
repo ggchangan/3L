@@ -10,7 +10,7 @@ const PRI_COLORS: Record<string, string> = { '高': '#e94560', '中': '#ffd700',
 const OPP_CONFIG: Record<string, { label: string; emoji: string; color: string; order: number }> = {
   '主线回调': { label: '主线回调', emoji: '🎯', color: '#e94560', order: 0 },
   '次线机会': { label: '次线机会', emoji: '🎯', color: '#ffd700', order: 1 },
-  '潜在主线': { label: '潜在主线', emoji: '🔮', color: '#4ecdc4', order: 2 },
+  '波谷观察': { label: '波谷观察', emoji: '🔮', color: '#4ecdc4', order: 2 },
   '趋势延续': { label: '趋势延续', emoji: '📈', color: '#44aa44', order: 3 },
   '回调中': { label: '回调中', emoji: '📉', color: '#888', order: 4 },
   '见顶风险': { label: '见顶风险', emoji: '⚠️', color: '#ff6b00', order: 5 },
@@ -78,6 +78,10 @@ export default function TradingPlan({ plan }: Props) {
                     {s.trend_stock && <span className="tag" style={{ background: '#2196f3', fontSize: 10, padding: '1px 6px' }}>📈</span>}
                     <span style={{ color: (s.change || 0) >= 0 ? '#ff4444' : '#44aa44' }}> {(s.change || 0) >= 0 ? '+' : ''}{s.change}%</span>
                     {s.stop_loss != null && <span style={{ color: '#ff9800', fontSize: 10 }}> 止损{s.stop_loss}{s.stop_loss_pct != null ? `(${s.stop_loss_pct}%)` : ''}</span>}
+                    {/* 显示理由 */}
+                    {(opp === '其他') && (s as any).opp_reason && (
+                      <span style={{ color: '#555', fontSize: 10, marginLeft: 4 }}>· {(s as any).opp_reason}</span>
+                    )}
                     {s.sector && <span style={{ color: '#555', fontSize: 10, marginLeft: 4 }}>· {s.sector}</span>}
                   </div>
                 ))}
@@ -115,7 +119,7 @@ function groupedBuyPriority(items: NonNullable<NonNullable<Props['plan']>['buy_p
     groups[opp].push(item)
   }
   const OPP_ORDER: Record<string, number> = {
-    '主线回调': 0, '次线机会': 1, '潜在主线': 2,
+    '主线回调': 0, '次线机会': 1, '波谷观察': 2,
     '趋势延续': 3, '回调中': 4, '见顶风险': 5,
     '主线观察': 6, '次级观察': 7, '其他': 99,
   }
