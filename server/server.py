@@ -87,6 +87,7 @@ def register_api_routes(routes):
         'backend.api.logic_tracking',
         'backend.api.plan_tracking',
         'backend.api.market_health',
+        'backend.api.concept_wave',
     ]
     for mod_name in api_modules:
         mod = importlib.import_module(mod_name)
@@ -234,6 +235,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/watchlist', '/trend_candidates',
             '/logic-tracking', '/alarm-sounds',
             '/plan-tracking',
+            '/concept-wave',
         }
         if path in spa_routes:
             self.path = '/react.html'

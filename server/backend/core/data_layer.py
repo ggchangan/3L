@@ -17,6 +17,7 @@ from backend.config import (
     REVIEW_CHARTS_DIR, SCRIPTS_DIR, SIMULATION_DIR,
     MAINLINES_CACHE_PATH,
     SIMULATION_V3_DIR as OUTPUT_DIR,
+    CONCEPT_LIST_PATH, STOCK_CONCEPT_MAP_PATH,
 )
 
 # ====== 通用 ======
@@ -155,6 +156,29 @@ def save_industry_map(data):
     """原子保存行业映射，清缓存"""
     _atomic_save_json(INDUSTRY_MAP_PATH, data)
     cache.invalidate('industry_map')
+
+
+# ====== 概念板块映射 ======
+def get_concept_list():
+    """返回 {code: {name, stock_count, stocks}}（走缓存，TTL=60s）"""
+    return cache.get('concept_list', lambda: _load_json(CONCEPT_LIST_PATH, {}), ttl=60)
+
+
+def save_concept_list(data):
+    """原子保存概念列表，清缓存"""
+    _atomic_save_json(CONCEPT_LIST_PATH, data)
+    cache.invalidate('concept_list')
+
+
+def get_stock_concept_map():
+    """返回 {code: {code, name, concept_codes, concept_names}}（走缓存，TTL=60s）"""
+    return cache.get('stock_concept_map', lambda: _load_json(STOCK_CONCEPT_MAP_PATH, {}), ttl=60)
+
+
+def save_stock_concept_map(data):
+    """原子保存个股概念映射，清缓存"""
+    _atomic_save_json(STOCK_CONCEPT_MAP_PATH, data)
+    cache.invalidate('stock_concept_map')
 
 
 # ====== 股票搜索 ======

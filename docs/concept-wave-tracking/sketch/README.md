@@ -1,0 +1,23 @@
+## Variant A: 数据密集型
+
+### 在浏览器打开原型
+
+[🗂️ 打开原型 →](https://htmlpreview.github.io/?https://raw.githubusercontent.com/ggchangan/3L/feature/concept-wave-tracking/docs/concept-wave-tracking/sketch/index.html)
+
+点击上方链接在浏览器中预览可交互原型。概念卡片可点击▶展开详情。
+
+### Design stance
+完整功能型 — 所有信息都在页面上，适合日常分析用。
+
+### Key choices
+- 顶部统计卡（4个指标）
+- 分组堆叠走势图（波谷/波中/下跌）
+- 完整标注：💧缩量 / 🔥放量 / ⚠️天量滞涨 / 切入窗口 / 轮动箭头 / 历史涨幅
+- 告警区块 + 新概念扫描区块
+
+### Trade-offs
+- 强：信息密度高，一次阅读不遗漏
+- 弱：初次接触的用户可能觉得信息量过大
+
+### Best for
+每日复盘时的完整分析场景

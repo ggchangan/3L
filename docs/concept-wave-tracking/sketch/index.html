@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>概念板块波谷追踪 | v2 折叠详情</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#13141f;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#c8c9d4;padding:24px 16px;display:flex;justify-content:center}
+.container{width:860px;max-width:100%}
+.title-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 0 12px;border-bottom:1px solid #2a2b3d;flex-wrap:wrap;gap:8px}
+.title-bar h1{font-size:20px;font-weight:700;color:#e8e9f0;letter-spacing:1px}
+.title-actions{display:flex;align-items:center;gap:10px}
+.date-range{display:flex;align-items:center;gap:6px;background:#1a1b2e;border:1px solid #2f3045;border-radius:6px;padding:5px 12px;font-size:13px;color:#9a9bb0}
+.date-range span{color:#c8c9d4}
+.btn-sort{background:#2a6eff;color:#fff;border-radius:6px;padding:6px 16px;font-size:13px;font-weight:600;cursor:default;letter-spacing:0.5px}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+.stat-card{background:#1a1b2e;border:1px solid #2a2b3d;border-radius:8px;padding:14px 12px;text-align:center}
+.stat-value{font-size:22px;font-weight:700;color:#e8e9f0;line-height:1.3}
+.stat-value .up{color:#34d399}
+.stat-label{font-size:12px;color:#7a7b92;margin-top:4px;letter-spacing:0.5px}
+.group-header{display:flex;align-items:center;gap:8px;padding:8px 0 4px;font-size:13px;font-weight:700;letter-spacing:1.5px}
+.group-header .tag{display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px}
+.tag-green{background:#0b2e1a;color:#34d399;border:1px solid #1a4a2e}
+.tag-yellow{background:#2a2000;color:#fbbf24;border:1px solid #4a3800}
+.tag-red{background:#2a0b0b;color:#ef4444;border:1px solid #4a1515}
+.group-header .gc{font-weight:400;color:#7a7b92;font-size:11px}
+.chart-wrap{position:relative;padding:4px 0}
+.today-line{position:absolute;left:73%;top:0;bottom:0;width:2px;background:#ef4444;z-index:5;pointer-events:none}
+.today-label{position:absolute;left:calc(73% - 12px);top:2px;color:#ef4444;font-size:10px;font-weight:600;z-index:6}
+
+.concept-card{margin:2px 0;background:#1a1b2e;border:1px solid #2a2b3d;border-radius:6px;overflow:hidden}
+.concept-card.expanded{border-color:#3a3b55}
+.concept-main{display:flex;align-items:center;padding:6px 10px;gap:8px;cursor:pointer}
+.concept-main:hover{background:#1e1f35}
+.concept-info{width:150px;flex-shrink:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px}
+.concept-name{font-size:15px;font-weight:500;color:#e67700;text-decoration:none;cursor:pointer}
+.concept-name:hover{text-decoration:underline}
+.concept-vl{font-size:12px;color:#7a7b92}
+.concept-vl .hl{color:#fbbf24;font-weight:600}
+.pg{color:#e67700;font-weight:700;font-size:13px}
+.ps{color:#9a9bb0;font-weight:700;font-size:13px}
+.concept-chart{position:relative;flex:1;min-width:60px;height:50px}
+.concept-chart svg{width:100%;height:100%;display:block}
+.c-label{position:absolute;pointer-events:none;white-space:nowrap;line-height:1}
+
+.expand-btn{width:24px;flex-shrink:0;text-align:center;font-size:12px;color:#7a7b92;cursor:pointer;transition:transform .2s}
+.expand-btn.open{transform:rotate(90deg);color:#fbbf24}
+
+.concept-badge{width:56px;flex-shrink:0;text-align:center;font-size:11px}
+.bg-green{color:#34d399}
+.bg-yellow{color:#fbbf24}
+.bg-red{color:#ef4444}
+
+.concept-detail{display:none;padding:6px 12px 8px;border-top:1px solid #2a2b3d;font-size:12px;background:#191a2d}
+.concept-detail.show{display:block}
+.d-line1{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:2px 0}
+.d-line2{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:2px 0;margin-top:2px}
+.dl{color:#7a7b92}
+.dv{font-weight:600}
+.dv.r{color:#ef4444}
+.dv.g{color:#34d399}
+.ds{color:#34d399;font-weight:600}
+.ds.wk{color:#ef4444;font-weight:600}
+.d-stk{color:#c8c9d4}
+.d-link{color:#fbbf24;text-decoration:none;cursor:pointer;font-weight:500}
+.d-link:hover{text-decoration:underline}
+.d-more{color:#7a7b92;cursor:pointer}
+.d-more:hover{color:#fbbf24}
+
+.section-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:#e8e9f0;margin:20px 0 10px;padding:0 4px}
+.section-title .count{font-weight:400;color:#7a7b92;font-size:12px}
+.alert-card{display:flex;align-items:flex-start;gap:10px;background:#1a1b2e;border:1px solid #2a2b3d;border-radius:8px;padding:12px 16px}
+.alert-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.alert-body{flex:1;font-size:13px;line-height:1.6;color:#c8c9d4}
+.alert-body strong{color:#e8e9f0}
+.alert-body .hl{color:#34d399;font-weight:600}
+.alert-body .stk{color:#fbbf24}
+.scan-card{display:flex;align-items:center;gap:8px;background:#1a1b2e;border:1px solid #2a2b3d;border-radius:8px;padding:10px 14px;font-size:13px;flex-wrap:wrap}
+.scan-name{font-weight:500;color:#e8e9f0}
+.scan-stat{color:#34d399;font-weight:600}
+.scan-label{color:#7a7b92;font-size:12px}
+.scan-add{background:#2a2b4e;color:#e0e0e0;border:1px solid #3a3b55;border-radius:4px;padding:4px 12px;font-size:12px;cursor:pointer;margin-left:auto}
+.collapsed{text-align:center;padding:8px 0;color:#7a7b92;font-size:13px}
+.collapsed span{background:#1a1b2e;border:1px solid #2a2b3d;padding:4px 20px;border-radius:6px;cursor:pointer}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;padding:12px 0;font-size:11px;color:#7a7b92}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.axis-row{display:flex;justify-content:space-between;font-size:11px;color:#555;padding:4px 8px}
+.axis-row .ta{color:#ef4444;font-weight:600}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="title-bar">
+  <h1>📊 概念板块波谷追踪</h1>
+  <div class="title-actions">
+    <div class="date-range">📅 <span>2026-05-01</span> ~ <span>2026-05-31</span></div>
+    <div class="btn-sort">按阶段排序 ▼</div>
+  </div>
+</div>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-value">67%</div><div class="stat-label">波谷准确率</div></div>
+  <div class="stat-card"><div class="stat-value">3<span style="font-size:14px;color:#7a7b92">个</span></div><div class="stat-label">当前波谷信号</div></div>
+  <div class="stat-card"><div class="stat-value">52</div><div class="stat-label">追踪概念总数</div></div>
+  <div class="stat-card"><div class="stat-value"><span class="up">↑14%</span></div><div class="stat-label">上周新发现机会</div></div>
+</div>
+
+<div class="section-title">📈 核心概念堆叠走势 <span class="count">· 点击 ▶ 展开详情</span></div>
+
+<div class="chart-wrap">
+
+<div class="today-line"></div>
+<div class="today-label">今天</div>
+
+<div class="group-header"><span class="tag tag-green">🟢 波谷组</span><span class="gc">重点关注 · 波谷阶段</span></div>
+
+<div class="concept-card">
+  <div class="concept-main" onclick="this.nextElementSibling.classList.toggle('show');this.querySelector('.expand-btn').classList.toggle('open');this.closest('.concept-card').classList.toggle('expanded')">
+    <div class="concept-info">
+      <span class="pg">[金]</span><a href="#" class="concept-name" onclick="event.stopPropagation()">AI算力</a>
+      <span class="concept-vl">vl:<span class="hl">4</span></span>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 50" preserveAspectRatio="none">
+        <polyline points="0,28 30,26 60,24 90,23 120,22 150,20 180,21 210,18 240,19 270,17 300,16" fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"/>
+        <polyline points="0,38 30,36 60,34 90,30 120,26 150,18 180,14 210,10 240,12 270,6 300,4" fill="none" stroke="#34d399" stroke-width="2"/>
+        <circle cx="270" cy="6" r="4" fill="#34d399" stroke="#13141f" stroke-width="1.5"/>
+      </svg>
+      <span class="c-label" style="left:50%;top:0;"><span>💧</span><span style="color:#7a7b92;font-size:9px">缩量</span></span>
+      <span class="c-label" style="left:85%;top:-2px;"><span style="color:#34d399;font-size:12px;">●</span><span style="color:#7a7b92;font-size:9px;">波谷</span></span>
+      <span class="c-label" style="left:48%;top:35px;"><span style="color:#34d399;font-size:10px;font-weight:600;">↓切入窗口</span></span>
+    </div>
+    <div class="concept-badge bg-green"><span>🟢</span> 波谷</div>
+    <div class="expand-btn">▶</div>
+  </div>
+  <div class="concept-detail">
+    <div class="d-line1">
+      <span><span class="dl">近5日</span> <span class="dv r">-1.2%</span></span>
+      <span><span class="dl">BIAS20</span> <span class="dv r">-6.3%</span></span>
+      <span><span class="dl">vs大盘</span> <span class="ds">+3.2%</span></span>
+      <span style="color:#7a7b92;">|</span>
+      <span><span class="dl">历史谷→峰</span> <span style="color:#e8e9f0;font-weight:600;">+18%</span></span>
+    </div>
+    <div class="d-line2">
+      <span class="dl">关联自选:</span>
+      <span class="d-stk">中际旭创</span><span style="color:#555">/</span>
+      <span class="d-stk">寒武纪</span><span style="color:#555">/</span>
+      <span class="d-stk">光迅科技</span>
+      <a href="#" class="d-link">+2更多 ›</a>
+    </div>
+  </div>
+</div>
+
+<div class="group-header"><span class="tag tag-yellow">🟡 波中组</span><span class="gc">正常观察 · 波中阶段</span></div>
+
+<div class="concept-card">
+  <div class="concept-main" onclick="toggle(this)">
+    <div class="concept-info">
+      <span class="ps">[银]</span><a href="#" class="concept-name" onclick="event.stopPropagation()">HBM概念</a>
+      <span class="concept-vl">vl:2</span>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 50" preserveAspectRatio="none">
+        <polyline points="0,28 30,26 60,24 90,23 120,22 150,20 180,21 210,18 240,19 270,17 300,16" fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"/>
+        <polyline points="0,36 30,34 60,32 90,28 120,24 150,20 180,16 210,12 240,14 270,8 300,6" fill="none" stroke="#fb923c" stroke-width="2"/>
+        <circle cx="270" cy="8" r="4" fill="#fb923c" stroke="#13141f" stroke-width="1.5"/>
+      </svg>
+      <span class="c-label" style="left:85%;top:-2px;"><span style="color:#fb923c;font-size:12px;">●</span><span style="color:#7a7b92;font-size:9px;">波谷</span></span>
+      <span class="c-label" style="left:52%;top:35px;"><span style="color:#fbbf24;font-size:10px;">↘轮动（算力→HBM）</span></span>
+    </div>
+    <div class="concept-badge bg-yellow"><span>🟡</span> 波中</div>
+    <div class="expand-btn">▶</div>
+  </div>
+  <div class="concept-detail">
+    <div class="d-line1">
+      <span><span class="dl">近5日</span> <span class="dv g">+3.1%</span></span>
+      <span><span class="dl">BIAS20</span> <span class="dv r">-2.1%</span></span>
+      <span><span class="dl">vs大盘</span> <span class="ds">+1.8%</span></span>
+      <span style="color:#7a7b92;">|</span>
+      <span><span class="dl">历史谷→峰</span> <span style="color:#e8e9f0;font-weight:600;">+12%</span></span>
+    </div>
+    <div class="d-line2">
+      <span class="dl">关联自选:</span>
+      <span class="d-stk">华海诚科</span><span style="color:#555">/</span>
+      <span class="d-stk">通富微电</span>
+      <a href="#" class="d-link">+1更多 ›</a>
+    </div>
+  </div>
+</div>
+
+<div class="concept-card">
+  <div class="concept-main" onclick="toggle(this)">
+    <div class="concept-info">
+      <a href="#" class="concept-name" onclick="event.stopPropagation()">机器人</a>
+      <span class="concept-vl">vl:1</span>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 50" preserveAspectRatio="none">
+        <polyline points="0,26 30,24 60,22 90,20 120,18 150,16 180,14 210,12 240,10 270,8 300,6" fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"/>
+        <polyline points="0,42 30,38 60,34 90,28 120,22 150,16 180,12 210,8 240,6 270,4 300,2" fill="none" stroke="#9ca3af" stroke-width="2"/>
+      </svg>
+      <span class="c-label" style="left:55%;top:0;"><span>🔥</span><span style="color:#7a7b92;font-size:9px">放量</span></span>
+    </div>
+    <div class="concept-badge bg-yellow"><span>🟡</span> 波中</div>
+    <div class="expand-btn">▶</div>
+  </div>
+  <div class="concept-detail">
+    <div class="d-line1">
+      <span><span class="dl">近5日</span> <span class="dv g">+0.5%</span></span>
+      <span><span class="dl">BIAS20</span> <span class="dv r">-0.8%</span></span>
+      <span><span class="dl">vs大盘</span> <span class="ds wk">-1.2%</span></span>
+    </div>
+    <div class="d-line2">
+      <span class="dl">关联自选:</span>
+      <span class="d-stk">汇川技术</span><span style="color:#555">/</span>
+      <span class="d-stk">绿的谐波</span>
+    </div>
+  </div>
+</div>
+
+<div class="group-header"><span class="tag tag-red">🔴 下跌组</span><span class="gc">警惕观望 · 下跌/波峰阶段</span></div>
+
+<div class="concept-card">
+  <div class="concept-main" onclick="toggle(this)">
+    <div class="concept-info">
+      <a href="#" class="concept-name" onclick="event.stopPropagation()">固态电池</a>
+      <span class="concept-vl" style="color:#666">vl:0</span>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 50" preserveAspectRatio="none">
+        <polyline points="0,20 30,18 60,16 90,14 120,12 150,10 180,8 210,6 240,4 270,2 300,0" fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"/>
+        <polyline points="0,18 30,20 60,22 90,24 120,26 150,28 180,30 210,32 240,34 270,36 300,38" fill="none" stroke="#ef4444" stroke-width="2"/>
+      </svg>
+      <span class="c-label" style="left:58%;top:35px;"><span>⚠️</span><span style="color:#7a7b92;font-size:9px">天量滞涨</span></span>
+    </div>
+    <div class="concept-badge bg-red"><span>🔴</span> 下跌</div>
+    <div class="expand-btn">▶</div>
+  </div>
+  <div class="concept-detail">
+    <div class="d-line1">
+      <span><span class="dl">近5日</span> <span class="dv r">-2.8%</span></span>
+      <span><span class="dl">BIAS20</span> <span class="dv r">-9.5%</span></span>
+      <span><span class="dl">vs大盘</span> <span class="ds wk">-4.1%</span></span>
+    </div>
+    <div class="d-line2">
+      <span class="dl">关联自选:</span>
+      <span class="d-stk">宁德时代</span>
+      <span class="d-more">查看 ›</span>
+    </div>
+  </div>
+</div>
+
+<div class="concept-card">
+  <div class="concept-main" onclick="toggle(this)">
+    <div class="concept-info">
+      <a href="#" class="concept-name" onclick="event.stopPropagation()">国产芯片</a>
+      <span class="concept-vl">vl:1</span>
+    </div>
+    <div class="concept-chart">
+      <svg viewBox="0 0 300 50" preserveAspectRatio="none">
+        <polyline points="0,20 30,18 60,16 90,14 120,12 150,10 180,8 210,6 240,4 270,2 300,0" fill="none" stroke="#3a3b50" stroke-width="1" stroke-dasharray="3,3"/>
+        <polyline points="0,34 30,30 60,26 90,22 120,18 150,14 180,10 210,6 240,4 270,2 300,0" fill="none" stroke="#ef4444" stroke-width="2"/>
+        <circle cx="150" cy="14" r="4" fill="#ef4444" stroke="#13141f" stroke-width="1.5"/>
+      </svg>
+      <span class="c-label" style="left:50%;top:-2px;"><span style="color:#ef4444;font-size:12px;">●</span><span style="color:#7a7b92;font-size:9px;">波峰</span></span>
+    </div>
+    <div class="concept-badge bg-red"><span>🔴</span> 下跌</div>
+    <div class="expand-btn">▶</div>
+  </div>
+  <div class="concept-detail">
+    <div class="d-line1">
+      <span><span class="dl">近5日</span> <span class="dv r">-1.5%</span></span>
+      <span><span class="dl">BIAS20</span> <span class="dv r">-4.2%</span></span>
+      <span><span class="dl">vs大盘</span> <span class="ds">+0.5%</span></span>
+      <span style="color:#7a7b92;">|</span>
+      <span><span class="dl">历史谷→峰</span> <span style="color:#e8e9f0;font-weight:600;">+22%</span></span>
+    </div>
+    <div class="d-line2">
+      <span class="dl">关联自选:</span>
+      <span class="d-stk">中芯国际</span><span style="color:#555">/</span>
+      <span class="d-stk">北方华创</span><span style="color:#555">/</span>
+      <span class="d-stk">韦尔股份</span>
+      <a href="#" class="d-link">+1更多 ›</a>
+    </div>
+  </div>
+</div>
+
+</div><!-- chart-wrap -->
+
+<div class="axis-row">
+  <span>← 30天前</span>
+  <span class="ta">今天</span>
+  <span>当前位 →</span>
+</div>
+
+<div class="collapsed"><span>+ 还有47个折叠（vl:0~1）</span></div>
+
+<div class="section-title">⚠️ 波谷告警（1条）<span class="count">· 强信号推荐关注</span></div>
+
+<div class="alert-card">
+  <div class="alert-icon">⚠️</div>
+  <div class="alert-body">
+    <strong>AI算力</strong> <span class="hl">vl_score=4</span> <span class="hl">BIAS20=-6.3%</span> 缩量至EMA60<br>
+    → 关注切入机会（<span class="stk">中际旭创</span> / <span class="stk">寒武纪</span> / <span class="stk">光迅科技</span>）
+  </div>
+</div>
+
+<div class="section-title">🔍 新概念扫描 <span class="count">· 本周新发现</span></div>
+
+<div class="scan-card">
+  <span class="scan-name">💡 时空大数据</span>
+  <span class="scan-stat">+18%</span>
+  <span class="scan-label">20日涨幅，不在核心关注列表</span>
+  <span class="scan-add">+ 添加追踪</span>
+</div>
+
+<div class="legend">
+  <span><span class="pg">[金]</span>主线前5</span>
+  <span><span class="ps">[银]</span>主线6-10</span>
+  <span><span style="color:#555;">— —</span> 大盘水位线</span>
+  <span>💧 缩量</span>
+  <span>🔥 放量</span>
+  <span>⚠️ 天量滞涨</span>
+  <span style="color:#34d399;">↓切入窗口</span>
+  <span style="color:#fbbf24;">↘轮动关联</span>
+  <span style="color:#7a7b92;">📈历史谷峰涨幅</span>
+</div>
+
+</div><!-- container -->
+
+<script>
+function toggle(el) {
+  var card = el.closest('.concept-card');
+  var detail = card.querySelector('.concept-detail');
+  var btn = card.querySelector('.expand-btn');
+  detail.classList.toggle('show');
+  btn.classList.toggle('open');
+  card.classList.toggle('expanded');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "hermes-agent",
+  "elements": [
+    {"type":"rectangle","id":"bg_title","x":50,"y":30,"width":780,"height":45,"roundness":{"type":3},"backgroundColor":"#1e1e2e","fillStyle":"solid","strokeColor":"#1e1e2e","boundElements":[{"id":"t_title","type":"text"}]},
+    {"type":"text","id":"t_title","x":60,"y":38,"width":500,"height":28,"text":"概念板块波谷追踪 v5","fontSize":22,"fontFamily":1,"strokeColor":"#ffffff","originalText":"概念板块波谷追踪 v5","autoResize":true,"containerId":"bg_title"},
+
+    {"type":"rectangle","id":"bg_date","x":50,"y":85,"width":780,"height":32,"roundness":{"type":3},"backgroundColor":"#f0f0f8","fillStyle":"solid","boundElements":[{"id":"t_date","type":"text"}]},
+    {"type":"text","id":"t_date","x":60,"y":90,"width":550,"height":22,"text":"日期 [2026-05-01] - [2026-05-31]        按阶段排序      刷新数据","fontSize":16,"fontFamily":1,"strokeColor":"#555","originalText":"日期 [2026-05-01] - [2026-05-31]        按阶段排序      刷新数据","autoResize":true,"containerId":"bg_date"},
+
+    {"type":"text","id":"t_desc","x":55,"y":128,"width":740,"height":22,"text":"核心概念堆叠走势  竖线=今天  [金]主线  [银]次线  --大盘  切入窗口  轮动  历史谷峰涨幅","fontSize":16,"fontFamily":1,"strokeColor":"#1a1a2e","originalText":"核心概念堆叠走势  竖线=今天  [金]主线  [银]次线  --大盘  切入窗口  轮动  历史谷峰涨幅","autoResize":true},
+
+    {"type":"rectangle","id":"chart_bg","x":50,"y":158,"width":780,"height":420,"roundness":{"type":3},"backgroundColor":"#fafafa","fillStyle":"solid","strokeColor":"#ddd"},
+
+    {"type":"line","id":"today_line","x":460,"y":160,"width":0,"height":415,"strokeColor":"#e03131","strokeWidth":2,"strokeStyle":"solid"},
+    {"type":"text","id":"today_label","x":440,"y":162,"width":40,"height":18,"text":"今天","fontSize":16,"fontFamily":1,"strokeColor":"#e03131","originalText":"今天","autoResize":true},
+
+    {"type":"text","id":"grp_trough","x":60,"y":168,"width":90,"height":20,"text":"[ 波谷组 ]","fontSize":16,"fontFamily":1,"strokeColor":"#15803d","originalText":"[ 波谷组 ]","autoResize":true},
+    {"type":"line","id":"sep_grp1_top","x":50,"y":193,"width":780,"height":0,"strokeColor":"#15803d","strokeWidth":1,"strokeStyle":"dotted"},
+
+    {"type":"rectangle","id":"r1_gold_tag","x":55,"y":200,"width":8,"height":30,"backgroundColor":"#e67700","fillStyle":"solid","strokeColor":"#e67700"},
+    {"type":"text","id":"r1_gold_l","x":55,"y":202,"width":18,"height":18,"text":"金","fontSize":16,"fontFamily":1,"strokeColor":"#ffffff","originalText":"金","autoResize":true,"containerId":"r1_gold_tag"},
+
+    {"type":"text","id":"r1_name","x":78,"y":204,"width":70,"height":20,"text":"AI算力","fontSize":18,"fontFamily":1,"strokeColor":"#1a1a2e","originalText":"AI算力","autoResize":true},
+    {"type":"text","id":"r1_vl","x":145,"y":206,"width":36,"height":18,"text":"vl:4","fontSize":16,"fontFamily":1,"strokeColor":"#e67700","originalText":"vl:4","autoResize":true},
+
+    {"type":"line","id":"r1_wave","x":195,"y":215,"width":430,"height":30,"strokeColor":"#15803d","strokeWidth":2,"roughness":1},
+    {"type":"line","id":"r1_idx","x":195,"y":220,"width":430,"height":26,"strokeColor":"#adb5bd","strokeWidth":1,"roughness":1,"strokeStyle":"dashed"},
+
+    {"type":"ellipse","id":"r1_trough","x":290,"y":238,"width":12,"height":12,"backgroundColor":"#15803d","fillStyle":"solid","strokeColor":"#15803d"},
+    {"type":"text","id":"r1_trough_l","x":295,"y":252,"width":28,"height":18,"text":"波谷","fontSize":14,"fontFamily":1,"strokeColor":"#15803d","originalText":"波谷","autoResize":true},
+
+    {"type":"rectangle","id":"r1_shrink","x":250,"y":208,"width":40,"height":18,"roundness":{"type":3},"backgroundColor":"#d3f9d8","fillStyle":"solid"},
+    {"type":"text","id":"r1_shrink_l","x":253,"y":210,"width":34,"height":16,"text":"缩量","fontSize":14,"fontFamily":1,"strokeColor":"#15803d","originalText":"缩量","autoResize":true,"containerId":"r1_shrink"},
+
+    {"type":"rectangle","id":"r1_entry","x":340,"y":208,"width":72,"height":18,"roundness":{"type":3},"backgroundColor":"#b2f2bb","fillStyle":"solid"},
+    {"type":"text","id":"r1_entry_l","x":343,"y":210,"width":66,"height":16,"text":"切入窗口","fontSize":14,"fontFamily":1,"strokeColor":"#15803d","originalText":"切入窗口","autoResize":true,"containerId":"r1_entry"},
+
+    {"type":"text","id":"r1_his","x":60,"y":234,"width":130,"height":18,"text":"历史: 上次谷到峰 +18%","fontSize":14,"fontFamily":1,"strokeColor":"#868e96","originalText":"历史: 上次谷到峰 +18%","autoResize":true},
+
+    {"type":"rectangle","id":"r1_badge","x":720,"y":200,"width":80,"height":24,"roundness":{"type":3},"backgroundColor":"#d3f9d8","fillStyle":"solid"},
+    {"type":"text","id":"r1_badge_l","x":725,"y":203,"width":70,"height":18,"text":"波谷","fontSize":16,"fontFamily":1,"strokeColor":"#15803d","originalText":"波谷","autoResize":true,"containerId":"r1_badge"},
+
+    {"type":"line","id":"sep_r1","x":55,"y":250,"width":770,"height":0,"strokeColor":"#ddd","strokeWidth":1,"strokeStyle":"solid"},
+
+    {"type":"text","id":"grp_mid","x":60,"y":258,"width":90,"height":20,"text":"[ 波中组 ]","fontSize":16,"fontFamily":1,"strokeColor":"#e67700","originalText":"[ 波中组 ]","autoResize":true},
+    {"type":"line","id":"sep_grp2_top","x":50,"y":283,"width":780,"height":0,"strokeColor":"#e67700","strokeWidth":1,"strokeStyle":"dotted"},
+
+    {"type":"rectangle","id":"r2_silver_tag","x":55,"y":290,"width":8,"height":30,"backgroundColor":"#868e96","fillStyle":"solid","strokeColor":"#868e96"},
+    {"type":"text","id":"r2_silver_l","x":55,"y":292,"width":18,"height":18,"text":"银","fontSize":16,"fontFamily":1,"strokeColor":"#ffffff","originalText":"银","autoResize":true,"containerId":"r2_silver_tag"},
+
+    {"type":"text","id":"r2_name","x":78,"y":294,"width":80,"height":20,"text":"HBM概念","fontSize":18,"fontFamily":1,"strokeColor":"#1a1a2e","originalText":"HBM概念","autoResize":true},
+    {"type":"text","id":"r2_vl","x":155,"y":296,"width":36,"height":18,"text":"vl:2","fontSize":16,"fontFamily":1,"strokeColor":"#868e96","originalText":"vl:2","autoResize":true},
+
+    {"type":"line","id":"r2_wave","x":200,"y":308,"width":425,"height":28,"strokeColor":"#e67700","strokeWidth":2,"roughness":1},
+    {"type":"line","id":"r2_idx","x":200,"y":312,"width":425,"height":24,"strokeColor":"#adb5bd","strokeWidth":1,"roughness":1,"strokeStyle":"dashed"},
+
+    {"type":"ellipse","id":"r2_trough","x":340,"y":330,"width":12,"height":12,"backgroundColor":"#15803d","fillStyle":"solid","strokeColor":"#15803d"},
+    {"type":"text","id":"r2_trough_l","x":345,"y":344,"width":28,"height":18,"text":"波谷","fontSize":14,"fontFamily":1,"strokeColor":"#15803d","originalText":"波谷","autoResize":true},
+
+    {"type":"rectangle","id":"r2_badge","x":720,"y":290,"width":80,"height":24,"roundness":{"type":3},"backgroundColor":"#fff3bf","fillStyle":"solid"},
+    {"type":"text","id":"r2_badge_l","x":725,"y":293,"width":70,"height":18,"text":"波中","fontSize":16,"fontFamily":1,"strokeColor":"#e67700","originalText":"波中","autoResize":true,"containerId":"r2_badge"},
+
+    {"type":"arrow","id":"r1_to_r2","x":395,"y":240,"width":0,"height":48,"strokeColor":"#e67700","strokeWidth":1,"roughness":1,"strokeStyle":"dashed","endArrowhead":"arrow"},
+    {"type":"text","id":"rotation_l","x":398,"y":265,"width":96,"height":16,"text":"轮动(算力->HBM)","fontSize":14,"fontFamily":1,"strokeColor":"#e67700","originalText":"轮动(算力->HBM)","autoResize":true},
+
+    {"type":"line","id":"sep_r2","x":55,"y":340,"width":770,"height":0,"strokeColor":"#ddd","strokeWidth":1,"strokeStyle":"dotted"},
+
+    {"type":"text","id":"r3_name","x":78,"y":348,"width":60,"height":20,"text":"机器人","fontSize":18,"fontFamily":1,"strokeColor":"#1a1a2e","originalText":"机器人","autoResize":true},
+    {"type":"text","id":"r3_vl","x":135,"y":350,"width":36,"height":18,"text":"vl:1","fontSize":16,"fontFamily":1,"strokeColor":"#868e96","originalText":"vl:1","autoResize":true},
+
+    {"type":"line","id":"r3_wave","x":180,"y":362,"width":445,"height":26,"strokeColor":"#868e96","strokeWidth":2,"roughness":1},
+    {"type":"line","id":"r3_idx","x":180,"y":366,"width":445,"height":22,"strokeColor":"#adb5bd","strokeWidth":1,"roughness":1,"strokeStyle":"dashed"},
+
+    {"type":"rectangle","id":"r3_volume","x":310,"y":348,"width":40,"height":18,"roundness":{"type":3},"backgroundColor":"#ffd8a8","fillStyle":"solid"},
+    {"type":"text","id":"r3_volume_l","x":313,"y":350,"width":34,"height":16,"text":"放量","fontSize":14,"fontFamily":1,"strokeColor":"#e8590c","originalText":"放量","autoResize":true,"containerId":"r3_volume"},
+
+    {"type":"rectangle","id":"r3_badge","x":720,"y":346,"width":80,"height":24,"roundness":{"type":3},"backgroundColor":"#fff3bf","fillStyle":"solid"},
+    {"type":"text","id":"r3_badge_l","x":725,"y":349,"width":70,"height":18,"text":"波中","fontSize":16,"fontFamily":1,"strokeColor":"#e67700","originalText":"波中","autoResize":true,"containerId":"r3_badge"},
+
+    {"type":"line","id":"sep_r3","x":55,"y":385,"width":770,"height":0,"strokeColor":"#ddd","strokeWidth":1,"strokeStyle":"solid"},
+
+    {"type":"text","id":"grp_down","x":60,"y":393,"width":90,"height":20,"text":"[ 下跌组 ]","fontSize":16,"fontFamily":1,"strokeColor":"#e03131","originalText":"[ 下跌组 ]","autoResize":true},
+    {"type":"line","id":"sep_grp3_top","x":50,"y":418,"width":780,"height":0,"strokeColor":"#e03131","strokeWidth":1,"strokeStyle":"dotted"},
+
+    {"type":"text","id":"r4_name","x":78,"y":425,"width":80,"height":20,"text":"固态电池","fontSize":18,"fontFamily":1,"strokeColor":"#868e96","originalText":"固态电池","autoResize":true},
+    {"type":"text","id":"r4_vl","x":155,"y":427,"width":36,"height":18,"text":"vl:0","fontSize":16,"fontFamily":1,"strokeColor":"#adb5bd","originalText":"vl:0","autoResize":true},
+
+    {"type":"line","id":"r4_wave","x":200,"y":440,"width":425,"height":24,"strokeColor":"#e03131","strokeWidth":2,"roughness":1},
+    {"type":"line","id":"r4_idx","x":200,"y":444,"width":425,"height":20,"strokeColor":"#adb5bd","strokeWidth":1,"roughness":1,"strokeStyle":"dashed"},
+
+    {"type":"rectangle","id":"r4_vol_warn","x":340,"y":425,"width":72,"height":18,"roundness":{"type":3},"backgroundColor":"#ffc9c9","fillStyle":"solid"},
+    {"type":"text","id":"r4_vol_warn_l","x":343,"y":427,"width":66,"height":16,"text":"天量滞涨","fontSize":14,"fontFamily":1,"strokeColor":"#e03131","originalText":"天量滞涨","autoResize":true,"containerId":"r4_vol_warn"},
+
+    {"type":"rectangle","id":"r4_badge","x":720,"y":423,"width":80,"height":24,"roundness":{"type":3},"backgroundColor":"#ffc9c9","fillStyle":"solid"},
+    {"type":"text","id":"r4_badge_l","x":725,"y":426,"width":70,"height":18,"text":"下跌","fontSize":16,"fontFamily":1,"strokeColor":"#e03131","originalText":"下跌","autoResize":true,"containerId":"r4_badge"},
+
+    {"type":"line","id":"sep_r4","x":55,"y":465,"width":770,"height":0,"strokeColor":"#ddd","strokeWidth":1,"strokeStyle":"dotted"},
+
+    {"type":"text","id":"r5_name","x":78,"y":472,"width":80,"height":20,"text":"国产芯片","fontSize":18,"fontFamily":1,"strokeColor":"#868e96","originalText":"国产芯片","autoResize":true},
+    {"type":"text","id":"r5_vl","x":155,"y":474,"width":36,"height":18,"text":"vl:1","fontSize":16,"fontFamily":1,"strokeColor":"#868e96","originalText":"vl:1","autoResize":true},
+
+    {"type":"line","id":"r5_wave","x":200,"y":488,"width":425,"height":22,"strokeColor":"#e03131","strokeWidth":2,"roughness":1},
+    {"type":"line","id":"r5_idx","x":200,"y":492,"width":425,"height":18,"strokeColor":"#adb5bd","strokeWidth":1,"roughness":1,"strokeStyle":"dashed"},
+
+    {"type":"ellipse","id":"r5_peak","x":560,"y":504,"width":12,"height":12,"backgroundColor":"#e03131","fillStyle":"solid","strokeColor":"#e03131"},
+    {"type":"text","id":"r5_peak_l","x":565,"y":517,"width":28,"height":18,"text":"波峰","fontSize":14,"fontFamily":1,"strokeColor":"#e03131","originalText":"波峰","autoResize":true},
+
+    {"type":"rectangle","id":"r5_badge","x":720,"y":470,"width":80,"height":24,"roundness":{"type":3},"backgroundColor":"#ffc9c9","fillStyle":"solid"},
+    {"type":"text","id":"r5_badge_l","x":725,"y":473,"width":70,"height":18,"text":"下跌","fontSize":16,"fontFamily":1,"strokeColor":"#e03131","originalText":"下跌","autoResize":true,"containerId":"r5_badge"},
+
+    {"type":"line","id":"sep_r5","x":55,"y":510,"width":770,"height":0,"strokeColor":"#ddd","strokeWidth":1,"strokeStyle":"solid"},
+
+    {"type":"rectangle","id":"collapsed","x":380,"y":515,"width":120,"height":22,"roundness":{"type":3},"backgroundColor":"#f0f0f8","fillStyle":"solid"},
+    {"type":"text","id":"collapsed_l","x":383,"y":517,"width":114,"height":18,"text":"+ 还有47个折叠","fontSize":16,"fontFamily":1,"strokeColor":"#868e96","originalText":"+ 还有47个折叠","autoResize":true,"containerId":"collapsed"},
+
+    {"type":"text","id":"axis_30","x":190,"y":545,"width":70,"height":16,"text":"<-- 30天前","fontSize":14,"fontFamily":1,"strokeColor":"#adb5bd","originalText":"<-- 30天前","autoResize":true},
+    {"type":"text","id":"axis_today","x":448,"y":545,"width":28,"height":18,"text":"今天","fontSize":16,"fontFamily":1,"strokeColor":"#e03131","originalText":"今天","autoResize":true},
+    {"type":"text","id":"axis_now","x":560,"y":545,"width":70,"height":16,"text":"当前位 -->","fontSize":14,"fontFamily":1,"strokeColor":"#1a1a2e","originalText":"当前位 -->","autoResize":true},
+
+    {"type":"text","id":"legend","x":55,"y":568,"width":740,"height":18,"text":"[金]主线前5  [银]主线6-10  --大盘水位线  缩量  放量  天量滞涨  切入窗口  轮动  历史谷峰涨幅","fontSize":14,"fontFamily":1,"strokeColor":"#868e96","originalText":"[金]主线前5  [银]主线6-10  --大盘水位线  缩量  放量  天量滞涨  切入窗口  轮动  历史谷峰涨幅","autoResize":true}
+  ]
+}

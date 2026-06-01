@@ -49,6 +49,8 @@ ALL_CODES_PATH = os.path.join(DATA_DIR, 'all_stock_codes.json')
 PINYIN_PATH = os.path.join(DATA_DIR, 'pinyin_initials.json')
 LOGIC_TRACKING_PATH = os.path.join(DATA_DIR, 'logic_tracking.json')
 ON_DEMAND_CACHE_PATH = os.path.join(DATA_DIR, 'stock_on_demand_cache.json')
+CONCEPT_LIST_PATH = os.path.join(DATA_DIR, 'map', 'concept_list.json')
+STOCK_CONCEPT_MAP_PATH = os.path.join(DATA_DIR, 'map', 'stock_concept.json')
 SCRIPTS_DIR = os.path.join(WWW_DIR, 'scripts')
 
 # =====================================================
