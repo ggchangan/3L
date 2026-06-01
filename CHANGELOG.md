@@ -1,5 +1,34 @@
 # Changelog
 
+## [v3.8.1] — 2026-06-01
+
+### 新增：P3 关键点×关键信号融合判定引擎（后端完成）
+
+实现《量价原理》5.7节的完整融合框架：
+
+**融合引擎：** `server/backend/core/signal_detector/fusion.py`
+- 8条判定规则覆盖所有组合场景
+- 9个信号检测器自动运行，取置信度最高者
+- 关键点方向判定（结构/阶段/EMA/BIAS → bullish/bearish/neutral）
+
+**8条融合规则：**
+
+| 规则 | 关键点方向 | 信号方向 | 结果 |
+|:----|:---------:|:--------:|:----|
+| strong_buy | 看多 | 看多 + 已有买点 | 🟢 强买入 |
+| signal_buy | 看多 | 看多 | 🟢 买入 |
+| conflict_bearish | 看多 | 看空 | ⚠️ 警惕 |
+| signal_sell | 看空 | 看空 | 🔴 卖出 |
+| conflict_bullish | 看空 | 看多 | ⚠️ 等确认 |
+| buy_point_only | 看多 | 无信号 | ⏳ 谨慎持有 |
+| ignore_signal | 中性 | 有信号 | ❌ 假信号忽略 |
+| balance | - | 无信号 | ⏳ 正常持有 |
+
+**集成范围：**
+- `get_stock_card()`: 新增 triggered_signals/fusion_type/fusion_reason 字段
+- `_build_conclusion()`: 融合判定优先于静态结论
+- `holdings_service`: 持仓数据传递融合字段
+
 ## [v3.8.0] — 2026-06-01
 
 ### 新增：中继信号补全 + 全量9信号回测
