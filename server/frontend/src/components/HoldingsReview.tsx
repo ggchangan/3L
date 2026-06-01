@@ -9,7 +9,9 @@ const DIR_COLORS: Record<string, string> = {
   'PCB概念': '#FFD93D',
 }
 
-export default function HoldingsReview({ stocks, directionOrder: dirOrder }: { stocks: BuySignalItem[]; directionOrder?: string[] }) {
+export default function HoldingsReview({ stocks, directionOrder: dirOrder, opportunityMap }: {
+  stocks: BuySignalItem[]; directionOrder?: string[]; opportunityMap?: Record<string, string>
+}) {
   const [activeDir, setActiveDir] = useState('')
   if (!stocks.length) return <div className="empty">暂无持仓数据</div>
 
@@ -47,7 +49,7 @@ export default function HoldingsReview({ stocks, directionOrder: dirOrder }: { s
         })}
       </div>
       {(groups[activeDir] || []).map((s, i) => (
-        <StockCard key={s.code + '-' + i} s={s} idx={i + 1} chartPrefix="hr_" mode="review" />
+        <StockCard key={s.code + '-' + i} s={s} idx={i + 1} chartPrefix="hr_" mode="review" opportunityMap={opportunityMap} />
       ))}
       <div style={{ marginTop: 6, textAlign: 'right', color: '#555', fontSize: 11 }}>
         共{stocks.length}只持仓

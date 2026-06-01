@@ -6,6 +6,16 @@ interface Props {
 
 const PRI_COLORS: Record<string, string> = { '高': '#e94560', '中': '#ffd700', '低': '#888' }
 
+// 机会类型配置
+const OPP_CONFIG: Record<string, { label: string; emoji: string; color: string; order: number }> = {
+  '主线回调': { label: '主线回调', emoji: '🎯', color: '#e94560', order: 0 },
+  '次线机会': { label: '次线机会', emoji: '🎯', color: '#ffd700', order: 1 },
+  '潜在主线': { label: '潜在主线', emoji: '🔮', color: '#4ecdc4', order: 2 },
+  '趋势延续': { label: '趋势延续', emoji: '📈', color: '#44aa44', order: 3 },
+  '回调中': { label: '回调中', emoji: '📉', color: '#888', order: 4 },
+  '见顶风险': { label: '见顶风险', emoji: '⚠️', color: '#ff6b00', order: 5 },
+}
+
 export default function TradingPlan({ plan }: Props) {
   if (!plan) return <div className="empty">暂无交易计划</div>
 
@@ -46,19 +56,31 @@ export default function TradingPlan({ plan }: Props) {
 
       {plan.buy_priority && plan.buy_priority.length > 0 && (
         <>
-          <div style={{ marginBottom: 6, marginTop: 12 }}><strong style={{ color: '#ffd700', fontSize: 13 }}>🎯 关注买点（优先级排序）</strong></div>
-          {plan.buy_priority.map((s, i) => (
-            <div key={i} className="plan-item" style={{ fontSize: 12 }}>
-              <span style={{ color: '#e94560', fontWeight: 'bold' }}>#{i + 1}</span>
-              <span style={{ fontWeight: 600 }}> {s.name}</span>
-              <span style={{ color: '#888' }}> {s.buy_point}</span>
-              {s.is_main && <span className="tag red" style={{ fontSize: 10 }}>主线</span>}
-              {s.profit_model1 && <span className="tag" style={{ background: '#e94560', fontSize: 10, padding: '1px 6px' }}>🏆</span>}
-              {s.trend_stock && <span className="tag" style={{ background: '#2196f3', fontSize: 10, padding: '1px 6px' }}>📈</span>}
-              <span style={{ color: (s.change || 0) >= 0 ? '#ff4444' : '#44aa44' }}> {(s.change || 0) >= 0 ? '+' : ''}{s.change}%</span>
-              {s.stop_loss != null && <span style={{ color: '#ff9800', fontSize: 10 }}> 止损{s.stop_loss}{s.stop_loss_pct != null ? `(${s.stop_loss_pct}%)` : ''}</span>}
-            </div>
-          ))}
+          <div style={{ marginBottom: 6, marginTop: 12 }}><strong style={{ color: '#ffd700', fontSize: 13 }}>🎯 关注买点（机会类型排序）</strong></div>
+          {/* 分组展示 */}
+          {groupedBuyPriority(plan.buy_priority).map(([opp, items]) => {
+            const cfg = OPP_CONFIG[opp] || { label: opp, emoji: '📋', color: '#888', order: 99 }
+            return (
+              <div key={opp} style={{ marginBottom: 8 }}>
+                <div style={{ color: cfg.color, fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  {cfg.emoji} {cfg.label} ({items.length})
+                </div>
+                {items.map((s, i) => (
+                  <div key={i} className="plan-item" style={{ fontSize: 12, paddingLeft: 8, borderLeft: `2px solid ${cfg.color}20`, marginBottom: 2 }}>
+                    <span style={{ color: '#e94560', fontWeight: 'bold' }}>#{i + 1}</span>
+                    <span style={{ fontWeight: 600 }}> {s.name}</span>
+                    <span style={{ color: '#888' }}> {s.buy_point}</span>
+                    {s.is_main && <span className="tag red" style={{ fontSize: 10 }}>主线</span>}
+                    {s.profit_model1 && <span className="tag" style={{ background: '#e94560', fontSize: 10, padding: '1px 6px' }}>🏆</span>}
+                    {s.trend_stock && <span className="tag" style={{ background: '#2196f3', fontSize: 10, padding: '1px 6px' }}>📈</span>}
+                    <span style={{ color: (s.change || 0) >= 0 ? '#ff4444' : '#44aa44' }}> {(s.change || 0) >= 0 ? '+' : ''}{s.change}%</span>
+                    {s.stop_loss != null && <span style={{ color: '#ff9800', fontSize: 10 }}> 止损{s.stop_loss}{s.stop_loss_pct != null ? `(${s.stop_loss_pct}%)` : ''}</span>}
+                    {s.sector && <span style={{ color: '#555', fontSize: 10, marginLeft: 4 }}>· {s.sector}</span>}
+                  </div>
+                ))}
+              </div>
+            )
+          })}
         </>
       )}
 
@@ -78,4 +100,23 @@ export default function TradingPlan({ plan }: Props) {
       )}
     </div>
   )
+}
+
+/** 按机会类型分组 buy_priority */
+function groupedBuyPriority(items: NonNullable<NonNullable<Props['plan']>['buy_priority']>) {
+  const groups: Record<string, typeof items> = {}
+  for (const item of items) {
+    const opp = (item as any).opportunity || '--'
+    if (!groups[opp]) groups[opp] = []
+    groups[opp].push(item)
+  }
+  const OPP_ORDER: Record<string, number> = {
+    '主线回调': 0, '次线机会': 1, '潜在主线': 2,
+    '趋势延续': 3, '回调中': 4, '见顶风险': 5,
+  }
+  return Object.entries(groups).sort(([a], [b]) => {
+    const oa = OPP_ORDER[a] ?? 99
+    const ob = OPP_ORDER[b] ?? 99
+    return oa - ob
+  })
 }

@@ -653,9 +653,20 @@ def compute_review_real_time(date_str=None):
         direction_map=_dir_map,
     )
 
+    # 从 backend.services.direction_service import get_all_ordered 移到函数头
+    from backend.services.direction_service import get_all_ordered
+
+    # 构建行业/概念 → 机会类型映射（在生成交易计划之前）
+    opp_map = {}
+    for entry in mainline_data.get('all_ranked', []):
+        opp_map[entry['name']] = entry.get('opportunity', '--')
+    for entry in concept_mainline_data.get('all_ranked', []):
+        opp_map[entry['name']] = entry.get('opportunity', '--')
+
     # ④ 交易计划
     trading_plan = generate_trading_plan(market_cycle, mainline_data, timing_signals, holdings,
-                                         holdings_review=holdings_review, buy_signals_review=buy_signals_review)
+                                         holdings_review=holdings_review, buy_signals_review=buy_signals_review,
+                                         opportunity_map=opp_map)
 
     # 写入主线缓存（供趋势候选页读）
     _mainlines_cache = {
@@ -663,8 +674,6 @@ def compute_review_real_time(date_str=None):
         'secondary': [l['name'] for l in mainline_data.get('secondary', [])],
     }
     save_json(MAINLINES_CACHE_PATH, _mainlines_cache)
-
-    from backend.services.direction_service import get_all_ordered
 
     review = {
         'date': date_str,
@@ -677,6 +686,7 @@ def compute_review_real_time(date_str=None):
         'holdings_review': holdings_review,
         'buy_signals_review': buy_signals_review,
         'direction_order': get_all_ordered(),
+        'opportunity_map': opp_map,
     }
 
     return review

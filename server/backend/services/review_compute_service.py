@@ -272,6 +272,38 @@ def _fallback_cycle(klines):
 
 
 # ═══════════════════════════════════════════════════════════════
+# ② 机会分类
+# ═══════════════════════════════════════════════════════════════
+
+def classify_opportunity(is_mainline, is_secondary, stage, vl_score):
+    """根据主线状态和5阶段判定机会类型"""
+    if is_mainline:
+        if stage == '波谷':
+            return '主线回调'
+        elif stage == '波峰':
+            return '见顶风险'
+        elif stage in ('上涨', '波中'):
+            return '趋势延续'
+        elif stage == '下跌':
+            return '回调中'
+        return '主线观察'
+    if is_secondary:
+        if stage == '波谷':
+            return '次线机会'
+        elif stage == '波峰':
+            return '见顶风险'
+        elif stage in ('上涨', '波中'):
+            return '趋势延续'
+        elif stage == '下跌':
+            return '回调中'
+        return '次级观察'
+    # 非榜板块：只有波谷+高评分才算潜在主线
+    if stage == '波谷' and (vl_score or 0) >= 3:
+        return '潜在主线'
+    return '--'
+
+
+# ═══════════════════════════════════════════════════════════════
 # ② 动量主线
 # ═══════════════════════════════════════════════════════════════
 
@@ -296,6 +328,9 @@ def get_mainline_data(date_str):
         print(f"[WARN] 本地板块数据为空（sector_daily.json 可能未更新）")
         return {'lines': [], 'secondary': [], 'industries': get_industry_rankings(), 'all_ranked': []}
 
+    # 导入概念波谷判定（复用至行业板块）
+    from backend.services.concept_wave_service import judge_concept_wave as _judge_wave
+
     scores = []
     for name, klines in industries_data.items():
         try:
@@ -303,12 +338,33 @@ def get_mainline_data(date_str):
                 continue
             chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
             chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
-            scores.append({'name': name, 'chg_20d': round(chg_20d, 2), 'chg_1d': round(chg_1d, 2)})
+            # 阶段判定
+            wave = _judge_wave(klines)
+            stage = wave.get('stage', '--')
+            vl_score = wave.get('vl_score', 0)
+            volume_ratio = wave.get('volume_ratio', 0)
+            scores.append({
+                'name': name,
+                'chg_20d': round(chg_20d, 2),
+                'chg_1d': round(chg_1d, 2),
+                'stage': stage,
+                'vl_score': vl_score,
+                'volume_ratio': volume_ratio,
+            })
         except Exception:
             continue
 
     scores.sort(key=lambda x: x['chg_20d'], reverse=True)
     daily_rankings = get_industry_rankings()
+
+    # 为每条数据标注主线状态 + 机会类型
+    for i, item in enumerate(scores):
+        item['is_mainline'] = i < 5
+        item['is_secondary'] = 5 <= i < 10
+        item['opportunity'] = classify_opportunity(
+            item['is_mainline'], item['is_secondary'],
+            item.get('stage', '--'), item.get('vl_score', 0),
+        )
 
     main_lines = scores[:5]
     secondary_lines = scores[5:10]
@@ -348,6 +404,7 @@ def get_mainline_data(date_str):
 def get_concept_mainline_data(date_str):
     """概念主线排名 — 与 get_mainline_data 相同逻辑，但用概念板块数据"""
     from backend.core.data_layer import get_sector_daily
+    from backend.services.concept_wave_service import judge_concept_wave as _judge_wave
     sector_data = get_sector_daily()
     concepts_data = sector_data.get('concepts', {})
     if not concepts_data:
@@ -360,11 +417,33 @@ def get_concept_mainline_data(date_str):
                 continue
             chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
             chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
-            scores.append({'name': name, 'chg_20d': round(chg_20d, 2), 'chg_1d': round(chg_1d, 2)})
+            # 阶段判定
+            wave = _judge_wave(klines)
+            stage = wave.get('stage', '--')
+            vl_score = wave.get('vl_score', 0)
+            volume_ratio = wave.get('volume_ratio', 0)
+            scores.append({
+                'name': name,
+                'chg_20d': round(chg_20d, 2),
+                'chg_1d': round(chg_1d, 2),
+                'stage': stage,
+                'vl_score': vl_score,
+                'volume_ratio': volume_ratio,
+            })
         except Exception:
             continue
 
     scores.sort(key=lambda x: x['chg_20d'], reverse=True)
+
+    # 为每条数据标注主线状态 + 机会类型
+    for i, item in enumerate(scores):
+        item['is_mainline'] = i < 5
+        item['is_secondary'] = 5 <= i < 10
+        item['opportunity'] = classify_opportunity(
+            item['is_mainline'], item['is_secondary'],
+            item.get('stage', '--'), item.get('vl_score', 0),
+        )
+
     main_lines = scores[:5]
     secondary_lines = scores[5:10]
 
@@ -532,7 +611,8 @@ def get_buy_sell_signals(holdings, buy_signals, date_str=None, all_stocks_data=N
 # ═══════════════════════════════════════════════════════════════
 
 def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_holdings,
-                          holdings_review=None, buy_signals_review=None):
+                          holdings_review=None, buy_signals_review=None,
+                          opportunity_map=None):
     """综合前4项生成次日交易计划"""
     plan = {
         'overall_strategy': market_cycle.get('strategy', '正常交易'),
@@ -597,6 +677,11 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
 
     if buy_signals_review:
         for bs in buy_signals_review:
+            # 通过 sector 名称在 opportunity_map 中查找该股票所属方向的机会类型
+            sec_name = bs.get('sector', '')
+            bs_opp = '--'
+            if opportunity_map and sec_name:
+                bs_opp = opportunity_map.get(sec_name, '--')
             plan['buy_priority'].append({
                 'name': bs.get('name', bs.get('code', '')),
                 'code': bs.get('code', ''),
@@ -610,6 +695,8 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'stage': bs.get('stage', ''),
                 'stop_loss': bs.get('stop_loss'),
                 'stop_loss_pct': bs.get('stop_loss_pct'),
+                'sector': sec_name,
+                'opportunity': bs_opp,
                 'priority': '高' if bs.get('buy_point', '') in ('中继买点', '突破买点') else '中',
             })
 
@@ -617,13 +704,18 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     PRIORITY_ORDER = {'高': 0, '中': 1, '低': 2}
     plan['holdings_action'].sort(key=lambda x: PRIORITY_ORDER.get(x.get('priority', '中'), 2))
 
-    # 排序：关注买点 主线级 > 趋势状态
+    # 排序：关注买点 机会类型优先级 > 主线级 > 趋势状态
+    OPP_ORDER = {
+        '主线回调': 0, '次线机会': 1, '潜在主线': 2,
+        '趋势延续': 3, '回调中': 4, '见顶风险': 5, '--': 6,
+    }
     MAINLINE_ORDER = {'主线': 0, '次级主线': 1}
     STRUCTURE_ORDER = {'上涨趋势': 0, '区间震荡': 1, '区间中段': 1, '区间底部': 1, '区间顶部': 2, '下降趋势': 3}
     plan['buy_priority'].sort(key=lambda x: (
+        OPP_ORDER.get(x.get('opportunity', '--'), 5),
         MAINLINE_ORDER.get(x.get('mainline_level', ''), 2),
         STRUCTURE_ORDER.get(x.get('structure', ''), 4),
-        -(x.get('change', 0) or 0),  # 同优先级涨幅高的靠前
+        -(x.get('change', 0) or 0),
     ))
 
     pk_score = market_cycle.get('pk_score', 0)

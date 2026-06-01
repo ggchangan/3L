@@ -10,7 +10,9 @@ const DIR_COLORS: Record<string, string> = {
 }
 const PER_PAGE = 10
 
-export default function BuySignalsReview({ signals, directionOrder: dirOrder }: { signals: BuySignalItem[]; directionOrder?: string[] }) {
+export default function BuySignalsReview({ signals, directionOrder: dirOrder, opportunityMap }: {
+  signals: BuySignalItem[]; directionOrder?: string[]; opportunityMap?: Record<string, string>
+}) {
   const [activeDir, setActiveDir] = useState('')
   const [page, setPage] = useState(1)
 
@@ -54,7 +56,7 @@ export default function BuySignalsReview({ signals, directionOrder: dirOrder }: 
         })}
       </div>
       {pageItems.map((s, i) => (
-        <StockCard key={s.code + '-' + i} s={s} idx={start + i + 1} chartPrefix="bs_" mode="review" />
+        <StockCard key={s.code + '-' + i} s={s} idx={start + i + 1} chartPrefix="bs_" mode="review" opportunityMap={opportunityMap} />
       ))}
       {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12 }}>

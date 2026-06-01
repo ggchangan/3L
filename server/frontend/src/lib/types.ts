@@ -242,15 +242,22 @@ export interface ReviewData {
     bias20_chg_3d?: number
   }
   mainline?: {
-    lines?: { name: string; chg_20d: number }[]
-    secondary?: { name: string; chg_20d: number }[]
-    persistence?: { name: string; days: number }[]
-    all_ranked?: { name: string; chg_20d: number }[]
+    lines?: LineItem[]
+    secondary?: LineItem[]
+    persistence?: { name: string; days: number; status: string }[]
+    all_ranked?: LineItem[]
+    concept_mainline?: {
+      lines?: LineItem[]
+      secondary?: LineItem[]
+      persistence?: { name: string; days: number; status: string }[]
+      all_ranked?: LineItem[]
+    }
   }
   holdings_review?: BuySignalItem[]
   holdings?: BuySignalItem[]
   buy_signals_review?: BuySignalItem[]
   direction_order?: string[]
+  opportunity_map?: Record<string, string>  // sector/concept → opportunity type
   trading_plan?: {
     overall_strategy?: string
     position_level?: string
@@ -258,11 +265,24 @@ export interface ReviewData {
     main_lines?: string[]
     position_detail?: string
     holdings_action?: { stock: string; action: string; reason: string; priority: string }[]
-    buy_priority?: (BuySignalItem & { is_main?: boolean })[]
+    buy_priority?: (BuySignalItem & { is_main?: boolean; sector?: string; opportunity?: string })[]
     risk_items?: string[]
   }
   charts?: {
     index_chart?: string
     fund_flow?: string
   }
+}
+
+/** 主线/板块行项目 */
+export interface LineItem {
+  name: string
+  chg_20d: number
+  chg_1d?: number
+  stage?: string
+  vl_score?: number
+  volume_ratio?: number
+  opportunity?: string
+  is_mainline?: boolean
+  is_secondary?: boolean
 }

@@ -19,9 +19,10 @@ interface StockCardProps {
   idx: number
   chartPrefix?: string
   mode?: 'review' | 'monitor'
+  opportunityMap?: Record<string, string>
 }
 
-export default function StockCard({ s, idx, chartPrefix = '', mode }: StockCardProps) {
+export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityMap }: StockCardProps) {
   const [showChart, setShowChart] = useState(false)
   const cls = s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold'
   const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--'
@@ -130,6 +131,23 @@ export default function StockCard({ s, idx, chartPrefix = '', mode }: StockCardP
           {s.sector_chg != null ? <span style={{ color: s.sector_chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginLeft: 4 }}>{s.sector_chg >= 0 ? '+' : ''}{s.sector_chg.toFixed(2)}%</span> : null}
           {s.direction ? <><span style={{ color: '#555', margin: '0 4px' }}>|</span><span className="l">方向:</span> <span className="v" style={{ color: '#4ecdc4', fontSize: 11 }}>{s.direction}</span></> : null}
         </div>
+        {/* 机会类型标注 */}
+        {(() => {
+          const secName = s.sector || s.direction || ''
+          const opp = opportunityMap && secName ? opportunityMap[secName] : (s as any).opportunity
+          if (!opp || opp === '--') return null
+          const oppColors: Record<string, string> = {
+            '主线回调': '#e94560', '次线机会': '#ffd700', '潜在主线': '#4ecdc4',
+            '趋势延续': '#44aa44', '见顶风险': '#ff6b00', '回调中': '#888',
+          }
+          const color = oppColors[opp] || '#888'
+          return (
+            <div className="field">
+              <span className="l">方向机会:</span>
+              <span className="v" style={{ color, fontSize: 11, fontWeight: 600 }}>{opp}</span>
+            </div>
+          )
+        })()}
         {s.mainline_level ? (
           <div className="field">
             <span className="l">定位:</span>

@@ -30,6 +30,7 @@ export default function Review() {
         holdings_review: reviewData.holdings_review || reviewData.holdings || [],
         buy_signals_review: reviewData.buy_signals_review || [],
         direction_order: reviewData.direction_order || [],
+        opportunity_map: reviewData.opportunity_map,
       })
       setLoading(false)
     }).catch(err => {
@@ -105,7 +106,7 @@ export default function Review() {
                   </span>
                 </div>
                 <div id="stockReviewList">
-                  <HoldingsReview stocks={data.holdings_review as any} directionOrder={data.direction_order} />
+                  <HoldingsReview stocks={data.holdings_review as any} directionOrder={data.direction_order} opportunityMap={data.opportunity_map} />
                 </div>
               </div>
             )}
@@ -119,7 +120,7 @@ export default function Review() {
               </div>
               <div id="buySignalList">
                 {data?.buy_signals_review && data.buy_signals_review.length > 0 ? (
-                  <BuySignalsReview signals={data.buy_signals_review as any} directionOrder={data.direction_order} />
+                  <BuySignalsReview signals={data.buy_signals_review as any} directionOrder={data.direction_order} opportunityMap={data.opportunity_map} />
                 ) : (
                   <div className="empty">暂无买点信号</div>
                 )}
