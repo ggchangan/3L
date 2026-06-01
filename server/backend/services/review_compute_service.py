@@ -683,34 +683,36 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'trend_stock': h.get('trend_stock', False),
             }
 
-            # 根据个股阶段判定操作
-            def _make_hold_action(action, reason_base, priority):
+            # 根据个股阶段判定操作（拆分为 action_type + signal 两列）
+            def _make_hold_action(action_type, signal, reason_base, priority):
                 """生成持仓操作（注入推理链）"""
-                return {**base, 'action': action, 'reason': f'{chain}→{reason_base}', 'priority': priority}
+                return {**base, 'action_type': action_type, 'signal': signal,
+                        'action': f'{action_type}·{signal}' if signal else action_type,
+                        'reason': f'{chain}→{reason_base}', 'priority': priority}
 
             if sig == 'sell':
-                plan['holdings_action'].append(_make_hold_action('卖出', f'{struct}·{stage}', '高'))
+                plan['holdings_action'].append(_make_hold_action('卖出', '', f'{struct}·{stage}', '高'))
             elif sig == 'buy':
                 buy_pt = h.get('buy_point', '买点')
-                plan['holdings_action'].append(_make_hold_action(f'执行{buy_pt}', f'{struct}·{stage}', '高'))
+                plan['holdings_action'].append(_make_hold_action('买入', buy_pt, f'{struct}·{stage}', '高'))
             elif stage == '加速':
-                plan['holdings_action'].append(_make_hold_action('持有·关注止盈', f'{struct}·{stage}，关注放量滞涨/加速变缓', '中'))
+                plan['holdings_action'].append(_make_hold_action('持有', '关注止盈', f'{struct}·{stage}，关注放量滞涨/加速变缓', '中'))
             elif stage == '缩量整理':
-                plan['holdings_action'].append(_make_hold_action('持有·可加仓', f'{struct}·{stage}，供应枯竭等待放量', '中'))
+                plan['holdings_action'].append(_make_hold_action('持有', '可加仓', f'{struct}·{stage}，供应枯竭等待放量', '中'))
             elif stage == '上行':
-                plan['holdings_action'].append(_make_hold_action('持有不动', f'{struct}·{stage}，趋势健康', '低'))
+                plan['holdings_action'].append(_make_hold_action('持有', '', f'{struct}·{stage}，趋势健康', '低'))
             elif stage == '滞涨':
-                plan['holdings_action'].append(_make_hold_action('警惕·考虑减仓', f'{struct}·{stage}，EMA10走平', '高'))
+                plan['holdings_action'].append(_make_hold_action('减仓', '警惕滞涨', f'{struct}·{stage}，EMA10走平', '高'))
             elif stage == '转弱':
-                plan['holdings_action'].append(_make_hold_action('关注·可换股', f'{struct}·{stage}，EMA10拐头向下', '高'))
+                plan['holdings_action'].append(_make_hold_action('换股', '关注转弱', f'{struct}·{stage}，EMA10拐头向下', '高'))
             elif stage == '区间底部':
-                plan['holdings_action'].append(_make_hold_action('支撑位·可加仓', f'{struct}·{stage}，区底企稳', '中'))
+                plan['holdings_action'].append(_make_hold_action('加仓', '支撑位', f'{struct}·{stage}，区底企稳', '中'))
             elif stage == '区间顶部':
-                plan['holdings_action'].append(_make_hold_action('压力位·注意减仓', f'{struct}·{stage}，区顶受阻', '高'))
+                plan['holdings_action'].append(_make_hold_action('减仓', '压力位', f'{struct}·{stage}，区顶受阻', '高'))
             elif stage == '区间中段':
-                plan['holdings_action'].append(_make_hold_action('持有·观望', f'{struct}·{stage}，方向未明', '低'))
+                plan['holdings_action'].append(_make_hold_action('持有', '', f'{struct}·{stage}，方向未明', '低'))
             else:
-                plan['holdings_action'].append(_make_hold_action('持有', f'{struct}·{stage}', '中'))
+                plan['holdings_action'].append(_make_hold_action('持有', '', f'{struct}·{stage}', '中'))
 
     if buy_signals_review:
         for bs in buy_signals_review:
@@ -731,6 +733,8 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             plan['buy_priority'].append({
                 'name': bs.get('name', bs.get('code', '')),
                 'code': bs.get('code', ''),
+                'action_type': '买入',
+                'signal': bs.get('buy_point', '') or bs.get('flags', '') or '买点信号',
                 'buy_point': bs.get('buy_point', '') or bs.get('flags', '') or '买点信号',
                 'change': bs.get('change'),
                 'mainline_level': bs.get('mainline_level', ''),

@@ -42,10 +42,13 @@ export default function TradingPlan({ plan }: Props) {
         title="📦 个股操作"
         items={plan.holdings_action}
         groupKey={g => g.opportunity || '其他'}
-        actionLabel="操作"
         renderAction={item => {
           const c = PRI_COLORS[item.priority] || '#888'
-          return <span style={{ color: c, fontWeight: 600 }}>{item.action}</span>
+          return <span style={{ color: c, fontWeight: 600 }}>{item.action_type || item.action}</span>
+        }}
+        renderSignal={item => {
+          const sig = item.signal || ''
+          return sig ? <span style={{ color: '#aaa', fontSize: 10 }}>{sig}</span> : null
         }}
         renderExtra={item => {
           const m = (item.stock || '').match(/\(([^)]+)\)/)
@@ -68,8 +71,11 @@ export default function TradingPlan({ plan }: Props) {
         title="🎯 关注买点"
         items={plan.buy_priority}
         groupKey={g => g.opportunity || '其他'}
-        actionLabel="买点类型"
-        renderAction={item => <span style={{ color: '#aaa', fontSize: 11 }}>{item.buy_point}</span>}
+        renderAction={item => <span style={{ color: '#4ecdc4', fontWeight: 600, fontSize: 11 }}>买入</span>}
+        renderSignal={item => {
+          const sig = item.signal || item.buy_point || ''
+          return <span style={{ color: '#aaa', fontSize: 10 }}>{sig}</span>
+        }}
         renderExtra={item => null}
         rightCol={item => {
           const chg = item.change || 0
@@ -98,12 +104,12 @@ export default function TradingPlan({ plan }: Props) {
 }
 
 /* 统一决策表 */
-function UnifiedTable({ title, items, groupKey, actionLabel, renderAction, renderExtra, rightCol }: {
+function UnifiedTable({ title, items, groupKey, renderAction, renderSignal, renderExtra, rightCol }: {
   title: string
   items?: any[]
   groupKey: (item: any) => string
-  actionLabel: string
   renderAction: (item: any) => React.ReactNode
+  renderSignal: (item: any) => React.ReactNode
   renderExtra: (item: any) => React.ReactNode
   rightCol: (item: any) => React.ReactNode
 }) {
@@ -133,13 +139,15 @@ function UnifiedTable({ title, items, groupKey, actionLabel, renderAction, rende
                 <col style={{ width: 'auto' }} />
                 <col style={{ width: 'auto' }} />
                 <col style={{ width: 'auto' }} />
+                <col style={{ width: 'auto' }} />
                 <col style={{ width: '1fr' }} />
                 <col style={{ width: 'auto' }} />
               </colgroup>
               <thead>
                 <tr style={{ color: '#555', fontSize: 10 }}>
                   <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>个股</th>
-                  <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>{actionLabel}</th>
+                  <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>操作</th>
+                  <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>信号</th>
                   <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>止损</th>
                   <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>板块</th>
                   <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>原因</th>
@@ -155,6 +163,9 @@ function UnifiedTable({ title, items, groupKey, actionLabel, renderAction, rende
                     </td>
                     <td style={{ padding: '3px 4px', whiteSpace: 'nowrap' }}>
                       {renderAction(item)}
+                    </td>
+                    <td style={{ padding: '3px 4px', whiteSpace: 'nowrap' }}>
+                      {renderSignal(item)}
                     </td>
                     <td style={{ padding: '3px 4px', whiteSpace: 'nowrap' }}>
                       {item.stop_loss != null ? (
