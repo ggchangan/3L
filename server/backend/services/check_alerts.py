@@ -308,6 +308,13 @@ def _sync_holdings_to_alarms():
     读取 holdings.json，将带 stop_loss_price 的持仓自动创建 price 报警。
     如果该股已有手动报警（source != holdings_auto），保留手动配置。
     """
+    # 全局跨日重置：扫描所有 handled 报警，恢复前一天 dismissed 的
+    try:
+        from backend.services.alarm_service import cross_day_reactivate
+        cross_day_reactivate()
+    except Exception:
+        pass
+
     try:
         holdings_path = os.path.join(DATA_DIR, 'private', 'holdings.json')
         if not os.path.exists(holdings_path):

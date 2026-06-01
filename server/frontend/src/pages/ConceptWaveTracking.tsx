@@ -1,6 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
 import './ConceptWaveTracking.css'
+
+/* ═══════════════════════ Types ═══════════════════════ */
+
+interface KLineData {
+  date: string       // 'YYYY-MM-DD'
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+interface ChartAnnotation {
+  idx: number        // index in klines array
+  type: 'peak' | 'trough' | 'shrink' | 'surge' | 'overheat'
+  label: string
+  price: number
+}
 
 interface WavePoint {
   date: string
@@ -14,6 +32,26 @@ interface Annotation {
   type: string
   score: number
   label: string
+}
+
+interface ReasoningChain {
+  market: {
+    position: string
+    position_pct: string
+    volume_level: string
+    volume_amount: string
+    top_mainlines: { name: string; rank: number; days: number }[]
+  }
+  concept_analysis: {
+    reason: string
+  }
+  stock_signals: {
+    code: string
+    name: string
+    signal: string
+    buy_type: string
+    reason: string
+  }[]
 }
 
 interface ConceptItem {
@@ -36,6 +74,9 @@ interface ConceptItem {
   stock_count: number
   wave_data: WavePoint[]
   annotations: Annotation[]
+  reasoning_chain?: ReasoningChain
+  klines: KLineData[]
+  chart_annotations: ChartAnnotation[]
 }
 
 interface AlertItem {
@@ -56,8 +97,10 @@ interface NewHotItem {
 interface WaveStats {
   total: number
   valley: number
+  peak: number
+  rise: number
+  decline: number
   mid: number
-  declining: number
   alerts_count: number
   new_this_week: number
 }
@@ -69,18 +112,39 @@ interface WaveData {
   stats: WaveStats
   grouped: {
     valley: ConceptItem[]
+    peak: ConceptItem[]
+    rise: ConceptItem[]
+    decline: ConceptItem[]
     mid: ConceptItem[]
-    declining: ConceptItem[]
   }
   alerts: AlertItem[]
   new_hot: NewHotItem[]
+  index_klines: KLineData[]
 }
+
+const STAGE_PROB: Record<string, string> = {
+  '波谷': '77.3%',
+  '波峰': '61.3%',
+  '上涨': '59.8%',
+  '下跌': '40.5%',
+  '波中': '',
+};
 
 const STAGE_META: Record<string, { label: string; color: string; bg: string; tag: string }> = {
   '波谷': { label: '重点关注 · 波谷阶段', color: '#34d399', bg: '#0b2e1a', tag: 'tag-green' },
+  '波峰': { label: '警惕观望 · 波峰阶段', color: '#f97316', bg: '#2a1500', tag: 'tag-orange' },
+  '上涨': { label: '趋势延续 · 上涨阶段', color: '#60a5fa', bg: '#0a1a2e', tag: 'tag-blue' },
+  '下跌': { label: '筑底过程 · 或有反弹机会', color: '#ef4444', bg: '#2a0b0b', tag: 'tag-red' },
   '波中': { label: '正常观察 · 波中阶段', color: '#fbbf24', bg: '#2a2000', tag: 'tag-yellow' },
-  '下跌': { label: '警惕观望 · 下跌/波峰阶段', color: '#ef4444', bg: '#2a0b0b', tag: 'tag-red' },
 }
+
+const CHART_COLORS = [
+  '#34d399', '#60a5fa', '#f472b6', '#fbbf24', '#a78bfa',
+  '#fb923c', '#22d3ee', '#f87171', '#4ade80', '#c084fc',
+  '#facc15', '#38bdf8', '#fb7185', '#a3e635', '#e879f9',
+]
+
+/* ═══════════════════════ Helpers ═══════════════════════ */
 
 function fmtPct(v: number): string {
   return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
@@ -97,12 +161,304 @@ function daysAgo(n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function calcEMA(data: number[], period: number): (number | null)[] {
+  if (data.length === 0) return []
+  const result: (number | null)[] = []
+  const k = 2 / (period + 1)
+  // SMA as initial EMA
+  let ema = data.slice(0, period).reduce((a, b) => a + b, 0) / period
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      result.push(null)
+    } else if (i === period - 1) {
+      result.push(ema)
+    } else {
+      ema = (data[i] - ema) * k + ema
+      result.push(ema)
+    }
+  }
+  return result
+}
+
+/* ═══════════════════════ LocalStorage Keys ═══════════════════════ */
+
+const FAVS_KEY = 'concept_wave_favs'
+const HIDDEN_CONCEPTS_KEY = 'concept_wave_hidden'
+
+function loadSet(key: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(key)
+    return new Set(raw ? JSON.parse(raw) : [])
+  } catch { return new Set() }
+}
+
+function saveSet(key: string, set: Set<string>) {
+  localStorage.setItem(key, JSON.stringify([...set]))
+}
+
+/* ═══════════════════════ K-line Chart Renderer ═══════════════════════ */
+
+function renderKLineSVG(
+  klines: KLineData[],
+  annotations: ChartAnnotation[],
+  fullKlines: KLineData[],
+) {
+  if (klines.length === 0) {
+    return <text x="300" y="100" textAnchor="middle" fill="#555" fontSize="12">暂无K线数据</text>
+  }
+
+  const n = klines.length
+  // Layout: left margin for Y-axis, right margin, top margin, bottom margin for X-axis + volume
+  const marginL = 48
+  const marginR = 8
+  const marginT = 10
+  const chartB = 148 // bottom of price chart area
+  const volumeB = 192 // bottom of volume area
+  const marginB = 196 // bottom of x-axis text
+
+  const chartW = 600 - marginL - marginR // usable width for candles
+  const chartH = chartB - marginT // height of price chart area
+  const volumeH = volumeB - chartB // height of volume area
+
+  // Price range
+  let minPrice = Infinity
+  let maxPrice = -Infinity
+  let maxVolume = 0
+  for (const k of klines) {
+    if (k.low < minPrice) minPrice = k.low
+    if (k.high > maxPrice) maxPrice = k.high
+    if (k.volume > maxVolume) maxVolume = k.volume
+  }
+  const pricePadding = (maxPrice - minPrice) * 0.05 || 1
+  minPrice -= pricePadding
+  maxPrice += pricePadding
+  const priceRange = maxPrice - minPrice || 1
+
+  const priceToY = (p: number) => marginT + chartH - ((p - minPrice) / priceRange) * chartH
+  const volumeToH = (v: number) => maxVolume > 0 ? (v / maxVolume) * volumeH : 0
+
+  const slotW = chartW / n
+  const candleW = Math.min(slotW * 0.6, 6) // max 6px wide
+
+  // Calculate EMAs
+  const closes = klines.map(k => k.close)
+  const ema5 = calcEMA(closes, 5)
+  const ema10 = calcEMA(closes, 10)
+  const ema20 = calcEMA(closes, 20)
+
+  // Build polyline points for EMAs (skip nulls)
+  function emaPolyline(ema: (number | null)[]): string | null {
+    const pts: string[] = []
+    for (let i = 0; i < ema.length; i++) {
+      if (ema[i] !== null) {
+        const cx = marginL + i * slotW + slotW / 2
+        pts.push(`${cx.toFixed(1)},${priceToY(ema[i]!).toFixed(1)}`)
+      }
+    }
+    return pts.length >= 2 ? pts.join(' ') : null
+  }
+
+  const ema5Pts = emaPolyline(ema5)
+  const ema10Pts = emaPolyline(ema10)
+  const ema20Pts = emaPolyline(ema20)
+
+  // Y-axis ticks: 4 labels
+  const yTicks = 4
+  const yTickLabels: { y: number; label: string }[] = []
+  for (let i = 0; i <= yTicks; i++) {
+    const price = maxPrice - (priceRange * i) / yTicks
+    yTickLabels.push({ y: priceToY(price), label: price.toFixed(1) })
+  }
+
+  // X-axis labels: 6 evenly spaced
+  const xLabelCount = Math.min(6, n)
+  const xStep = Math.max(1, Math.floor(n / xLabelCount))
+  const xLabels: { x: number; label: string }[] = []
+  for (let i = 0; i < n; i += xStep) {
+    xLabels.push({
+      x: marginL + i * slotW + slotW / 2,
+      label: klines[i].date.slice(5), // MM-DD
+    })
+  }
+  // Always include last date
+  if (xLabels.length === 0 || xLabels[xLabels.length - 1].label !== klines[n - 1].date.slice(5)) {
+    xLabels.push({
+      x: marginL + (n - 1) * slotW + slotW / 2,
+      label: klines[n - 1].date.slice(5),
+    })
+  }
+
+  // Build annotation markers
+  const origIdxLookup = new Map<string, number>()
+  fullKlines.forEach((k, i) => origIdxLookup.set(k.date, i))
+  const annMarkers: React.ReactNode[] = []
+  const annLabels: React.ReactNode[] = []
+
+  for (const ann of annotations) {
+    // Find the original kline date from the index
+    if (ann.idx < 0 || ann.idx >= fullKlines.length) continue
+    const origDate = fullKlines[ann.idx].date
+    // Find this date in the filtered klines
+    const fi = klines.findIndex(k => k.date === origDate)
+    if (fi < 0) continue
+
+    const cx = marginL + fi * slotW + slotW / 2
+    const cy = priceToY(ann.price)
+
+    if (ann.type === 'trough') {
+      // Green dot with V marker
+      annMarkers.push(
+        <g key={`ann-${ann.idx}-marker`}>
+          <circle cx={cx} cy={cy} r="4" fill="none" stroke="#34d399" strokeWidth="2" />
+          <circle cx={cx} cy={cy} r="2" fill="#34d399" />
+          <path d={`M${cx - 5},${cy + 4} L${cx},${cy + 10} L${cx + 5},${cy + 4}`}
+            fill="none" stroke="#34d399" strokeWidth="1.5" />
+        </g>
+      )
+      annLabels.push(
+        <text key={`ann-${ann.idx}-label`} x={cx} y={cy - 8} textAnchor="middle"
+          fill="#34d399" fontSize="9" fontWeight="600">
+          {ann.label}
+        </text>
+      )
+    } else if (ann.type === 'peak') {
+      // Red dot with Λ marker
+      annMarkers.push(
+        <g key={`ann-${ann.idx}-marker`}>
+          <circle cx={cx} cy={cy} r="4" fill="none" stroke="#ef4444" strokeWidth="2" />
+          <circle cx={cx} cy={cy} r="2" fill="#ef4444" />
+          <path d={`M${cx - 5},${cy - 4} L${cx},${cy - 10} L${cx + 5},${cy - 4}`}
+            fill="none" stroke="#ef4444" strokeWidth="1.5" />
+        </g>
+      )
+      annLabels.push(
+        <text key={`ann-${ann.idx}-label`} x={cx} y={cy + 14} textAnchor="middle"
+          fill="#ef4444" fontSize="9" fontWeight="600">
+          {ann.label}
+        </text>
+      )
+    } else if (ann.type === 'shrink') {
+      annLabels.push(
+        <text key={`ann-${ann.idx}-label`} x={cx} y={cy + 14} textAnchor="middle"
+          fill="#60a5fa" fontSize="10">
+          💧{ann.label}
+        </text>
+      )
+    } else if (ann.type === 'surge') {
+      annLabels.push(
+        <text key={`ann-${ann.idx}-label`} x={cx} y={cy + 14} textAnchor="middle"
+          fill="#ff6b6b" fontSize="10">
+          🔥{ann.label}
+        </text>
+      )
+    } else if (ann.type === 'overheat') {
+      annLabels.push(
+        <text key={`ann-${ann.idx}-label`} x={cx} y={cy - 8} textAnchor="middle"
+          fill="#fbbf24" fontSize="10" fontWeight="600">
+          ⚠️{ann.label}
+        </text>
+      )
+    }
+  }
+
+  // "今天" vertical line at last candle
+  const lastX = marginL + (n - 1) * slotW + slotW / 2
+
+  return (
+    <>
+      {/* Grid lines */}
+      {yTickLabels.map((t, i) => (
+        <line key={`grid-${i}`} x1={marginL} y1={t.y} x2={600 - marginR} y2={t.y}
+          stroke="#2a2b3d" strokeWidth="1" strokeDasharray="3,3" />
+      ))}
+      {/* Y-axis labels */}
+      {yTickLabels.map((t, i) => (
+        <text key={`ytick-${i}`} x={marginL - 4} y={t.y + 3} textAnchor="end"
+          fill="#7a7b92" fontSize="9">
+          {t.label}
+        </text>
+      ))}
+      {/* X-axis labels */}
+      {xLabels.map((xl, i) => (
+        <text key={`xtick-${i}`} x={xl.x} y={marginB} textAnchor="middle"
+          fill="#7a7b92" fontSize="9">
+          {xl.label}
+        </text>
+      ))}
+      {/* Candles */}
+      {klines.map((k, i) => {
+        const cx = marginL + i * slotW + slotW / 2
+        const isUp = k.close >= k.open
+        const bodyTop = priceToY(Math.max(k.open, k.close))
+        const bodyBot = priceToY(Math.min(k.open, k.close))
+        const bodyH = Math.max(bodyBot - bodyTop, 1)
+        const wickTop = priceToY(k.high)
+        const wickBot = priceToY(k.low)
+        const color = isUp ? '#ff4444' : '#44aa44'
+        const halfW = Math.max(candleW / 2, 1)
+
+        // Volume bar
+        const vh = volumeToH(k.volume)
+        const volColor = isUp ? 'rgba(255,68,68,0.35)' : 'rgba(68,170,68,0.35)'
+
+        return (
+          <g key={i}>
+            {/* Volume */}
+            <rect x={cx - halfW} y={volumeB - vh} width={candleW} height={vh}
+              fill={volColor} />
+            {/* Wick */}
+            <line x1={cx} y1={wickTop} x2={cx} y2={wickBot} stroke={color} strokeWidth="1" />
+            {/* Body */}
+            <rect x={cx - halfW} y={bodyTop} width={candleW} height={bodyH}
+              fill={color} stroke={color} strokeWidth="0.5" />
+          </g>
+        )
+      })}
+      {/* EMA lines */}
+      {ema5Pts && (
+        <polyline points={ema5Pts} fill="none" stroke="#ffd700" strokeWidth="1.5" opacity="0.9" />
+      )}
+      {ema10Pts && (
+        <polyline points={ema10Pts} fill="none" stroke="#ff6b6b" strokeWidth="1.5" opacity="0.9" />
+      )}
+      {ema20Pts && (
+        <polyline points={ema20Pts} fill="none" stroke="#4ecdc4" strokeWidth="1.5" opacity="0.9" />
+      )}
+      {/* Annotation markers */}
+      {annMarkers}
+      {annLabels}
+      {/* "今天" vertical line */}
+      <line x1={lastX} y1={marginT} x2={lastX} y2={volumeB}
+        stroke="#ef4444" strokeWidth="1" strokeDasharray="3,3" opacity="0.6" />
+      <text x={lastX} y={marginT - 2} textAnchor="middle" fill="#ef4444" fontSize="9" fontWeight="600">
+        今天
+      </text>
+    </>
+  )
+}
+
+/* ═══════════════════════ Main Component ═══════════════════════ */
+
 export default function ConceptWaveTracking() {
   const [data, setData] = useState<WaveData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const [collapsed, setCollapsed] = useState(true) // 折叠低分项
+  const [favs, setFavs] = useState<Set<string>>(loadSet(FAVS_KEY))
+  const [hiddenCodes, setHiddenCodes] = useState<Set<string>>(loadSet(HIDDEN_CONCEPTS_KEY))
+  const [showHidden, setShowHidden] = useState(false)
+  const [showAllStocks, setShowAllStocks] = useState<Record<string, boolean>>({})
+
+  // Date range state
+  const [startDate, setStartDate] = useState(daysAgo(60))
+  const [endDate, setEndDate] = useState(todayStr())
+
+  const minDate = daysAgo(60)
+  const maxDate = todayStr()
+
+  // Persist favs and hiddenCodes
+  useEffect(() => { saveSet(FAVS_KEY, favs) }, [favs])
+  useEffect(() => { saveSet(HIDDEN_CONCEPTS_KEY, hiddenCodes) }, [hiddenCodes])
 
   useEffect(() => {
     setLoading(true)
@@ -114,51 +470,258 @@ export default function ConceptWaveTracking() {
       .finally(() => setLoading(false))
   }, [])
 
-  function toggleExpand(code: string) {
-    setExpanded(prev => ({ ...prev, [code]: !prev[code] }))
+  const toggleFav = useCallback((code: string) => {
+    setFavs(prev => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  }, [])
+
+  const toggleHide = useCallback((code: string) => {
+    setHiddenCodes(prev => {
+      const next = new Set(prev)
+      next.add(code)
+      return next
+    })
+  }, [])
+
+  const restoreItem = useCallback((code: string) => {
+    setHiddenCodes(prev => {
+      const next = new Set(prev)
+      next.delete(code)
+      return next
+    })
+  }, [])
+
+  function toggleExpand(id: string) {
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  function toggleStocksExpand(cardId: string) {
+    setShowAllStocks(prev => ({ ...prev, [cardId]: !prev[cardId] }))
   }
 
   const s = data?.stats
   const isEmpty = !loading && !data?.success
 
-  // 所有可视化的概念（折叠/展开控制）
-  function visibleItems(group: ConceptItem[]): ConceptItem[] {
-    if (!group) return []
-    if (!collapsed) return group
-    // 折叠时只显示前5个非波谷组或者其他组的全部
-    return group
+  function allItems(): ConceptItem[] {
+    if (!data?.grouped) return []
+    return [
+      ...data.grouped.valley,
+      ...data.grouped.mid,
+      ...data.grouped.decline,
+    ]
+  }
+
+  // Visible items (not hidden)
+  function visibleItems(): ConceptItem[] {
+    return allItems().filter(i => !hiddenCodes.has(i.code))
+  }
+
+  function hiddenItems(): ConceptItem[] {
+    return allItems().filter(i => hiddenCodes.has(i.code))
+  }
+
+  function favItems(): ConceptItem[] {
+    return visibleItems().filter(i => favs.has(i.code))
+  }
+
+  // Filter klines by date range
+  function filterKlines(klines: KLineData[]): KLineData[] {
+    if (!klines || klines.length === 0) return []
+    return klines.filter(k => k.date >= startDate && k.date <= endDate)
+  }
+
+  // 单张卡片的渲染
+  function renderCard(item: ConceptItem, group: string, isFav?: boolean) {
+    const chartId = `${group}-${item.code}`
+    const isExpanded = expanded[chartId]
+    const meta = STAGE_META[item.stage] || { label: '', color: '#888', bg: '#1a1b2e' }
+    const stageIcon = item.stage === '波谷' ? '🟢' : item.stage === '波中' ? '🟡' : '🔴'
+
+    // Filtered klines for this card (computed only when expanded)
+    const filteredKlines = isExpanded ? filterKlines(item.klines || []) : []
+    const displayKlines = filteredKlines.length > 0 ? filteredKlines : (item.klines || [])
+    const hasAnnotations = item.chart_annotations && item.chart_annotations.length > 0
+
+    const stocksExpanded = showAllStocks[chartId]
+    const totalRelated = item.related_count || item.related_stocks.length
+    const showMore = item.related_stocks.length > 3
+
+    // Determine signal tags for left info
+    const signals: { label: string; className: string }[] = []
+    if (item.volume_signal === 'shrink') signals.push({ label: '💧缩量', className: 'shrink' })
+    if (item.volume_signal === 'surge') signals.push({ label: '🔥放量', className: 'surge' })
+    if (item.entry_window) signals.push({ label: '↓切入窗口', className: 'entry' })
+    if (item.chart_annotations?.some(a => a.type === 'overheat')) {
+      signals.push({ label: '⚠️天量滞涨', className: 'overheat' })
+    }
+
+    return (
+      <div key={chartId} className={`cw-card ${isExpanded ? 'expanded' : ''} ${isFav ? 'cw-card-fav' : ''}`}>
+        {/* ====== 折叠态：全宽信息卡片 ====== */}
+        <div className="cw-main" onClick={() => toggleExpand(chartId)}>
+          {/* 第一行：名称 + 右侧操作区 */}
+          <div className="cw-row-top">
+            <span className="cw-name-block">
+              <span className="cw-action-btn cw-star-btn" onClick={e => { e.stopPropagation(); toggleFav(item.code) }}
+                title={favs.has(item.code) ? '取消特别关注' : '设为特别关注'}>
+                {favs.has(item.code) ? '⭐' : '☆'}
+              </span>
+              {item.mainline_badge === 'gold' && <span className="cw-gold">[金]</span>}
+              {item.mainline_badge === 'silver' && <span className="cw-silver">[银]</span>}
+              <span className="cw-name">{item.name}</span>
+              <span className="cw-vl">vl:<span className="cw-hl">{item.vl_score}</span></span>
+            </span>
+            <span className="cw-actions">
+              <span className="cw-stage-badge" style={{ color: meta.color }}>
+                {stageIcon} {item.stage}{STAGE_PROB[item.stage] ? ` (${STAGE_PROB[item.stage]})` : ''}
+              </span>
+              <span className="cw-action-btn" onClick={e => { e.stopPropagation(); toggleHide(item.code) }}
+                title="隐藏此概念"
+                style={{ fontSize: 15, opacity: 0.5 }}>🙈</span>
+            </span>
+          </div>
+          {/* 第二行：信号标签 */}
+          {signals.length > 0 && (
+            <div className="cw-row-signals">
+              {signals.map((s, si) => (
+                <span key={si} className={`cw-signal-tag ${s.className}`}>{s.label}</span>
+              ))}
+            </div>
+          )}
+          {/* 第三行：核心指标 */}
+          <div className="cw-row-stats">
+            <span className="cw-stat-item">
+              近5日 <span className={item.change_5d >= 0 ? 'up' : 'dn'}>{fmtPct(item.change_5d)}</span>
+            </span>
+            <span className="cw-stat-sep">|</span>
+            <span className="cw-stat-item">
+              BIAS20 <span className="dn">{fmtPct(item.bias20)}</span>
+            </span>
+            <span className="cw-stat-sep">|</span>
+            <span className="cw-stat-item">
+              vs大盘 <span className={item.vs_market_5d >= 0 ? 'up' : 'dn'}>{fmtPct(item.vs_market_5d)}</span>
+            </span>
+          </div>
+          {/* 第四行：关联自选（带展开/收起全部） */}
+          <div className="cw-row-related">
+            <span className="cw-rl">关联:</span>
+            {stocksExpanded ? (
+              <>
+                {item.related_stocks.map((stk, i) => (
+                  <span key={i}>
+                    <span className="cw-rstk">{stk}</span>
+                    {i < item.related_stocks.length - 1 && <span className="cw-sep"> / </span>}
+                  </span>
+                ))}
+                <span className="cw-more-hint clickable" onClick={e => { e.stopPropagation(); toggleStocksExpand(chartId) }}>
+                  · 收起 ▲
+                </span>
+              </>
+            ) : (
+              <>
+                {item.related_stocks.slice(0, 3).map((stk, i) => (
+                  <span key={i}>
+                    <span className="cw-rstk">{stk}</span>
+                    {i < Math.min(item.related_stocks.length, 3) - 1 && <span className="cw-sep"> / </span>}
+                  </span>
+                ))}
+                {showMore && (
+                  <span className="cw-more-hint clickable" onClick={e => { e.stopPropagation(); toggleStocksExpand(chartId) }}>
+                    · 共{item.related_stocks.length}只 ›
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ====== 展开态：仅K线图 ====== */}
+        <div className={`cw-detail ${isExpanded ? 'show' : ''}`}>
+          <div className="cw-chart-expanded">
+            {isExpanded && item.klines && item.klines.length > 0 && (
+              <svg viewBox="0 0 600 200" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+                {renderKLineSVG(displayKlines, hasAnnotations ? item.chart_annotations : [], item.klines || [])}
+              </svg>
+            )}
+            {isExpanded && (!item.klines || item.klines.length === 0) && (
+              <div className="cw-chart-empty">暂无K线数据</div>
+            )}
+          </div>
+          {/* 推理链 */}
+          {isExpanded && item.reasoning_chain && (
+            <div className="cw-reasoning-chain" style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(78,205,196,0.05)', borderRadius: 6, borderLeft: '3px solid #4ecdc4' }}>
+              <div style={{ fontSize: 11, color: '#4ecdc4', fontWeight: 600, marginBottom: 6 }}>📊 推理链</div>
+              <div style={{ fontSize: 11, color: '#bbb', lineHeight: 1.7 }}>
+                <div>🏛 大盘周期：<span style={{ color: '#e0e0e0' }}>{item.reasoning_chain.market.position}</span>（建议仓位 <span style={{ color: '#34d399' }}>{item.reasoning_chain.market.position_pct}</span>）</div>
+                <div style={{ marginLeft: 16, fontSize: 10, color: '#888' }}>成交量：{item.reasoning_chain.market.volume_level}（{item.reasoning_chain.market.volume_amount}）</div>
+                {item.reasoning_chain.market.top_mainlines.length > 0 && (
+                  <div style={{ marginLeft: 16, fontSize: 10, color: '#888' }}>
+                    主线：{item.reasoning_chain.market.top_mainlines.map((m, i) => (
+                      <span key={i}>{m.name}(第{m.rank}名{m.days}天){i < item.reasoning_chain.market.top_mainlines.length - 1 ? ' · ' : ''}</span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ marginTop: 3 }}>📦 概念分析：<span style={{ color: '#e0e0e0' }}>{item.reasoning_chain.concept_analysis.reason}</span></div>
+                {item.reasoning_chain.stock_signals.filter(s => s.signal === 'buy').length > 0 && (
+                  <div style={{ marginTop: 3 }}>
+                    📈 个股买入信号：
+                    {item.reasoning_chain.stock_signals.filter(s => s.signal === 'buy').map((s, i) => (
+                      <span key={i} style={{ marginRight: 8, fontSize: 11 }}>
+                        🟢 {s.name}({s.code}) — {s.buy_type}（{s.reason}）
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="page-wrap">
       <NavBar />
       <div className="content" style={{ maxWidth: 900, margin: '0 auto' }}>
-        {/* ══════════ 标题栏 ══════════ */}
         <div className="cw-title-bar">
           <h1 className="cw-title">📊 概念板块波谷追踪</h1>
           <div className="cw-title-actions">
             <div className="cw-date-range">
-              📅 <span className="cw-date-val">{daysAgo(30)}</span> ~ <span className="cw-date-val">{todayStr()}</span>
+              📅
+              <input
+                type="date"
+                className="cw-date-input"
+                value={startDate}
+                min={minDate}
+                max={endDate}
+                onChange={e => setStartDate(e.target.value)}
+              />
+              <span className="cw-date-sep">~</span>
+              <input
+                type="date"
+                className="cw-date-input"
+                value={endDate}
+                min={startDate}
+                max={maxDate}
+                onChange={e => setEndDate(e.target.value)}
+              />
             </div>
             <div className="cw-btn-sort">按阶段排序 ▼</div>
           </div>
         </div>
 
-        {loading && !data && (
-          <div className="empty">正在加载概念板块数据…</div>
-        )}
-
-        {error && (
-          <div className="empty" style={{ color: '#e94560' }}>⚠️ {error}</div>
-        )}
-
-        {isEmpty && (
-          <div className="empty">暂无概念板块数据，请先运行数据更新</div>
-        )}
+        {loading && !data && <div className="empty">正在加载概念板块数据…</div>}
+        {error && <div className="empty" style={{ color: '#e94560' }}>⚠️ {error}</div>}
+        {isEmpty && <div className="empty">暂无概念板块数据，请先运行数据更新</div>}
 
         {s && data?.success && (
           <>
-            {/* ══════════ 4个统计卡片 ══════════ */}
+            {/* 4 stat cards */}
             <div className="cw-stats-row">
               <div className="cw-stat-card">
                 <div className="cw-stat-value">{s.valley}</div>
@@ -180,139 +743,152 @@ export default function ConceptWaveTracking() {
               </div>
             </div>
 
-            {/* ══════════ 堆叠走势区域 ══════════ */}
+            {/* ══════════ ⭐ 特别关注区 ══════════ */}
+            {favItems().length > 0 && (
+              <>
+                <div className="cw-fav-header">
+                  <span className="cw-fav-title">⭐ 特别关注 · {favItems().length}个</span>
+                  <span className="cw-fav-hint">点击☆可取消关注</span>
+                </div>
+
+                {/* 特别关注堆叠走势 — 独立行，不重叠 */}
+                <div className="cw-fav-stack">
+                  {favItems().map((item, fi) => {
+                    const klines = item.klines || []
+                    if (klines.length < 2) return null
+                    const color = CHART_COLORS[fi % CHART_COLORS.length]
+                    const closes = klines.map(k => k.close)
+                    const base = closes[0]
+                    const vals = closes.map(c => (c - base) / base * 100) // % change
+                    const minV = Math.min(...vals)
+                    const maxV = Math.max(...vals)
+                    const rng = Math.max(maxV - minV, 1)
+                    const n = vals.length
+                    const svgW = 400, svgH = 60
+                    const pts = vals.map((v, i) =>
+                      `${((i / (n - 1 || 1)) * svgW).toFixed(0)},${(svgH - ((v - minV) / rng) * svgH * 0.8 - svgH * 0.1).toFixed(0)}`
+                    ).join(' ')
+                    const lastChg = vals[n - 1]
+                    // 中证全指参考线
+                    const indexCloses = (data?.index_klines || []).map(k => k.close)
+                    let indexPolyline: string | null = null
+                    if (indexCloses.length >= 2) {
+                      const iBase = indexCloses[0]
+                      const iVals = indexCloses.map(c => (c - iBase) / iBase * 100)
+                      // 对齐到同一范围
+                      const allVals = [...vals, ...iVals]
+                      const allMin = Math.min(...allVals)
+                      const allMax = Math.max(...allVals)
+                      const allRng = Math.max(allMax - allMin, 1)
+                      indexPolyline = iVals.map((v, i) =>
+                        `${((i / (iVals.length - 1 || 1)) * svgW).toFixed(0)},${(svgH - ((v - allMin) / allRng) * svgH * 0.8 - svgH * 0.1).toFixed(0)}`
+                      ).join(' ')
+                    }
+                    return (
+                      <div key={item.code} className="cw-fav-row">
+                        <span className="cw-fav-row-name">
+                          <span className="cw-fav-row-star">{favs.has(item.code) ? '⭐' : '☆'}</span>
+                          {item.name}
+                          <span className="cw-fav-row-vl">vl:{item.vl_score}</span>
+                        </span>
+                        <span className="cw-fav-row-chart">
+                          <svg viewBox={`0 0 ${svgW} ${svgH}`} preserveAspectRatio="none"
+                            style={{ width: '100%', height: `${svgH}px` }}>
+                            {/* 中证全指参考线（灰色虚线） */}
+                            {indexPolyline && (
+                              <polyline points={indexPolyline} fill="none" stroke="#555" strokeWidth="1"
+                                strokeDasharray="4,3" opacity="0.5" />
+                            )}
+                            {/* 概念走势线 */}
+                            <polyline points={pts} fill="none" stroke={color} strokeWidth="2"
+                              strokeLinecap="round" strokeLinejoin="round" />
+                            {/* 终点圆圈 */}
+                            <circle cx={svgW} cy={svgH - ((vals[n - 1] - minV) / rng) * svgH * 0.8 - svgH * 0.1}
+                              r="3" fill={color} stroke="#13141f" strokeWidth="1" />
+                          </svg>
+                        </span>
+                        <span className="cw-fav-row-info">
+                          <span className={`cw-fav-row-chg ${lastChg >= 0 ? 'up' : 'dn'}`}>
+                            {lastChg >= 0 ? '+' : ''}{lastChg.toFixed(1)}%
+                          </span>
+                          <span className="cw-fav-row-label">区间涨跌</span>
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Individual fav cards */}
+                <div style={{ marginTop: 2 }}>
+                  {favItems().map(item => renderCard(item, 'fav', true))}
+                </div>
+              </>
+            )}
+
+            {/* ══════════ Grouped concept areas ══════════ */}
             <div className="cw-chart-area">
-              {(['valley', 'mid', 'declining'] as const).map(group => {
+              {(['valley', 'peak', 'rise', 'decline', 'mid'] as const).map(group => {
                 const items = data.grouped[group]
                 if (!items || items.length === 0) return null
-                const meta = STAGE_META[items[0].stage] || { label: '', color: '#888', bg: '#1a1b2e', tag: '' }
+                const filtered = items.filter(i => !favs.has(i.code) && !hiddenCodes.has(i.code))
+                if (filtered.length === 0) return null
+                const meta = STAGE_META[items[0].stage] || { label: '', color: '#888', bg: '#1a1b2e' }
+                const stageIcon = items[0].stage === '波谷' ? '🟢' : items[0].stage === '波中' ? '🟡' : '🔴'
 
                 return (
                   <div key={group}>
-                    {/* 组标题 */}
                     <div className="cw-group-header">
                       <span className="cw-tag" style={{ borderColor: meta.color, color: meta.color, background: meta.bg }}>
-                        {items[0].stage === '波谷' ? '🟢' : items[0].stage === '波中' ? '🟡' : '🔴'} {items[0].stage}组
+                        {items[0].stage === '波谷' ? '🟢' : items[0].stage === '波峰' ? '🟠' : items[0].stage === '上涨' ? '🔵' : items[0].stage === '下跌' ? '🔴' : '🟡'} {items[0].stage}组{STAGE_PROB[items[0].stage] ? ` (${STAGE_PROB[items[0].stage]})` : ''}
                       </span>
-                      <span className="cw-gc">{meta.label} · {items.length}个概念</span>
+                      <span className="cw-gc">{meta.label} · {filtered.length}个概念</span>
                     </div>
-
-                    {items.map(item => {
-                      const chartId = `${group}-${item.code}`
-                      const isExpanded = expanded[chartId]
-                      const hasAnnotations = item.annotations && item.annotations.length > 0
-
-                      return (
-                        <div key={chartId} className={`cw-card ${isExpanded ? 'expanded' : ''}`}>
-                          <div className="cw-main" onClick={() => toggleExpand(chartId)}>
-                            {/* 左侧信息 */}
-                            <div className="cw-info">
-                              {item.mainline_badge === 'gold' && <span className="cw-gold">[金]</span>}
-                              {item.mainline_badge === 'silver' && <span className="cw-silver">[银]</span>}
-                              <span className="cw-name">{item.name}</span>
-                              <span className="cw-vl">vl:<span className="cw-hl">{item.vl_score}</span></span>
-                            </div>
-
-                            {/* 走势图 */}
-                            <div className="cw-chart">
-                              <svg viewBox="0 0 300 50" preserveAspectRatio="none">
-                                {/* 大盘虚线 */}
-                                {item.wave_data.length > 1 && (
-                                  <polyline
-                                    points={item.wave_data.map((w, i) =>
-                                      `${(i / (item.wave_data.length - 1 || 1)) * 300},${50 - ((w.normalized - 45) / 55) * 40}`
-                                    ).join(' ')}
-                                    fill="none" stroke="#3a3b50" strokeWidth="1" strokeDasharray="3,3"
-                                  />
-                                )}
-                                {/* 走势线 */}
-                                {item.wave_data.length > 1 && (
-                                  <polyline
-                                    points={item.wave_data.map((w, i) =>
-                                      `${(i / (item.wave_data.length - 1 || 1)) * 300},${50 - ((w.normalized - 45) / 55) * 40}`
-                                    ).join(' ')}
-                                    fill="none" stroke={meta.color} strokeWidth="2"
-                                  />
-                                )}
-                                {/* 标注点 */}
-                                {hasAnnotations && item.annotations.map((ann, i) => {
-                                  const idx = item.wave_data.findIndex(w => w.date === ann.date)
-                                  if (idx < 0) return null
-                                  const x = (idx / (item.wave_data.length - 1 || 1)) * 300
-                                  const y = 50 - ((item.wave_data[idx].normalized - 45) / 55) * 40
-                                  const ac = ann.type === 'valley' ? '#34d399' : ann.type === 'peak' ? '#ef4444' : '#fbbf24'
-                                  return <circle key={i} cx={x} cy={y} r="4" fill={ac} stroke="#13141f" strokeWidth="1.5" />
-                                })}
-                                {/* 今日竖线 */}
-                                <line x1="73%" y1="0" x2="73%" y2="100%" stroke="#ef4444" strokeWidth="1" strokeDasharray="2,2" opacity="0.6" />
-                              </svg>
-                              {/* 今日标签 */}
-                              <span className="cw-today-label">今天</span>
-                              {/* 量价信号 */}
-                              {item.volume_signal === 'shrink' && (
-                                <span className="cw-clabel" style={{ left: '50%', top: '-2px' }}>
-                                  💧 <span className="cw-csub">缩量</span>
-                                </span>
-                              )}
-                              {item.volume_signal === 'surge' && (
-                                <span className="cw-clabel" style={{ left: '50%', top: '-2px' }}>
-                                  🔥 <span className="cw-csub">放量</span>
-                                </span>
-                              )}
-                              {item.entry_window && (
-                                <span className="cw-clabel" style={{ left: '48%', top: '35px', color: '#34d399', fontSize: 10, fontWeight: 600 }}>
-                                  ↓切入窗口
-                                </span>
-                              )}
-                            </div>
-
-                            {/* 阶段标签 */}
-                            <div className="cw-badge" style={{ color: meta.color }}>
-                              {item.stage === '波谷' ? '🟢' : item.stage === '波中' ? '🟡' : '🔴'} {item.stage}
-                            </div>
-
-                            {/* 展开按钮 */}
-                            <div className={`cw-expand ${isExpanded ? 'open' : ''}`}>▶</div>
-                          </div>
-
-                          {/* 展开详情 */}
-                          <div className={`cw-detail ${isExpanded ? 'show' : ''}`}>
-                            <div className="cw-dline1">
-                              <span className="cw-dl">近5日 <span className={`cw-dv ${item.change_5d >= 0 ? 'g' : 'r'}`}>{fmtPct(item.change_5d)}</span></span>
-                              <span className="cw-dl">BIAS20 <span className="cw-dv r">{fmtPct(item.bias20)}</span></span>
-                              <span className="cw-dl">vs大盘 <span className={`cw-ds ${item.vs_market_5d >= 0 ? '' : 'wk'}`}>{fmtPct(item.vs_market_5d)}</span></span>
-                              <span className="cw-sep">|</span>
-                              <span className="cw-dl">自选关联 <span style={{ color: '#e8e9f0', fontWeight: 600 }}>{item.related_count}只</span></span>
-                            </div>
-                            <div className="cw-dline2">
-                              <span className="cw-dl">关联自选:</span>
-                              {item.related_stocks.map((stk, i) => (
-                                <span key={i}>
-                                  <span className="cw-dstk">{stk}</span>
-                                  {i < item.related_stocks.length - 1 && <span className="cw-sep">/</span>}
-                                </span>
-                              ))}
-                              {item.related_count > 3 && item.related_stocks.length < item.related_count && (
-                                <span className="cw-dmore">+{item.related_count - item.related_stocks.length}更多 ›</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
+                    {filtered.map(item => renderCard(item, group))}
                   </div>
                 )
               })}
             </div>
 
-            {/* 时间轴 */}
+            {/* Time axis */}
             <div className="cw-axis-row">
-              <span>← 30天前</span>
+              <span>← 60天前</span>
               <span className="cw-axis-today">今天</span>
               <span>当前位 →</span>
             </div>
 
-            {/* 波谷告警 */}
+            {/* ══════════ Hidden concepts section ══════════ */}
+            {hiddenItems().length > 0 && (
+              <div className="cw-hidden-section">
+                <div className="cw-hidden-header" onClick={() => setShowHidden(v => !v)}>
+                  <span className={`cw-hidden-icon ${showHidden ? 'open' : ''}`}>▶</span>
+                  🙈 已隐藏（<span className="cw-hidden-count">{hiddenItems().length}</span>个概念）
+                </div>
+                <div className={`cw-hidden-body ${showHidden ? 'show' : ''}`}>
+                  {hiddenItems().map(item => {
+                    const meta = STAGE_META[item.stage] || { label: '', color: '#888', bg: '#1a1b2e' }
+                    const stageIcon = item.stage === '波谷' ? '🟢' : item.stage === '波中' ? '🟡' : '🔴'
+                    return (
+                      <div key={item.code} className="cw-card" style={{ opacity: 0.6 }}>
+                        <div className="cw-main" style={{ minHeight: 'auto', padding: '6px 10px' }}>
+                          <span className="cw-info" style={{ flexDirection: 'row', width: 'auto', gap: 6, padding: 0 }}>
+                            <span className="cw-name" style={{ fontSize: 13 }}>{item.name}</span>
+                            <span className="cw-vl" style={{ fontSize: 11 }}>vl:{item.vl_score}</span>
+                          </span>
+                          <span style={{ fontSize: 11, color: meta.color }}>
+                            {stageIcon} {item.stage}
+                          </span>
+                          <span className="cw-restore-btn" onClick={() => restoreItem(item.code)}>
+                            恢复
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Valley alerts */}
             <div className="cw-section-title">
               ⚠️ 波谷告警（{data.alerts.length}条）
               <span className="cw-sc">· 强信号推荐关注</span>
@@ -329,7 +905,7 @@ export default function ConceptWaveTracking() {
               </div>
             ))}
 
-            {/* 新概念扫描 */}
+            {/* New concepts scan */}
             {data.new_hot.length > 0 && (
               <>
                 <div className="cw-section-title">
@@ -346,7 +922,7 @@ export default function ConceptWaveTracking() {
               </>
             )}
 
-            {/* 图例 */}
+            {/* Legend */}
             <div className="cw-legend">
               <span><span className="cw-gold">[金]</span>主线前5</span>
               <span><span className="cw-silver">[银]</span>主线6-10</span>
@@ -355,9 +931,12 @@ export default function ConceptWaveTracking() {
               <span>🔥 放量</span>
               <span>⚠️ 天量滞涨</span>
               <span style={{ color: '#34d399' }}>↓切入窗口</span>
+              <span><span style={{ color: '#888' }}>☆</span>点击星标特别关注</span>
+              <span style={{ color: '#ffd700' }}>— EMA5</span>
+              <span style={{ color: '#ff6b6b' }}>— EMA10</span>
+              <span style={{ color: '#4ecdc4' }}>— EMA20</span>
             </div>
 
-            {/* 更新时间 */}
             <div style={{ fontSize: 10, color: '#444', textAlign: 'right', marginTop: 8 }}>
               {data.data_timestamp?.slice(0, 16) || data.date || ''}
             </div>

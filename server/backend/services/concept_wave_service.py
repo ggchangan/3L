@@ -180,13 +180,25 @@ def judge_concept_wave(klines):
     if z_score > 1.5:
         pk_score += 1
     
-    # 阶段判定
-    if vl_score >= 3:
-        stage = '波谷'
-    elif vl_score >= 1 or pk_score >= 3:
-        stage = '波中'
-    else:
+    # 波峰确认：放量下跌才算见顶（排除缩量洗盘）
+    peak_confirmed = pk_score >= 3 and gain < 0 and volume_ratio > 0.7
+
+    # 缩量条件（波谷门槛）
+    is_shrinked = volume_ratio < 0.7 or vol_shrink_ratio < 0.8
+
+    # 阶段判定（5阶段 + 优化条件）
+    if vl_score >= 5:
+        stage = '波谷'  # 极度超卖 → 直接波谷
+    elif vl_score >= 3 and is_shrinked:
+        stage = '波谷'  # 波谷 + 缩量 → 高胜率信号
+    elif pk_score >= 3 and peak_confirmed:
+        stage = '波峰'  # 连续2日确认 → 减少假信号
+    elif slope_now > 0.3 and bias5 > -3:
+        stage = '上涨'
+    elif slope_now < -0.3 and bias20 < 0:
         stage = '下跌'
+    else:
+        stage = '波中'
     
     # 切入窗口：vl_score>=3 + BIAS20在-5%~-8% + 持续缩量
     entry_window = (vl_score >= 3 and
@@ -219,6 +231,126 @@ def judge_concept_wave(klines):
             'vol_5d_shrink_ratio': round(vol_shrink_ratio, 2),
         },
     }
+
+
+def compute_chart_annotations(klines, period=60):
+    """
+    计算K线标注：波峰、波谷、量价信号（缩量/放量上涨/放量滞涨）
+
+    输入: klines = [{date, open, high, low, close, volume}, ...]
+    输出: [{'idx': int, 'type': str, 'label': str, 'price': float}, ...]
+    """
+    if not klines or len(klines) < 5:
+        return []
+
+    n = len(klines)
+    annotations = []
+
+    highs = [k['high'] for k in klines]
+    lows = [k['low'] for k in klines]
+    closes = [k['close'] for k in klines]
+    volumes = [k.get('volume', 0) for k in klines]
+
+    # ---- 20日均量（逐日计算，前20天为None）----
+    vol_ma20 = []
+    for i in range(n):
+        if i >= 20:
+            vol_ma20.append(statistics.mean(volumes[i - 20:i]))
+        else:
+            vol_ma20.append(None)
+
+    # ---- 波峰/波谷检测（从左到右扫描）----
+    last_trough_idx = None
+    last_trough_price = None
+    last_peak_idx = None
+    last_peak_price = None
+
+    for i in range(2, n - 2):
+        # 波峰：high[i]是前后2根K线中的局部最高
+        is_peak = (
+            highs[i] > highs[i - 1] and highs[i] > highs[i - 2]
+            and highs[i] > highs[i + 1] and highs[i] > highs[i + 2]
+        )
+        if is_peak:
+            cond_ok = False
+            if last_trough_idx is not None and last_trough_price is not None and last_trough_price > 0:
+                gain = (highs[i] - last_trough_price) / last_trough_price * 100
+                cond_ok = gain >= 3
+            # 第一个波峰无条件接受（没有前一个谷底可对比）
+            if last_trough_idx is None:
+                cond_ok = True
+
+            if cond_ok:
+                annotations.append({
+                    'idx': i,
+                    'type': 'peak',
+                    'label': f'波峰 {highs[i]:.2f}',
+                    'price': highs[i],
+                })
+                last_peak_idx = i
+                last_peak_price = highs[i]
+
+        # 波谷：low[i]是前后2根K线中的局部最低
+        is_trough = (
+            lows[i] < lows[i - 1] and lows[i] < lows[i - 2]
+            and lows[i] < lows[i + 1] and lows[i] < lows[i + 2]
+        )
+        if is_trough:
+            cond_ok = False
+            if last_peak_idx is not None and last_peak_price is not None and last_peak_price > 0:
+                decline = (last_peak_price - lows[i]) / last_peak_price * 100
+                cond_ok = decline >= 3
+            # 第一个波谷无条件接受
+            if last_peak_idx is None:
+                cond_ok = True
+
+            if cond_ok:
+                annotations.append({
+                    'idx': i,
+                    'type': 'trough',
+                    'label': f'波谷 {lows[i]:.2f}',
+                    'price': lows[i],
+                })
+                last_trough_idx = i
+                last_trough_price = lows[i]
+
+    # ---- 量价信号（逐日判断）----
+    for i in range(20, n):
+        vol_ma = vol_ma20[i]
+        if vol_ma is None or vol_ma <= 0:
+            continue
+
+        vol_ratio = volumes[i] / vol_ma
+        gain = (closes[i] - closes[i - 1]) / closes[i - 1] * 100 if i >= 1 else 0
+
+        # 缩量：量 < 0.7 * 20日均量
+        if vol_ratio < 0.7:
+            annotations.append({
+                'idx': i,
+                'type': 'shrink',
+                'label': f'缩量({vol_ratio:.2f}x)',
+                'price': closes[i],
+            })
+        # 放量上涨：量 > 1.5 * 20日均量 且 涨幅 > 2%
+        if vol_ratio > 1.5 and gain > 2:
+            annotations.append({
+                'idx': i,
+                'type': 'surge',
+                'label': f'放量上涨({gain:.1f}%)',
+                'price': closes[i],
+            })
+        # 放量滞涨：量 > 2.0 * 20日均量 且 涨幅 < 0.5%
+        if vol_ratio > 2.0 and abs(gain) < 0.5:
+            annotations.append({
+                'idx': i,
+                'type': 'overheat',
+                'label': f'放量滞涨({vol_ratio:.2f}x)',
+                'price': closes[i],
+            })
+
+    # 统一按idx排序
+    annotations.sort(key=lambda a: a['idx'])
+    return annotations
 
 
 def backtest_report(klines_history):

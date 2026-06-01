@@ -338,7 +338,16 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_json({'status': 'error'}, 404)
 
     def send_json(self, data, status=200):
-        body = json.dumps(data, ensure_ascii=False, default=str).encode()
+        # 递归将 NaN 转为 None（兼容 JSON 规范）
+        def _clean(obj):
+            if isinstance(obj, float):
+                return None if obj != obj else obj  # NaN != NaN
+            if isinstance(obj, dict):
+                return {k: _clean(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [_clean(v) for v in obj]
+            return obj
+        body = json.dumps(_clean(data), ensure_ascii=False, default=str).encode()
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         # 仅允许同源跨域（检查请求 Origin 是否匹配服务器地址）
