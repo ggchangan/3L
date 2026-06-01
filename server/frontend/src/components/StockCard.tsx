@@ -159,6 +159,36 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
         </div>
       </div>
       <div style={{ marginTop: 2, fontSize: 11, color: conclusionColor, padding: '2px 0' }}>💡 {conclusion}</div>
+
+      {/* 融合判定信号显示 */}
+      {s.triggered_signals && s.triggered_signals.length > 0 && (
+        <div style={{ marginTop: 4, padding: '4px 6px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, border: '1px solid #2a2a3a' }}>
+          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>📡 关键信号</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {(s.triggered_signals as Array<{name:string;confidence:number;direction:string}>).slice(0,4).map((sig, i) => {
+              const dirColor = sig.direction === 'bullish' ? '#4ecdc4' : sig.direction === 'bearish' ? '#e94560' : '#ffd700'
+              const dirIcon = sig.direction === 'bullish' ? '🟢' : sig.direction === 'bearish' ? '🔴' : '🟡'
+              return (
+                <span key={i} style={{ fontSize: 10, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4, color: dirColor }}>
+                  {dirIcon} {sig.name} {sig.confidence.toFixed(0)}分
+                </span>
+              )
+            })}
+            {s.fusion_type && (
+              <span style={{ fontSize: 10, background: 'rgba(88,166,255,0.1)', padding: '2px 6px', borderRadius: 4, color: '#58a6ff' }}>
+                {(() => {
+                  const fusionLabels: Record<string,string> = {
+                    'strong_buy': '🟢强买', 'signal_buy': '🟢买入', 'conflict_bearish': '⚠️警惕',
+                    'signal_sell': '🔴卖出', 'conflict_bullish': '⚠️等确认', 'buy_point_only': '⏳买点',
+                    'bearish_watch': '👀偏空', 'bullish_wait': '⏳等待', 'balance': '⚖️平衡',
+                  }
+                  return fusionLabels[s.fusion_type!] || s.fusion_type
+                })()}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
       {(chartEverShown || showChart) && (
         <div id={chartId} className="chart-container" style={{ display: showChart ? 'block' : 'none', marginTop: 6 }}>
           <object data={chartUrl} type="image/svg+xml" style={{ width: '100%', maxWidth: 700, borderRadius: 8 }} />

@@ -45,6 +45,7 @@ from backend.core.trend_trading import (
     decide_system_with_detail,
 )
 from backend.core.signal_detector.fusion import fusion_judge
+from backend.core.signal_detector.sell_point_detection import detect_sell_point
 
 
 # ── 手动趋势股（不缓存，文件很小直接读）──
@@ -417,6 +418,32 @@ def get_stock_card(code, date_str, market_position='波中',
         triggered_signals = []
         fusion_type = ''
         fusion_reason = ''
+
+    # 5d. 独立卖点引擎（补充融合判定未覆盖的场景）
+    if signal != 'sell':
+        try:
+            sp = detect_sell_point(klines, idx,
+                                   structure=struct_info.get('structure', ''),
+                                   stage=struct_info.get('stage', ''),
+                                   bias5=deviation_pct)
+            if sp.get('triggered'):
+                sell_cf = sp.get('confidence', 0)
+                if sell_cf > score:  # 卖点置信度更高才覆盖
+                    signal = 'sell'
+                    signal_text = sp.get('sell_type', '')
+                    buy_point = ''
+                    score = sell_cf
+                    # 追加一个卖点信号到triggered_signals
+                    triggered_signals.append({
+                        'key': 'sell_point_detector',
+                        'name': sp.get('sell_type', '卖出'),
+                        'direction': 'bearish',
+                        'confidence': sell_cf,
+                        'detail': sp.get('reason', ''),
+                        'scores': {},
+                    })
+        except Exception:
+            pass
 
     # 6. 止损
     sl_result = _calc_stop_loss(klines, idx)

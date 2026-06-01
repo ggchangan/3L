@@ -1,0 +1,82 @@
+{
+  "signals": {
+    "upward_breakout": {
+      "confidence_pass": 60,
+      "direction": "bullish",
+      "description": "向上突破",
+      "enabled": true
+    },
+    "upward_continuation": {
+      "confidence_pass": 60,
+      "direction": "bullish",
+      "description": "上涨中继",
+      "enabled": true
+    },
+    "upward_reversal": {
+      "confidence_pass": 60,
+      "direction": "bullish",
+      "description": "向上反转",
+      "enabled": true
+    },
+    "supply_exhaustion": {
+      "confidence_pass": 60,
+      "direction": "bullish",
+      "description": "供应衰竭",
+      "enabled": true
+    },
+    "downward_breakout": {
+      "confidence_pass": 60,
+      "direction": "bearish",
+      "description": "向下突破",
+      "enabled": true
+    },
+    "downward_reversal": {
+      "confidence_pass": 70,
+      "direction": "bearish",
+      "description": "向下反转",
+      "enabled": true
+    },
+    "demand_exhaustion": {
+      "confidence_pass": 70,
+      "direction": "bearish",
+      "description": "需求衰竭",
+      "enabled": true
+    },
+    "downward_continuation": {
+      "confidence_pass": 60,
+      "direction": "bearish",
+      "description": "下跌中继",
+      "enabled": true
+    },
+    "range_continuation": {
+      "confidence_pass": 60,
+      "direction": "neutral",
+      "description": "区间震荡中继",
+      "enabled": true
+    }
+  },
+  "fusion": {
+    "strong_buy_min_confidence": 60,
+    "signal_buy_min_confidence": 55,
+    "signal_sell_min_confidence": 60,
+    "conflict_alert_min_confidence": 50,
+    "keypoint_bias_overbought": 12,
+    "keypoint_bias_oversold": -8,
+    "buy_point_scale": {
+      "盈利模式1": 90,
+      "突破买点": 80,
+      "中继买点": 60,
+      "趋势买入": 50
+    }
+  },
+  "market_filter": {
+    "acceleration_bias_threshold": 12,
+    "acceleration_pk_threshold": 4,
+    "bear_market_stage": "下降趋势",
+    "normal_trading": "其他阶段不管大盘"
+  },
+  "backtest_defaults": {
+    "window": 60,
+    "min_klines": 30
+  }
+}

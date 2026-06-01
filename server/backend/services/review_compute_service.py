@@ -681,6 +681,9 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'is_main': h.get('mainline_level', '') in ('主线', '次级主线'),
                 'profit_model1': h.get('profit_model1', False),
                 'trend_stock': h.get('trend_stock', False),
+                'triggered_signals': h.get('triggered_signals', []),
+                'fusion_type': h.get('fusion_type', ''),
+                'fusion_reason': h.get('fusion_reason', ''),
             }
 
             # 根据个股阶段判定操作（拆分为 action_type + signal 两列）
@@ -751,6 +754,9 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'opp_reason': opp_reason,
                 'reason': f'{market_tag}→{sec_name}·{bs_opp}→{bs.get("structure", "--")}·{bs.get("stage", "--")}' if bs_opp and bs_opp != '--' else f'{market_tag}→{opp_reason}' if opp_reason else '',
                 'priority': '高' if bs.get('buy_point', '') in ('中继买点', '突破买点') else '中',
+                'triggered_signals': bs.get('triggered_signals', []),
+                'fusion_type': bs.get('fusion_type', ''),
+                'fusion_reason': bs.get('fusion_reason', ''),
             })
 
     # 排序：个股操作 高→低

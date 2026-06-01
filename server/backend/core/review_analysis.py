@@ -108,6 +108,10 @@ def generate_holdings_review(holdings, stocks, buy_signals,
             'mainline_level': card.get('mainline_level', ''),
             'stop_loss': stop_loss,
             'stop_loss_pct': stop_loss_pct,
+            # 融合判定字段
+            'triggered_signals': card.get('triggered_signals', []),
+            'fusion_type': card.get('fusion_type', ''),
+            'fusion_reason': card.get('fusion_reason', ''),
         })
 
     result.sort(key=lambda x: struct_priority.get(x['structure'], 3))
@@ -199,6 +203,9 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             "ema": card['ema'],
             "vol_analysis": card['vol_analysis'],
             "flags": card.get('flags', ''),
+            "triggered_signals": card.get('triggered_signals', []),
+            "fusion_type": card.get('fusion_type', ''),
+            "fusion_reason": card.get('fusion_reason', ''),
         })
 
     # 按分数降序

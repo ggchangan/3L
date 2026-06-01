@@ -140,6 +140,16 @@ export interface BuySignalItem {
   sector_chg?: number
   mainline_level?: string
   trading_reason?: string
+  /** 融合判定字段 */
+  triggered_signals?: Array<{
+    key: string
+    name: string
+    direction: 'bullish' | 'bearish' | 'neutral'
+    confidence: number
+    detail?: string
+  }>
+  fusion_type?: string
+  fusion_reason?: string
 }
 
 /** 止损预警API返回类型 */

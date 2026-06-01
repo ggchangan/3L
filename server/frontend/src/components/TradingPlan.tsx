@@ -48,7 +48,22 @@ export default function TradingPlan({ plan }: Props) {
         }}
         renderSignal={item => {
           const sig = item.signal || ''
-          return sig ? <span style={{ color: '#aaa', fontSize: 10 }}>{sig}</span> : null
+          const sigs = item.triggered_signals || []
+          const ft = item.fusion_type || ''
+          return (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+              {sig ? <span style={{ color: '#aaa', fontSize: 10 }}>{sig}</span> : null}
+              {(sigs.length > 0) && sigs.slice(0,2).map((s: any, i: number) => {
+                const c = s.direction === 'bullish' ? '#4ecdc4' : s.direction === 'bearish' ? '#e94560' : '#ffd700'
+                return <span key={i} style={{fontSize:9,color:c,background:'rgba(255,255,255,0.05)',padding:'1px 4px',borderRadius:3}}>{s.name}</span>
+              })}
+              {ft && (
+                <span style={{fontSize:9,color:'#58a6ff',background:'rgba(88,166,255,0.1)',padding:'1px 4px',borderRadius:3}}>
+                  {({strong_buy:'强买',signal_buy:'买入',conflict_bearish:'⚠️',signal_sell:'卖出',conflict_bullish:'等确认',buy_point_only:'买点',bearish_watch:'偏空',bullish_wait:'等待',balance:'平衡'})[ft] || ft}
+                </span>
+              )}
+            </div>
+          )
         }}
         renderExtra={item => {
           const m = (item.stock || '').match(/\(([^)]+)\)/)
