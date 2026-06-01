@@ -302,7 +302,8 @@ def get_mainline_data(date_str):
             if len(klines) < 20:
                 continue
             chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
-            scores.append({'name': name, 'chg_20d': round(chg_20d, 2)})
+            chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
+            scores.append({'name': name, 'chg_20d': round(chg_20d, 2), 'chg_1d': round(chg_1d, 2)})
         except Exception:
             continue
 
@@ -344,7 +345,58 @@ def get_mainline_data(date_str):
     return result
 
 
-def track_mainline_persistence(date_str, current_lines):
+def get_concept_mainline_data(date_str):
+    """概念主线排名 — 与 get_mainline_data 相同逻辑，但用概念板块数据"""
+    from backend.core.data_layer import get_sector_daily
+    sector_data = get_sector_daily()
+    concepts_data = sector_data.get('concepts', {})
+    if not concepts_data:
+        return {'lines': [], 'secondary': [], 'all_ranked': [], 'persistence': []}
+
+    scores = []
+    for name, klines in concepts_data.items():
+        try:
+            if len(klines) < 20:
+                continue
+            chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
+            chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
+            scores.append({'name': name, 'chg_20d': round(chg_20d, 2), 'chg_1d': round(chg_1d, 2)})
+        except Exception:
+            continue
+
+    scores.sort(key=lambda x: x['chg_20d'], reverse=True)
+    main_lines = scores[:5]
+    secondary_lines = scores[5:10]
+
+    # 写入历史（共享同一份 mainline_history.json，标记 concept_ 前缀）
+    try:
+        top10_names = [l['name'] for l in (main_lines + secondary_lines)]
+        history = {}
+        if os.path.isfile(MAINLINE_HISTORY_PATH):
+            with open(MAINLINE_HISTORY_PATH) as _fh:
+                history = json.load(_fh)
+        key = f'concept_{date_str}'
+        history = {k: v for k, v in history.items() if k.split('_')[-1] <= date_str}
+        history[key] = {'top10': top10_names}
+        with open(MAINLINE_HISTORY_PATH, 'w') as _fh:
+            json.dump(history, _fh, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[3L复盘] ⚠️ 概念历史记录保存失败: {e}")
+
+    # 持续性
+    persistence = track_mainline_persistence(date_str, main_lines, prefix='concept_')
+
+    return {
+        'date': date_str,
+        'lines': main_lines,
+        'secondary': secondary_lines,
+        'all_ranked': scores,
+        'persistence': persistence,
+        'type': 'concept',
+    }
+
+
+def track_mainline_persistence(date_str, current_lines, prefix=''):
     """主线持续性跟踪 — 从历史记录追溯连续在榜天数"""
     if not current_lines:
         return []
@@ -358,7 +410,7 @@ def track_mainline_persistence(date_str, current_lines):
         return [{'name': l['name'], 'days': 1, 'status': '持续'} for l in current_lines]
 
     # 获取所有历史日期，从最近到最远
-    past_dates = sorted([d for d in history.keys() if d < date_str], reverse=True)
+    past_dates = sorted([d for d in history.keys() if d.startswith(prefix) and d < prefix + date_str], reverse=True)
     result = []
 
     for line in current_lines:

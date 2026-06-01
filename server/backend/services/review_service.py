@@ -291,7 +291,7 @@ def generate_daily_review(date_str=None):
 
     from backend.services.review_compute_service import (
         is_trading_day, fetch_index_klines, fetch_market_quote,
-        judge_peak_valley, get_mainline_data, track_mainline_persistence,
+        judge_peak_valley, get_mainline_data, get_concept_mainline_data, track_mainline_persistence,
         generate_trading_plan, get_buy_sell_signals, load_market_data_for_profit_check,
     )
     from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
@@ -346,6 +346,11 @@ def generate_daily_review(date_str=None):
     if mainline_data['lines']:
         persistence = track_mainline_persistence(date_str, mainline_data['lines'])
         mainline_data['persistence'] = persistence
+
+    # 概念主线
+    print("[3L复盘] ② 计算概念主线...")
+    concept_mainline_data = get_concept_mainline_data(date_str)
+    mainline_data['concept_mainline'] = concept_mainline_data
 
     # ③ 加载数据
     print("[3L复盘] ③ 加载数据...")
@@ -548,7 +553,7 @@ def compute_review_real_time(date_str=None):
 
     from backend.services.review_compute_service import (
         is_trading_day,
-        judge_peak_valley, get_mainline_data, track_mainline_persistence,
+        judge_peak_valley, get_mainline_data, get_concept_mainline_data, track_mainline_persistence,
         generate_trading_plan, get_buy_sell_signals, load_market_data_for_profit_check,
     )
     from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
@@ -582,6 +587,10 @@ def compute_review_real_time(date_str=None):
     if mainline_data.get('lines'):
         persistence = track_mainline_persistence(date_str, mainline_data['lines'])
         mainline_data['persistence'] = persistence
+
+    # 概念主线
+    concept_mainline_data = get_concept_mainline_data(date_str)
+    mainline_data['concept_mainline'] = concept_mainline_data
 
     # ③ 扫描买点信号（只扫持仓股 + 启用方向自选股）
     all_stocks = get_all_stocks()
