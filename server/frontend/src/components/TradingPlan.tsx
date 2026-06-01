@@ -37,32 +37,60 @@ export default function TradingPlan({ plan }: Props) {
         </div>
       )}
 
-      {/* 统一决策表头 */}
-      <PlanTable
+      {/* 个股操作 */}
+      <PlanSection
         title="📦 个股操作"
         items={plan.holdings_action}
         groupKey={g => g.opportunity || '其他'}
-        oppLabel={g => g.sector || ''}
-        columns={[
-          { label: '个股', w: '1fr', render: item => {
-            const m = (item.stock || '').match(/\(([^)]+)\)/)
-            return <><b>{item.stock?.replace(/\([^)]+\)/, '')}</b> <span style={{color:'#555',fontSize:10}}>{m?.[1]}</span></>
-          }},
-          { label: '操作', w: 'auto', render: item => <span style={{color:PRI_COLORS[item.priority]||'#888',fontWeight:600}}>{item.action}</span> },
-          { label: '止损', w: 'auto', render: item => item.stop_loss != null ? <span style={{color:'#ff9800',fontSize:10}}>⬇ {Number(item.stop_loss).toFixed(2)}{item.stop_loss_pct != null ? `(${item.stop_loss_pct}%)` : ''}</span> : null },
-        ]}
+        renderRow={item => {
+          const priColor = PRI_COLORS[item.priority] || '#888'
+          const m = (item.stock || '').match(/\(([^)]+)\)/)
+          const name = (item.stock || '').replace(/\([^)]+\)/, '')
+          const code = m ? m[1] : ''
+          return (
+            <div style={{ padding: '4px 8px', borderBottom: '1px solid #222' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <b style={{ fontSize: 12 }}>{name}</b>
+                <span style={{ color: '#555', fontSize: 10 }}>{code}</span>
+                <span style={{ color: priColor, fontWeight: 600, fontSize: 11 }}>→ {item.action}</span>
+                <span style={{ color: '#888', fontSize: 10 }}>{item.sector || ''}</span>
+                <span style={{ color: priColor, fontSize: 10, marginLeft: 'auto' }}>{item.priority}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1, fontSize: 10, color: '#888' }}>
+                {item.stop_loss != null ? <span style={{ color: '#ff9800' }}>⬇ {Number(item.stop_loss).toFixed(2)}{item.stop_loss_pct != null ? `(${item.stop_loss_pct}%)` : ''}</span> : null}
+                <span>{item.reason}</span>
+              </div>
+            </div>
+          )
+        }}
       />
 
-      <PlanTable
+      {/* 关注买点 */}
+      <PlanSection
         title="🎯 关注买点"
         items={plan.buy_priority}
         groupKey={g => g.opportunity || '其他'}
-        oppLabel={g => g.sector || ''}
-        columns={[
-          { label: '个股', w: '1fr', render: item => <><b>{item.name}</b> <span style={{color:'#555',fontSize:10}}>·{item.sector||'--'}</span></> },
-          { label: '买点', w: 'auto', render: item => <span style={{fontSize:10,color:'#aaa'}}>{item.buy_point}</span> },
-          { label: '止损', w: 'auto', render: item => item.stop_loss != null ? <span style={{color:'#ff9800',fontSize:10}}>⬇ {Number(item.stop_loss).toFixed(2)}{item.stop_loss_pct != null ? `(${item.stop_loss_pct}%)` : ''}</span> : null },
-        ]}
+        renderRow={item => {
+          return (
+            <div style={{ padding: '4px 8px', borderBottom: '1px solid #222' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <b style={{ fontSize: 12 }}>{item.name}</b>
+                <span style={{ color: '#888', fontSize: 10 }}>{item.buy_point}</span>
+                <span style={{ color: '#555', fontSize: 10 }}>{item.sector || ''}</span>
+                {item.is_main && <span className="tag red" style={{ fontSize: 9 }}>主线</span>}
+                {item.profit_model1 && <span className="tag" style={{ background: '#e94560', fontSize: 9, padding: '1px 4px' }}>🏆</span>}
+                {item.trend_stock && <span className="tag" style={{ background: '#2196f3', fontSize: 9, padding: '1px 4px' }}>📈</span>}
+                <span style={{ color: (item.change || 0) >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginLeft: 'auto' }}>
+                  {(item.change || 0) >= 0 ? '+' : ''}{item.change}%
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1, fontSize: 10, color: '#888' }}>
+                {item.stop_loss != null ? <span style={{ color: '#ff9800' }}>⬇ {Number(item.stop_loss).toFixed(2)}{item.stop_loss_pct != null ? `(${item.stop_loss_pct}%)` : ''}</span> : null}
+                {(item as any).opp_reason ? <span>{(item as any).opp_reason}</span> : null}
+              </div>
+            </div>
+          )
+        }}
       />
 
       {plan.risk_items?.length ? (
@@ -80,17 +108,15 @@ export default function TradingPlan({ plan }: Props) {
   )
 }
 
-/* 统一决策表组件 */
-function PlanTable({ title, items, groupKey, oppLabel, columns }: {
+/* 分组展示组件 */
+function PlanSection({ title, items, groupKey, renderRow }: {
   title: string
   items?: any[]
   groupKey: (item: any) => string
-  oppLabel: (item: any) => string
-  columns: { label: string; w: string; render: (item: any) => React.ReactNode }[]
+  renderRow: (item: any) => React.ReactNode
 }) {
   if (!items?.length) return <div className="empty" style={{marginTop:12}}>{title.replace(/^[^\s]+\s/,'')} 暂无</div>
 
-  // 分组
   const groups: Record<string, any[]> = {}
   for (const item of items) {
     const k = groupKey(item)
@@ -104,31 +130,15 @@ function PlanTable({ title, items, groupKey, oppLabel, columns }: {
       <div style={{ marginBottom: 6 }}><strong style={{ color: '#4ecdc4', fontSize: 13 }}>{title}</strong></div>
       {sorted.map(([opp, rows]) => {
         const cfg = OPP_CFG[opp] || { emoji: '📋', color: '#888', order: 99 }
+        const bgColor = cfg.color + '15'
         return (
-          <div key={opp} style={{ marginBottom: 8 }}>
-            <div style={{ color: cfg.color, fontSize: 11, fontWeight: 600, marginBottom: 3 }}>
+          <div key={opp} style={{ marginBottom: 8, background: bgColor, borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ color: cfg.color, fontSize: 11, fontWeight: 600, padding: '4px 8px' }}>
               {cfg.emoji} {opp} ({rows.length})
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-              <tbody>
-                {rows.map((item, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #222' }}>
-                    {columns.map((col, ci) => (
-                      <td key={ci} style={{
-                        padding: '3px 6px', whiteSpace: 'nowrap',
-                        width: col.w !== 'auto' ? col.w : undefined,
-                      }}>
-                        {col.render(item)}
-                      </td>
-                    ))}
-                    {/* 右侧 opp 标签 */}
-                    <td style={{ textAlign: 'right', padding: '3px 6px', whiteSpace: 'nowrap' }}>
-                      {oppLabel(item) ? <span style={{color:'#555',fontSize:10}}>{oppLabel(item)}</span> : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ background: 'rgba(0,0,0,0.2)' }}>
+              {rows.map((item, i) => renderRow(item))}
+            </div>
           </div>
         )
       })}
