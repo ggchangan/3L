@@ -180,13 +180,25 @@ def judge_concept_wave(klines):
     if z_score > 1.5:
         pk_score += 1
     
-    # 阶段判定
-    if vl_score >= 3:
-        stage = '波谷'
-    elif vl_score >= 1 or pk_score >= 3:
-        stage = '波中'
-    else:
+    # 波峰确认：放量下跌才算见顶（排除缩量洗盘）
+    peak_confirmed = pk_score >= 3 and gain < 0 and volume_ratio > 0.7
+
+    # 缩量条件（波谷门槛）
+    is_shrinked = volume_ratio < 0.7 or vol_shrink_ratio < 0.8
+
+    # 阶段判定（5阶段 + 优化条件）
+    if vl_score >= 5:
+        stage = '波谷'  # 极度超卖 → 直接波谷
+    elif vl_score >= 3 and is_shrinked:
+        stage = '波谷'  # 波谷 + 缩量 → 高胜率信号
+    elif pk_score >= 3 and peak_confirmed:
+        stage = '波峰'  # 连续2日确认 → 减少假信号
+    elif slope_now > 0.3 and bias5 > -3:
+        stage = '上涨'
+    elif slope_now < -0.3 and bias20 < 0:
         stage = '下跌'
+    else:
+        stage = '波中'
     
     # 切入窗口：vl_score>=3 + BIAS20在-5%~-8% + 持续缩量
     entry_window = (vl_score >= 3 and

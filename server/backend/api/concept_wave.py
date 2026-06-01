@@ -145,6 +145,7 @@ def _make_response(handler, path):
             'klines': klines[-60:],
             'chart_annotations': compute_chart_annotations(klines[-60:]),
             'annotations': [],
+            'reasoning_chain': _build_reasoning_chain(name, score, related_codes),
         })
 
     # 排序
@@ -155,22 +156,29 @@ def _make_response(handler, path):
     elif sort_by == 'change_5d':
         results.sort(key=lambda r: r['change_5d'])
 
-    # 分组
-    grouped = {'valley': [], 'mid': [], 'declining': []}
+    # 分组（5阶段）
+    grouped = {'valley': [], 'peak': [], 'rise': [], 'decline': [], 'mid': []}
     for r in results:
-        if r['stage'] == '波谷':
+        stage = r['stage']
+        if stage == '波谷':
             grouped['valley'].append(r)
-        elif r['stage'] == '波中':
-            grouped['mid'].append(r)
+        elif stage == '波峰':
+            grouped['peak'].append(r)
+        elif stage == '上涨':
+            grouped['rise'].append(r)
+        elif stage == '下跌':
+            grouped['decline'].append(r)
         else:
-            grouped['declining'].append(r)
+            grouped['mid'].append(r)
 
     # 统计
     s = {
         'total': len(results),
         'valley': len(grouped['valley']),
+        'peak': len(grouped['peak']),
+        'rise': len(grouped['rise']),
+        'decline': len(grouped['decline']),
         'mid': len(grouped['mid']),
-        'declining': len(grouped['declining']),
         'alerts_count': sum(1 for r in results if r['vl_score'] >= 3),
         'new_this_week': 0,
     }
@@ -198,6 +206,89 @@ def _make_response(handler, path):
     }
 
     handler.send_json(response)
+
+
+def _build_reasoning_chain(name, score, related_codes):
+    """构建推理链数据"""
+    from backend.services.review_compute_service import judge_peak_valley
+    from backend.core.data_layer import get_index_klines
+
+    chain = {'market': {}, 'concept_analysis': {}, 'stock_signals': []}
+    try:
+        index_klines = get_index_klines()
+        if isinstance(index_klines, list):
+            mc = judge_peak_valley(index_klines)
+            chain['market'] = {
+                'position': mc.get('position', '波中'),
+                'position_pct': mc.get('position_pct', '半仓'),
+                'volume_level': '中等',
+                'volume_amount': '--',
+                'top_mainlines': [],
+            }
+    except Exception:
+        chain['market'] = {'position': '波中', 'position_pct': '半仓', 'volume_level': '--', 'volume_amount': '--', 'top_mainlines': []}
+
+    # 主线TOP3（从服务器内存数据读）
+    try:
+        from . import get_server
+        _srv = get_server()
+        ml = _srv.REVIEW_DATA.get('mainlines', {}).get('mainlines', {})
+        # mainlines 可能是 {name: rank} 字典或 [{name, rank}] 列表
+        if isinstance(ml, dict):
+            sorted_ml = sorted(ml.items(), key=lambda x: x[1])[:3]
+            chain['market']['top_mainlines'] = [
+                {'name': name, 'rank': rank, 'days': 1}
+                for name, rank in sorted_ml
+            ]
+        elif isinstance(ml, list):
+            chain['market']['top_mainlines'] = [
+                {'name': l.get('name', l) if isinstance(l, dict) else l, 'rank': rank, 'days': 1}
+                for rank, l in enumerate(ml[:3])
+            ]
+    except Exception:
+        pass
+
+    # 概念分析理由
+    vl, pk = score.get('vl_score', 0), score.get('pk_score', 0)
+    b20 = score.get('bias20', 0)
+    vr = score.get('volume_ratio', 1)
+    es = score.get('ema10_slope', 0)
+    stage = score.get('stage', '波中')
+    parts = []
+    if b20 < -5:
+        parts.append(f'BIAS20={b20:.1f}%（深度负值）')
+    if vr < 0.7:
+        parts.append(f'量比={vr:.2f}（{"极度" if vr < 0.5 else ""}缩量）')
+    if es > -0.3:
+        parts.append('EMA10走平/拐头')
+    if stage == '波谷':
+        chain['concept_analysis']['reason'] = ' → '.join(parts) + ' → 波谷确认' if parts else '波段底部确认'
+    elif stage == '波峰':
+        chain['concept_analysis']['reason'] = '价格高位+放量滞涨 → 警惕见顶'
+    elif stage == '上涨':
+        chain['concept_analysis']['reason'] = '趋势向上+量能配合 → 趋势延续'
+    elif stage == '下跌':
+        chain['concept_analysis']['reason'] = '价格下行+缩量 → 筑底过程'
+    else:
+        chain['concept_analysis']['reason'] = '趋势不明 → 继续观察'
+
+    # 个股信号（检查关联自选股是否有买点）
+    try:
+        from backend.services.stock_card_service import get_stock_card
+        for code in related_codes[:5]:
+            card = get_stock_card(code, datetime.now().strftime('%Y%m%d'))
+            if card and card.get('signal') in ('buy',):
+                chain['stock_signals'].append({
+                    'code': code,
+                    'name': card.get('name', ''),
+                    'signal': 'buy',
+                    'buy_type': card.get('buy_point', ''),
+                    'reason': card.get('signal_text', ''),
+                })
+    except Exception:
+        pass
+
+    return chain
 
 
 def register_routes(routes):

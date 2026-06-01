@@ -352,7 +352,7 @@ def _fetch_sector_klines_akshare(sector_type, name):
     import akshare as ak
     from datetime import datetime, timedelta
     today = datetime.now().strftime('%Y%m%d')
-    start = (datetime.now() - timedelta(days=90)).strftime('%Y%m%d')
+    start = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
     try:
         if sector_type == 'industry':
             df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)

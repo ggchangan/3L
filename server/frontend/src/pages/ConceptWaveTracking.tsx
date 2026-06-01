@@ -34,6 +34,26 @@ interface Annotation {
   label: string
 }
 
+interface ReasoningChain {
+  market: {
+    position: string
+    position_pct: string
+    volume_level: string
+    volume_amount: string
+    top_mainlines: { name: string; rank: number; days: number }[]
+  }
+  concept_analysis: {
+    reason: string
+  }
+  stock_signals: {
+    code: string
+    name: string
+    signal: string
+    buy_type: string
+    reason: string
+  }[]
+}
+
 interface ConceptItem {
   code: string
   name: string
@@ -54,6 +74,7 @@ interface ConceptItem {
   stock_count: number
   wave_data: WavePoint[]
   annotations: Annotation[]
+  reasoning_chain?: ReasoningChain
   klines: KLineData[]
   chart_annotations: ChartAnnotation[]
 }
@@ -76,8 +97,10 @@ interface NewHotItem {
 interface WaveStats {
   total: number
   valley: number
+  peak: number
+  rise: number
+  decline: number
   mid: number
-  declining: number
   alerts_count: number
   new_this_week: number
 }
@@ -89,20 +112,30 @@ interface WaveData {
   stats: WaveStats
   grouped: {
     valley: ConceptItem[]
+    peak: ConceptItem[]
+    rise: ConceptItem[]
+    decline: ConceptItem[]
     mid: ConceptItem[]
-    declining: ConceptItem[]
   }
   alerts: AlertItem[]
   new_hot: NewHotItem[]
   index_klines: KLineData[]
 }
 
-/* ═══════════════════════ Constants ═══════════════════════ */
+const STAGE_PROB: Record<string, string> = {
+  '波谷': '77.3%',
+  '波峰': '61.3%',
+  '上涨': '59.8%',
+  '下跌': '40.5%',
+  '波中': '',
+};
 
-const STAGE_META: Record<string, { label: string; color: string; bg: string }> = {
-  '波谷': { label: '重点关注 · 波谷阶段', color: '#34d399', bg: '#0b2e1a' },
-  '波中': { label: '正常观察 · 波中阶段', color: '#fbbf24', bg: '#2a2000' },
-  '下跌': { label: '警惕观望 · 下跌/波峰阶段', color: '#ef4444', bg: '#2a0b0b' },
+const STAGE_META: Record<string, { label: string; color: string; bg: string; tag: string }> = {
+  '波谷': { label: '重点关注 · 波谷阶段', color: '#34d399', bg: '#0b2e1a', tag: 'tag-green' },
+  '波峰': { label: '警惕观望 · 波峰阶段', color: '#f97316', bg: '#2a1500', tag: 'tag-orange' },
+  '上涨': { label: '趋势延续 · 上涨阶段', color: '#60a5fa', bg: '#0a1a2e', tag: 'tag-blue' },
+  '下跌': { label: '筑底过程 · 或有反弹机会', color: '#ef4444', bg: '#2a0b0b', tag: 'tag-red' },
+  '波中': { label: '正常观察 · 波中阶段', color: '#fbbf24', bg: '#2a2000', tag: 'tag-yellow' },
 }
 
 const CHART_COLORS = [
@@ -478,7 +511,7 @@ export default function ConceptWaveTracking() {
     return [
       ...data.grouped.valley,
       ...data.grouped.mid,
-      ...data.grouped.declining,
+      ...data.grouped.decline,
     ]
   }
 
@@ -544,7 +577,7 @@ export default function ConceptWaveTracking() {
             </span>
             <span className="cw-actions">
               <span className="cw-stage-badge" style={{ color: meta.color }}>
-                {stageIcon} {item.stage}
+                {stageIcon} {item.stage}{STAGE_PROB[item.stage] ? ` (${STAGE_PROB[item.stage]})` : ''}
               </span>
               <span className="cw-action-btn" onClick={e => { e.stopPropagation(); toggleHide(item.code) }}
                 title="隐藏此概念"
@@ -618,6 +651,34 @@ export default function ConceptWaveTracking() {
               <div className="cw-chart-empty">暂无K线数据</div>
             )}
           </div>
+          {/* 推理链 */}
+          {isExpanded && item.reasoning_chain && (
+            <div className="cw-reasoning-chain" style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(78,205,196,0.05)', borderRadius: 6, borderLeft: '3px solid #4ecdc4' }}>
+              <div style={{ fontSize: 11, color: '#4ecdc4', fontWeight: 600, marginBottom: 6 }}>📊 推理链</div>
+              <div style={{ fontSize: 11, color: '#bbb', lineHeight: 1.7 }}>
+                <div>🏛 大盘周期：<span style={{ color: '#e0e0e0' }}>{item.reasoning_chain.market.position}</span>（建议仓位 <span style={{ color: '#34d399' }}>{item.reasoning_chain.market.position_pct}</span>）</div>
+                <div style={{ marginLeft: 16, fontSize: 10, color: '#888' }}>成交量：{item.reasoning_chain.market.volume_level}（{item.reasoning_chain.market.volume_amount}）</div>
+                {item.reasoning_chain.market.top_mainlines.length > 0 && (
+                  <div style={{ marginLeft: 16, fontSize: 10, color: '#888' }}>
+                    主线：{item.reasoning_chain.market.top_mainlines.map((m, i) => (
+                      <span key={i}>{m.name}(第{m.rank}名{m.days}天){i < item.reasoning_chain.market.top_mainlines.length - 1 ? ' · ' : ''}</span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ marginTop: 3 }}>📦 概念分析：<span style={{ color: '#e0e0e0' }}>{item.reasoning_chain.concept_analysis.reason}</span></div>
+                {item.reasoning_chain.stock_signals.filter(s => s.signal === 'buy').length > 0 && (
+                  <div style={{ marginTop: 3 }}>
+                    📈 个股买入信号：
+                    {item.reasoning_chain.stock_signals.filter(s => s.signal === 'buy').map((s, i) => (
+                      <span key={i} style={{ marginRight: 8, fontSize: 11 }}>
+                        🟢 {s.name}({s.code}) — {s.buy_type}（{s.reason}）
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -766,7 +827,7 @@ export default function ConceptWaveTracking() {
 
             {/* ══════════ Grouped concept areas ══════════ */}
             <div className="cw-chart-area">
-              {(['valley', 'mid', 'declining'] as const).map(group => {
+              {(['valley', 'peak', 'rise', 'decline', 'mid'] as const).map(group => {
                 const items = data.grouped[group]
                 if (!items || items.length === 0) return null
                 const filtered = items.filter(i => !favs.has(i.code) && !hiddenCodes.has(i.code))
@@ -778,7 +839,7 @@ export default function ConceptWaveTracking() {
                   <div key={group}>
                     <div className="cw-group-header">
                       <span className="cw-tag" style={{ borderColor: meta.color, color: meta.color, background: meta.bg }}>
-                        {stageIcon} {items[0].stage}组
+                        {items[0].stage === '波谷' ? '🟢' : items[0].stage === '波峰' ? '🟠' : items[0].stage === '上涨' ? '🔵' : items[0].stage === '下跌' ? '🔴' : '🟡'} {items[0].stage}组{STAGE_PROB[items[0].stage] ? ` (${STAGE_PROB[items[0].stage]})` : ''}
                       </span>
                       <span className="cw-gc">{meta.label} · {filtered.length}个概念</span>
                     </div>
