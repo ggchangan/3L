@@ -28,16 +28,35 @@
 .cw-date-range {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   background: #1a1b2e;
   border: 1px solid #2f3045;
   border-radius: 6px;
-  padding: 5px 12px;
+  padding: 4px 10px;
   font-size: 13px;
   color: #9a9bb0;
 }
-.cw-date-val {
+.cw-date-input {
+  background: transparent;
+  border: none;
   color: #c8c9d4;
+  font-size: 13px;
+  padding: 2px 2px;
+  outline: none;
+  width: 110px;
+  font-family: inherit;
+}
+.cw-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+.cw-date-input::-webkit-datetime-edit-text {
+  color: #7a7b92;
+}
+.cw-date-sep {
+  color: #555;
+  font-size: 13px;
+  user-select: none;
 }
 .cw-btn-sort {
   background: #2a6eff;
@@ -104,38 +123,50 @@
   margin: 2px 0;
   background: #1a1b2e;
   border: 1px solid #2a2b3d;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
 }
 .cw-card.expanded {
   border-color: #3a3b55;
 }
+
+/* ── 折叠态：全宽信息卡片 ── */
 .cw-main {
-  display: flex;
-  align-items: center;
-  padding: 6px 10px;
-  gap: 8px;
   cursor: pointer;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 .cw-main:hover {
   background: #1e1f35;
 }
-
-/* ── 左侧信息 ── */
-.cw-info {
-  width: 150px;
-  flex-shrink: 0;
+.cw-row-top {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cw-name-block {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px;
+}
+.cw-star-btn {
+  font-size: 15px;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+  transition: transform 0.15s;
+}
+.cw-star-btn:hover {
+  transform: scale(1.2);
 }
 .cw-name {
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   color: #e67700;
-  text-decoration: none;
-  cursor: pointer;
 }
 .cw-vl {
   font-size: 12px;
@@ -156,59 +187,105 @@
   font-size: 13px;
 }
 
-/* ── 走势图 ── */
-.cw-chart {
-  position: relative;
-  flex: 1;
-  min-width: 60px;
-  height: 50px;
+/* ── 右侧操作区 ── */
+.cw-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
-.cw-chart svg {
+.cw-stage-badge {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cw-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  border-radius: 4px;
+  user-select: none;
+  transition: background 0.15s;
+}
+.cw-action-btn:hover {
+  background: #2a2b3d;
+}
+
+/* ── 信号标签行 ── */
+.cw-row-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.cw-signal-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.cw-signal-tag.shrink { background: #1a2a3e; color: #60a5fa; border: 1px solid #2a3a5e; }
+.cw-signal-tag.surge { background: #3a1a1a; color: #ff6b6b; border: 1px solid #5a2a2a; }
+.cw-signal-tag.overheat { background: #3a2a0a; color: #fbbf24; border: 1px solid #5a3a1a; }
+.cw-signal-tag.entry { background: #0a2a1a; color: #34d399; border: 1px solid #1a3a2a; }
+
+/* ── 指标行 ── */
+.cw-row-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #7a7b92;
+}
+.cw-stat-item { white-space: nowrap; }
+.cw-stat-item .up { color: #34d399; font-weight: 600; }
+.cw-stat-item .dn { color: #ef4444; font-weight: 600; }
+.cw-stat-sep { color: #333; margin: 0 2px; }
+
+/* ── 关联自选行 ── */
+.cw-row-related {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: #555;
+}
+.cw-rl { color: #7a7b92; }
+.cw-rstk { color: #c8c9d4; }
+.cw-more-hint { color: #555; font-size: 10px; }
+.cw-more-hint.clickable { color: #60a5fa; cursor: pointer; font-size: 10px; }
+.cw-more-hint.clickable:hover { color: #93c5fd; }
+
+
+
+/* ── 走势图（展开态，懒加载）── */
+.cw-chart-expanded {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  margin-bottom: 6px;
+}
+.cw-chart-expanded svg {
   width: 100%;
   height: 100%;
   display: block;
 }
-.cw-clabel {
-  position: absolute;
-  pointer-events: none;
-  white-space: nowrap;
-  line-height: 1;
-}
-.cw-csub {
-  color: #7a7b92;
-  font-size: 9px;
+.cw-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #555;
+  font-size: 12px;
 }
 .cw-today-label {
   position: absolute;
-  left: calc(73% - 12px);
-  top: 2px;
-  color: #ef4444;
-  font-size: 10px;
-  font-weight: 600;
   pointer-events: none;
-}
-
-/* ── 阶段标签 ── */
-.cw-badge {
-  width: 56px;
-  flex-shrink: 0;
-  text-align: center;
-  font-size: 11px;
-}
-
-/* ── 展开按钮 ── */
-.cw-expand {
-  width: 24px;
-  flex-shrink: 0;
-  text-align: center;
-  font-size: 12px;
-  color: #7a7b92;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-.cw-expand.open {
-  transform: rotate(90deg);
-  color: #fbbf24;
 }
 
 /* ── 展开详情 ── */
@@ -260,15 +337,22 @@
 .cw-dstk {
   color: #c8c9d4;
 }
-.cw-sep {
-  color: #555;
-}
 .cw-dmore {
   color: #7a7b92;
   cursor: pointer;
+  user-select: none;
 }
 .cw-dmore:hover {
   color: #fbbf24;
+}
+.cw-dstk-all {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 6px;
+  padding: 4px 0 2px;
+}
+.cw-dstk-all .cw-dstk {
+  font-size: 11px;
 }
 
 /* ── 时间轴 ── */
@@ -383,4 +467,198 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+/* ── 特别关注堆叠走势（独立行，不重叠）── */
+.cw-fav-stack {
+  background: #1a1b2e;
+  border: 1px solid #3a2a00;
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+.cw-fav-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.cw-fav-row + .cw-fav-row {
+  border-top: 1px solid #2a2b3d;
+}
+.cw-fav-row-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  width: 120px;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #c8c9d4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cw-fav-row-star {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.cw-fav-row-vl {
+  font-size: 10px;
+  color: #7a7b92;
+}
+.cw-fav-row-chart {
+  flex: 1;
+  min-width: 60px;
+  height: 60px;
+}
+.cw-fav-row-chart svg {
+  display: block;
+}
+.cw-fav-row-info {
+  width: 70px;
+  flex-shrink: 0;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+.cw-fav-row-chg {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.cw-fav-row-chg.up { color: #34d399; }
+.cw-fav-row-chg.dn { color: #ef4444; }
+.cw-fav-row-label {
+  font-size: 9px;
+  color: #7a7b92;
+  line-height: 1;
+}
+
+/* ── 特别关注组 ── */
+.cw-fav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 6px;
+  border-bottom: 1px solid #e67700;
+  margin-bottom: 6px;
+}
+.cw-fav-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #e67700;
+  letter-spacing: 1px;
+}
+.cw-fav-hint {
+  font-size: 11px;
+  color: #7a7b92;
+}
+.cw-card-fav {
+  border-color: #3a2a00;
+}
+
+/* ── 叠加走势图 ── */
+.cw-overlay-wrap {
+  background: #1a1b2e;
+  border: 1px solid #3a2a00;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.cw-overlay-chart {
+  width: 100%;
+  height: 200px;
+}
+.cw-overlay-chart svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.cw-overlay-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 8px 0 2px;
+  font-size: 11px;
+  color: #7a7b92;
+}
+.cw-oly-title {
+  color: #e67700;
+  font-weight: 600;
+  font-size: 12px;
+  width: 100%;
+  margin-bottom: 2px;
+}
+.cw-oly-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #c8c9d4;
+}
+.cw-oly-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.cw-oly-vl {
+  color: #7a7b92;
+  font-size: 10px;
+}
+
+/* ── 已隐藏区 ── */
+.cw-hidden-section {
+  margin-top: 16px;
+  border-top: 1px solid #2a2b3d;
+}
+.cw-hidden-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px;
+  cursor: pointer;
+  color: #7a7b92;
+  font-size: 13px;
+  user-select: none;
+}
+.cw-hidden-header:hover {
+  color: #c8c9d4;
+}
+.cw-hidden-icon {
+  font-size: 14px;
+  transition: transform 0.2s;
+}
+.cw-hidden-icon.open {
+  transform: rotate(90deg);
+}
+.cw-hidden-count {
+  color: #9a9bb0;
+  font-weight: 600;
+}
+.cw-hidden-body {
+  display: none;
+  padding: 4px 0 12px;
+}
+.cw-hidden-body.show {
+  display: block;
+}
+.cw-restore-btn {
+  font-size: 10px;
+  color: #60a5fa;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #2a3a5e;
+  background: #1a2a3e;
+  margin-left: 6px;
+  user-select: none;
+}
+.cw-restore-btn:hover {
+  background: #2a3a5e;
+  color: #93c5fd;
 }

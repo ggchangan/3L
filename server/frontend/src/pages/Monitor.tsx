@@ -41,11 +41,12 @@ export default function Monitor() {
         // 同步全部报警到报警层面板（含已处理的）
         setFullAlarmPanel(alarms)
 
-        // 找新触发的（待处理状态、且还没展示过的）
+        // 找新触发的（已触发、待处理、且还没展示过的）
         const newTriggered = alarms.filter((a: any) => {
           const id = a.id || `${a.stock_code}_${a.type}`
           const isActive = a.status === 'active'
-          return isActive && !shownRef.current.has(id)
+          const hasTriggered = !!a.triggered_at  // 只有实际触发的才弹 toast
+          return isActive && hasTriggered && !shownRef.current.has(id)
         })
         if (newTriggered.length === 0) return
 

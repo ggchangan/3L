@@ -2,10 +2,10 @@
 import json, os, sys, statistics
 from datetime import datetime
 
-from backend.services.concept_wave_service import judge_concept_wave
+from backend.services.concept_wave_service import judge_concept_wave, compute_chart_annotations
 from backend.core.data_layer import (
     get_sector_daily, get_concept_list, get_stock_concept_map,
-    get_watchlist,
+    get_watchlist, get_index_klines,
 )
 
 
@@ -137,11 +137,13 @@ def _make_response(handler, path):
             'last_trough_date': None,
             'cycle_days': None,
             'cycle_count': 0,
-            'related_stocks': related_stocks[:3],
+            'related_stocks': related_stocks,
             'related_count': len(related_stocks),
-            'related_codes': related_codes[:3],
+            'related_codes': related_codes,
             'stock_count': cinfo.get('stock_count', 0),
             'wave_data': wave_data,
+            'klines': klines[-60:],
+            'chart_annotations': compute_chart_annotations(klines[-60:]),
             'annotations': [],
         })
 
@@ -180,6 +182,9 @@ def _make_response(handler, path):
         for r in results if r['vl_score'] >= 3
     ][:10]
 
+    # 获取中证全指K线（用于对比线）
+    index_klines = get_index_klines() or []
+
     response = {
         'success': True,
         'date': _today_str(),
@@ -189,6 +194,7 @@ def _make_response(handler, path):
         'list': results if group_by == 'none' else [],
         'alerts': alerts,
         'new_hot': [],
+        'index_klines': index_klines[-60:] if len(index_klines) >= 60 else index_klines,
     }
 
     handler.send_json(response)
