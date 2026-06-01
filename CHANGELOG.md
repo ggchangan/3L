@@ -392,4 +392,46 @@ cron 始终找不到 `backend` 模块，数据停留在旧日期。
 
 ## [v1.0.0] — 2026-04
 
+---
+
+## [v3.8.2] — 2026-06-01
+
+### 新增：参数固化 + 卖点体系 + 大盘过滤
+
+**参数固化：** `server/backend/core/signal_detector/signal_config.json`
+- 各信号阈值集中管理（confidence_pass / direction / enabled）
+- 融合引擎参数（keypoint_bias_thresholds / buy_point_scale）
+- 大盘过滤参数（acceleration_bias_threshold / bear_market_stage）
+
+**卖点体系：** `server/backend/core/signal_detector/sell_point_detection.py`
+- 规则1：向下突破（置信度≥60，最强烈）
+- 规则2：向下反转（置信度≥65，上涨趋势末端）
+- 规则3：需求衰竭（置信度≥75，波峰预警）
+- 规则4：结构卖出（下降趋势/转弱/滞涨）
+- 规则5：BIAS5>15%乖离卖出
+- 集成到 `get_stock_card()`，置信度高于信号时覆盖
+
+**大盘过滤：** `server/backend/core/signal_detector/market_filter.py`
+- 加速阶段（波峰/pk≥4/BIAS>12%）→ 减仓至5成
+- 阴跌阶段（下降趋势/vl≥4/BIAS<-8%）→ 休息至3成
+- 其他阶段 → 正常交易（8成）
+
+**前端集成：**
+- `StockCard.tsx`: 信号徽章显示（方向色+置信度+融合类型标签）
+- `TradingPlan.tsx`: 交易计划信号+融合类型展示
+- `types.ts`: 信号类型定义
+
+### 新增：SVG关键点图信号标注
+
+- `stock_chart_service.py`: `generate_stock_chart()` 新增 `triggered_signals` 参数
+- SVG右上角添加暗色信号徽章（▲/▼/◆方向图标+信号名+置信度）
+- `stock.py`: `_handle_stock_chart` 自动检测信号传入图表
+
+### 新增：信号系统单元测试
+
+- `server/backend/tests/test_signal_fusion.py`，44个用例
+- 覆盖9大检测器调用验证 / 8条融合规则 / 大盘过滤三态 / 卖点五规则
+
+---
+
 初始版本：3L 交易系统基础功能上线。
