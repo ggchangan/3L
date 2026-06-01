@@ -14,6 +14,9 @@ const OPP_CONFIG: Record<string, { label: string; emoji: string; color: string; 
   '趋势延续': { label: '趋势延续', emoji: '📈', color: '#44aa44', order: 3 },
   '回调中': { label: '回调中', emoji: '📉', color: '#888', order: 4 },
   '见顶风险': { label: '见顶风险', emoji: '⚠️', color: '#ff6b00', order: 5 },
+  '主线观察': { label: '主线观察', emoji: '👀', color: '#666', order: 6 },
+  '次级观察': { label: '次级观察', emoji: '👀', color: '#666', order: 7 },
+  '其他': { label: '其他（暂无方向阶段数据）', emoji: '⚪', color: '#555', order: 99 },
 }
 
 export default function TradingPlan({ plan }: Props) {
@@ -106,13 +109,15 @@ export default function TradingPlan({ plan }: Props) {
 function groupedBuyPriority(items: NonNullable<NonNullable<Props['plan']>['buy_priority']>) {
   const groups: Record<string, typeof items> = {}
   for (const item of items) {
-    const opp = (item as any).opportunity || '--'
+    let opp = (item as any).opportunity || '--'
+    if (opp === '--') opp = '其他'
     if (!groups[opp]) groups[opp] = []
     groups[opp].push(item)
   }
   const OPP_ORDER: Record<string, number> = {
     '主线回调': 0, '次线机会': 1, '潜在主线': 2,
     '趋势延续': 3, '回调中': 4, '见顶风险': 5,
+    '主线观察': 6, '次级观察': 7, '其他': 99,
   }
   return Object.entries(groups).sort(([a], [b]) => {
     const oa = OPP_ORDER[a] ?? 99
