@@ -1,0 +1,14 @@
+# 3L 交易系统 — 定时任务配置
+# 安装: crontab deploy/crontab
+# 查看: crontab -l
+
+# ── 数据更新 ────────────────────────────
+# 收市后17:00拉原始数据（个股/指数/板块）
+0 17 * * 1-5 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data >> /home/ubuntu/3l-server/logs/update.log 2>&1
+
+# akshare概念板块数据延迟~4小时，21:00补拉一次
+0 21 * * 1-5 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data >> /home/ubuntu/3l-server/logs/update_late.log 2>&1
+
+# ── 备份 ────────────────────────────────
+# 每日凌晨3点全量备份
+0 3 * * * cd /home/ubuntu/3l-server && bash deploy/backup.sh >> /home/ubuntu/3l-server/logs/backup.log 2>&1
