@@ -393,13 +393,17 @@ def update_sectors():
         log(f'⚠️  概念板块列表拉取失败: {e}')
         con_names = list(concepts.keys())
 
-    log(f'📋  行业{len(ind_names)}个, 概念{len(con_names)}个')
+    log(f'📋  行业{len(ind_names)}个, 概念{len(con_names)}个, 上次更新{last_updated}')
 
     # 更新行业
     ind_updated = 0
     ind_new = 0
     for name in ind_names:
         try:
+            # 已有且已是最新 → 跳过
+            if name in industries and industries[name] and industries[name][-1]['date'] == last_updated:
+                continue
+
             # 新板块：拉全量
             if name not in industries:
                 klines = _fetch_sector_klines_akshare('industry', name)
@@ -409,7 +413,7 @@ def update_sectors():
                 time.sleep(0.3)
                 continue
 
-            # 已有板块：只追最新日
+            # 已有板块但落后：只追最新日
             klines = industries[name]
             existing_dates = {k['date'] for k in klines}
             fetched = _fetch_sector_klines_akshare('industry', name)
@@ -437,6 +441,10 @@ def update_sectors():
     con_new = 0
     for name in con_names:
         try:
+            # 已有且已是最新 → 跳过
+            if name in concepts and concepts[name] and concepts[name][-1]['date'] == last_updated:
+                continue
+
             if name not in concepts:
                 klines = _fetch_sector_klines_akshare('concept', name)
                 if klines:
