@@ -327,18 +327,37 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     except Exception:
         stock_structure = '上涨趋势'
 
-    # 支撑线（最近的突破点且低于现价）— 仅区间震荡画
+    # 支撑/压力线 — 仅区间震荡画（2026-06-02 回测优化）
+    # 支撑: D(混合) — 有突破点用突破点, 无则用前低, 再退到20日最低
+    # 压力: B(统计边界) — 20日最高
+    # 见 scripts/backtest_support_resistance.py 回测结果: 综合72.2%
     cur_close = closes[-1] if closes else 0
     bk_pts = []
     hi_15 = None
     if stock_structure == '区间震荡':
-        bk_pts = sorted(
+        # 支撑（D混合）: 突破点 → 前低 → 20日最低
+        bk_candidates = sorted(
             [kp for kp in kps if kp['label'] == '突' and kp['y'] < cur_close],
             key=lambda x: x['y'], reverse=True
         )
-        # 压力线（15 日内最高）
-        nd15 = min(15, len(closes))
-        hi_15 = max(highs[-nd15:]) if nd15 > 0 else mx
+        if bk_candidates:
+            # 有突破点: 取最高的那个（最近的突破后支撑）
+            support_y = bk_candidates[0]['y']
+        else:
+            # 无突破: 取近20日最高前低
+            nd20 = min(20, len(closes))
+            recent_lows = [kp for kp in kps if kp['label'] == '前低'
+                           and kp['idx'] >= len(closes) - nd20 and kp['y'] < cur_close]
+            if recent_lows:
+                support_y = max(kp['y'] for kp in recent_lows)
+            else:
+                # 退到20日最低
+                support_y = min(lows[-nd20:]) if nd20 > 0 else 0
+        bk_pts = [{'y': support_y, 'label': '支撑'}]
+        
+        # 压力（B统计边界）: 20日最高
+        nd20 = min(20, len(closes))
+        hi_15 = max(highs[-nd20:]) if nd20 > 0 else mx
 
     # ── 5. 组装 SVG ────────────────────────────────────────
     sv = []

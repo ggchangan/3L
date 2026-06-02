@@ -67,7 +67,7 @@ def _keypoint_direction(structure: str, stage: str,
     # 看空信号
     if structure == '下降趋势':
         return 'bearish'
-    if stage in ('加速', '滞涨', '转弱'):
+    if stage in ('加速', '滞涨', '转弱', '放量滞涨', '缩量滞涨'):
         return 'bearish'
     if bias5 > 12:  # 严重超买
         return 'bearish'
