@@ -29,6 +29,8 @@ from backend.core.data_layer import (
     save_sector_daily,
 )
 from backend.core.data_layer import (
+    get_concept_list,
+    get_stock_concept_map,
     save_concept_list,
     save_stock_concept_map,
 )
@@ -395,6 +397,31 @@ def update_sectors():
 
     log(f'📋  行业{len(ind_names)}个, 概念{len(con_names)}个, 上次更新{last_updated}')
 
+    # ── 确定追踪中的概念（自选股关联≥6只才拉K线） ──
+    today = datetime.now().strftime('%Y%m%d')
+    try:
+        _concept_list = get_concept_list()
+        _stock_concept_map = get_stock_concept_map()
+        wl = get_watchlist()
+        wl_codes = set(s.get('code', '') for s in wl)
+
+        tracked_concepts = set()
+        for code, cinfo in _concept_list.items():
+            name = cinfo.get('name', '')
+            if not name:
+                continue
+            related = 0
+            for scode, sinfo in _stock_concept_map.items():
+                if code in sinfo.get('concept_codes', []) and scode in wl_codes:
+                    related += 1
+            if related >= 6:
+                tracked_concepts.add(name)
+
+        log(f'📋  追踪概念: {len(tracked_concepts)}个（自选股关联≥6只）')
+    except Exception as e:
+        log(f'⚠️  计算追踪概念失败: {e}，回退到全量更新')
+        tracked_concepts = set(con_names)
+
     # 更新行业
     ind_updated = 0
     ind_new = 0
@@ -436,13 +463,17 @@ def update_sectors():
         except Exception as e:
             log(f'  ⚠️  行业-{name}: {e}')
 
-    # 更新概念
+    # 更新概念（只拉追踪中的，非追踪概念保持旧数据不变）
     con_updated = 0
     con_new = 0
     for name in con_names:
+        # 跳过非追踪概念
+        if name not in tracked_concepts:
+            continue
+
         try:
-            # 已有且已是最新 → 跳过
-            if name in concepts and concepts[name] and concepts[name][-1]['date'] == last_updated:
+            # 已有且已有今天数据 → 跳过
+            if name in concepts and concepts[name] and concepts[name][-1]['date'] == today:
                 continue
 
             if name not in concepts:
@@ -583,6 +614,7 @@ def update_concept_maps():
             '算力概念': '东数西算(算力)',
             '光刻机(胶)': '光刻机',
             '光通信模块': '光纤概念',
+            'AIPC': 'AI PC',
             '车联网(路云)': '车联网(车路协同)',
             '数据中心': '数据中心(AIDC)',
             '新型烟草(电子烟)': '新型烟草(电子烟)',
@@ -841,6 +873,10 @@ def main():
     # 行业映射（全量更新，～1-2秒）
     log('━━━ 行业映射 ━━━')
     update_industry_map()
+
+    # 概念映射（东方财富 f103 + 名称映射表，~1秒）
+    log('━━━ 概念映射 ━━━')
+    update_concept_maps()
 
     client = _create_mootdx_client()
 
