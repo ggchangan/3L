@@ -65,10 +65,7 @@ export default function TradingPlan({ plan }: Props) {
             </div>
           )
         }}
-        renderExtra={item => {
-          const m = (item.stock || '').match(/\(([^)]+)\)/)
-          return m ? <span style={{ color: '#555', fontSize: 10 }}>{m[1]}</span> : null
-        }}
+        renderExtra={item => null}
         rightCol={item => {
           const chg = item.change || 0
           const chgStr = <span style={{color: chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginRight: 6}}>{(chg >= 0 ? '+' : '')}{chg}%</span>
@@ -86,10 +83,28 @@ export default function TradingPlan({ plan }: Props) {
         title="🎯 关注买点"
         items={plan.buy_priority}
         groupKey={g => g.opportunity || '其他'}
-        renderAction={item => <span style={{ color: '#4ecdc4', fontWeight: 600, fontSize: 11 }}>买入</span>}
+        renderAction={item => {
+          const c = PRI_COLORS[item.priority] || '#888'
+          return <span style={{ color: c, fontWeight: 600 }}>{item.action_type || '买入'}</span>
+        }}
         renderSignal={item => {
           const sig = item.signal || item.buy_point || ''
-          return <span style={{ color: '#aaa', fontSize: 10 }}>{sig}</span>
+          const sigs = item.triggered_signals || []
+          const ft = item.fusion_type || ''
+          return (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+              {sig ? <span style={{ color: '#aaa', fontSize: 10 }}>{sig}</span> : null}
+              {(sigs.length > 0) && sigs.slice(0,2).map((s: any, i: number) => {
+                const c = s.direction === 'bullish' ? '#4ecdc4' : s.direction === 'bearish' ? '#e94560' : '#ffd700'
+                return <span key={i} style={{fontSize:9,color:c,background:'rgba(255,255,255,0.05)',padding:'1px 4px',borderRadius:3}}>{s.name}</span>
+              })}
+              {ft && (
+                <span style={{fontSize:9,color:'#58a6ff',background:'rgba(88,166,255,0.1)',padding:'1px 4px',borderRadius:3}}>
+                  {({strong_buy:'强买',signal_buy:'买入',conflict_bearish:'⚠️',signal_sell:'卖出',conflict_bullish:'等确认',buy_point_only:'买点',bearish_watch:'偏空',bullish_wait:'等待',balance:'平衡'})[ft] || ft}
+                </span>
+              )}
+            </div>
+          )
         }}
         renderExtra={item => null}
         rightCol={item => {
