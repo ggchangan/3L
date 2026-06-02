@@ -85,20 +85,27 @@ def _ema(values, period):
     return result
 
 
-def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stage=None):
+def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stage=None,
+                              opens=None, detect_reversal=False):
     """识别关键点：突破（突）、前高前低、放量信号
+
+    统一函数，个股/板块/大盘共用。如有差异需求通过参数分支处理。
 
     2026-06-02 优化：
     - 前高前低窗口从10→20（减少噪音）
     - 放量/缩量区分方向
     - 结合stage判断放量滞涨
     - 突破点结合EMA20位置过滤
+
+    Args:
+        detect_reversal: 是否检测'反'(反转)标记（大盘/板块需要，个股不需要）
     """
     n = len(closes)
     kps = []
 
     # EMA20 用于突破点位置校验
     e20 = _ema(closes, 20) if len(closes) >= 20 else [None] * n
+    opens_arr = opens or closes
 
     for i in range(10, n):
         # ── 前高（20日窗口） ──
@@ -146,6 +153,12 @@ def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stag
                 # EMA20在当日有值 + 位置合理
                 if e20[i] and closes[i] > e20[i]:
                     kps.append({'idx': i, 'label': '突', 'y': highs[i]})
+
+        # ── 反转（仅大盘/板块使用） ──
+        if detect_reversal and i >= 1:
+            if (closes[i] > opens_arr[i] and closes[i - 1] < opens_arr[i - 1]
+                    and closes[i] > opens_arr[i - 1] and opens_arr[i] < closes[i - 1]):
+                kps.append({'idx': i, 'label': '反', 'y': lows[i]})
 
     return kps
 
@@ -755,34 +768,17 @@ def _ema_index(values, period):
 
 
 def _find_index_keypoints(data):
-    """中证全指关键点识别（同 gen_index_chart.py）"""
+    """中证全指关键点识别 — 委托统一函数"""
     closes = [k['close'] for k in data]
     highs = [k['high'] for k in data]
     lows = [k['low'] for k in data]
     opens = [k['open'] for k in data]
     volumes = [k['volume'] for k in data]
-    n = len(data)
-    kps = []
-    for i in range(5, n):
-        if highs[i] == max(highs[max(0, i - 10):i + 1]) and i > 0:
-            kps.append({'idx': i, 'type': 1, 'label': '前高', 'y': highs[i]})
-        if lows[i] == min(lows[max(0, i - 10):i + 1]) and i > 0:
-            kps.append({'idx': i, 'type': 1, 'label': '前低', 'y': lows[i]})
-        if i >= 10:
-            vw = volumes[i - 10:i]
-            if len(vw) > 0 and max(vw) > 0:
-                if volumes[i] >= max(vw) * 1.5:
-                    kps.append({'idx': i, 'type': 1, 'label': '量',
-                                'y': highs[i] + (highs[i] - lows[i]) * 0.5})
-                elif volumes[i] <= min(vw) * 0.5 and volumes[i] > 0:
-                    kps.append({'idx': i, 'type': 1, 'label': '量',
-                                'y': highs[i] + (highs[i] - lows[i]) * 0.5})
-            ph = max(highs[i - 10:i])
-            if closes[i] > ph and closes[i] > opens[i]:
-                kps.append({'idx': i, 'type': 2, 'label': '突', 'y': highs[i]})
-            if i >= 1 and closes[i] > opens[i] and closes[i - 1] < opens[i - 1] \
-                    and closes[i] > opens[i - 1] and opens[i] < closes[i - 1]:
-                kps.append({'idx': i, 'type': 2, 'label': '反', 'y': lows[i]})
+    kps = _find_breakthrough_points(closes, highs, lows, volumes,
+                                    opens=opens, detect_reversal=True)
+    # 兼容旧字段格式（type字段用于SVG渲染）
+    for kp in kps:
+        kp['type'] = 1 if kp['label'] in ('前高', '前低', '量', '放↑', '放↓', '缩', '↯') else 2
     return kps
 
 
