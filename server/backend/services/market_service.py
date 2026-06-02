@@ -147,8 +147,10 @@ def get_momentum_data():
 # 5. 板块 K 线关键点 SVG 图
 # =====================================================
 
-def get_sector_chart(name):
+def get_sector_chart(name, board_type='industry'):
     """生成板块 60 日 K 线关键点 SVG 图。
+
+    board_type: 'industry'（行业板块）或 'concept'（概念板块）
 
     返回 (svg_path, error_or_none):
         - svg_path: SVG 文件绝对路径（成功时）
@@ -157,7 +159,8 @@ def get_sector_chart(name):
     if not name:
         return None, 'missing name param'
 
-    svg_file = os.path.join(REVIEW_CHARTS_DIR, f'sector_{name}.svg')
+    prefix = 'concept_' if board_type == 'concept' else ''
+    svg_file = os.path.join(REVIEW_CHARTS_DIR, f'{prefix}sector_{name}.svg')
 
     # 检查缓存（交易时间10分钟，非交易时间1小时）
     now = datetime.now()
@@ -173,31 +176,45 @@ def get_sector_chart(name):
 
     # 生成板块关键点图
     try:
-        import akshare as ak
-
-        # 获取 60 日 K 线
-        now = datetime.now()
-        start_d = now - timedelta(days=90)
-        start_date = start_d.strftime('%Y%m%d')
-        end_date = now.strftime('%Y%m%d')
-        df = ak.stock_board_industry_index_ths(
-            symbol=name, start_date=start_date, end_date=end_date
-        )
-
-        if df is None or len(df) < 10:
-            return None, 'insufficient data'
-
-        # 解析数据
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                'day': str(row['日期']),
-                'open': float(row['开盘价']),
-                'high': float(row['最高价']),
-                'low': float(row['最低价']),
-                'close': float(row['收盘价']),
-                'volume': float(row['成交量']),
-            })
+        if board_type == 'concept':
+            # 从 sector_daily.json 读取概念板块K线数据
+            from backend.core.data_layer import get_sector_daily
+            sd = get_sector_daily()
+            concepts = sd.get('concepts', {})
+            klines = concepts.get(name, [])
+            if not klines or len(klines) < 10:
+                return None, 'insufficient data'
+            data = []
+            for k in klines:
+                data.append({
+                    'day': str(k['date']),
+                    'open': float(k['open']),
+                    'high': float(k['high']),
+                    'low': float(k['low']),
+                    'close': float(k['close']),
+                    'volume': float(k['volume']),
+                })
+        else:
+            import akshare as ak
+            now = datetime.now()
+            start_d = now - timedelta(days=90)
+            start_date = start_d.strftime('%Y%m%d')
+            end_date = now.strftime('%Y%m%d')
+            df = ak.stock_board_industry_index_ths(
+                symbol=name, start_date=start_date, end_date=end_date
+            )
+            if df is None or len(df) < 10:
+                return None, 'insufficient data'
+            data = []
+            for _, row in df.iterrows():
+                data.append({
+                    'day': str(row['日期']),
+                    'open': float(row['开盘价']),
+                    'high': float(row['最高价']),
+                    'low': float(row['最低价']),
+                    'close': float(row['收盘价']),
+                    'volume': float(row['成交量']),
+                })
 
         # -------- 关键点识别 --------
         closes = [k['close'] for k in data]

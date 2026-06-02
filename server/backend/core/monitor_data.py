@@ -1047,6 +1047,37 @@ def get_market_leaders():
     return result
 
 
+def get_top_concept_sectors_with_5d():
+    """
+    获取概念板块实时排行
+    数据源：stock_board_change_em() 东方财富实时涨跌幅（0.28s）
+    纯排行，不做任何名称匹配/结构补充，用于盯盘板块监测概念Tab
+    """
+    import akshare as ak
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    try:
+        df = ak.stock_board_change_em()
+        results = []
+        seen = set()
+        for _, row in df.iterrows():
+            name = str(row['板块名称']).strip()
+            if name in seen:
+                continue
+            seen.add(name)
+            chg_str = str(row['涨跌幅']).strip()
+            try:
+                chg = float(chg_str)
+            except (ValueError, TypeError):
+                chg = 0
+            results.append({'name': name, 'chg': round(chg, 2)})
+        results.sort(key=lambda x: x['chg'], reverse=True)
+        return {'today_top5': results[:10], 'chg20d_top10': []}
+    except Exception:
+        return {'today_top5': [], 'chg20d_top10': []}
+
+
 if __name__ == '__main__':
     print("=== 测试数据源 ===\n")
     

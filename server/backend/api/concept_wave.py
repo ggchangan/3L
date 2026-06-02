@@ -79,8 +79,8 @@ def _make_response(handler, path):
                 related_stocks.append(sinfo.get('name', scode))
                 related_codes.append(scode)
 
-        # ★ 核心筛选：只展示有自选股关联的概念，"波谷组"=真正的"重点关注"
-        if not related_stocks:
+        # ★ 核心筛选：自选股关联>=6只才视为重点关注的概念
+        if len(related_stocks) < 6:
             continue
 
         # 近5日涨跌
@@ -183,6 +183,25 @@ def _make_response(handler, path):
         'new_this_week': 0,
     }
 
+    # 未追踪股票（所在概念自选股<6只，未纳入波谷追踪）
+    untracked_stocks = []
+    untracked_concepts = []
+    for code, cinfo in concept_list.items():
+        name = cinfo.get('name', '')
+        klines = concepts_kline.get(name)
+        if not klines or len(klines) < 20:
+            continue
+        related_stocks = []
+        for scode, sinfo in stock_concept_map.items():
+            if code in sinfo.get('concept_codes', []) and scode in watchlist_codes:
+                related_stocks.append(sinfo.get('name', scode))
+        if 1 <= len(related_stocks) <= 5:
+            untracked_concepts.append({'name': name, 'stock_count': len(related_stocks), 'stocks': related_stocks})
+            for sname in related_stocks:
+                if sname not in untracked_stocks:
+                    untracked_stocks.append(sname)
+    untracked_concepts.sort(key=lambda x: -x['stock_count'])
+
     # 告警
     alerts = [
         {'code': r['code'], 'name': r['name'], 'vl_score': r['vl_score'],
@@ -203,6 +222,8 @@ def _make_response(handler, path):
         'alerts': alerts,
         'new_hot': [],
         'index_klines': index_klines[-60:] if len(index_klines) >= 60 else index_klines,
+        'untracked_stocks': untracked_stocks,
+        'untracked_concepts': untracked_concepts[:20],
     }
 
     handler.send_json(response)

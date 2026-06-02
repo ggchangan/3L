@@ -240,6 +240,53 @@ export default function LeaderMonitor() {
               )}
             </div>
           )}
+
+          {/* 区块3: 概念板块异动 */}
+          {data.concept_anomalies && (
+            <div className="info-block" style={{ marginTop: 4 }}>
+              <div className="block-title-sm">📦 概念板块异动</div>
+              {data.concept_anomalies.surge && data.concept_anomalies.surge.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, color: '#4ecdc4', marginBottom: 2 }}>🚀 关注概念·领涨 (&gt;3%)</div>
+                  <table className="leader-table" style={{ fontSize: 11 }}>
+                    <thead>
+                      <tr><th>概念</th><th>涨幅</th></tr>
+                    </thead>
+                    <tbody>
+                      {data.concept_anomalies.surge.map((item, i) => (
+                        <tr key={i}>
+                          <td style={{ fontWeight: 'bold' }}>{item.name}</td>
+                          <td className="up">+{item.chg}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {data.concept_anomalies.plunge && data.concept_anomalies.plunge.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, color: '#ff6b6b', marginBottom: 2 }}>⚠️ 关注概念·领跌 (&lt;-3%)</div>
+                  <table className="leader-table" style={{ fontSize: 11 }}>
+                    <thead>
+                      <tr><th>概念</th><th>涨幅</th></tr>
+                    </thead>
+                    <tbody>
+                      {data.concept_anomalies.plunge.map((item, i) => (
+                        <tr key={i}>
+                          <td style={{ fontWeight: 'bold' }}>{item.name}</td>
+                          <td className="down">{item.chg}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {(!data.concept_anomalies.surge || data.concept_anomalies.surge.length === 0) &&
+               (!data.concept_anomalies.plunge || data.concept_anomalies.plunge.length === 0) && (
+                <div className="empty" style={{ fontSize: 11 }}>关注概念暂无异常</div>
+              )}
+            </div>
+          )}
         </>
       )}
     </>

@@ -120,6 +120,8 @@ interface WaveData {
   alerts: AlertItem[]
   new_hot: NewHotItem[]
   index_klines: KLineData[]
+  untracked_stocks?: string[]
+  untracked_concepts?: { name: string; stock_count: number; stocks: string[] }[]
 }
 
 const STAGE_PROB: Record<string, string> = {
@@ -919,6 +921,39 @@ export default function ConceptWaveTracking() {
                     <span className="cw-scan-add">+ 添加追踪</span>
                   </div>
                 ))}
+              </>
+            )}
+
+            {/* Untracked stocks */}
+            {data.untracked_concepts && data.untracked_concepts.length > 0 && (
+              <>
+                <div className="cw-section-title">
+                  🏷️ 未追踪概念 <span className="cw-sc">· 自选股关联数不足</span>
+                </div>
+                <div style={{ padding: '4px 12px', fontSize: 11, color: '#888', marginBottom: 4 }}>
+                  以下概念关联自选股数量不足6只，未纳入波谷追踪。
+                  如想追踪，可在龙头观测手动添加。
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '0 12px 12px' }}>
+                  {data.untracked_concepts.slice(0, 15).map((uc, i) => (
+                    <div key={i} style={{
+                      background: '#1a1a2a', borderRadius: 4, padding: '3px 8px', fontSize: 10,
+                      border: '1px solid #2a2a4a',
+                    }}>
+                      {uc.name} <span style={{ color: '#666' }}>({uc.stock_count}只)</span>
+                    </div>
+                  ))}
+                  {data.untracked_concepts.length > 15 && (
+                    <div style={{ fontSize: 10, color: '#555', padding: '3px 4px' }}>
+                      +{data.untracked_concepts.length - 15}个
+                    </div>
+                  )}
+                </div>
+                {data.untracked_stocks && data.untracked_stocks.length > 0 && (
+                  <div style={{ padding: '0 12px 12px', fontSize: 10, color: '#666' }}>
+                    涉及未追踪股票: {data.untracked_stocks.join('、')}
+                  </div>
+                )}
               </>
             )}
 

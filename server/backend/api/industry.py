@@ -32,11 +32,14 @@ def _handle_industry_content(h, path):
 
 
 def _handle_sector_chart(h, path):
-    name = parse_query(path).get('name', [None])[0]
+    from urllib.parse import parse_qs, urlparse
+    qs = parse_qs(urlparse(path).query)
+    name = qs.get('name', [None])[0]
+    board_type = qs.get('type', ['industry'])[0]  # industry | concept
     if not name:
         h.send_json({'error': 'missing name param'})
         return
-    svg_path, err = get_sector_chart(name)
+    svg_path, err = get_sector_chart(name, board_type)
     if err:
         h.send_json({'error': err})
         return
