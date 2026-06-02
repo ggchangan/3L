@@ -134,7 +134,24 @@ def detect_supply_exhaustion(klines: List[Dict], idx: int = -1) -> SignalResult:
     scores['range_narrow'] = range_score
     total += range_score * 0.30
 
-    confidence = total
+    # ── 持续性加分：衰竭是一个过程，连续多天衰减→更可信 ──
+    # 检查前3根K线，每根也符合缩量+窄幅特征的，加持续分
+    sustain_count = 0
+    for bi in range(max(0, end-3), end):
+        bk = data[bi]
+        bvr = calc_volume_ratio(data, bi, 20)
+        b_range = abs(bk['high'] - bk['low'])
+        avg_range = sum(abs(data[j]['high'] - data[j]['low'])
+                       for j in range(max(0, bi-10), bi)) / min(bi, 10) if bi >= 10 else b_range
+        # 前一根也满足：缩量(量比<0.85) 且 振幅收窄(振幅小于平均)
+        if bvr < 0.85 and avg_range > 0 and b_range < avg_range * 0.85:
+            sustain_count += 1
+
+    sustain_bonus = min(sustain_count * 8, 20)  # 最多加20分
+    scores['sustain'] = sustain_bonus
+    total += sustain_bonus
+
+    confidence = min(total, 85)  # 封顶85分，衰竭永远不百分百确定
     triggered = confidence >= CONFIDENCE_PASS
 
     detail_parts = []
