@@ -111,17 +111,31 @@ def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stag
     opens_arr = opens or closes
 
     for i in range(10, n):
-        # ── 前高（20日窗口） ──
-        if highs[i] == max(highs[max(0, i - 20):i + 1]) and i > 0:
-            if i - _last.get('前高', -99) >= 3:
-                kps.append({'idx': i, 'label': '前高', 'y': highs[i]})
-                _last['前高'] = i
+        # ── 前高（波峰检测：比前后各5根高才算真前高） ──
+        if i >= 5 and i < n - 5:
+            if highs[i] > max(highs[i - 5:i]) and highs[i] >= max(highs[i + 1:i + 6]):
+                if i - _last.get('前高', -99) >= 3:
+                    kps.append({'idx': i, 'label': '前高', 'y': highs[i]})
+                    _last['前高'] = i
+        elif i >= n - 5:
+            # 末尾5根：退回到后向窗口
+            if highs[i] == max(highs[max(0, i - 10):i + 1]):
+                if i - _last.get('前高', -99) >= 3:
+                    kps.append({'idx': i, 'label': '前高', 'y': highs[i]})
+                    _last['前高'] = i
 
-        # ── 前低（20日窗口） ──
-        if lows[i] == min(lows[max(0, i - 20):i + 1]) and i > 0:
-            if i - _last.get('前低', -99) >= 3:
-                kps.append({'idx': i, 'label': '前低', 'y': lows[i]})
-                _last['前低'] = i
+        # ── 前低（波谷检测：比前后各5根低才算真前低） ──
+        if i >= 5 and i < n - 5:
+            if lows[i] < min(lows[i - 5:i]) and lows[i] <= min(lows[i + 1:i + 6]):
+                if i - _last.get('前低', -99) >= 3:
+                    kps.append({'idx': i, 'label': '前低', 'y': lows[i]})
+                    _last['前低'] = i
+        elif i >= n - 5:
+            # 末尾5根：退回到后向窗口
+            if lows[i] == min(lows[max(0, i - 10):i + 1]):
+                if i - _last.get('前低', -99) >= 3:
+                    kps.append({'idx': i, 'label': '前低', 'y': lows[i]})
+                    _last['前低'] = i
 
         # ── 量能信号 ──
         if i >= 15:
