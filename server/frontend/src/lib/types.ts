@@ -150,6 +150,7 @@ export interface BuySignalItem {
   }>
   fusion_type?: string
   fusion_reason?: string
+  wave_position?: string
 }
 
 /** 止损预警API返回类型 */

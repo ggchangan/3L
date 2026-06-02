@@ -173,6 +173,7 @@ def get_holdings_with_prices():
             item['fusion_type'] = card.get('fusion_type', '')
             item['fusion_reason'] = card.get('fusion_reason', '')
             item['triggered_signals'] = card.get('triggered_signals', [])
+            item['wave_position'] = card.get('wave_position', '')
         except Exception:
             pass
 

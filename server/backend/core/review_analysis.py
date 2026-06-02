@@ -112,6 +112,7 @@ def generate_holdings_review(holdings, stocks, buy_signals,
             'triggered_signals': card.get('triggered_signals', []),
             'fusion_type': card.get('fusion_type', ''),
             'fusion_reason': card.get('fusion_reason', ''),
+            'wave_position': card.get('wave_position', ''),
         })
 
     result.sort(key=lambda x: struct_priority.get(x['structure'], 3))
@@ -206,6 +207,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             "triggered_signals": card.get('triggered_signals', []),
             "fusion_type": card.get('fusion_type', ''),
             "fusion_reason": card.get('fusion_reason', ''),
+            "wave_position": card.get('wave_position', ''),
         })
 
     # 按分数降序

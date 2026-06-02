@@ -46,6 +46,7 @@ from backend.core.trend_trading import (
 )
 from backend.core.signal_detector.fusion import fusion_judge
 from backend.core.signal_detector.sell_point_detection import detect_sell_point
+from backend.core.structure_wave import judge_structure_wave
 
 
 # ── 手动趋势股（不缓存，文件很小直接读）──
@@ -445,6 +446,16 @@ def get_stock_card(code, date_str, market_position='波中',
         except Exception:
             pass
 
+    # 5e. 个股波峰波谷位置（辅助字段，波谷可用于买点确认）
+    wave_position = ''
+    try:
+        wr = judge_structure_wave(klines, structure=struct_info.get('structure', ''))
+        wave_position = wr.get('position', '')
+        wave_stage = wr.get('stage', '')
+    except Exception:
+        wave_position = ''
+        wave_stage = ''
+
     # 6. 止损
     sl_result = _calc_stop_loss(klines, idx)
     if sl_result and sl_result[0]:
@@ -496,6 +507,7 @@ def get_stock_card(code, date_str, market_position='波中',
         'triggered_signals': triggered_signals,
         'fusion_type': fusion_type,
         'fusion_reason': fusion_reason,
+        'wave_position': wave_position,
         'conclusion': '',
         'tags': [],
     }
@@ -543,6 +555,7 @@ def _empty_card(code, name, sector, direction, reason):
         'triggered_signals': [],
         'fusion_type': '',
         'fusion_reason': '',
+        'wave_position': '',
         'conclusion': reason,
         'tags': [],
     }
