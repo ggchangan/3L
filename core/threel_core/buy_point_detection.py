@@ -457,9 +457,12 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
     ema_arr = get_ema_arrangement(closes_60)
     
     # ====== 支撑/阻力（提前计算，供突破确认用） ======
-    # 关键阻力位：最近在上的波峰（前高），而非简单的前10日最高
+    # 波峰阻力（用于上涨趋势的突破确认）：最近在上的波峰（前高），比前后5根都高
     resistance = _find_resistance_levels(kls, idx)
-    is_breakout = resistance and close > resistance  # 突破真前高
+    # 区间高点阻力（用于区间震荡的突破确认）：最近15根的区间上沿
+    zone_resistance = max(highs[-15:]) if len(highs) >= 15 else None
+    # 默认用波峰阻力（上涨趋势场景），区间震荡场景在分支内单独判断
+    is_breakout = resistance and close > resistance
     
     # ====== 突破后3天确认机制 ======
     # 突破日买入，但结构改变需要3天确认
@@ -622,6 +625,7 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
         }
 
     elif structure == '区间震荡':
+        is_range_breakout = False
         if stage == '区间底部' and is_shrink:
             # 区间底部缩量企稳 → 中继买点
             buy_type = '中继买点'
@@ -634,13 +638,16 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
                 'shrink': True,
             }
         
-        if stage == '区间顶部' and is_breakout:
-            # 多维评分判定突破有效性
-            is_breakout_valid, breakout_score, breakout_detail = _breakout_score(
-                close, prev_close, resistance, vol_ratio, body_ratio, high=high, low=low
-            )
+        if stage == '区间顶部':
+            # 区间震荡的突破阻力位 = 区间高点（max(highs[-15:])），不是波峰
+            is_range_breakout = zone_resistance and close > zone_resistance
+            if is_range_breakout:
+                # 多维评分判定突破有效性
+                is_breakout_valid, breakout_score, breakout_detail = _breakout_score(
+                    close, prev_close, zone_resistance, vol_ratio, body_ratio, high=high, low=low
+                )
 
-        if stage == '区间顶部' and is_breakout and is_breakout_valid:
+        if stage == '区间顶部' and is_range_breakout and is_breakout_valid:
             # 区顶放量突破 → 突破买点
             buy_type = '突破买点'
             score = 4
@@ -649,7 +656,7 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
                 'structure': structure,
                 'stage': stage,
                 'vol_ratio': round(vol_ratio, 2),
-                'breakout_pct': round((close - resistance) / resistance * 100, 2) if resistance else 0,
+                'breakout_pct': round((close - zone_resistance) / zone_resistance * 100, 2) if zone_resistance else 0,
                 'breakout_score': breakout_score,
                 'breakout_detail': breakout_detail,
             }
