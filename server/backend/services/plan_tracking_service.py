@@ -456,6 +456,48 @@ def _group_stats(rows: list, group_field: str = None) -> dict:
         }
 
 
+def _compute_daily_stats(all_plans: list) -> list:
+    """按日期聚合统计 — 用于算法效果追踪折线图"""
+    from collections import defaultdict
+    daily = defaultdict(lambda: {'total': 0, 'success': 0, 'failure': 0, 'flat': 0,
+                                 'changes': [], 'gain_sum': 0.0, 'loss_sum': 0.0})
+    for p in all_plans:
+        d = p.get('date', '')
+        r = p.get('result', '')
+        chg = p.get('change_pct')
+        if r not in ('success', 'failure', 'flat'):
+            continue
+        daily[d]['total'] += 1
+        daily[d][r] += 1
+        if chg is not None:
+            daily[d]['changes'].append(chg)
+            if r == 'success':
+                daily[d]['gain_sum'] += chg
+            elif r == 'failure':
+                daily[d]['loss_sum'] += chg
+
+    result = []
+    for date in sorted(daily.keys()):
+        st = daily[date]
+        valid = st['success'] + st['failure']
+        rate = round(st['success'] / valid * 100, 1) if valid > 0 else 0
+        avg_chg = round(sum(st['changes']) / len(st['changes']), 2) if st['changes'] else 0
+        avg_gain = round(st['gain_sum'] / st['success'], 2) if st['success'] > 0 else 0
+        avg_loss = round(st['loss_sum'] / st['failure'], 2) if st['failure'] > 0 else 0
+        result.append({
+            'date': date,
+            'total': st['total'],
+            'success': st['success'],
+            'failure': st['failure'],
+            'flat': st['flat'],
+            'success_rate': rate,
+            'avg_change': avg_chg,
+            'avg_gain': avg_gain,
+            'avg_loss': avg_loss,
+        })
+    return result
+
+
 def get_tracking(db_path: str = None, start_date: str = None, end_date: str = None,
                  force_db_init: bool = True) -> dict:
     """获取完整的追踪数据（含多维统计）
@@ -493,6 +535,9 @@ def get_tracking(db_path: str = None, start_date: str = None, end_date: str = No
 
     suggestions = generate_suggestions(all_plans, summary, by_buy_point, by_structure, by_is_main)
 
+    # 每日聚合统计 — 用于算法效果追踪折线图
+    daily_stats = _compute_daily_stats(all_plans)
+
     return {
         'plans': all_plans,
         'summary': summary,
@@ -501,6 +546,7 @@ def get_tracking(db_path: str = None, start_date: str = None, end_date: str = No
         'by_is_main': by_is_main,
         'by_source': by_source,
         'suggestions': suggestions,
+        'daily_stats': daily_stats,
         'last_updated': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
     }
 

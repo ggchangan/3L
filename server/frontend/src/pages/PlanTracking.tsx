@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
+import DailyTrendChart from '../components/DailyTrendChart'
 import './PlanTracking.css'
 
 interface PlanEntry {
@@ -262,6 +263,9 @@ export default function PlanTracking() {
                   <div className="stat-sub">最差 {s.worst_loss}%</div>
                 </div>
               </div>
+
+              {/* 📈 算法效果趋势 */}
+              <DailyTrendChart data={data.daily_stats || []} />
 
               {/* 📋 系统建议 */}
               {suggestions.length > 0 && (
