@@ -473,38 +473,71 @@ def get_leader_dashboard():
     switch_events.sort(key=lambda x: x['diff'], reverse=True)
     anomalies['switching'] = switch_events[:5]
 
-    # 7. 概念板块异动（涨跌幅 >3% 的领涨/领跌概念板块）
+    # 7. 概念板块异动 — 只显示关注的66个概念（自选股>=6只）
     concept_anomalies = {'surge': [], 'plunge': []}
     try:
-        from backend.core.monitor_data import get_top_concept_sectors_with_5d
-        concept_data = get_top_concept_sectors_with_5d()
-        ct = concept_data.get('today_top5', [])
-        for c in ct:
-            chg = c.get('chg', 0) or 0
-            if chg > 3:
-                concept_anomalies['surge'].append({
-                    'name': c['name'],
-                    'chg': round(chg, 2),
-                    'structure': c.get('structure', ''),
-                    'phase': c.get('phase', ''),
-                })
-        # 概念板块底部：从实时数据里拿跌幅最大的（不做THS名称过滤）
+        # 计算关注的概念列表（借鉴波谷追踪的筛选逻辑）
+        from backend.core.data_layer import get_stock_concept_map, get_concept_list
+        from backend.core.data_layer import get_watchlist
+        watchlist_data = get_watchlist()
+        watchlist_codes = set(s.get('code', '') for s in watchlist_data)
+        stock_concept = get_stock_concept_map()
+        concept_list = get_concept_list()
+        # 统计每个概念的自选股数量
+        concept_counts = {}
+        for code in watchlist_codes:
+            code_str = str(code)
+            if code_str in stock_concept:
+                for c in stock_concept[code_str].get('concept_codes', []):
+                    concept_counts[c] = concept_counts.get(c, 0) + 1
+        # >=6只的视为关注概念
+        tracked_codes = {c for c, cnt in concept_counts.items() if cnt >= 6}
+        tracked_names = {concept_list.get(c, {}).get('name', c) for c in tracked_codes}
+        # 读取手动添加的追踪概念
+        from backend.config import WATCHED_INDUSTRIES_PATH
+        watched_concepts_path = os.path.join(os.path.dirname(WATCHED_INDUSTRIES_PATH), 'watched_concepts.json')
+        if os.path.isfile(watched_concepts_path):
+            with open(watched_concepts_path) as f:
+                wc = json.load(f)
+            for w in wc.get('concepts', []):
+                if isinstance(w, str):
+                    tracked_names.add(w)
+
+        # 从 change_em 取实时数据，过滤出关注概念的异动
         import akshare as ak
         import warnings
         warnings.filterwarnings('ignore')
         df = ak.stock_board_change_em()
-        bottom = []
+        em_data = {}  # THS名 → chg
         for _, row in df.iterrows():
-            name = str(row['板块名称']).strip()
+            em_name = str(row['板块名称']).strip()
             chg_str = str(row['涨跌幅']).strip()
             try:
                 chg = float(chg_str)
             except (ValueError, TypeError):
                 continue
-            if chg < -3:
-                bottom.append({'name': name, 'chg': round(chg, 2)})
-        bottom.sort(key=lambda x: x['chg'])
-        concept_anomalies['plunge'] = bottom[:5]
+            em_data[em_name] = chg
+
+        # 按关注概念匹配（同花顺名 → 直接匹配 / 去掉"概念"匹配）
+        tracked_real = {}
+        for tn in tracked_names:
+            if tn in em_data:
+                tracked_real[tn] = em_data[tn]
+            else:
+                # 去掉"概念"试试
+                simple = tn.replace('概念', '')
+                if simple in em_data:
+                    tracked_real[tn] = em_data[simple]
+
+        # 领涨
+        surge = [(n, c) for n, c in tracked_real.items() if c > 3]
+        surge.sort(key=lambda x: x[1], reverse=True)
+        concept_anomalies['surge'] = [{'name': n, 'chg': round(c, 2)} for n, c in surge[:5]]
+
+        # 领跌
+        plunge = [(n, c) for n, c in tracked_real.items() if c < -3]
+        plunge.sort(key=lambda x: x[1])
+        concept_anomalies['plunge'] = [{'name': n, 'chg': round(c, 2)} for n, c in plunge[:5]]
     except Exception:
         pass
 
