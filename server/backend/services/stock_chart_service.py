@@ -91,17 +91,20 @@ def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stag
 
     统一函数，个股/板块/大盘共用。如有差异需求通过参数分支处理。
 
-    2026-06-02 优化：
-    - 前高前低窗口从10→20（减少噪音）
-    - 放量/缩量区分方向
-    - 结合stage判断放量滞涨
-    - 突破点结合EMA20位置过滤
+    2026-06-02 修复：
+    - 前高/前低/突破/反转各自独立去重（互不干扰）
+    - 去重阈值 >= 3（允许3根K线间隔）
+    - "突" 仅在结构为 区间震荡 时标记（上升趋势不叫突破）
+    - 板块图/大盘图也必须传入 structure
 
     Args:
         detect_reversal: 是否检测'反'(反转)标记（大盘/板块需要，个股不需要）
     """
     n = len(closes)
     kps = []
+
+    # 每种类型独立去重列表
+    _last = {'前高': -99, '前低': -99, '突': -99, '反': -99}
 
     # EMA20 用于突破点位置校验
     e20 = _ema(closes, 20) if len(closes) >= 20 else [None] * n
@@ -110,14 +113,15 @@ def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stag
     for i in range(10, n):
         # ── 前高（20日窗口） ──
         if highs[i] == max(highs[max(0, i - 20):i + 1]) and i > 0:
-            # 仅当这个前高不是连续标记（避免重复）
-            if not kps or abs(kps[-1]['idx'] - i) > 3:
+            if i - _last.get('前高', -99) >= 3:
                 kps.append({'idx': i, 'label': '前高', 'y': highs[i]})
+                _last['前高'] = i
 
         # ── 前低（20日窗口） ──
         if lows[i] == min(lows[max(0, i - 20):i + 1]) and i > 0:
-            if not kps or abs(kps[-1]['idx'] - i) > 3:
+            if i - _last.get('前低', -99) >= 3:
                 kps.append({'idx': i, 'label': '前低', 'y': lows[i]})
+                _last['前低'] = i
 
         # ── 量能信号 ──
         if i >= 15:
@@ -143,22 +147,33 @@ def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stag
                 elif cur_v <= min(vw10) * 0.5 and cur_v > 0:
                     kps.append({'idx': i, 'label': '缩', 'y': highs[i] + (highs[i] - lows[i]) * 0.5})
 
-        # ── 突破 ──
-        if i >= 12:
-            ph = max(highs[i - 12:i])
-            # 突破前12日最高 + 收盘在偏高位置 + EMA20上行过滤
-            if (closes[i] > ph and
-                closes[i] > closes[i - 1] and
-                closes[i] > highs[i] - (highs[i] - lows[i]) * 0.3):
-                # EMA20在当日有值 + 位置合理
-                if e20[i] and closes[i] > e20[i]:
-                    kps.append({'idx': i, 'label': '突', 'y': highs[i]})
+        # ── 突破 — 仅区间震荡的真突破（上升趋势/下跌反弹不标"突"） ──
+        if structure == '区间震荡' and i >= 15:
+            # 检查前12根K线是否真震荡（收盘价窄幅整理才算，单边涨不算）
+            win_closes = closes[i - 12:i]
+            c_lo = min(win_closes)
+            c_hi = max(win_closes)
+            if c_lo > 0:
+                c_range = (c_hi - c_lo) / c_lo * 100
+                # 12根K线收盘价范围≤8%才算真震荡（超过说明在趋势中）
+                if c_range <= 8:
+                    ph = max(highs[i - 12:i])
+                    # 突破前12日最高 + 收盘在偏高位置 + EMA20上行过滤
+                    if (closes[i] > ph and
+                        closes[i] > closes[i - 1] and
+                        closes[i] > highs[i] - (highs[i] - lows[i]) * 0.3):
+                        if e20[i] and closes[i] > e20[i]:
+                            if i - _last.get('突', -99) >= 3:
+                                kps.append({'idx': i, 'label': '突', 'y': highs[i]})
+                                _last['突'] = i
 
         # ── 反转（仅大盘/板块使用） ──
         if detect_reversal and i >= 1:
             if (closes[i] > opens_arr[i] and closes[i - 1] < opens_arr[i - 1]
                     and closes[i] > opens_arr[i - 1] and opens_arr[i] < closes[i - 1]):
-                kps.append({'idx': i, 'label': '反', 'y': lows[i]})
+                if i - _last.get('反', -99) >= 3:
+                    kps.append({'idx': i, 'label': '反', 'y': lows[i]})
+                    _last['反'] = i
 
     return kps
 
@@ -774,7 +789,14 @@ def _find_index_keypoints(data):
     lows = [k['low'] for k in data]
     opens = [k['open'] for k in data]
     volumes = [k['volume'] for k in data]
+    # 计算结构（大盘关键点图也要基于结构判定）
+    from backend.core.ema_utils import get_structure
+    try:
+        idx_structure = get_structure(closes)
+    except Exception:
+        idx_structure = '上涨趋势'
     kps = _find_breakthrough_points(closes, highs, lows, volumes,
+                                    structure=idx_structure,
                                     opens=opens, detect_reversal=True)
     # 兼容旧字段格式（type字段用于SVG渲染）
     for kp in kps:

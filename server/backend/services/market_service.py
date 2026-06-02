@@ -209,8 +209,15 @@ def get_sector_chart(name):
 
         # 关键点识别 — 委托统一函数（与个股/大盘一致）
         from backend.services.stock_chart_service import _find_breakthrough_points
+        from backend.core.ema_utils import get_structure
+        sector_structure = '上涨趋势'
+        try:
+            sector_structure = get_structure(closes) or '上涨趋势'
+        except Exception:
+            pass
         kps_raw = _find_breakthrough_points(
             closes, highs, lows, volumes,
+            structure=sector_structure,
             opens=opens, detect_reversal=True
         )
         # 补充旧格式字段（type）
