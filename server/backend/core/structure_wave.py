@@ -150,11 +150,13 @@ def judge_structure_wave(klines: List[Dict], structure: Optional[str] = None):
         # --- 波峰（需求透支型） ---
         conds_p = {}
         recent_gain_5d = sum(g for g in gains_5d)
-        conds_p['有上涨基础'] = recent_gain_5d > 3
-        conds_p['加速+实体收窄'] = yang_count_5d >= 3 and avg_gain_5d > 1.0 and body_pct < 0.8
-        conds_p['放量滞涨'] = vol_ratio > 1.5 and body_pct < 0.8 and abs(gain_prev) < 1.5
-        conds_p['缩量滞涨'] = bias5 > 3 and vol_ratio < 0.6 and body_pct < 0.5
-        conds_p['长上影'] = us_pct > 2.0 and gain_prev < 1.0
+        conds_p['有上涨基础'] = recent_gain_5d > 2  # 放宽前置：3→2
+        conds_p['加速高潮'] = yang_count_5d >= 3 and avg_gain_5d > 1.5  # 去掉body_pct限制
+        conds_p['放量滞涨'] = vol_ratio > 1.5 and body_pct < 1.0  # 放宽body_pct
+        conds_p['缩量滞涨'] = bias5 > 3 and vol_ratio < 0.7  # 放宽缩量和body条件
+        conds_p['长上影'] = us_pct > 1.5  # 放宽上影线到1.5%
+        conds_p['连涨后首阴'] = (yang_count_5d >= 3 and gain_prev < -1.0 and vol_ratio > 0.8)  # 新增：连涨后第一根放量阴线
+        conds_p['放量下跌'] = gain_prev < -1.5 and vol_ratio > 1.3  # 新增：明显的放量下跌
         pk_score = sum(1 for v in conds_p.values() if v) if conds_p.get('有上涨基础', False) else 0
         peak_conds = conds_p
 
@@ -220,18 +222,15 @@ def judge_structure_wave(klines: List[Dict], structure: Optional[str] = None):
         range_size = (recent_max - recent_min) / recent_min * 100 if recent_min > 0 else 0
         cur_vs_max = (cur['close'] - recent_min) / (recent_max - recent_min) * 100 if recent_max > recent_min else 50
 
-        # 波峰（区间顶+放量滞涨）
+        # 波峰（区间顶+确认）
         conds_p = {}
         conds_p['近区间顶'] = cur_vs_max > 80
+        can_peak = conds_p['近区间顶']
         conds_p['放量滞涨'] = vol_ratio > 1.3 and body_pct < 1.0
         conds_p['上影线'] = us_pct > 1.5
-        conds_p['bias5转负'] = False
-        if bias5 <= 0:
-            conds_p['bias5转负'] = True
-        pk_score = sum(1 for v in conds_p.values() if v) if any([
-            conds_p['近区间顶'], conds_p['放量滞涨']
-        ]) else 0
-        peak_conds = conds_p
+        conds_p['放量下跌'] = gain_prev < -1.5 and vol_ratio > 1.2
+        conds_p['bias5转负'] = bias5 <= 0
+        pk_score = sum(1 for v in conds_p.values() if v) if can_peak else 0
 
         # 波谷（区间底+缩量企稳）
         conds_v = {}
