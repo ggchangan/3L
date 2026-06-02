@@ -558,7 +558,7 @@ def compute_review_real_time(date_str=None):
     )
     from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
     from backend.core.scan_buy_signals import get_main_lines
-    from backend.core.data_layer import get_watchlist, get_all_stocks, get_index_klines
+    from backend.core.data_layer import get_watchlist, get_all_stocks, get_index_klines, get_concept_list, get_stock_concept_map, load_sector_daily_uncached
 
     print(f"[3L复盘实时] 计算 {date_str} 复盘数据...")
 
@@ -675,10 +675,99 @@ def compute_review_real_time(date_str=None):
     }
     save_json(MAINLINES_CACHE_PATH, _mainlines_cache)
 
+    # ── 板块领涨股（为每个行业/概念板块加 leaders 字段） ──
+    try:
+        # 绕过缓存，直接读文件（get_all_stocks缓存可能为空）
+        if os.path.isfile(ALL_STOCKS_PATH):
+            with open(ALL_STOCKS_PATH) as _f:
+                _all_raw = json.load(_f)
+            _all_60d = _all_raw.get('stocks', {})
+        else:
+            _all_60d = all_stocks_60d
+
+        if os.path.isfile(INDUSTRY_MAP_PATH):
+            with open(INDUSTRY_MAP_PATH) as _f:
+                _ind_map_raw = json.load(_f)
+            _ind_to_stocks = {}
+            for _code, _info in _ind_map_raw.items():
+                _ind = _info.get('ths_industry', '')
+                if _ind:
+                    _ind_to_stocks.setdefault(_ind, []).append(_code)
+
+        _kline_index = {}
+        for _dir, _ss in _all_60d.items():
+            for _code, _kls in _ss.items():
+                _kline_index[_code] = _kls
+
+        _wl = get_watchlist()
+        _wl_list = _wl.get('stocks', _wl) if isinstance(_wl, dict) else _wl
+        _wl_codes = set(s.get('code', '') for s in _wl_list if isinstance(s, dict) and s.get('code'))
+
+        def _calc_stock_leaders(stock_codes, kline_index, wl_codes, top_n=5):
+            _candidates = []
+            for _c in stock_codes:
+                if _c not in wl_codes:
+                    continue
+                _kls = kline_index.get(_c)
+                if not _kls or len(_kls) < 5:
+                    continue
+                _close_now = _kls[-1]['close']
+                _close_1d = _kls[-2]['close'] if len(_kls) >= 2 else _close_now
+                _close_5d = _kls[-5]['close'] if len(_kls) >= 5 else _close_now
+                _chg_1d = round((_close_now - _close_1d) / _close_1d * 100, 1)
+                _chg_5d = round((_close_now - _close_5d) / _close_5d * 100, 1)
+                _name = ''
+                for _d, _ss in _all_60d.items():
+                    if _c in _ss and len(_ss[_c]) > 0:
+                        _name = _ss[_c][0].get('name', _c)
+                        break
+                _tag = '🏆领涨' if _chg_5d >= 5 else ('💪中军' if _chg_1d > 0 else '')
+                _candidates.append({
+                    'code': _c, 'name': _name or _c,
+                    'chg_1d': _chg_1d, 'chg_5d': _chg_5d, 'tag': _tag,
+                })
+            _candidates.sort(key=lambda x: -x['chg_5d'])
+            return _candidates[:top_n]
+
+        _concept_list = get_concept_list()
+
+        if mainline_data.get('all_ranked'):
+            for _entry in mainline_data['all_ranked']:
+                _sname = _entry.get('name', '')
+                _codes = _ind_to_stocks.get(_sname, [])
+                _entry['leaders'] = _calc_stock_leaders(_codes, _kline_index, _wl_codes)
+
+        _cm = mainline_data.get('concept_mainline', {})
+        if _cm.get('all_ranked'):
+            for _entry in _cm['all_ranked']:
+                _cname = _entry.get('name', '')
+                _ccode = None
+                for _cc, _ci in _concept_list.items():
+                    if _ci.get('name') == _cname:
+                        _ccode = _cc
+                        break
+                _concept_stocks = _concept_list.get(_ccode, {}).get('stocks', []) if _ccode else []
+                _entry['leaders'] = _calc_stock_leaders(_concept_stocks, _kline_index, _wl_codes)
+    except Exception as e:
+        print(f'[3L复盘] ⚠️ 板块领涨股计算失败: {e}')
+        import traceback; traceback.print_exc()
+
+    # ── 检查板块数据时效性 ──
+    _data_stale = False
+    try:
+        _sd = load_sector_daily_uncached()
+        _lu = _sd.get('last_updated', '')
+        _today_yyyymmdd = date_str.replace('-', '')
+        if _lu and _lu < _today_yyyymmdd:
+            _data_stale = True
+    except:
+        pass
+
     review = {
         'date': date_str,
         'market': {**market_cycle, 'date': date_str},
         'mainline': mainline_data,
+        'data_stale': _data_stale,
         'timing_signals': timing_signals,
         'trading_plan': trading_plan,
         'holdings': holdings,

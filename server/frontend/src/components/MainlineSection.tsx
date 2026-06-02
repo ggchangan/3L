@@ -203,6 +203,8 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
               const stageIcon = STAGE_ICONS[stage] || '•'
               const stageColor = STAGE_COLORS[stage] || '#888'
               const c = item.chg_1d ?? 0
+              const [showLeaders, setShowLeaders] = useState(false)
+              const leaders = item.leaders || []
               return (
                 <div key={item.name} style={{
                   display: 'flex', alignItems: 'center',
@@ -230,6 +232,28 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
                     <span style={{ color, fontSize: 10, fontWeight: 600 }}>
                       {emoji} {opp}
                     </span>
+                  )}
+                  {leaders.length > 0 && (
+                    <span
+                      onClick={() => setShowLeaders(v => !v)}
+                      style={{ cursor: 'pointer', color: '#888', fontSize: 10, marginLeft: 'auto' }}
+                    >📈 {showLeaders ? '收起' : '领涨'}</span>
+                  )}
+                  {showLeaders && leaders.length > 0 && (
+                    <div style={{ width: '100%', padding: '6px 0 2px 0', fontSize: 11 }}>
+                      {leaders.map((ld: any) => (
+                        <span key={ld.code} style={{
+                          display: 'inline-block', marginRight: 10, marginBottom: 3,
+                          color: ld.chg_5d >= 5 ? '#ff6b6b' : ld.chg_5d > 0 ? '#44aa44' : '#888',
+                        }}>
+                          {ld.name}
+                          <span style={{ color: '#555', fontSize: 10 }}>
+                            {' '}{ld.chg_1d > 0 ? '+' : ''}{ld.chg_1d}% / 5d{ld.chg_5d > 0 ? '+' : ''}{ld.chg_5d}%
+                          </span>
+                          {ld.tag && <span style={{ fontSize: 10, marginLeft: 2 }}>{ld.tag}</span>}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
               )
