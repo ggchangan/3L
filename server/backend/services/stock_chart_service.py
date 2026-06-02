@@ -85,30 +85,128 @@ def _ema(values, period):
     return result
 
 
-def _find_breakthrough_points(closes, highs, lows, volumes):
-    """识别关键点：突破（突）、前高前低、放量"""
+def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stage=None,
+                              opens=None, detect_reversal=False):
+    """识别关键点：突破（突）、前高前低、放量信号
+
+    统一函数，个股/板块/大盘共用。如有差异需求通过参数分支处理。
+
+    关键点类型一览（静态层，基于量价数据实时计算）：
+
+    【供需格局转换点】—— 代表供应/需求主导权切换：
+      - 前高：局部波峰，比前后各5根K线的最高都高 → 需求衰竭，供应开始主导
+      - 前低：局部波谷，比前后各5根K线的最低都低 → 供应衰竭，需求开始主导
+      - 突：真区间震荡突破（结构=区间震荡+前12根收盘价窄幅≤8%）→ 需求突破供应区
+      - 反：阴转阳反转形态 → 短期供需逆转（仅大盘/板块）
+
+    【量能辅助标注】—— 描述当日成交量行为，不构成供需转换：
+      - 放↑：放量上涨（≥1.5倍10日均量，涨幅>2%）
+      - 放↓：放量下跌（≥1.5倍10日均量，跌幅>2%）
+      - 缩：缩量（接近10日最低量50%）
+      - ↯：放量滞涨（stage=放量滞涨+量>1.2倍）
+
+    动态信号层（由 signal_detector 独立检测，通过 triggered_signals 参数传入，
+    在SVG右上角以图例框展示）：向上突破/上涨中继/向上反转/供应衰竭/
+    向下突破/向下反转/需求衰竭/下跌中继/区间震荡中继
+
+    2026-06-02 修复：
+    - 前高/前低/突破/反转各自独立去重（互不干扰）
+    - 去重阈值 >= 3（允许3根K线间隔）
+    - "突" 仅在结构为 区间震荡 时标记（上升趋势不叫突破）
+    - 板块图/大盘图也必须传入 structure
+
+    Args:
+        detect_reversal: 是否检测'反'(反转)标记（大盘/板块需要，个股不需要）
+    """
     n = len(closes)
     kps = []
-    for i in range(5, n):
-        # 前高
-        if highs[i] == max(highs[max(0, i - 10):i + 1]) and i > 0:
-            kps.append({'idx': i, 'label': '前高', 'y': highs[i]})
-        # 前低
-        if lows[i] == min(lows[max(0, i - 10):i + 1]) and i > 0:
-            kps.append({'idx': i, 'label': '前低', 'y': lows[i]})
-        # 放量 / 缩量
-        if i >= 10:
-            vw = volumes[i - 10:i]
-            if vw and max(vw) > 0:
-                if volumes[i] >= max(vw) * 1.5:
-                    kps.append({'idx': i, 'label': '量', 'y': highs[i] + (highs[i] - lows[i]) * 0.5})
-                elif volumes[i] <= min(vw) * 0.5 and volumes[i] > 0:
-                    kps.append({'idx': i, 'label': '量', 'y': highs[i] + (highs[i] - lows[i]) * 0.5})
-        # 突破
-        if i >= 10:
-            ph = max(highs[i - 10:i])
-            if closes[i] > ph and closes[i] > highs[i] - (highs[i] - lows[i]) * 0.3:
-                kps.append({'idx': i, 'label': '突', 'y': highs[i]})
+
+    # 每种类型独立去重列表
+    _last = {'前高': -99, '前低': -99, '突': -99, '反': -99}
+
+    # EMA20 用于突破点位置校验
+    e20 = _ema(closes, 20) if len(closes) >= 20 else [None] * n
+    opens_arr = opens or closes
+
+    for i in range(10, n):
+        # ── 前高（波峰检测：比前后各5根高才算真前高） ──
+        if i >= 5 and i < n - 5:
+            if highs[i] > max(highs[i - 5:i]) and highs[i] >= max(highs[i + 1:i + 6]):
+                if i - _last.get('前高', -99) >= 3:
+                    kps.append({'idx': i, 'label': '前高', 'y': highs[i]})
+                    _last['前高'] = i
+        elif i >= n - 5:
+            # 末尾5根：退回到后向窗口
+            if highs[i] == max(highs[max(0, i - 10):i + 1]):
+                if i - _last.get('前高', -99) >= 3:
+                    kps.append({'idx': i, 'label': '前高', 'y': highs[i]})
+                    _last['前高'] = i
+
+        # ── 前低（波谷检测：比前后各5根低才算真前低） ──
+        if i >= 5 and i < n - 5:
+            if lows[i] < min(lows[i - 5:i]) and lows[i] <= min(lows[i + 1:i + 6]):
+                if i - _last.get('前低', -99) >= 3:
+                    kps.append({'idx': i, 'label': '前低', 'y': lows[i]})
+                    _last['前低'] = i
+        elif i >= n - 5:
+            # 末尾5根：退回到后向窗口
+            if lows[i] == min(lows[max(0, i - 10):i + 1]):
+                if i - _last.get('前低', -99) >= 3:
+                    kps.append({'idx': i, 'label': '前低', 'y': lows[i]})
+                    _last['前低'] = i
+
+        # ── 量能信号 ──
+        if i >= 15:
+            vw10 = volumes[i - 10:i]
+            vw20 = volumes[i - 15:i]
+            if vw10 and max(vw10) > 0 and vw20 and max(vw20) > 0:
+                vol_10max = max(vw10)
+                vol_10avg = sum(vw10) / len(vw10)
+                vol_15avg = sum(vw20[-10:]) / 10
+                cur_v = volumes[i]
+                cur_gain = (closes[i] - closes[i - 1]) / closes[i - 1] * 100
+
+                # 放量滞涨（结合stage）
+                if stage == '放量滞涨' and cur_v > vol_10avg * 1.2:
+                    kps.append({'idx': i, 'label': '↯', 'y': highs[i] + (highs[i] - lows[i]) * 0.5})
+                # 放量涨
+                elif cur_v >= vol_10max * 1.5 and cur_gain > 2:
+                    kps.append({'idx': i, 'label': '放↑', 'y': highs[i] + (highs[i] - lows[i]) * 0.5})
+                # 放量跌
+                elif cur_v >= vol_10max * 1.5 and cur_gain < -2:
+                    kps.append({'idx': i, 'label': '放↓', 'y': highs[i] + (highs[i] - lows[i]) * 0.5})
+                # 缩量（接近10日最低量50%）
+                elif cur_v <= min(vw10) * 0.5 and cur_v > 0:
+                    kps.append({'idx': i, 'label': '缩', 'y': highs[i] + (highs[i] - lows[i]) * 0.5})
+
+        # ── 突破 — 仅区间震荡的真突破（上升趋势/下跌反弹不标"突"） ──
+        if structure == '区间震荡' and i >= 15:
+            # 检查前12根K线是否真震荡（收盘价窄幅整理才算，单边涨不算）
+            win_closes = closes[i - 12:i]
+            c_lo = min(win_closes)
+            c_hi = max(win_closes)
+            if c_lo > 0:
+                c_range = (c_hi - c_lo) / c_lo * 100
+                # 12根K线收盘价范围≤8%才算真震荡（超过说明在趋势中）
+                if c_range <= 8:
+                    ph = max(highs[i - 12:i])
+                    # 突破前12日最高 + 收盘在偏高位置 + EMA20上行过滤
+                    if (closes[i] > ph and
+                        closes[i] > closes[i - 1] and
+                        closes[i] > highs[i] - (highs[i] - lows[i]) * 0.3):
+                        if e20[i] and closes[i] > e20[i]:
+                            if i - _last.get('突', -99) >= 3:
+                                kps.append({'idx': i, 'label': '突', 'y': highs[i]})
+                                _last['突'] = i
+
+        # ── 反转（仅大盘/板块使用） ──
+        if detect_reversal and i >= 1:
+            if (closes[i] > opens_arr[i] and closes[i - 1] < opens_arr[i - 1]
+                    and closes[i] > opens_arr[i - 1] and opens_arr[i] < closes[i - 1]):
+                if i - _last.get('反', -99) >= 3:
+                    kps.append({'idx': i, 'label': '反', 'y': lows[i]})
+                    _last['反'] = i
+
     return kps
 
 
@@ -317,15 +415,21 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     e10 = _ema(closes, 10)
     e20 = _ema(closes, 20)
 
-    # 关键点
-    kps = _find_breakthrough_points(closes, highs, lows, volumes)
-
-    # 判断结构，只有区间震荡才画支撑/压力线
-    from backend.core.ema_utils import get_structure
+    # 判断结构+阶段
+    from backend.core.ema_utils import get_structure, get_stage
     try:
         stock_structure = get_structure(closes)
     except Exception:
         stock_structure = '上涨趋势'
+    try:
+        stock_stage = get_stage(closes, structure=stock_structure, highs=highs, lows=lows,
+                                volumes=volumes, opens_p=opens_p)
+    except Exception:
+        stock_stage = ''
+
+    # 关键点（传入结构+阶段用于量价信号标注）
+    kps = _find_breakthrough_points(closes, highs, lows, volumes,
+                                    structure=stock_structure, stage=stock_stage)
 
     # 支撑/压力线 — 仅区间震荡画（2026-06-02 回测优化）
     # 支撑: D(混合) — 有突破点用突破点, 无则用前低, 再退到20日最低
@@ -369,10 +473,16 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     )
     sv.append(f'<rect width="{W}" height="{H}" fill="#1a1a2e"/>')
 
-    # 5b. 标题
-    title_text = f'{name}({raw_code}) K线图'
+    # 5b. 标题（含结构+阶段标签）
+    stage_label = ''
+    if stock_structure:
+        stage_label = ' [' + stock_structure
+        if stock_stage:
+            stage_label += '·' + stock_stage
+        stage_label += ']'
+    title_text = name + '(' + raw_code + ') K线图' + stage_label
     if today_label:
-        title_text += f'  |  {today_label}'
+        title_text += '  |  ' + today_label
     sv.append(
         f'<text x="{W / 2}" y="20" text-anchor="middle" '
         f'font-family="sans-serif" font-size="14" fill="#ffffff" '
@@ -462,7 +572,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
             continue
         xp = px(ai)
         yp = py_price(kp['y'])
-        clr_map = {'突': '#2196f3', '量': '#ff9800', '前高': '#ff9800', '前低': '#4caf50'}
+        clr_map = {'突': '#2196f3', '前高': '#ff9800', '前低': '#4caf50', '放↑': '#ff5722', '放↓': '#9c27b0', '缩': '#607d8b', '↯': '#ff9800'}
         clr = clr_map.get(kp['label'], '#ff9800')
         sv.append(
             f'<rect x="{xp - sz}" y="{yp - sz}" width="{sz * 2}" '
@@ -498,6 +608,21 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
             f'font-size="9" fill="#f44336" font-weight="bold">'
             f'压力 {hi_15:.2f}</text>'
         )
+
+    # 5j2. 上涨趋势EMA支撑线
+    if stock_structure == '上涨趋势' and e10 and len(e10) > 5:
+        e10v = e10[-1]
+        if e10v:
+            ey = py_price(e10v)
+            sv.append(
+                f'<line x1="{pl}" y1="{ey}" x2="{W - pr}" y2="{ey}" '
+                f'stroke="#2196f3" stroke-width="1.0" stroke-dasharray="3,3" opacity="0.5"/>'
+            )
+            sv.append(
+                f'<text x="{W - pr - 4}" y="{ey - 4}" font-family="sans-serif" '
+                f'font-size="8" fill="#2196f3">'
+                f'EMA10 {e10v:.2f}</text>'
+            )
 
     # 5k. 今日蜡烛（盘中虚线+实时标记，收盘实心+今日标记）
     if has_today:
@@ -690,34 +815,24 @@ def _ema_index(values, period):
 
 
 def _find_index_keypoints(data):
-    """中证全指关键点识别（同 gen_index_chart.py）"""
+    """中证全指关键点识别 — 委托统一函数"""
     closes = [k['close'] for k in data]
     highs = [k['high'] for k in data]
     lows = [k['low'] for k in data]
     opens = [k['open'] for k in data]
     volumes = [k['volume'] for k in data]
-    n = len(data)
-    kps = []
-    for i in range(5, n):
-        if highs[i] == max(highs[max(0, i - 10):i + 1]) and i > 0:
-            kps.append({'idx': i, 'type': 1, 'label': '前高', 'y': highs[i]})
-        if lows[i] == min(lows[max(0, i - 10):i + 1]) and i > 0:
-            kps.append({'idx': i, 'type': 1, 'label': '前低', 'y': lows[i]})
-        if i >= 10:
-            vw = volumes[i - 10:i]
-            if len(vw) > 0 and max(vw) > 0:
-                if volumes[i] >= max(vw) * 1.5:
-                    kps.append({'idx': i, 'type': 1, 'label': '量',
-                                'y': highs[i] + (highs[i] - lows[i]) * 0.5})
-                elif volumes[i] <= min(vw) * 0.5 and volumes[i] > 0:
-                    kps.append({'idx': i, 'type': 1, 'label': '量',
-                                'y': highs[i] + (highs[i] - lows[i]) * 0.5})
-            ph = max(highs[i - 10:i])
-            if closes[i] > ph and closes[i] > opens[i]:
-                kps.append({'idx': i, 'type': 2, 'label': '突', 'y': highs[i]})
-            if i >= 1 and closes[i] > opens[i] and closes[i - 1] < opens[i - 1] \
-                    and closes[i] > opens[i - 1] and opens[i] < closes[i - 1]:
-                kps.append({'idx': i, 'type': 2, 'label': '反', 'y': lows[i]})
+    # 计算结构（大盘关键点图也要基于结构判定）
+    from backend.core.ema_utils import get_structure
+    try:
+        idx_structure = get_structure(closes)
+    except Exception:
+        idx_structure = '上涨趋势'
+    kps = _find_breakthrough_points(closes, highs, lows, volumes,
+                                    structure=idx_structure,
+                                    opens=opens, detect_reversal=True)
+    # 兼容旧字段格式（type字段用于SVG渲染）
+    for kp in kps:
+        kp['type'] = 1 if kp['label'] in ('前高', '前低', '量', '放↑', '放↓', '缩', '↯') else 2
     return kps
 
 

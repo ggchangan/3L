@@ -207,34 +207,28 @@ def get_sector_chart(name):
         volumes = [k['volume'] for k in data]
         n = len(data)
 
+        # 关键点识别 — 委托统一函数（与个股/大盘一致）
+        from backend.services.stock_chart_service import _find_breakthrough_points
+        from backend.core.ema_utils import get_structure
+        sector_structure = '上涨趋势'
+        try:
+            sector_structure = get_structure(closes) or '上涨趋势'
+        except Exception:
+            pass
+        kps_raw = _find_breakthrough_points(
+            closes, highs, lows, volumes,
+            structure=sector_structure,
+            opens=opens, detect_reversal=True
+        )
+        # 补充旧格式字段（type）
         kps = []
-        for i in range(5, n):
-            if highs[i] == max(highs[max(0, i - 10):i + 1]) and i > 0:
-                kps.append({'idx': i, 'type': 1, 'label': '前高', 'y': highs[i]})
-            if lows[i] == min(lows[max(0, i - 10):i + 1]) and i > 0:
-                kps.append({'idx': i, 'type': 1, 'label': '前低', 'y': lows[i]})
-            if i >= 10:
-                vw = volumes[i - 10:i]
-                if len(vw) > 0 and max(vw) > 0:
-                    if volumes[i] >= max(vw) * 1.5:
-                        kps.append({
-                            'idx': i, 'type': 1, 'label': '量',
-                            'y': highs[i] + (highs[i] - lows[i]) * 0.5
-                        })
-                    elif volumes[i] <= min(vw) * 0.5 and volumes[i] > 0:
-                        kps.append({
-                            'idx': i, 'type': 1, 'label': '量',
-                            'y': highs[i] + (highs[i] - lows[i]) * 0.5
-                        })
-            if i >= 10:
-                ph = max(highs[i - 10:i])
-                if closes[i] > ph and closes[i] > opens[i]:
-                    kps.append({'idx': i, 'type': 2, 'label': '突', 'y': highs[i]})
-                if (i >= 1 and closes[i] > opens[i]
-                        and closes[i - 1] < opens[i - 1]
-                        and closes[i] > opens[i - 1]
-                        and opens[i] < closes[i - 1]):
-                    kps.append({'idx': i, 'type': 2, 'label': '反', 'y': lows[i]})
+        for kp in kps_raw:
+            kps.append({
+                'idx': kp['idx'],
+                'label': kp['label'],
+                'y': kp['y'],
+                'type': 1 if kp['label'] in ('前高', '前低', '量', '放↑', '放↓', '缩', '↯') else 2,
+            })
 
         # -------- SVG 生成 --------
         W, H = 800, 400
@@ -361,7 +355,15 @@ def get_sector_chart(name):
             ai = kp['idx'] - (n - nd)
             xp = px(ai)
             yp = py(kp['y'])
-            clr = '#ff9800' if kp['type'] == 1 else '#2196f3'
+            # 颜色映射（与个股图一致）
+            clr_map_m = {
+                '突': '#2196f3', '反': '#e040fb',
+                '前高': '#ff9800', '前低': '#4caf50',
+                '放↑': '#ff5722', '放↓': '#9c27b0',
+                '缩': '#607d8b', '↯': '#ff9800',
+                '量': '#ff9800',
+            }
+            clr = clr_map_m.get(kp['label'], '#ff9800')
             sv.append(
                 f'<rect x="{xp - sz}" y="{yp - sz}" width="{sz * 2}" '
                 f'height="{sz * 2}" fill="{clr}" opacity="0.85"/>'
