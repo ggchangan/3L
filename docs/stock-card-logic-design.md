@@ -580,8 +580,9 @@ def _find_support_levels(klines, idx):
 ### 阻力位（突破判定基准）
 
 ```python
-prev_10d_high = max(kls[idx-j]['high'] for j in range(1, 11))
-is_breakout = close > prev_10d_high   # 突破前10日最高
+# 关键阻力位：最近在上的波峰（前高），而非简单的前10日最高
+resistance = _find_resistance_levels(kls, idx)
+is_breakout = resistance and close > resistance   # 突破真前高
 ```
 
 ### 止损位计算
