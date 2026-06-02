@@ -1,5 +1,110 @@
 # Changelog
 
+## [v3.8.1] — 2026-06-01
+
+### 新增：P3 关键点×关键信号融合判定引擎（后端完成）
+
+实现《量价原理》5.7节的完整融合框架：
+
+**融合引擎：** `server/backend/core/signal_detector/fusion.py`
+- 8条判定规则覆盖所有组合场景
+- 9个信号检测器自动运行，取置信度最高者
+- 关键点方向判定（结构/阶段/EMA/BIAS → bullish/bearish/neutral）
+
+**8条融合规则：**
+
+| 规则 | 关键点方向 | 信号方向 | 结果 |
+|:----|:---------:|:--------:|:----|
+| strong_buy | 看多 | 看多 + 已有买点 | 🟢 强买入 |
+| signal_buy | 看多 | 看多 | 🟢 买入 |
+| conflict_bearish | 看多 | 看空 | ⚠️ 警惕 |
+| signal_sell | 看空 | 看空 | 🔴 卖出 |
+| conflict_bullish | 看空 | 看多 | ⚠️ 等确认 |
+| buy_point_only | 看多 | 无信号 | ⏳ 谨慎持有 |
+| ignore_signal | 中性 | 有信号 | ❌ 假信号忽略 |
+| balance | - | 无信号 | ⏳ 正常持有 |
+
+**集成范围：**
+- `get_stock_card()`: 新增 triggered_signals/fusion_type/fusion_reason 字段
+- `_build_conclusion()`: 融合判定优先于静态结论
+- `holdings_service`: 持仓数据传递融合字段
+
+## [v3.8.0] — 2026-06-01
+
+### 新增：中继信号补全 + 全量9信号回测
+
+基于《量价原理》5.6节，补全最后2个中继信号，实现全部9大量价信号检测：
+
+**新增信号：**
+- **下跌中继**（`downward_continuation`）：下降趋势中缩量反弹至压力位，成交量不能持续+价格回到均线附近
+- **区间震荡中继**（`range_continuation`）：顶部放量滞涨+底部放量滞跌，价格无法突破震荡区间
+
+**全量9信号回测结果：**
+
+| 信号 | 触发 | 5日方向 | 均盈亏 | 评价 |
+|:----|:---:|:------:|:-----:|:----|
+| **向上突破** | 123次 | 68.2%涨 | +4.51% | ✅ 好 |
+| **上涨中继** | 650次 | 61.0%涨 | +3.59% | ✅ 好 |
+| **向上反转** | 27次 | 57.1%涨 | +3.79% | ✅ 好 |
+| 向下突破 | 13次 | 40.0%跌 | +1.25% | ⚠️ 偏弱 |
+| 向下反转 | 42次 | 41.7%跌 | -0.71% | ⚠️ 方向待优化 |
+| 需求衰竭 | 805次 | 54.6%涨 | +1.23% | ⚠️ 非主线+高分可用 |
+| 供应衰竭 | 10次 | 20.0%涨 | -0.98% | ❌ 样本不足 |
+| 下跌中继 | 59次 | 35.9%跌 | +0.01% | ⚠️ 方向偏 |
+| 区间震荡中继 | 196次 | 50.0%涨 | +0.32% | ⚠️ 随机 |
+
+**关键发现：**
+- 上涨趋势信号（向上突破/上涨中继/向上反转）表现稳定，5日胜率57-68%
+- 下降趋势信号（向下突破/向下反转）方向偏弱，因60天窗口内强势股回调后仍能涨回
+- 需求衰竭在非主线板块有效（52.1%跌），高分信号(90+)独立有效（69.2%跌）
+- 向下反转在非主线+上涨趋势中30.0%跌，勉强可用
+
+**设计文档更新：**
+- `docs/signal-detector/design.md` — 新增5.7节关键点×关键信号辩证关系
+
+**单元测试：**
+- `tests/test_signal_detectors.py` — 16个测试全部通过
+- `tests/test_new_continuation.py` — 新增下跌中继+区间震荡中继测试
+
+**文件清单：**
+- `server/backend/core/signal_detector/downward_continuation.py` — 新实现
+- `server/backend/core/signal_detector/range_continuation.py` — 新实现
+- `server/backend/core/signal_detector/__init__.py` — 注册2个新信号
+
+## [v3.7.0] — 2026-06-01
+
+### 新增：六大关键信号检测系统（P1完成）
+
+基于《量价原理》5.6节原文规则，实现全部6大量价信号的程序化检测：
+
+**新信号实现：**
+- **向下突破**（`downward_breakout`）：区间震荡中跌破前低+放量+大阴线
+- **向下反转**（`downward_reversal`）：上涨趋势中不再创新高+放量长阴/阴包阳+跌破EMA5
+- **需求衰竭**（`demand_exhaustion`）：两种形态——加速(连续大阳线+斜率陡峭+BIAS20>8%) 和 缩量滞涨(成交量跟不上+价格停滞+平顶)
+- **供应衰竭**（`supply_exhaustion`）：下降趋势中缓跌后急跌+放量大跌+恐慌抛售
+
+**回测框架升级：**
+- 改造 `backtest.py` v2，支持按结构分层回测（主线板块/非主线 + 趋势方向）
+- 结构分层结果写入设计文档
+
+**关键回测结论：**
+- 需求衰竭在非主线板块上52.1%概率跌，90分以上69.2%概率跌
+- 主线板块上需求衰竭是假信号（60.5%继续涨）
+- 供应衰竭样本不足，需200天以上窗口
+
+**单元测试：**
+- `tests/test_signal_detectors.py`，16个测试全部通过
+- 覆盖7个信号检测器的基本逻辑验证
+
+**文件清单：**
+- `server/backend/core/signal_detector/downward_breakout.py` — 新实现
+- `server/backend/core/signal_detector/downward_reversal.py` — 新实现
+- `server/backend/core/signal_detector/demand_exhaustion.py` — 重写（原文规则）
+- `server/backend/core/signal_detector/supply_exhaustion.py` — 重写（原文规则）
+- `server/backend/core/signal_detector/backtest.py` — 升级v2（分层回测）
+- `docs/signal-detector/design.md` — 更新（结构分层+回测结果）
+- `tests/test_signal_detectors.py` — 新增
+
 ## [v3.6.0] — 2026-05-31
 
 ### 重构：操作计划追踪 v2 — 数据源改为复盘 trading_plan + SQLite 存储
@@ -286,5 +391,47 @@ cron 始终找不到 `backend` 模块，数据停留在旧日期。
 ---
 
 ## [v1.0.0] — 2026-04
+
+---
+
+## [v3.8.2] — 2026-06-01
+
+### 新增：参数固化 + 卖点体系 + 大盘过滤
+
+**参数固化：** `server/backend/core/signal_detector/signal_config.json`
+- 各信号阈值集中管理（confidence_pass / direction / enabled）
+- 融合引擎参数（keypoint_bias_thresholds / buy_point_scale）
+- 大盘过滤参数（acceleration_bias_threshold / bear_market_stage）
+
+**卖点体系：** `server/backend/core/signal_detector/sell_point_detection.py`
+- 规则1：向下突破（置信度≥60，最强烈）
+- 规则2：向下反转（置信度≥65，上涨趋势末端）
+- 规则3：需求衰竭（置信度≥75，波峰预警）
+- 规则4：结构卖出（下降趋势/转弱/滞涨）
+- 规则5：BIAS5>15%乖离卖出
+- 集成到 `get_stock_card()`，置信度高于信号时覆盖
+
+**大盘过滤：** `server/backend/core/signal_detector/market_filter.py`
+- 加速阶段（波峰/pk≥4/BIAS>12%）→ 减仓至5成
+- 阴跌阶段（下降趋势/vl≥4/BIAS<-8%）→ 休息至3成
+- 其他阶段 → 正常交易（8成）
+
+**前端集成：**
+- `StockCard.tsx`: 信号徽章显示（方向色+置信度+融合类型标签）
+- `TradingPlan.tsx`: 交易计划信号+融合类型展示
+- `types.ts`: 信号类型定义
+
+### 新增：SVG关键点图信号标注
+
+- `stock_chart_service.py`: `generate_stock_chart()` 新增 `triggered_signals` 参数
+- SVG右上角添加暗色信号徽章（▲/▼/◆方向图标+信号名+置信度）
+- `stock.py`: `_handle_stock_chart` 自动检测信号传入图表
+
+### 新增：信号系统单元测试
+
+- `server/backend/tests/test_signal_fusion.py`，44个用例
+- 覆盖9大检测器调用验证 / 8条融合规则 / 大盘过滤三态 / 卖点五规则
+
+---
 
 初始版本：3L 交易系统基础功能上线。

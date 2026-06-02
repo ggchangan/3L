@@ -16,7 +16,7 @@ describe('MacroPage', () => {
 
   it('渲染副标题', () => {
     renderPage()
-    expect(screen.getByText('A股大盘 · 全球指数 · 宏观数据 · 汇率')).toBeTruthy()
+    expect(screen.getByText('A股大盘 · 全球指数 · 宏观数据 · 汇率 · 外围映射')).toBeTruthy()
   })
 
   it('渲染加载状态', () => {

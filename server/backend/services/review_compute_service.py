@@ -272,6 +272,38 @@ def _fallback_cycle(klines):
 
 
 # ═══════════════════════════════════════════════════════════════
+# ② 机会分类
+# ═══════════════════════════════════════════════════════════════
+
+def classify_opportunity(is_mainline, is_secondary, stage, vl_score):
+    """根据主线状态和5阶段判定机会类型"""
+    if is_mainline:
+        if stage == '波谷':
+            return '主线回调'
+        elif stage == '波峰':
+            return '见顶风险'
+        elif stage in ('上涨', '波中'):
+            return '趋势延续'
+        elif stage == '下跌':
+            return '回调中'
+        return '主线观察'
+    if is_secondary:
+        if stage == '波谷':
+            return '次线机会'
+        elif stage == '波峰':
+            return '见顶风险'
+        elif stage in ('上涨', '波中'):
+            return '趋势延续'
+        elif stage == '下跌':
+            return '回调中'
+        return '次级观察'
+    # 非榜板块：只有波谷+高评分才算波谷观察
+    if stage == '波谷' and (vl_score or 0) >= 3:
+        return '波谷观察'
+    return '--'
+
+
+# ═══════════════════════════════════════════════════════════════
 # ② 动量主线
 # ═══════════════════════════════════════════════════════════════
 
@@ -296,18 +328,43 @@ def get_mainline_data(date_str):
         print(f"[WARN] 本地板块数据为空（sector_daily.json 可能未更新）")
         return {'lines': [], 'secondary': [], 'industries': get_industry_rankings(), 'all_ranked': []}
 
+    # 导入概念波谷判定（复用至行业板块）
+    from backend.services.concept_wave_service import judge_concept_wave as _judge_wave
+
     scores = []
     for name, klines in industries_data.items():
         try:
             if len(klines) < 20:
                 continue
             chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
-            scores.append({'name': name, 'chg_20d': round(chg_20d, 2)})
+            chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
+            # 阶段判定
+            wave = _judge_wave(klines)
+            stage = wave.get('stage', '--')
+            vl_score = wave.get('vl_score', 0)
+            volume_ratio = wave.get('volume_ratio', 0)
+            scores.append({
+                'name': name,
+                'chg_20d': round(chg_20d, 2),
+                'chg_1d': round(chg_1d, 2),
+                'stage': stage,
+                'vl_score': vl_score,
+                'volume_ratio': volume_ratio,
+            })
         except Exception:
             continue
 
     scores.sort(key=lambda x: x['chg_20d'], reverse=True)
     daily_rankings = get_industry_rankings()
+
+    # 为每条数据标注主线状态 + 机会类型
+    for i, item in enumerate(scores):
+        item['is_mainline'] = i < 5
+        item['is_secondary'] = 5 <= i < 10
+        item['opportunity'] = classify_opportunity(
+            item['is_mainline'], item['is_secondary'],
+            item.get('stage', '--'), item.get('vl_score', 0),
+        )
 
     main_lines = scores[:5]
     secondary_lines = scores[5:10]
@@ -344,7 +401,81 @@ def get_mainline_data(date_str):
     return result
 
 
-def track_mainline_persistence(date_str, current_lines):
+def get_concept_mainline_data(date_str):
+    """概念主线排名 — 与 get_mainline_data 相同逻辑，但用概念板块数据"""
+    from backend.core.data_layer import get_sector_daily
+    from backend.services.concept_wave_service import judge_concept_wave as _judge_wave
+    sector_data = get_sector_daily()
+    concepts_data = sector_data.get('concepts', {})
+    if not concepts_data:
+        return {'lines': [], 'secondary': [], 'all_ranked': [], 'persistence': []}
+
+    scores = []
+    for name, klines in concepts_data.items():
+        try:
+            if len(klines) < 20:
+                continue
+            chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
+            chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
+            # 阶段判定
+            wave = _judge_wave(klines)
+            stage = wave.get('stage', '--')
+            vl_score = wave.get('vl_score', 0)
+            volume_ratio = wave.get('volume_ratio', 0)
+            scores.append({
+                'name': name,
+                'chg_20d': round(chg_20d, 2),
+                'chg_1d': round(chg_1d, 2),
+                'stage': stage,
+                'vl_score': vl_score,
+                'volume_ratio': volume_ratio,
+            })
+        except Exception:
+            continue
+
+    scores.sort(key=lambda x: x['chg_20d'], reverse=True)
+
+    # 为每条数据标注主线状态 + 机会类型
+    for i, item in enumerate(scores):
+        item['is_mainline'] = i < 5
+        item['is_secondary'] = 5 <= i < 10
+        item['opportunity'] = classify_opportunity(
+            item['is_mainline'], item['is_secondary'],
+            item.get('stage', '--'), item.get('vl_score', 0),
+        )
+
+    main_lines = scores[:5]
+    secondary_lines = scores[5:10]
+
+    # 写入历史（共享同一份 mainline_history.json，标记 concept_ 前缀）
+    try:
+        top10_names = [l['name'] for l in (main_lines + secondary_lines)]
+        history = {}
+        if os.path.isfile(MAINLINE_HISTORY_PATH):
+            with open(MAINLINE_HISTORY_PATH) as _fh:
+                history = json.load(_fh)
+        key = f'concept_{date_str}'
+        history = {k: v for k, v in history.items() if k.split('_')[-1] <= date_str}
+        history[key] = {'top10': top10_names}
+        with open(MAINLINE_HISTORY_PATH, 'w') as _fh:
+            json.dump(history, _fh, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[3L复盘] ⚠️ 概念历史记录保存失败: {e}")
+
+    # 持续性
+    persistence = track_mainline_persistence(date_str, main_lines, prefix='concept_')
+
+    return {
+        'date': date_str,
+        'lines': main_lines,
+        'secondary': secondary_lines,
+        'all_ranked': scores,
+        'persistence': persistence,
+        'type': 'concept',
+    }
+
+
+def track_mainline_persistence(date_str, current_lines, prefix=''):
     """主线持续性跟踪 — 从历史记录追溯连续在榜天数"""
     if not current_lines:
         return []
@@ -358,7 +489,7 @@ def track_mainline_persistence(date_str, current_lines):
         return [{'name': l['name'], 'days': 1, 'status': '持续'} for l in current_lines]
 
     # 获取所有历史日期，从最近到最远
-    past_dates = sorted([d for d in history.keys() if d < date_str], reverse=True)
+    past_dates = sorted([d for d in history.keys() if d.startswith(prefix) and d < prefix + date_str], reverse=True)
     result = []
 
     for line in current_lines:
@@ -480,7 +611,8 @@ def get_buy_sell_signals(holdings, buy_signals, date_str=None, all_stocks_data=N
 # ═══════════════════════════════════════════════════════════════
 
 def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_holdings,
-                          holdings_review=None, buy_signals_review=None):
+                          holdings_review=None, buy_signals_review=None,
+                          opportunity_map=None):
     """综合前4项生成次日交易计划"""
     plan = {
         'overall_strategy': market_cycle.get('strategy', '正常交易'),
@@ -505,49 +637,107 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         '偏波谷': '偏波谷仓位五至八成，建仓10%/只。积极寻找买点，止损后换股补回',
     }.get(pos, '正常仓位管理')
 
+    # 大盘周期标签（注入原因链）
+    market_tag = f'大盘{pos}'
+
     if holdings_review:
         for h in holdings_review:
             name = f"{h['name']}({h['code']})"
             sig = h.get('signal', 'hold')
             stage = h.get('stage', '')
             struct = h.get('structure', '')
-            # 所有持仓项共有的字段
+            # 查询所属板块的机会类型
+            sec_name = h.get('sector', '')
+            sec_opp = '--'
+            sec_opp_reason = ''
+            if opportunity_map and sec_name:
+                sec_opp = opportunity_map.get(sec_name, '--')
+            if sec_opp == '--':
+                if not sec_name:
+                    sec_opp_reason = '暂无行业数据'
+                elif sec_name not in opportunity_map:
+                    sec_opp_reason = '无板块数据'
+                else:
+                    sec_opp_reason = '暂无信号'
+            # 构建推理链：大盘→板块→个股
+            chain_parts = [market_tag]
+            if sec_name and sec_opp and sec_opp != '--':
+                chain_parts.append(f'{sec_name}·{sec_opp}')
+            elif sec_name and sec_opp_reason:
+                chain_parts.append(f'{sec_name}·{sec_opp_reason}')
+            elif sec_name:
+                chain_parts.append(f'{sec_name}')
+            chain = '→'.join(chain_parts)
+            # 基础字段
             base = {
                 'stock': name,
                 'stop_loss': h.get('stop_loss'),
                 'stop_loss_pct': h.get('stop_loss_pct'),
                 'change': h.get('change'),
+                'sector': sec_name,
+                'opportunity': sec_opp,
+                'opp_reason': sec_opp_reason,
+                'mainline_level': h.get('mainline_level', ''),
+                'is_main': h.get('mainline_level', '') in ('主线', '次级主线'),
+                'profit_model1': h.get('profit_model1', False),
+                'trend_stock': h.get('trend_stock', False),
+                'triggered_signals': h.get('triggered_signals', []),
+                'fusion_type': h.get('fusion_type', ''),
+                'fusion_reason': h.get('fusion_reason', ''),
             }
 
+            # 根据个股阶段判定操作（拆分为 action_type + signal 两列）
+            def _make_hold_action(action_type, signal, reason_base, priority):
+                """生成持仓操作（注入推理链）"""
+                return {**base, 'action_type': action_type, 'signal': signal,
+                        'action': f'{action_type}·{signal}' if signal else action_type,
+                        'reason': f'{chain}→{reason_base}', 'priority': priority}
+
             if sig == 'sell':
-                plan['holdings_action'].append({**base, 'action': '卖出', 'reason': f'{struct}·{stage}', 'priority': '高'})
+                plan['holdings_action'].append(_make_hold_action('卖出', '', f'{struct}·{stage}', '高'))
             elif sig == 'buy':
                 buy_pt = h.get('buy_point', '买点')
-                plan['holdings_action'].append({**base, 'action': f'执行{buy_pt}', 'reason': f'{struct}·{stage}', 'priority': '高'})
+                plan['holdings_action'].append(_make_hold_action('买入', buy_pt, f'{struct}·{stage}', '高'))
             elif stage == '加速':
-                plan['holdings_action'].append({**base, 'action': '持有·关注止盈', 'reason': f'{struct}·{stage}，关注放量滞涨/加速变缓', 'priority': '中'})
+                plan['holdings_action'].append(_make_hold_action('持有', '关注止盈', f'{struct}·{stage}，关注放量滞涨/加速变缓', '中'))
             elif stage == '缩量整理':
-                plan['holdings_action'].append({**base, 'action': '持有·可加仓', 'reason': f'{struct}·{stage}，供应枯竭等待放量', 'priority': '中'})
+                plan['holdings_action'].append(_make_hold_action('持有', '可加仓', f'{struct}·{stage}，供应枯竭等待放量', '中'))
             elif stage == '上行':
-                plan['holdings_action'].append({**base, 'action': '持有不动', 'reason': f'{struct}·{stage}，趋势健康', 'priority': '低'})
+                plan['holdings_action'].append(_make_hold_action('持有', '', f'{struct}·{stage}，趋势健康', '低'))
             elif stage == '滞涨':
-                plan['holdings_action'].append({**base, 'action': '警惕·考虑减仓', 'reason': f'{struct}·{stage}，EMA10走平', 'priority': '高'})
+                plan['holdings_action'].append(_make_hold_action('减仓', '警惕滞涨', f'{struct}·{stage}，EMA10走平', '高'))
             elif stage == '转弱':
-                plan['holdings_action'].append({**base, 'action': '关注·可换股', 'reason': f'{struct}·{stage}，EMA10拐头向下', 'priority': '高'})
+                plan['holdings_action'].append(_make_hold_action('换股', '关注转弱', f'{struct}·{stage}，EMA10拐头向下', '高'))
             elif stage == '区间底部':
-                plan['holdings_action'].append({**base, 'action': '支撑位·可加仓', 'reason': f'{struct}·{stage}，区底企稳', 'priority': '中'})
+                plan['holdings_action'].append(_make_hold_action('加仓', '支撑位', f'{struct}·{stage}，区底企稳', '中'))
             elif stage == '区间顶部':
-                plan['holdings_action'].append({**base, 'action': '压力位·注意减仓', 'reason': f'{struct}·{stage}，区顶受阻', 'priority': '高'})
+                plan['holdings_action'].append(_make_hold_action('减仓', '压力位', f'{struct}·{stage}，区顶受阻', '高'))
             elif stage == '区间中段':
-                plan['holdings_action'].append({**base, 'action': '持有·观望', 'reason': f'{struct}·{stage}，方向未明', 'priority': '低'})
+                plan['holdings_action'].append(_make_hold_action('持有', '', f'{struct}·{stage}，方向未明', '低'))
             else:
-                plan['holdings_action'].append({**base, 'action': '持有', 'reason': f'{struct}·{stage}', 'priority': '中'})
+                plan['holdings_action'].append(_make_hold_action('持有', '', f'{struct}·{stage}', '中'))
 
     if buy_signals_review:
         for bs in buy_signals_review:
+            # 通过 sector 名称在 opportunity_map 中查找该股票所属方向的机会类型
+            sec_name = bs.get('sector', '')
+            direction = bs.get('direction', '')
+            bs_opp = '--'
+            opp_reason = ''
+            if opportunity_map and sec_name:
+                bs_opp = opportunity_map.get(sec_name, '--')
+            if not bs_opp or bs_opp == '--':
+                if not sec_name:
+                    opp_reason = direction if direction else '暂无行业数据'
+                elif sec_name not in opportunity_map:
+                    opp_reason = f'{sec_name}·无板块数据'
+                else:
+                    opp_reason = f'{sec_name}·暂无信号'
             plan['buy_priority'].append({
                 'name': bs.get('name', bs.get('code', '')),
                 'code': bs.get('code', ''),
+                'action_type': '买入',
+                'signal': bs.get('buy_point', '') or bs.get('flags', '') or '买点信号',
                 'buy_point': bs.get('buy_point', '') or bs.get('flags', '') or '买点信号',
                 'change': bs.get('change'),
                 'mainline_level': bs.get('mainline_level', ''),
@@ -558,20 +748,33 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'stage': bs.get('stage', ''),
                 'stop_loss': bs.get('stop_loss'),
                 'stop_loss_pct': bs.get('stop_loss_pct'),
+                'sector': sec_name,
+                'direction': direction,
+                'opportunity': bs_opp,
+                'opp_reason': opp_reason,
+                'reason': f'{market_tag}→{sec_name}·{bs_opp}→{bs.get("structure", "--")}·{bs.get("stage", "--")}' if bs_opp and bs_opp != '--' else f'{market_tag}→{opp_reason}' if opp_reason else '',
                 'priority': '高' if bs.get('buy_point', '') in ('中继买点', '突破买点') else '中',
+                'triggered_signals': bs.get('triggered_signals', []),
+                'fusion_type': bs.get('fusion_type', ''),
+                'fusion_reason': bs.get('fusion_reason', ''),
             })
 
     # 排序：个股操作 高→低
     PRIORITY_ORDER = {'高': 0, '中': 1, '低': 2}
     plan['holdings_action'].sort(key=lambda x: PRIORITY_ORDER.get(x.get('priority', '中'), 2))
 
-    # 排序：关注买点 主线级 > 趋势状态
+    # 排序：关注买点 机会类型优先级 > 主线级 > 趋势状态
+    OPP_ORDER = {
+        '主线回调': 0, '次线机会': 1, '潜在主线': 2,
+        '趋势延续': 3, '回调中': 4, '见顶风险': 5, '--': 6,
+    }
     MAINLINE_ORDER = {'主线': 0, '次级主线': 1}
     STRUCTURE_ORDER = {'上涨趋势': 0, '区间震荡': 1, '区间中段': 1, '区间底部': 1, '区间顶部': 2, '下降趋势': 3}
     plan['buy_priority'].sort(key=lambda x: (
+        OPP_ORDER.get(x.get('opportunity', '--'), 5),
         MAINLINE_ORDER.get(x.get('mainline_level', ''), 2),
         STRUCTURE_ORDER.get(x.get('structure', ''), 4),
-        -(x.get('change', 0) or 0),  # 同优先级涨幅高的靠前
+        -(x.get('change', 0) or 0),
     ))
 
     pk_score = market_cycle.get('pk_score', 0)

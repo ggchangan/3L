@@ -178,7 +178,7 @@ def _resolve_today_candle_state(now_hour, now_min, quote, last_date_str, today_s
         }
 
 
-def generate_stock_chart(code, mode='review'):
+def generate_stock_chart(code, mode='review', triggered_signals=None):
     """
     生成个股 K 线 SVG（60 日 K 线）
     mode=monitor: 含今日实时虚线蜡烛，不缓存；
@@ -629,6 +629,20 @@ def generate_stock_chart(code, mode='review'):
             f'font-size="9" fill="#888888">{lbl}</text>'
         )
 
+
+    # 5o. 信号标记（如果提供）
+    if triggered_signals:
+        sig_x = W - pr - 10
+        sig_y = pt + 4
+        sv.append(f'<rect x="{sig_x - 85}" y="{sig_y - 2}" width="90" height="{min(len(triggered_signals) * 18 + 4, 90)}" rx="4" fill="#0d1117" stroke="#30363d" stroke-width="0.5" opacity="0.9"/>')
+        for si, sig in enumerate(triggered_signals[:5]):
+            sy2 = sig_y + si * 18
+            dc = sig.get('direction', 'neutral')
+            dir_color = '#4ecdc4' if dc == 'bullish' else '#e94560' if dc == 'bearish' else '#ffd700'
+            dir_icon = chr(9650) if dc == 'bullish' else chr(9660) if dc == 'bearish' else chr(9670)
+            conf = sig.get('confidence', 0)
+            nm = (sig.get('name', '') or sig.get('key', ''))[:8]
+            sv.append(f'<text x="{sig_x}" y="{sy2 + 10}" text-anchor="end" font-family="monospace" font-size="8" fill="{dir_color}">{dir_icon} {nm} {conf:.0f}</text>')
     sv.append('</svg>')
     svg_content = '\n'.join(sv)
 

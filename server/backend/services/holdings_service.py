@@ -169,6 +169,11 @@ def get_holdings_with_prices():
             item['structure'] = card.get('structure', '--')
             item['stage'] = card.get('stage', '--')
             item['signal'] = card.get('signal', '--')
+            item['buy_point'] = card.get('buy_point', '')
+            item['fusion_type'] = card.get('fusion_type', '')
+            item['fusion_reason'] = card.get('fusion_reason', '')
+            item['triggered_signals'] = card.get('triggered_signals', [])
+            item['wave_position'] = card.get('wave_position', '')
         except Exception:
             pass
 

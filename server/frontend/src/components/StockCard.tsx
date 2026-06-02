@@ -19,9 +19,10 @@ interface StockCardProps {
   idx: number
   chartPrefix?: string
   mode?: 'review' | 'monitor'
+  opportunityMap?: Record<string, string>
 }
 
-export default function StockCard({ s, idx, chartPrefix = '', mode }: StockCardProps) {
+export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityMap }: StockCardProps) {
   const [showChart, setShowChart] = useState(false)
   const cls = s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold'
   const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--'
@@ -130,6 +131,23 @@ export default function StockCard({ s, idx, chartPrefix = '', mode }: StockCardP
           {s.sector_chg != null ? <span style={{ color: s.sector_chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginLeft: 4 }}>{s.sector_chg >= 0 ? '+' : ''}{s.sector_chg.toFixed(2)}%</span> : null}
           {s.direction ? <><span style={{ color: '#555', margin: '0 4px' }}>|</span><span className="l">方向:</span> <span className="v" style={{ color: '#4ecdc4', fontSize: 11 }}>{s.direction}</span></> : null}
         </div>
+        {/* 机会类型标注 */}
+        {(() => {
+          const secName = s.sector || s.direction || ''
+          const opp = opportunityMap && secName ? opportunityMap[secName] : (s as any).opportunity
+          if (!opp || opp === '--') return null
+          const oppColors: Record<string, string> = {
+            '主线回调': '#e94560', '次线机会': '#ffd700', '波谷观察': '#4ecdc4',
+            '趋势延续': '#44aa44', '见顶风险': '#ff6b00', '回调中': '#888',
+          }
+          const color = oppColors[opp] || '#888'
+          return (
+            <div className="field">
+              <span className="l">方向机会:</span>
+              <span className="v" style={{ color, fontSize: 11, fontWeight: 600 }}>{opp}</span>
+            </div>
+          )
+        })()}
         {s.mainline_level ? (
           <div className="field">
             <span className="l">定位:</span>
@@ -141,6 +159,36 @@ export default function StockCard({ s, idx, chartPrefix = '', mode }: StockCardP
         </div>
       </div>
       <div style={{ marginTop: 2, fontSize: 11, color: conclusionColor, padding: '2px 0' }}>💡 {conclusion}</div>
+
+      {/* 融合判定信号显示 */}
+      {s.triggered_signals && s.triggered_signals.length > 0 && (
+        <div style={{ marginTop: 4, padding: '4px 6px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, border: '1px solid #2a2a3a' }}>
+          <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>📡 关键信号</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {(s.triggered_signals as Array<{name:string;confidence:number;direction:string}>).slice(0,4).map((sig, i) => {
+              const dirColor = sig.direction === 'bullish' ? '#4ecdc4' : sig.direction === 'bearish' ? '#e94560' : '#ffd700'
+              const dirIcon = sig.direction === 'bullish' ? '🟢' : sig.direction === 'bearish' ? '🔴' : '🟡'
+              return (
+                <span key={i} style={{ fontSize: 10, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4, color: dirColor }}>
+                  {dirIcon} {sig.name} {sig.confidence.toFixed(0)}分
+                </span>
+              )
+            })}
+            {s.fusion_type && (
+              <span style={{ fontSize: 10, background: 'rgba(88,166,255,0.1)', padding: '2px 6px', borderRadius: 4, color: '#58a6ff' }}>
+                {(() => {
+                  const fusionLabels: Record<string,string> = {
+                    'strong_buy': '🟢强买', 'signal_buy': '🟢买入', 'conflict_bearish': '⚠️警惕',
+                    'signal_sell': '🔴卖出', 'conflict_bullish': '⚠️等确认', 'buy_point_only': '⏳买点',
+                    'bearish_watch': '👀偏空', 'bullish_wait': '⏳等待', 'balance': '⚖️平衡',
+                  }
+                  return fusionLabels[s.fusion_type!] || s.fusion_type
+                })()}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
       {(chartEverShown || showChart) && (
         <div id={chartId} className="chart-container" style={{ display: showChart ? 'block' : 'none', marginTop: 6 }}>
           <object data={chartUrl} type="image/svg+xml" style={{ width: '100%', maxWidth: 700, borderRadius: 8 }} />

@@ -44,6 +44,9 @@ from backend.core.trend_trading import (
     detect_trend_buy,
     decide_system_with_detail,
 )
+from backend.core.signal_detector.fusion import fusion_judge
+from backend.core.signal_detector.sell_point_detection import detect_sell_point
+from backend.core.structure_wave import judge_structure_wave
 
 
 # ── 手动趋势股（不缓存，文件很小直接读）──
@@ -137,6 +140,9 @@ def _build_conclusion(card):
     buy_point = card.get('buy_point', '')
     stop_loss = card.get('stop_loss')
     stop_loss_pct = card.get('stop_loss_pct')
+    fusion_type = card.get('fusion_type', '')
+    fusion_reason = card.get('fusion_reason', '')
+    triggered = card.get('triggered_signals', [])
 
     sl_text = ''
     if stop_loss and stop_loss_pct:
@@ -158,6 +164,27 @@ def _build_conclusion(card):
                 return f'⚠️ BIAS5={bias_f:.2f}%，价格远离EMA5，警戒区，关注回调风险'
         return f'趋势交易，{stage}阶段，{structure}'
 
+    # 融合判定优先
+    if fusion_type == 'strong_buy' and s == 'buy':
+        # 列举触发的信号
+        sig_str = '，'.join([f'{t["name"]}({t["confidence"]:.0f})' for t in triggered[:3]])
+        return f'触发{buy_point}，{sig_str}信号确认，可执行买入计划{sl_text}'
+
+    if fusion_type == 'signal_buy' and s == 'buy':
+        sig_str = '，'.join([f'{t["name"]}({t["confidence"]:.0f})' for t in triggered[:2]])
+        return f'{sig_str}，{stage}阶段，关键点位看多，倾向买入{sl_text}'
+
+    if fusion_type == 'signal_sell' and s == 'sell':
+        sig_str = '，'.join([f'{t["name"]}({t["confidence"]:.0f})' for t in triggered[:2]])
+        return f'{sig_str}，关键点偏空，建议卖出避险'
+
+    if fusion_type == 'conflict_bearish':
+        return f'结构{structure}·{stage}偏多，但出现向下信号，需警惕'
+
+    if fusion_type == 'conflict_bullish':
+        return f'结构偏空但出现看多信号，等确认再入场'
+
+    # 回退到原有逻辑
     if s == 'buy':
         return f'触发{buy_point}，{stage}阶段确认，可执行买入计划{sl_text}'
 
@@ -358,6 +385,77 @@ def get_stock_card(code, date_str, market_position='波中',
             signal = 'sell'
             signal_text = signal_text or f'{stage}·建议减仓'
 
+    # 5c. 关键点×关键信号融合判定
+    try:
+        f_result = fusion_judge(
+            klines, idx, main_line_names, sector,
+            existing_signal=signal, existing_buy_point=buy_point,
+            structure=struct_info.get('structure', ''),
+            stage=struct_info.get('stage', ''),
+            ema_arrangement=struct_info.get('ema', ''),
+            bias5=deviation_pct,
+        )
+        triggered_signals = f_result.get('triggered_signals', [])
+        fusion_type = f_result.get('fusion_type', '')
+        fusion_reason = f_result.get('reason', '')
+
+        # 融合判定覆盖规则：
+        # - 已有买点+融合确认→增强置信度
+        # - 无买点但融合出buy→采用
+        # - 无卖出但融合出sell→采用
+        if fusion_type in ('strong_buy', 'signal_buy'):
+            if signal == 'hold':
+                signal = 'buy'
+                buy_point = '信号确认'
+                signal_text = f_result.get('signal_text', '')
+                score = min(100, f_result['confidence'])
+            elif signal == 'buy':
+                score = max(score, f_result['confidence'])
+        elif fusion_type == 'signal_sell' and signal != 'sell':
+            signal = 'sell'
+            signal_text = f_result.get('signal_text', '')
+            score = f_result['confidence']
+    except Exception:
+        triggered_signals = []
+        fusion_type = ''
+        fusion_reason = ''
+
+    # 5d. 独立卖点引擎（补充融合判定未覆盖的场景）
+    if signal != 'sell':
+        try:
+            sp = detect_sell_point(klines, idx,
+                                   structure=struct_info.get('structure', ''),
+                                   stage=struct_info.get('stage', ''),
+                                   bias5=deviation_pct)
+            if sp.get('triggered'):
+                sell_cf = sp.get('confidence', 0)
+                if sell_cf > score:  # 卖点置信度更高才覆盖
+                    signal = 'sell'
+                    signal_text = sp.get('sell_type', '')
+                    buy_point = ''
+                    score = sell_cf
+                    # 追加一个卖点信号到triggered_signals
+                    triggered_signals.append({
+                        'key': 'sell_point_detector',
+                        'name': sp.get('sell_type', '卖出'),
+                        'direction': 'bearish',
+                        'confidence': sell_cf,
+                        'detail': sp.get('reason', ''),
+                        'scores': {},
+                    })
+        except Exception:
+            pass
+
+    # 5e. 个股波峰波谷位置（辅助字段，波谷可用于买点确认）
+    wave_position = ''
+    try:
+        wr = judge_structure_wave(klines, structure=struct_info.get('structure', ''))
+        wave_position = wr.get('position', '')
+        wave_stage = wr.get('stage', '')
+    except Exception:
+        wave_position = ''
+        wave_stage = ''
+
     # 6. 止损
     sl_result = _calc_stop_loss(klines, idx)
     if sl_result and sl_result[0]:
@@ -406,6 +504,10 @@ def get_stock_card(code, date_str, market_position='波中',
         'sector_chg': None,
         'score': score,
         'flags': flags,
+        'triggered_signals': triggered_signals,
+        'fusion_type': fusion_type,
+        'fusion_reason': fusion_reason,
+        'wave_position': wave_position,
         'conclusion': '',
         'tags': [],
     }
@@ -450,6 +552,10 @@ def _empty_card(code, name, sector, direction, reason):
         'sector_chg': None,
         'score': 0,
         'flags': '',
+        'triggered_signals': [],
+        'fusion_type': '',
+        'fusion_reason': '',
+        'wave_position': '',
         'conclusion': reason,
         'tags': [],
     }

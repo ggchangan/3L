@@ -73,7 +73,9 @@ def _handle_stock_chart(h, path):
             h.send_json({'error': err})
             return
     else:
-        svg_str, err = generate_stock_chart(code, mode=mode)
+        # 检测信号（用于SVG图上标注）
+        triggered = _detect_chart_signals(code)
+        svg_str, err = generate_stock_chart(code, mode=mode, triggered_signals=triggered)
         if err:
             h.send_json({'error': err})
             return
@@ -83,6 +85,55 @@ def _handle_stock_chart(h, path):
     h.send_header('Content-Length', str(len(body)))
     h.end_headers()
     h.wfile.write(body)
+
+
+def _detect_chart_signals(code):
+    """对个股检测信号，返回触发信号列表用于SVG标注"""
+    try:
+        from backend.core.signal_detector import (
+            detect_upward_breakout, detect_upward_continuation, detect_upward_reversal,
+            detect_supply_exhaustion, detect_downward_breakout, detect_downward_reversal,
+            detect_demand_exhaustion, detect_downward_continuation, detect_range_continuation,
+        )
+        from backend.services.stock_chart_service import get_all_stocks, get_stock_klines
+        raw_code = str(code).strip()
+        for pfx in ['SH', 'SZ', 'sh', 'sz']:
+            if raw_code.startswith(pfx):
+                raw_code = raw_code[len(pfx):]
+                break
+        raw_code = raw_code[-6:] if len(raw_code) >= 6 else raw_code
+        stocks = get_all_stocks()
+        klines = get_stock_klines(raw_code, stocks=stocks)
+        if not klines or len(klines) < 20:
+            return []
+        idx = len(klines) - 1
+        detectors = [
+            ('向上突破', detect_upward_breakout, 'bullish'),
+            ('上涨中继', detect_upward_continuation, 'bullish'),
+            ('向上反转', detect_upward_reversal, 'bullish'),
+            ('供应衰竭', detect_supply_exhaustion, 'bullish'),
+            ('向下突破', detect_downward_breakout, 'bearish'),
+            ('向下反转', detect_downward_reversal, 'bearish'),
+            ('需求衰竭', detect_demand_exhaustion, 'bearish'),
+            ('下跌中继', detect_downward_continuation, 'bearish'),
+            ('区间震荡', detect_range_continuation, 'neutral'),
+        ]
+        signals = []
+        for name, detector, direction in detectors:
+            try:
+                result = detector(klines, idx)
+                if result.get('triggered'):
+                    signals.append({
+                        'key': name,
+                        'name': name,
+                        'direction': direction,
+                        'confidence': result.get('confidence', 60),
+                    })
+            except Exception:
+                pass
+        return signals
+    except Exception:
+        return []
 
 
 def register_routes(routes):
