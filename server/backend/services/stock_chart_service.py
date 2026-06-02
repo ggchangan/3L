@@ -431,27 +431,33 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     kps = _find_breakthrough_points(closes, highs, lows, volumes,
                                     structure=stock_structure, stage=stock_stage)
 
-    # 支撑/压力线 — 基于近20日前低/前高，跨越结构通用
-    # 2026-06-02 v2: 废弃"突"点支撑法（突破点来自前区间，与当前价格范围无关）
-    #   改用统一逻辑：支撑=近20日最高前低（区间底部），压力=近20日最低前高（区间顶部）
+    # 支撑/压力线 — 综合支撑候选，取最近的一档
+    # 2026-06-02 v3: 支撑=前低+前高(角色互换)+突(突破)，均低于现价取最高
+    #               压力=前高+前低(角色互换)+突，均高于现价取最低
     cur_close = closes[-1] if closes else 0
     bk_pts = []
     hi_15 = None
     nd20 = min(20, len(closes))
 
-    # 统一支撑：近20日"前低"中最高且低于现价的
-    recent_lows = [kp for kp in kps if kp['label'] == '前低'
-                   and kp['idx'] >= len(closes) - nd20 and kp['y'] < cur_close]
-    if recent_lows:
-        support_y = max(kp['y'] for kp in recent_lows)
+    # 支撑候选：所有低于现价的关键点，取最高的（最接近现价）
+    support_candidates = [kp for kp in kps
+                          if kp['label'] in ('前低', '前高', '突')
+                          and kp['idx'] >= len(closes) - nd20
+                          and kp['y'] < cur_close]
+    if support_candidates:
+        best = max(support_candidates, key=lambda x: x['y'])
+        support_y = best['y']
     else:
         support_y = min(lows[-nd20:]) if nd20 > 0 else 0
 
-    # 统一压力：近20日"前高"中最低且高于现价的
-    recent_highs = [kp for kp in kps if kp['label'] == '前高'
-                    and kp['idx'] >= len(closes) - nd20 and kp['y'] > cur_close]
-    if recent_highs:
-        resistance_y = min(kp['y'] for kp in recent_highs)
+    # 压力候选：所有高于现价的关键点，取最低的（最接近现价）
+    resistance_candidates = [kp for kp in kps
+                             if kp['label'] in ('前高', '前低', '突')
+                             and kp['idx'] >= len(closes) - nd20
+                             and kp['y'] > cur_close]
+    if resistance_candidates:
+        best = min(resistance_candidates, key=lambda x: x['y'])
+        resistance_y = best['y']
     else:
         resistance_y = max(highs[-nd20:]) if nd20 > 0 else mx
 
