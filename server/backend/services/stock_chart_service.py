@@ -439,9 +439,10 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     bk_pts = []
     hi_15 = None
     if stock_structure == '区间震荡':
-        # 支撑（D混合）: 突破点 → 前低 → 20日最低
+        # 支撑（D混合）: 近30日突破点 → 前低 → 20日最低
         bk_candidates = sorted(
-            [kp for kp in kps if kp['label'] == '突' and kp['y'] < cur_close],
+            [kp for kp in kps if kp['label'] == '突' and kp['y'] < cur_close
+             and kp['idx'] >= len(closes) - 30],
             key=lambda x: x['y'], reverse=True
         )
         if bk_candidates:
