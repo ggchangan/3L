@@ -375,6 +375,7 @@ def get_mainline_data(date_str):
         'secondary': secondary_lines,
         'industries': daily_rankings,
         'all_ranked': scores,
+        'persistence': track_mainline_persistence(date_str, main_lines, prefix=''),
     }
 
     # 写入缓存
