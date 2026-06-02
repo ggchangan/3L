@@ -33,53 +33,42 @@ def get_ema_arrangement(closes):
     return '--'
 
 def get_structure(closes):
-    """基于EMA10极值位置+对称末端校验判断结构
+    """基于EMA20斜率+BIAS20判断结构（2026-06-02 回测优化替代EMA10极值法）
 
-    ① EMA10极值位置法（基础，保留平滑性）
-    ② 对称末端校验（解决EMA10滞后问题）
-       - 上涨降级：末3根EMA10连续下降+close跌破 → 区间震荡
-       - 下降升级：末3根EMA10连续上升+close突破 → 区间震荡
-    ③ 已移除（2026-05-23 宽幅震荡误判，替代为依赖第一步EMA10极值）
+    EMA10极值法区分度为负（判下降后反弹+6.21%，判上涨只有+4.78%）
+    EMA20斜率法区分度+1.51%（239只股票×60天滚动回测）
+    
+    ① EMA20斜率 > 0.2% + BIAS20 > -2% → 上涨趋势
+    ② EMA20斜率 < -0.2% + BIAS20 < 2% → 下降趋势
+    ③ 其他 → 区间震荡
     """
-    if len(closes) < 15:
+    if len(closes) < 25:
         return '--'
-
-    # ① 基础：EMA10极值位置法
-    e10 = ema_list(closes, 10)[-15:]
-    n = len(e10)
-    fq = n // 4
-    lq = n - 1 - n // 4
-    max_pos = max(range(n), key=lambda i: e10[i] if e10[i] is not None else -1e9)
-    min_pos = min(range(n), key=lambda i: e10[i] if e10[i] is not None else 1e9)
-
-    if max_pos >= lq and min_pos <= fq:
-        base = '上涨趋势'
-    elif min_pos >= lq and max_pos <= fq:
-        base = '下降趋势'
+    
+    ema20 = ema_list(closes, 20)
+    e20_recent = [v for v in ema20[-10:] if v is not None]
+    if len(e20_recent) < 5:
+        return '--'
+    
+    slope = _reg_slope(e20_recent)
+    slope_pct = slope / e20_recent[0] * 100 if e20_recent[0] else 0
+    
+    cur, cur_ema20 = closes[-1], e20_recent[-1]
+    bias20 = (cur - cur_ema20) / cur_ema20 * 100 if cur_ema20 else 0
+    
+    if slope_pct > 0.2 and bias20 > -2:
+        return '上涨趋势'
+    elif slope_pct < -0.2 and bias20 < 2:
+        return '下降趋势'
     else:
-        base = '区间震荡'
+        return '区间震荡'
 
-    # ② 对称末端校验
-    l3 = [v for v in e10[-3:] if v is not None]
-
-    # 上涨降级：EMA10末端连续下降+close跌破
-    if base == '上涨趋势':
-        if len(l3) == 3 and l3[0] > l3[1] > l3[2] and closes[-1] < l3[-1]:
-            return '区间震荡'
-
-    # 下降升级：EMA10末端连续上升+close突破
-    if base == '下降趋势':
-        if len(l3) == 3 and l3[0] < l3[1] < l3[2] and closes[-1] > l3[-1]:
-            return '区间震荡'
-
-    return base
-
-def get_stage(closes, structure=None, highs=None, lows=None, support_level=None, resistance_level=None, volumes=None):
+def get_stage(closes, structure=None, highs=None, lows=None, support_level=None, resistance_level=None, volumes=None, opens_p=None):
     """基于EMA10半段斜率判断阶段
     - s1=末15根EMA10整体斜率（趋势基准），s2=末3根斜率（近期动量，更敏感）
-    - 上涨趋势: 上行(ratio 0.4~1.8) / 加速(>1.8) / 滞涨(<0.4 量未缩) / 缩量整理(<0.4 量缩80%+价在EMA10上) / 转弱(s1>0,s2<0)
+    - 上涨趋势: 上行(ratio 0.4~1.8) / 加速(>1.8) / 放量滞涨(量>1.3x+窄幅) / 缩量滞涨(缩量+横盘) / 缩量整理(缩量+回踩) / 转弱(s1>0,s2<0)
     - 下降趋势: 下行(ratio≤1.8) / 加速跌(>1.8) / 转强(s1<0,s2>0)
-    - 区间震荡: 区间顶部/区间中段/区间底部（价格位置，用支撑/压力替代15日极值）
+    - 区间震荡: 区间顶部/区间中段/区间底部（价格位置）
     """
     if structure == '区间震荡':
         cur = closes[-1] if closes else 0
@@ -138,12 +127,36 @@ def get_stage(closes, structure=None, highs=None, lows=None, support_level=None,
                                 break
         if ratio > 1.8: return '加速'
         elif ratio < 0.4:
+            # 按原文量价原理区分：放量滞涨 / 缩量滞涨 / 缩量整理
             if volumes and len(volumes) >= 13 and closes[-1] > e10_last[-1]:
                 vol_last3 = sum(volumes[-3:]) / 3
                 vol_prev10 = sum(volumes[-13:-3]) / 10
-                if vol_prev10 > 0 and vol_last3 / vol_prev10 < 0.8:
-                    return '缩量整理'
-            return '滞涨'
+                if vol_prev10 > 0:
+                    vol_ratio = vol_last3 / vol_prev10
+                    
+                    # ① 放量滞涨 — 原文5.6节：放量+价不涨+窄幅
+                    if vol_ratio > 1.2:
+                        op = opens_p[-1] if opens_p else closes[-1]
+                        body_pct = abs(closes[-1] - op) / op if op else 0
+                        hi = highs[-1] if highs else closes[-1]
+                        lo = lows[-1] if lows else closes[-1]
+                        amp = (hi - lo) / lo if lo else 0
+                        if body_pct < 0.02 and amp < 0.04:
+                            return '放量滞涨'
+                    
+                    # ② 缩量 + 检查价格形态
+                    if vol_ratio < 0.8:
+                        # 缩量整理：有回踩 + 价不破EMA10（正常回调）
+                        if len(closes) >= 10:
+                            recent_low = min(closes[-10:])
+                            recent_high = max(closes[-10:])
+                            recent_range = (recent_high - recent_low) / recent_low * 100
+                            if recent_range > 3:
+                                return '缩量整理'
+                        # 缩量滞涨：需求不足→横盘→平顶风险
+                        # 近10日波动<3%或不再创新高
+                        return '缩量滞涨'
+            return '滞涨'  # fallback
         else: return '上行'
     elif s1 < 0 and s2 < 0:
         ratio = s2 / s1 if abs(s1) > 1e-8 else 1.0
