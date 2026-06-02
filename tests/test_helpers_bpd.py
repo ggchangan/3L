@@ -136,6 +136,32 @@ class TestCalcStopLoss:
         sl, pct = calc_stop_loss(kls, 4, close_price=95)
         assert sl is None
 
+    def test_buy_type_zhongji(self):
+        """中继买点止损在低吸K线最低价下方4%"""
+        kls = _make_klines(25)
+        sl, pct = calc_stop_loss(kls, 24, buy_type='中继买点', entry_idx=20)
+        entry_low = kls[20]['low']
+        expected_sl = round(entry_low * 0.96, 2)
+        assert sl == expected_sl, f'预期{expected_sl} 实际{sl}'
+        assert pct is not None and pct > 0
+
+    def test_buy_type_tupo(self):
+        """突破买点止损在突破K线最低价下方5%"""
+        kls = _make_klines(25)
+        sl, pct = calc_stop_loss(kls, 24, buy_type='突破买点', entry_idx=20)
+        entry_low = kls[20]['low']
+        entry_close = kls[20]['close']
+        expected_sl = round(min(entry_low, entry_close) * 0.95, 2)
+        assert sl == expected_sl, f'预期{expected_sl} 实际{sl}'
+        assert pct is not None and pct > 0
+
+    def test_buy_type_no_entry_idx_falls_back(self):
+        """有buy_type但无entry_idx时回退到支撑位法"""
+        kls = _make_klines(25)
+        sl, pct = calc_stop_loss(kls, 24, buy_type='中继买点')
+        # 无entry_idx，走支撑位法
+        assert sl is not None
+
 
 # ===== _volume_ratio =====
 
