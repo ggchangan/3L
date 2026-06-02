@@ -33,46 +33,35 @@ def get_ema_arrangement(closes):
     return '--'
 
 def get_structure(closes):
-    """基于EMA10极值位置+对称末端校验判断结构
+    """基于EMA20斜率+BIAS20判断结构（2026-06-02 回测优化替代EMA10极值法）
 
-    ① EMA10极值位置法（基础，保留平滑性）
-    ② 对称末端校验（解决EMA10滞后问题）
-       - 上涨降级：末3根EMA10连续下降+close跌破 → 区间震荡
-       - 下降升级：末3根EMA10连续上升+close突破 → 区间震荡
-    ③ 已移除（2026-05-23 宽幅震荡误判，替代为依赖第一步EMA10极值）
+    EMA10极值法区分度为负（判下降后反弹+6.21%，判上涨只有+4.78%）
+    EMA20斜率法区分度+1.51%（239只股票×60天滚动回测）
+    
+    ① EMA20斜率 > 0.2% + BIAS20 > -2% → 上涨趋势
+    ② EMA20斜率 < -0.2% + BIAS20 < 2% → 下降趋势
+    ③ 其他 → 区间震荡
     """
-    if len(closes) < 15:
+    if len(closes) < 25:
         return '--'
-
-    # ① 基础：EMA10极值位置法
-    e10 = ema_list(closes, 10)[-15:]
-    n = len(e10)
-    fq = n // 4
-    lq = n - 1 - n // 4
-    max_pos = max(range(n), key=lambda i: e10[i] if e10[i] is not None else -1e9)
-    min_pos = min(range(n), key=lambda i: e10[i] if e10[i] is not None else 1e9)
-
-    if max_pos >= lq and min_pos <= fq:
-        base = '上涨趋势'
-    elif min_pos >= lq and max_pos <= fq:
-        base = '下降趋势'
+    
+    ema20 = ema_list(closes, 20)
+    e20_recent = [v for v in ema20[-10:] if v is not None]
+    if len(e20_recent) < 5:
+        return '--'
+    
+    slope = _reg_slope(e20_recent)
+    slope_pct = slope / e20_recent[0] * 100 if e20_recent[0] else 0
+    
+    cur, cur_ema20 = closes[-1], e20_recent[-1]
+    bias20 = (cur - cur_ema20) / cur_ema20 * 100 if cur_ema20 else 0
+    
+    if slope_pct > 0.2 and bias20 > -2:
+        return '上涨趋势'
+    elif slope_pct < -0.2 and bias20 < 2:
+        return '下降趋势'
     else:
-        base = '区间震荡'
-
-    # ② 对称末端校验
-    l3 = [v for v in e10[-3:] if v is not None]
-
-    # 上涨降级：EMA10末端连续下降+close跌破
-    if base == '上涨趋势':
-        if len(l3) == 3 and l3[0] > l3[1] > l3[2] and closes[-1] < l3[-1]:
-            return '区间震荡'
-
-    # 下降升级：EMA10末端连续上升+close突破
-    if base == '下降趋势':
-        if len(l3) == 3 and l3[0] < l3[1] < l3[2] and closes[-1] > l3[-1]:
-            return '区间震荡'
-
-    return base
+        return '区间震荡'
 
 def get_stage(closes, structure=None, highs=None, lows=None, support_level=None, resistance_level=None, volumes=None):
     """基于EMA10半段斜率判断阶段
