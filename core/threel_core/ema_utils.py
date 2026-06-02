@@ -73,11 +73,18 @@ def get_structure(closes):
     if len(e5_recent) >= 3:
         s5 = _reg_slope(e5_recent)
         ema5_slope_pct = s5 / e5_recent[0] * 100 if e5_recent[0] else 0
-    
+
+    # ── 超短周期确认：收盘价5日斜率 ──
+    close5 = closes[-5:]
+    close_slope_pct = 0
+    if len(close5) >= 5:
+        sc = _reg_slope(close5)
+        close_slope_pct = sc / close5[0] * 100 if close5[0] else 0
+
     # ── 结构判定 ──
     if slope_pct > 0.8 and bias > -5 and bull_arrange:
-        # 长周期看涨，但需短周期确认
-        if ema5_slope_pct > 0:
+        # 长周期看涨，但需中/短周期双重确认
+        if ema5_slope_pct > 0 and close_slope_pct > 0:
             return '上涨趋势'
         else:
             return '区间震荡'  # 趋势转弱，降级
