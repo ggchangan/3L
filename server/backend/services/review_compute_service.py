@@ -614,9 +614,25 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                           holdings_review=None, buy_signals_review=None,
                           opportunity_map=None):
     """综合前4项生成次日交易计划"""
+    from backend.core.signal_detector.market_filter import get_market_filter
+    mf = get_market_filter(market_cycle)
+    mf_filter = mf.get('filter', 'normal')
+
+    # 大盘过滤覆盖策略
+    if mf_filter == 'reduce':
+        _strategy = '减仓控风险'
+        _position = mf.get('max_position', '5成')
+    elif mf_filter == 'rest':
+        _strategy = '休息不动'
+        _position = mf.get('max_position', '3成')
+    else:
+        _strategy = market_cycle.get('strategy', '正常交易')
+        _position = market_cycle.get('position_pct', '半仓')
+
     plan = {
-        'overall_strategy': market_cycle.get('strategy', '正常交易'),
-        'position_level': market_cycle.get('position_pct', '半仓'),
+        'overall_strategy': _strategy,
+        'position_level': _position,
+        'market_filter': mf,
         'build_per_stock_pct': f"{market_cycle.get('build_per_stock_pct', 5)}%/只",
         'main_lines': [],
         'position_detail': '',
@@ -636,6 +652,14 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         '波中偏下': '波中偏下仓位五至七成，建仓5%/只。谨慎选股，收紧止损',
         '偏波谷': '偏波谷仓位五至八成，建仓10%/只。积极寻找买点，止损后换股补回',
     }.get(pos, '正常仓位管理')
+
+    # 大盘过滤覆盖 position_detail
+    if mf_filter == 'reduce':
+        plan['position_detail'] = f'{mf.get("reason", "")}。{plan["position_detail"]}'
+        plan['risk_items'].append(f'大盘减速阶段：{mf.get("reason", "")}')
+    elif mf_filter == 'rest':
+        plan['position_detail'] = f'{mf.get("reason", "")}。{plan["position_detail"]}'
+        plan['risk_items'].append(f'大盘休整阶段：{mf.get("reason", "")}')
 
     # 大盘周期标签（注入原因链）
     market_tag = f'大盘{pos}'
