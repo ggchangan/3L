@@ -57,6 +57,7 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
   const [prevRanked, setPrevRanked] = useState<string[]>([])
   const [rotationNote, setRotationNote] = useState('')
   const [tab, setTab] = useState<'industry' | 'concept'>('industry')
+  const [expandedLeader, setExpandedLeader] = useState<string | null>(null)
 
   // 选择当前 tab 的数据来源
   const activeData: MainlineData | null | undefined = tab === 'concept'
@@ -203,7 +204,7 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
               const stageIcon = STAGE_ICONS[stage] || '•'
               const stageColor = STAGE_COLORS[stage] || '#888'
               const c = item.chg_1d ?? 0
-              const [showLeaders, setShowLeaders] = useState(false)
+              const showLeaders = expandedLeader === item.name
               const leaders = item.leaders || []
               return (
                 <div key={item.name} style={{
@@ -235,7 +236,7 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
                   )}
                   {leaders.length > 0 && (
                     <span
-                      onClick={() => setShowLeaders(v => !v)}
+                      onClick={() => setExpandedLeader(showLeaders ? null : item.name)}
                       style={{ cursor: 'pointer', color: '#888', fontSize: 10, marginLeft: 'auto' }}
                     >📈 {showLeaders ? '收起' : '领涨'}</span>
                   )}
