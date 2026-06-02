@@ -460,7 +460,8 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
     # 波峰阻力（用于上涨趋势的突破确认）：最近在上的波峰（前高），比前后5根都高
     resistance = _find_resistance_levels(kls, idx)
     # 区间高点阻力（用于区间震荡的突破确认）：最近15根的区间上沿
-    zone_resistance = max(highs_60[-15:]) if len(highs_60) >= 15 else None
+    prev_highs = highs_60[:-1]
+    zone_resistance = max(prev_highs[-15:]) if len(prev_highs) >= 15 else None
     # 默认用波峰阻力（上涨趋势场景），区间震荡场景在分支内单独判断
     is_breakout = resistance and close > resistance
     
