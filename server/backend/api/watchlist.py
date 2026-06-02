@@ -138,6 +138,51 @@ def _handle_watchlist_boards(h, path):
     h.send_json({'boards': boards, 'total': sum(b['count'] for b in boards)})
 
 
+def _handle_watchlist_add_stock(h, path, body):
+    '''POST: 添加单只股票到自选股（自动分配方向）'''
+    try:
+        data = json.loads(body)
+        code = data.get('code', '').strip()
+        name = data.get('name', '').strip()
+        direction = data.get('direction', '').strip() or None
+        if not code:
+            h.send_json({'success': False, 'error': '缺少股票代码'})
+            return
+
+        wl = get_watchlist()
+        stocks = wl.get('stocks', []) if isinstance(wl, dict) else wl
+
+        # 查重
+        if any(s.get('code') == code for s in stocks if isinstance(s, dict)):
+            h.send_json({'success': True, 'msg': '已在自选股中'})
+            return
+
+        # 如果没有指定方向，尝试从行业映射推断
+        if not direction:
+            try:
+                import os
+                from backend.config import INDUSTRY_MAP_PATH
+                if os.path.isfile(INDUSTRY_MAP_PATH):
+                    with open(INDUSTRY_MAP_PATH) as _f:
+                        _im = json.load(_f)
+                    info = _im.get(code, {})
+                    suggested = info.get('direction', info.get('ths_industry', ''))
+                    if suggested and suggested not in ('未知', '获取失败'):
+                        direction = suggested
+                if not direction:
+                    direction = '其他'
+            except:
+                direction = '其他'
+
+        new_stock = {'code': code, 'name': name or code, 'direction': direction or '其他'}
+        stocks.append(new_stock)
+        wl_data = {'stocks': stocks, 'directions': wl.get('directions', [])} if isinstance(wl, dict) else {'stocks': stocks, 'directions': []}
+        save_watchlist(wl_data)
+        h.send_json({'success': True, 'msg': f'已添加 {name} 到自选股'})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
 def register_routes(routes):
     routes.exact('/api/watchlist', func=_handle_watchlist)
     routes.exact('/api/watchlist/boards', func=_handle_watchlist_boards)

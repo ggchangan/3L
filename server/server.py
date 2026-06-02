@@ -301,6 +301,7 @@ class Handler(SimpleHTTPRequestHandler):
         post_routes = {
             '/api/review/save': ('backend.api.review', '_handle_review_save'),
             '/api/watchlist/save': ('backend.api.watchlist', '_handle_watchlist_save'),
+            '/api/watchlist/add-stock': ('backend.api.watchlist', '_handle_watchlist_add_stock'),
             '/api/tips/save-journal': ('backend.api.tips', '_handle_save_journal'),
             '/api/update': ('backend.api.system', '_handle_update'),
             # 方向管理（独立模块）

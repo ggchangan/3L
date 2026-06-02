@@ -247,6 +247,19 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
                           display: 'inline-block', marginRight: 10, marginBottom: 3,
                           color: ld.chg_5d >= 5 ? '#ff6b6b' : ld.chg_5d > 0 ? '#44aa44' : '#888',
                         }}>
+                          <span
+                            onClick={() => {
+                              fetch('/api/watchlist/add-stock', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({code: ld.code, name: ld.name}),
+                              }).then(r => r.json()).then(res => {
+                                if (res.success) alert(res.msg)
+                              })
+                            }}
+                            style={{ cursor: 'pointer', marginRight: 2 }}
+                            title="加自选"
+                          >➕</span>
                           {ld.name}
                           <span style={{ color: '#555', fontSize: 10 }}>
                             {' '}{ld.chg_1d > 0 ? '+' : ''}{ld.chg_1d}% / 5d{ld.chg_5d > 0 ? '+' : ''}{ld.chg_5d}%
