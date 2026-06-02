@@ -10,12 +10,6 @@ from backend.config import DATA_DIR
 
 DB_PATH = os.path.join(DATA_DIR, 'private', 'plan_tracking.db')
 
-_SUCC_THRESHOLD = 0.5    # 涨过0.5%算成功
-_FAIL_THRESHOLD = -0.5   # 跌过0.5%算失败
-
-_HOLD_ACTIONS = {'持有不动', '持有·观望', '持有·可加仓', '持有·关注止盈',
-                 '警惕·考虑减仓', '关注·可换股', '持有'}
-
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS plan_records (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,6 +65,14 @@ def _init_db(db_path=None):
     conn = sqlite3.connect(db_path)
     try:
         conn.executescript(_SCHEMA_SQL)
+        # 兼容旧表：追加新列（幂等）
+        for col, col_type in [('exit_date', 'TEXT'), ('exit_price', 'REAL'),
+                               ('exit_reason', 'TEXT'), ('holding_days', 'INTEGER'),
+                               ('max_price', 'REAL'), ('min_price', 'REAL')]:
+            try:
+                conn.execute(f'ALTER TABLE plan_records ADD COLUMN {col} {col_type}')
+            except sqlite3.OperationalError:
+                pass  # 列已存在
         conn.commit()
     finally:
         conn.close()
@@ -109,13 +111,6 @@ def _parse_reason(reason: str) -> tuple:
         return ('', '')
     parts = reason.split('·')
     return (parts[0].strip(), parts[1].strip() if len(parts) > 1 else '')
-
-
-def _is_hold_action(action: str) -> bool:
-    """判断action是否属于"持有"类"""
-    if not action:
-        return False
-    return any(ha in action for ha in _HOLD_ACTIONS)
 
 
 def extract_plans_from_trading_plan(trading_plan: dict, date_str: str) -> list:
@@ -194,98 +189,139 @@ def extract_plans_from_trading_plan(trading_plan: dict, date_str: str) -> list:
 
 
 # ═══════════════════════════════════════════════════════════════
-# 次日涨跌判定
+# 完整交易判定（持有期扫描）
 # ═══════════════════════════════════════════════════════════════
 
-def judge_next_day(plan: dict, klines: list) -> dict:
-    """根据K线数据判定计划次日的表现
+def judge_trade_exit(plan: dict, klines: list, all_stocks: dict = None) -> dict:
+    """从买入日往后扫描，直到触发卖出条件
+
+    退出优先级：
+    1. 止损：最低价跌破止损价 → 止损价卖出
+    2. 信号卖出：get_stock_card().signal='sell' → 当日收盘价卖出
 
     Args:
-        plan: {'date', 'plan_close', 'action', 'stop_loss', ...}
-        klines: [{date: 'YYYYMMDD', close, open, high, low}, ...] 按日期升序
+        plan: plan dict，含 date / code / stop_loss
+        klines: 该股票全量K线 [{date, close, open, high, low}, ...] 升序
+        all_stocks: get_all_stocks() 全量数据（用于 get_stock_card）
 
     Returns:
-        更新后的 plan 字段（result, change_pct, next_date, next_close, hit_stop_loss...）
+        更新后的 plan 字段（result, exit_date, exit_price, exit_reason, ...）
     """
     result = dict(plan)
-
     date_compact = plan['date'].replace('-', '')
-    plan_close = plan.get('plan_close')
+    code = plan.get('code', '')
+    stop_loss = plan.get('stop_loss')
+    stop_loss_pct = plan.get('stop_loss_pct')
+    action = plan.get('action', '')
 
-    # 找当日K线
-    plan_kline = None
-    next_kline = None
-    found = False
-    for k in klines:
-        kd = str(k.get('date', ''))
-        if kd == date_compact:
-            plan_kline = k
-            found = True
-            continue
-        if found and kd > date_compact:
-            next_kline = k
+    # 找入场日
+    entry_idx = None
+    for i, k in enumerate(klines):
+        if str(k.get('date', '')) == date_compact:
+            entry_idx = i
+            result['plan_close'] = float(k.get('close', 0))
             break
 
-    if plan_kline:
-        result['plan_close'] = float(plan_kline.get('close', 0))
-        plan_close = result['plan_close']
-
-    if not plan_close or plan_close == 0:
+    plan_close = result.get('plan_close')
+    if not plan_close or plan_close == 0 or entry_idx is None:
         result['result'] = 'pending'
         return result
 
-    if not next_kline:
+    # 卖出类 — 沿用次日判定（卖出后第二天涨=卖飞，跌=卖对）
+    is_sell_plan = '卖出' in action
+    if is_sell_plan:
+        if entry_idx + 1 < len(klines):
+            nk = klines[entry_idx + 1]
+            nc = float(nk.get('close', 0))
+            change = (nc - plan_close) / plan_close * 100
+            result['next_date'] = str(nk.get('date', ''))
+            result['next_close'] = nc
+            result['change_pct'] = round(change, 2)
+            if change <= -0.5:
+                result['result'] = 'success'
+                result['exit_reason'] = 'price_down'
+            elif change >= 0.5:
+                result['result'] = 'failure'
+                result['exit_reason'] = 'price_up'
+            else:
+                result['result'] = 'flat'
+                result['exit_reason'] = 'flat'
+            result['exit_date'] = result['next_date']
+            result['exit_price'] = nc
+            result['holding_days'] = 1
+        else:
+            result['result'] = 'pending'
+        return result
+
+    # ── 买入类：扫描持有期 ──
+    max_price = plan_close
+    min_price = plan_close
+
+    # 从次日开始逐日扫描
+    for i in range(entry_idx + 1, len(klines)):
+        k = klines[i]
+        cur_close = float(k.get('close', 0))
+        cur_low = float(k.get('low', 0))
+        cur_high = float(k.get('high', 0))
+        cur_date = str(k.get('date', ''))
+
+        max_price = max(max_price, cur_high)
+        min_price = min(min_price, cur_low)
+        holding_days = i - entry_idx
+
+        # 1. 止损 — 用 stop_loss_pct 按入场价算，避免入场价变化导致止损失效
+        actual_sl = None
+        if stop_loss_pct is not None and stop_loss_pct > 0:
+            actual_sl = plan_close * (1 - stop_loss_pct / 100)
+        elif stop_loss is not None:
+            actual_sl = float(stop_loss)
+        if actual_sl is not None and cur_low < actual_sl:
+            result['exit_date'] = cur_date
+            result['exit_price'] = round(actual_sl, 2)
+            result['exit_reason'] = 'stop_loss'
+            result['change_pct'] = round((actual_sl - plan_close) / plan_close * 100, 2)
+            result['holding_days'] = holding_days
+            result['max_gain'] = round((max_price - plan_close) / plan_close * 100, 2)
+            result['max_loss'] = round((min_price - plan_close) / plan_close * 100, 2)
+            result['max_price'] = max_price
+            result['min_price'] = min_price
+            result['hit_stop_loss'] = 1
+            result['result'] = 'failure'  # 止损就是失败
+            break
+
+        # 2. 信号卖出 — 调用 get_stock_card
+        if all_stocks:
+            try:
+                from backend.services.stock_card_service import get_stock_card
+                # 用截至当天的K线数据判断
+                date_for_card = cur_date[:4] + '-' + cur_date[4:6] + '-' + cur_date[6:8]
+                card = get_stock_card(code, date_str=date_for_card, klines=klines[:i+1])
+                if card and card.get('signal') == 'sell':
+                    result['exit_date'] = cur_date
+                    result['exit_price'] = cur_close
+                    result['exit_reason'] = 'signal_sell'
+                    result['holding_days'] = holding_days
+                    result['change_pct'] = round((cur_close - plan_close) / plan_close * 100, 2)
+                    result['max_gain'] = round((max_price - plan_close) / plan_close * 100, 2)
+                    result['max_loss'] = round((min_price - plan_close) / plan_close * 100, 2)
+                    result['max_price'] = max_price
+                    result['min_price'] = min_price
+                    result['result'] = 'success' if result['change_pct'] >= 0 else 'failure'
+                    break
+            except Exception:
+                pass
+
+    # 扫描完成但未退出
+    if 'exit_date' not in result or not result.get('exit_date'):
         result['result'] = 'pending'
-        return result
-
-    # 次日数据
-    nc = float(next_kline.get('close', 0))
-    nh = float(next_kline.get('high', 0))
-    nl_ = float(next_kline.get('low', 0))
-    no_ = float(next_kline.get('open', 0))
-
-    change = (nc - plan_close) / plan_close * 100
-    max_gain = (nh - plan_close) / plan_close * 100
-    max_loss = (nl_ - plan_close) / plan_close * 100
-
-    result['next_date'] = str(next_kline.get('date', ''))
-    result['next_open'] = no_
-    result['next_close'] = nc
-    result['next_high'] = nh
-    result['next_low'] = nl_
-    result['change_pct'] = round(change, 2)
-    result['max_gain'] = round(max_gain, 2)
-    result['max_loss'] = round(max_loss, 2)
-
-    # 盘中是否触及止损
-    stop_loss = plan.get('stop_loss')
-    if stop_loss is not None and nl_ < float(stop_loss):
-        result['hit_stop_loss'] = 1
-    else:
-        result['hit_stop_loss'] = 0
-
-    # 持有类action不参与统计，只记涨跌
-    if _is_hold_action(plan.get('action', '')):
-        result['result'] = None
-        return result
-
-    # 判定成功/失败
-    action_for_judge = plan.get('action', '')
-    is_sell = '卖出' in action_for_judge
-    if is_sell:
-        if change <= _FAIL_THRESHOLD:
-            result['result'] = 'success'
-        elif change >= _SUCC_THRESHOLD:
-            result['result'] = 'failure'
-        else:
-            result['result'] = 'flat'
-    else:
-        if change >= _SUCC_THRESHOLD:
-            result['result'] = 'success'
-        elif change <= _FAIL_THRESHOLD:
-            result['result'] = 'failure'
-        else:
-            result['result'] = 'flat'
+        # 但记录截至目前的浮动盈亏
+        last_close = float(klines[-1].get('close', 0))
+        result['change_pct'] = round((last_close - plan_close) / plan_close * 100, 2)
+        result['max_gain'] = round((max_price - plan_close) / plan_close * 100, 2)
+        result['max_loss'] = round((min_price - plan_close) / plan_close * 100, 2)
+        result['max_price'] = max_price
+        result['min_price'] = min_price
+        result['holding_days'] = len(klines) - entry_idx - 1
 
     return result
 
@@ -321,6 +357,12 @@ def _plan_to_row(p: dict) -> dict:
         'max_gain': p.get('max_gain'),
         'max_loss': p.get('max_loss'),
         'hit_stop_loss': p.get('hit_stop_loss', 0),
+        'exit_date': p.get('exit_date'),
+        'exit_price': p.get('exit_price'),
+        'exit_reason': p.get('exit_reason'),
+        'holding_days': p.get('holding_days'),
+        'max_price': p.get('max_price'),
+        'min_price': p.get('min_price'),
         'result': p.get('result'),
         'executed': p.get('executed'),
         'user_note': p.get('user_note', ''),
@@ -456,6 +498,48 @@ def _group_stats(rows: list, group_field: str = None) -> dict:
         }
 
 
+def _compute_daily_stats(all_plans: list) -> list:
+    """按日期聚合统计 — 用于算法效果追踪折线图"""
+    from collections import defaultdict
+    daily = defaultdict(lambda: {'total': 0, 'success': 0, 'failure': 0, 'flat': 0,
+                                 'changes': [], 'gain_sum': 0.0, 'loss_sum': 0.0})
+    for p in all_plans:
+        d = p.get('date', '')
+        r = p.get('result', '')
+        chg = p.get('change_pct')
+        if r not in ('success', 'failure', 'flat'):
+            continue
+        daily[d]['total'] += 1
+        daily[d][r] += 1
+        if chg is not None:
+            daily[d]['changes'].append(chg)
+            if r == 'success':
+                daily[d]['gain_sum'] += chg
+            elif r == 'failure':
+                daily[d]['loss_sum'] += chg
+
+    result = []
+    for date in sorted(daily.keys()):
+        st = daily[date]
+        valid = st['success'] + st['failure']
+        rate = round(st['success'] / valid * 100, 1) if valid > 0 else 0
+        avg_chg = round(sum(st['changes']) / len(st['changes']), 2) if st['changes'] else 0
+        avg_gain = round(st['gain_sum'] / st['success'], 2) if st['success'] > 0 else 0
+        avg_loss = round(st['loss_sum'] / st['failure'], 2) if st['failure'] > 0 else 0
+        result.append({
+            'date': date,
+            'total': st['total'],
+            'success': st['success'],
+            'failure': st['failure'],
+            'flat': st['flat'],
+            'success_rate': rate,
+            'avg_change': avg_chg,
+            'avg_gain': avg_gain,
+            'avg_loss': avg_loss,
+        })
+    return result
+
+
 def get_tracking(db_path: str = None, start_date: str = None, end_date: str = None,
                  force_db_init: bool = True) -> dict:
     """获取完整的追踪数据（含多维统计）
@@ -493,6 +577,9 @@ def get_tracking(db_path: str = None, start_date: str = None, end_date: str = No
 
     suggestions = generate_suggestions(all_plans, summary, by_buy_point, by_structure, by_is_main)
 
+    # 每日聚合统计 — 用于算法效果追踪折线图
+    daily_stats = _compute_daily_stats(all_plans)
+
     return {
         'plans': all_plans,
         'summary': summary,
@@ -501,6 +588,7 @@ def get_tracking(db_path: str = None, start_date: str = None, end_date: str = No
         'by_is_main': by_is_main,
         'by_source': by_source,
         'suggestions': suggestions,
+        'daily_stats': daily_stats,
         'last_updated': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
     }
 
@@ -694,7 +782,7 @@ def compute_tracking(force=False, db_path=None) -> dict:
             if not klines or not isinstance(klines, list):
                 plan['result'] = 'no_data'
             else:
-                plan = judge_next_day(plan, klines)
+                plan = judge_trade_exit(plan, klines, all_stocks)
 
             _save_plan_record(db_path, plan)
 

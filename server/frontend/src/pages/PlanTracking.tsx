@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
+import DailyTrendChart from '../components/DailyTrendChart'
 import './PlanTracking.css'
 
 interface PlanEntry {
@@ -263,6 +264,9 @@ export default function PlanTracking() {
                 </div>
               </div>
 
+              {/* 📈 算法效果趋势 */}
+              <DailyTrendChart data={data.daily_stats || []} />
+
               {/* 📋 系统建议 */}
               {suggestions.length > 0 && (
                 <div className="info-card" style={{ marginTop: 12, padding: 10 }}>
@@ -431,13 +435,14 @@ export default function PlanTracking() {
                       <th>主线</th>
                       <th>涨跌幅</th>
                       <th>结果</th>
+                      <th>退出</th>
                       <th>执行</th>
                       <th>备注</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredPlans.length === 0 && (
-                      <tr><td colSpan={10} style={{ textAlign: 'center', color: '#666', padding: 20 }}>无匹配计划</td></tr>
+                      <tr><td colSpan={11} style={{ textAlign: 'center', color: '#666', padding: 20 }}>无匹配计划</td></tr>
                     )}
                     {filteredPlans.map((p, i) => (
                       <tr key={`${p.date}-${p.code}-${i}`}>
@@ -454,6 +459,14 @@ export default function PlanTracking() {
                           {p.change_pct != null ? `${p.change_pct >= 0 ? '+' : ''}${p.change_pct.toFixed(2)}%` : '--'}
                         </td>
                         <td>{RESULT_LABELS[p.result || ''] || (p.result === undefined || p.result === null ? '📌 参考' : p.result)}</td>
+                        <td style={{ fontSize: 10 }}>
+                          {p.exit_reason ? (
+                            <span style={{ color: p.exit_reason === 'stop_loss' ? '#e94560' : p.exit_reason === 'signal_sell' ? '#ffd700' : '#888' }}>
+                              {p.exit_reason === 'stop_loss' ? '🛑止损' : p.exit_reason === 'signal_sell' ? '📡卖信号' : p.exit_reason === 'price_down' ? '📉跌' : p.exit_reason === 'price_up' ? '📈涨' : p.exit_reason}
+                              {p.holding_days ? ` ${p.holding_days}天` : ''}
+                            </span>
+                          ) : <span style={{ color: '#555' }}>--</span>}
+                        </td>
                         <td>
                           {p.result === 'success' || p.result === 'failure' || p.result === 'flat' ? (
                             <span

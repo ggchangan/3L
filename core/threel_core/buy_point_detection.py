@@ -92,13 +92,14 @@ def _find_support_levels(klines, idx):
     return min(highs[-20:]) if len(highs) >= 20 else None
 
 
-def calc_stop_loss(klines, idx, close_price=None):
-    """计算推荐止损位和止损率
+def calc_stop_loss(klines, idx, close_price=None, buy_type=None, entry_idx=None):
+    """计算推荐止损位和止损率 — 基于买点类型（简放训练营第15期）
 
-    逻辑：
-    - 找最近关键支撑位
-    - 止损位 = 支撑位 × 0.98（支撑下方2%防假破）
-    - 若找不到支撑，用EMA20 × 0.97（EMA下方3%）
+    不同买点类型对应不同止损位置：
+    - 突破买点：突破失败 = 跌破突破位置 → 止损在突破K线最低价下方5%
+    - 中继买点(低吸)：低吸失败 = 跌破低吸点 → 止损在低吸K线最低价下方4%
+    - 恐慌买点/反转买点：失败 = 跌破信号K线 → 止损在信号K线最低价下方5%
+    - 无买点(默认)：用支撑位×0.95 或 EMA20×0.96
 
     返回: (stop_loss_price, stop_loss_pct)
     """
@@ -107,15 +108,54 @@ def calc_stop_loss(klines, idx, close_price=None):
 
     closes = [k['close'] for k in klines[:idx+1]]
     cur = close_price or closes[-1]
+
+    # ── 按买点类型计算止损 ──
+    if buy_type and entry_idx is not None and entry_idx >= 0 and entry_idx < len(klines):
+        ek = klines[entry_idx]
+        ek_low = ek['low']
+        ek_close = ek['close']
+        ek_open = ek['open']
+
+        if buy_type in ('突破买点', '区顶突破'):
+            # 突破买点：止损在突破K线最低价下方5%
+            # 同时也参考阻力位下方：取两者中较低（更宽松）的一个
+            stop_base = min(ek_low, ek_close)
+            sl = round(stop_base * 0.95, 2)
+            # 如果能找到阻力位，也参考阻力位下方的止损
+            resistance = _find_resistance_levels(klines, idx)
+            if resistance and resistance > 0:
+                resistance_sl = round(resistance * 0.96, 2)
+                # 取较低者（更安全，给更多空间）
+                sl = min(sl, resistance_sl)
+            sl_pct = round((cur - sl) / cur * 100, 2) if cur > 0 else None
+            return (sl, sl_pct)
+
+        elif buy_type in ('中继买点', '趋势回踩'):
+            # 中继买点(低吸)：止损在低吸K线最低价下方4%
+            # 低吸点被跌破 = 低吸失败
+            sl = round(ek_low * 0.96, 2)
+            # 如果低吸K线带下影线（低开高走），收盘价也参考
+            if ek_close > ek_open:
+                sl = min(sl, round(ek_close * 0.95, 2))
+            sl_pct = round((cur - sl) / cur * 100, 2) if cur > 0 else None
+            return (sl, sl_pct)
+
+        elif buy_type in ('恐慌买点', '反转买点'):
+            # 恐慌/反转买点：止损在信号K线最低价下方5%
+            sl = round(ek_low * 0.95, 2)
+            sl_pct = round((cur - sl) / cur * 100, 2) if cur > 0 else None
+            return (sl, sl_pct)
+
+    # ── 无买点类型：用支撑位×0.95 或 EMA20×0.96 ──
     support = _find_support_levels(klines, idx)
     if support is not None and support > 0:
-        sl = round(support * 0.98, 2)
+        sl = round(support * 0.95, 2)
     else:
         # 退而求其次：用EMA20
         from backend.core.ema_utils import ema_list
         ema20 = ema_list(closes, 20)
         if ema20[-1] and ema20[-1] > 0:
-            sl = round(ema20[-1] * 0.97, 2)
+            sl = round(ema20[-1] * 0.96, 2)
         else:
             return (None, None)
     sl_pct = round((cur - sl) / cur * 100, 2) if cur > 0 else None
