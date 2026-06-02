@@ -1068,13 +1068,17 @@ def get_top_concept_sectors_with_5d():
     if not concepts_kline:
         return {'today_top5': [], 'chg20d_top5': []}
 
-    # === 源A：东方财富实时涨跌幅 ===
+    # === 源A：东方财富实时涨跌幅（不做THS名称过滤，直接用原始数据） ===
     realtime_chg = {}  # name → chg_today
     try:
         df = ak.stock_board_change_em()
         for _, row in df.iterrows():
-            name = str(row['板块名称'])
-            chg = float(row['涨跌幅']) if row['涨跌幅'] != '-' else 0
+            name = str(row['板块名称']).strip()
+            chg_str = str(row['涨跌幅']).strip()
+            try:
+                chg = float(chg_str)
+            except (ValueError, TypeError):
+                chg = 0
             realtime_chg[name] = chg
     except Exception:
         realtime_chg = {}
@@ -1094,28 +1098,78 @@ def get_top_concept_sectors_with_5d():
         den = sum((xs[i]-mx)**2 for i in range(n))
         return num/den if den else 0
 
-    all_results = []
+    # 工具函数（与 get_top_sectors_with_5d 保持一致）
+    kline_map = {name: klines for name, klines in concepts_kline.items() if klines and len(klines) >= 5}
+
+    # === 今日涨幅TOP10：直接用东方财富实时数据排序（不依赖THS名称过滤） ===
+    today_candidates = []
+    for name, chg in realtime_chg.items():
+        klines = kline_map.get(name)
+        if klines:
+            closes = [k['close'] for k in klines]
+            highs = [k['high'] for k in klines]
+            lows = [k['low'] for k in klines]
+            # 20日涨幅
+            chg20d = 0
+            if len(closes) >= 21:
+                chg20d = round((closes[-1] / closes[-21] - 1) * 100, 2)
+            # 结构/阶段
+            c15 = closes[-15:] if len(closes) >= 15 else closes
+            e10 = _ema_list(c15, 10)
+            n = len(e10)
+            max_pos = max(range(n), key=lambda i: e10[i])
+            min_pos = min(range(n), key=lambda i: e10[i])
+            first_q = n // 4
+            last_q = n - 1 - n // 4
+            if max_pos >= last_q and min_pos <= first_q:
+                structure = '📈 上涨趋势'
+            elif min_pos >= last_q and max_pos <= first_q:
+                structure = '📉 下降趋势'
+            else:
+                structure = '➡ 区间震荡'
+            half = max(1, len(e10) // 2)
+            s1 = _reg_slope(e10[:half])
+            s2 = _reg_slope(e10[half:])
+            if structure == '📈 上涨趋势':
+                if s1 > 0 and s2 > 0:
+                    ratio = s2 / s1 if s1 != 0 else 999
+                    if ratio > 1.8:    phase = '🚀 加速'
+                    elif ratio < 0.4:  phase = '⚠️ 滞涨'
+                    else:              phase = '↑ 上行'
+                else:
+                    phase = ''
+            elif structure == '📉 下降趋势':
+                if s1 < 0 and s2 < 0:
+                    ratio = s2 / s1 if s1 != 0 else 0
+                    if ratio > 1.8:    phase = '📉 加速跌'
+                    else:              phase = '↓ 下行'
+                else:
+                    phase = ''
+            else:
+                phase = ''
+        else:
+            chg20d = None
+            structure = ''
+            phase = ''
+
+        today_candidates.append({
+            'name': name,
+            'chg': round(chg, 2),
+            'chg20d': chg20d,
+            'structure': structure,
+            'phase': phase,
+        })
+
+    today_top10 = sorted(today_candidates, key=lambda x: x['chg'], reverse=True)[:10]
+
+    # === 20日涨幅TOP10：只用同花顺日K线数据（20日涨幅不会实时变） ===
+    chg20d_all = []
     for name, klines in concepts_kline.items():
         if not klines or len(klines) < 5:
             continue
-
         closes = [k['close'] for k in klines]
         highs = [k['high'] for k in klines]
         lows = [k['low'] for k in klines]
-
-        # 今日涨幅：优先实时数据，fallback到日K线计算
-        chg_today = realtime_chg.get(name)
-        if chg_today is None and len(closes) >= 2:
-            chg_today = round((closes[-1] / closes[-2] - 1) * 100, 2)
-        elif chg_today is not None:
-            chg_today = round(chg_today, 2)
-        else:
-            chg_today = 0
-
-        # 20日涨幅
-        chg20d = 0
-        if len(closes) >= 21:
-            chg20d = round((closes[-1] / closes[-21] - 1) * 100, 2)
 
         # 结构（EMA10极值位置）
         c15 = closes[-15:] if len(closes) >= 15 else closes
@@ -1155,19 +1209,18 @@ def get_top_concept_sectors_with_5d():
         else:
             phase = ''
 
-        all_results.append({
+        chg20d_all.append({
             'name': name,
-            'chg': chg_today,
+            'chg': 0,  # 今日涨幅在今日Tab中已由change_em提供，此处不重要
             'chg20d': chg20d,
             'structure': structure,
             'phase': phase,
         })
 
-    if not all_results:
-        return {'today_top5': [], 'chg20d_top5': []}
+    if not chg20d_all:
+        return {'today_top5': today_top10, 'chg20d_top5': []}
 
-    today_top10 = sorted(all_results, key=lambda x: x['chg'], reverse=True)[:10]
-    chg20d_top10 = sorted(all_results, key=lambda x: x['chg20d'], reverse=True)[:10]
+    chg20d_top10 = sorted(chg20d_all, key=lambda x: (x['chg20d'] is not None, x['chg20d'] or 0), reverse=True)[:10]
 
     return {
         'today_top5': today_top10,

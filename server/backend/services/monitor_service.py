@@ -488,23 +488,19 @@ def get_leader_dashboard():
                     'structure': c.get('structure', ''),
                     'phase': c.get('phase', ''),
                 })
-        # 概念板块底部：从实时数据里拿跌幅最大的
+        # 概念板块底部：从实时数据里拿跌幅最大的（不做THS名称过滤）
         import akshare as ak
         import warnings
         warnings.filterwarnings('ignore')
         df = ak.stock_board_change_em()
-        con_names = set()
-        try:
-            con_df = ak.stock_board_concept_name_ths()
-            con_names = set(con_df['name'])
-        except Exception:
-            pass
         bottom = []
         for _, row in df.iterrows():
-            name = str(row['板块名称'])
-            if name not in con_names:
+            name = str(row['板块名称']).strip()
+            chg_str = str(row['涨跌幅']).strip()
+            try:
+                chg = float(chg_str)
+            except (ValueError, TypeError):
                 continue
-            chg = float(row['涨跌幅']) if row['涨跌幅'] != '-' else 0
             if chg < -3:
                 bottom.append({'name': name, 'chg': round(chg, 2)})
         bottom.sort(key=lambda x: x['chg'])
