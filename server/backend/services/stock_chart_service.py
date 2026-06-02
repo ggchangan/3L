@@ -101,8 +101,6 @@ def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stag
       - 缩：缩量（接近10日最低量50%）→ 供需双方观望
       - ↯：放量滞涨（stage=放量滞涨+量>1.2倍）→ 需求推不动价
 
-    均线支撑/压力（TODO）：EMA5/10/20处的方向性供需转换点，待实现
-
     动态信号层（由 signal_detector 独立检测，通过 triggered_signals 参数传入，
     在SVG右上角以图例框展示）：向上突破/上涨中继/向上反转/供应衰竭/
     向下突破/向下反转/需求衰竭/下跌中继/区间震荡中继
