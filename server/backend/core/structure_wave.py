@@ -170,7 +170,10 @@ def judge_structure_wave(klines: List[Dict], structure: Optional[str] = None):
         conds_v['回调深度充足'] = pullback_pct > 3.0
         scoring_v = ['缩量', '价波收窄', 'ema10支撑', '下影线企稳', '回调深度充足']
         real_vl = sum(1 for k in scoring_v if conds_v.get(k, False))
-        vl_score = real_vl if (can_trigger and real_vl >= 2) else 0
+        # 缩量是必要条件（原文核心：供应枯竭），其余条件≥2个
+        strict_vl = conds_v.get('缩量', False) and real_vl >= 3
+        normal_vl = real_vl >= 4  # 即使没缩量，4个其他条件也够
+        vl_score = real_vl if (can_trigger and (strict_vl or normal_vl)) else 0
         valley_conds = conds_v
 
     elif structure in ('下降趋势', '下跌趋势'):
@@ -194,15 +197,20 @@ def judge_structure_wave(klines: List[Dict], structure: Optional[str] = None):
         peak_conds = conds_p
 
         # --- 波谷（恐慌抛售型） ---
+        # 原文6.2.1: 下降趋势中的波谷=恐慌抛售：大跌+放量+不破位
         conds_v = {}
         conds_v['大跌'] = gain_prev < -3
         conds_v['放量'] = vol_ratio > 1.5
         conds_v['下影线'] = ls_pct > body_pct * 1.5 and ls_pct > 0.5
         conds_v['不破位'] = cur['close'] >= klines[-2]['low'] * 0.97
         conds_v['收相对高位'] = cur['close'] > (cur['high'] + cur['low']) / 2
-        vl_score = sum(1 for v in conds_v.values() if v) if any([
-            conds_v['大跌'], conds_v['放量'], conds_v['下影线']
-        ]) else 0
+        # 恐慌抛售模式（高质量信号）
+        panic_mode = conds_v['大跌'] and conds_v['放量'] and (conds_v['不破位'] or conds_v['下影线'] or conds_v['收相对高位'])
+        # 放量不跌模式（低质量但可接受）
+        absorb_mode = conds_v['放量'] and not conds_v['大跌'] and conds_v['不破位'] and conds_v['收相对高位']
+        # 单纯下影线不算！必须有实质性的恐慌或放量吸收
+        score_v = sum(1 for v in conds_v.values() if v)
+        vl_score = score_v if (panic_mode or absorb_mode) else 0
         valley_conds = conds_v
 
     else:  # 区间震荡
