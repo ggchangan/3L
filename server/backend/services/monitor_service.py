@@ -488,18 +488,25 @@ def get_leader_dashboard():
                     'structure': c.get('structure', ''),
                     'phase': c.get('phase', ''),
                 })
-        # 概念板块底部（今日跌幅前5）
-        from backend.core.data_layer import get_sector_daily
-        sd = get_sector_daily()
-        concepts_kline = sd.get('concepts', {})
+        # 概念板块底部：从实时数据里拿跌幅最大的
+        import akshare as ak
+        import warnings
+        warnings.filterwarnings('ignore')
+        df = ak.stock_board_change_em()
+        con_names = set()
+        try:
+            con_df = ak.stock_board_concept_name_ths()
+            con_names = set(con_df['name'])
+        except Exception:
+            pass
         bottom = []
-        for cname, klines in concepts_kline.items():
-            if not klines or len(klines) < 2:
+        for _, row in df.iterrows():
+            name = str(row['板块名称'])
+            if name not in con_names:
                 continue
-            closes = [k['close'] for k in klines]
-            chg = round((closes[-1] / closes[-2] - 1) * 100, 2)
+            chg = float(row['涨跌幅']) if row['涨跌幅'] != '-' else 0
             if chg < -3:
-                bottom.append({'name': cname, 'chg': chg})
+                bottom.append({'name': name, 'chg': round(chg, 2)})
         bottom.sort(key=lambda x: x['chg'])
         concept_anomalies['plunge'] = bottom[:5]
     except Exception:

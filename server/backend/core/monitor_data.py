@@ -1049,21 +1049,37 @@ def get_market_leaders():
 
 def get_top_concept_sectors_with_5d():
     """
-    获取概念板块排行
-    - 「今日涨幅TOP10」：今日涨跌幅前10
-    - 「20日涨幅TOP10」：近20交易日累计涨幅前10
-    数据源：sector_daily.json['concepts']（同花顺概念板块指数）
-    与 get_top_sectors_with_5d() 复用同一套结构/阶段计算逻辑
-    """
-    from backend.core.data_layer import get_sector_daily
+    获取概念板块排行 — **双源合并方案**
+    - 「今日涨幅TOP10」：从 stock_board_change_em() 拿实时涨跌幅（0.28s）
+    - 「20日涨幅TOP10」：从 sector_daily.json['concepts'] 拿20日涨幅+结构+阶段
 
+    为什么双源？
+    - change_em（东方财富）一次返回999个板块实时涨跌幅，0.28s搞定
+    - 但没有结构/阶段/20日涨幅计算，这些用本地缓存的日K线数据
+    """
+    import akshare as ak
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    from backend.core.data_layer import get_sector_daily
     sector_data = get_sector_daily()
     concepts_kline = sector_data.get('concepts', {})
 
     if not concepts_kline:
         return {'today_top5': [], 'chg20d_top5': []}
 
-    # 工具函数（与 get_top_sectors_with_5d 保持一致）
+    # === 源A：东方财富实时涨跌幅 ===
+    realtime_chg = {}  # name → chg_today
+    try:
+        df = ak.stock_board_change_em()
+        for _, row in df.iterrows():
+            name = str(row['板块名称'])
+            chg = float(row['涨跌幅']) if row['涨跌幅'] != '-' else 0
+            realtime_chg[name] = chg
+    except Exception:
+        realtime_chg = {}
+
+    # === 源B：本地日K线 → 结构/阶段/20日涨幅 ===
     def _ema_list(d, p):
         r = [None]*len(d); m = 2/(p+1)
         for i in range(len(d)):
@@ -1078,23 +1094,30 @@ def get_top_concept_sectors_with_5d():
         den = sum((xs[i]-mx)**2 for i in range(n))
         return num/den if den else 0
 
-    def _compute_one(name, klines):
-        """计算单个概念板块的结构、阶段、今日涨幅、20日涨幅"""
+    all_results = []
+    for name, klines in concepts_kline.items():
+        if not klines or len(klines) < 5:
+            continue
+
         closes = [k['close'] for k in klines]
         highs = [k['high'] for k in klines]
         lows = [k['low'] for k in klines]
 
-        # 今日涨幅（最近两日收盘）
-        chg_today = 0
-        if len(closes) >= 2:
+        # 今日涨幅：优先实时数据，fallback到日K线计算
+        chg_today = realtime_chg.get(name)
+        if chg_today is None and len(closes) >= 2:
             chg_today = round((closes[-1] / closes[-2] - 1) * 100, 2)
+        elif chg_today is not None:
+            chg_today = round(chg_today, 2)
+        else:
+            chg_today = 0
 
         # 20日涨幅
         chg20d = 0
         if len(closes) >= 21:
             chg20d = round((closes[-1] / closes[-21] - 1) * 100, 2)
 
-        # 结构（EMA10极值位置，同 get_top_sectors_with_5d）
+        # 结构（EMA10极值位置）
         c15 = closes[-15:] if len(closes) >= 15 else closes
         e10 = _ema_list(c15, 10)
         n = len(e10)
@@ -1132,28 +1155,18 @@ def get_top_concept_sectors_with_5d():
         else:
             phase = ''
 
-        return {
+        all_results.append({
             'name': name,
             'chg': chg_today,
             'chg20d': chg20d,
             'structure': structure,
             'phase': phase,
-        }
-
-    # 计算所有概念板块
-    all_results = []
-    for name, klines in concepts_kline.items():
-        if not klines or len(klines) < 5:
-            continue
-        all_results.append(_compute_one(name, klines))
+        })
 
     if not all_results:
         return {'today_top5': [], 'chg20d_top5': []}
 
-    # 今日涨幅TOP10
     today_top10 = sorted(all_results, key=lambda x: x['chg'], reverse=True)[:10]
-
-    # 20日涨幅TOP10
     chg20d_top10 = sorted(all_results, key=lambda x: x['chg20d'], reverse=True)[:10]
 
     return {
