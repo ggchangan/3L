@@ -33,22 +33,22 @@ def get_ema_arrangement(closes):
     return '--'
 
 def get_structure(closes):
-    """基于EMA12不对称斜率阈值判断结构（2026-06-02 深度优化版）
+    """基于EMA12+EMA5长短配合判定结构（2026-06-02 C方案）
 
     不对称阈值：上涨严格(斜率高) + 下降宽松(斜率低)
-    回测结果(239只自选股×60天滚动，5931次判定)：
-    - 上涨趋势: 51.6% 均+5.12%（占比降22%，收益升0.67%）
-    - 区间震荡: 42.3% 均+3.02%
-    - 下降趋势:  6.1% 均+0.24%（比旧版+1.00%降0.76%）
-    - 区分度: +4.88%（旧版EMA20法+3.45%，提升1.43%）
 
-    ① EMA12斜率 > 0.8% + BIAS > -5% → 上涨趋势（严格）
-    ② EMA12斜率 < -0.2% + BIAS < 3%  → 下降趋势（宽松）
-    ③ 其他 → 区间震荡
+    上涨趋势判定（需同时满足长/短周期条件）：
+    ① 长周期：EMA12斜率>0.8% + BIAS>-5% + 多头排列
+    ② 短周期确认：EMA5斜率>0%（短周期动量未转弱）
+    ①②均满足→上涨趋势；①满足但②不满足→区间震荡(转弱降级)
+
+    下降趋势：EMA12斜率<-0.2% + BIAS<3%
+    其他 → 区间震荡
     """
     if len(closes) < 25:
         return '--'
     
+    # ── 长周期：EMA12 ──
     ema12 = ema_list(closes, 12)
     e12_recent = [v for v in ema12[-12:] if v is not None]
     if len(e12_recent) < 5:
@@ -60,12 +60,39 @@ def get_structure(closes):
     cur, cur_ema12 = closes[-1], e12_recent[-1]
     bias = (cur - cur_ema12) / cur_ema12 * 100 if cur_ema12 else 0
     
-    if slope_pct > 0.8 and bias > -5:
-        return '上涨趋势'
-    elif slope_pct < -0.2 and bias < 3:
+    # ── 多头排列检查 ──
+    e5 = ema_list(closes, 5)
+    e10 = ema_list(closes, 10)
+    e20 = ema_list(closes, 20)
+    bull_arrange = (e5[-1] and e10[-1] and e20[-1] and e5[-1] > e10[-1] > e20[-1])
+    
+    # ── 短周期确认：EMA5斜率 ──
+    ema5 = ema_list(closes, 5)
+    e5_recent = [v for v in ema5[-5:] if v is not None]
+    ema5_slope_pct = 0
+    if len(e5_recent) >= 3:
+        s5 = _reg_slope(e5_recent)
+        ema5_slope_pct = s5 / e5_recent[0] * 100 if e5_recent[0] else 0
+
+    # ── 超短周期确认：收盘价5日斜率 ──
+    close5 = closes[-5:]
+    close_slope_pct = 0
+    if len(close5) >= 5:
+        sc = _reg_slope(close5)
+        close_slope_pct = sc / close5[0] * 100 if close5[0] else 0
+
+    # ── 结构判定 ──
+    if slope_pct > 0.8 and bias > -5 and bull_arrange:
+        # 长周期看涨，但需中/短周期双重确认
+        if ema5_slope_pct > 0 and close_slope_pct > 0:
+            return '上涨趋势'
+        else:
+            return '区间震荡'  # 趋势转弱，降级
+    
+    if slope_pct < -0.2 and bias < 3:
         return '下降趋势'
-    else:
-        return '区间震荡'
+    
+    return '区间震荡'
 
 def get_stage(closes, structure=None, highs=None, lows=None, support_level=None, resistance_level=None, volumes=None, opens_p=None):
     """基于EMA10半段斜率判断阶段

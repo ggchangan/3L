@@ -96,7 +96,7 @@ def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stag
     【供需格局转换点】—— 代表供应/需求主导权切换：
       - 前高：局部波峰，比前后各5根K线的最高都高 → 需求衰竭，供应开始主导
       - 前低：局部波谷，比前后各5根K线的最低都低 → 供应衰竭，需求开始主导
-      - 突：真区间震荡突破（结构=区间震荡+前12根收盘价窄幅≤8%）→ 需求突破供应区
+      - 突：区间震荡突破（结构=区间震荡+突破前12日最高+收盘偏高+EMA20以上）→ 需求突破供应区
       - 反：阴转阳反转形态 → 短期供需逆转（仅大盘/板块）
 
     【量能辅助标注】—— 描述当日成交量行为，不构成供需转换：
@@ -181,23 +181,15 @@ def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stag
 
         # ── 突破 — 仅区间震荡的真突破（上升趋势/下跌反弹不标"突"） ──
         if structure == '区间震荡' and i >= 15:
-            # 检查前12根K线是否真震荡（收盘价窄幅整理才算，单边涨不算）
-            win_closes = closes[i - 12:i]
-            c_lo = min(win_closes)
-            c_hi = max(win_closes)
-            if c_lo > 0:
-                c_range = (c_hi - c_lo) / c_lo * 100
-                # 12根K线收盘价范围≤8%才算真震荡（超过说明在趋势中）
-                if c_range <= 8:
-                    ph = max(highs[i - 12:i])
-                    # 突破前12日最高 + 收盘在偏高位置 + EMA20上行过滤
-                    if (closes[i] > ph and
-                        closes[i] > closes[i - 1] and
-                        closes[i] > highs[i] - (highs[i] - lows[i]) * 0.3):
-                        if e20[i] and closes[i] > e20[i]:
-                            if i - _last.get('突', -99) >= 3:
-                                kps.append({'idx': i, 'label': '突', 'y': highs[i]})
-                                _last['突'] = i
+            ph = max(highs[i - 12:i])
+            # 突破前12日最高 + 收盘在偏高位置 + EMA20上行过滤
+            if (closes[i] > ph and
+                closes[i] > closes[i - 1] and
+                closes[i] > highs[i] - (highs[i] - lows[i]) * 0.3):
+                if e20[i] and closes[i] > e20[i]:
+                    if i - _last.get('突', -99) >= 3:
+                        kps.append({'idx': i, 'label': '突', 'y': highs[i]})
+                        _last['突'] = i
 
         # ── 反转（仅大盘/板块使用） ──
         if detect_reversal and i >= 1:
@@ -431,37 +423,53 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     kps = _find_breakthrough_points(closes, highs, lows, volumes,
                                     structure=stock_structure, stage=stock_stage)
 
-    # 支撑/压力线 — 仅区间震荡画（2026-06-02 回测优化）
-    # 支撑: D(混合) — 有突破点用突破点, 无则用前低, 再退到20日最低
-    # 压力: B(统计边界) — 20日最高
-    # 见 scripts/backtest_support_resistance.py 回测结果: 综合72.2%
+    # ── 5. 当前买卖点 — 显示 get_stock_card() 的信号 ──
+    try:
+        from backend.services.stock_card_service import get_stock_card
+        card = get_stock_card(raw_code, last_date, klines=stocks) if last_date else None
+        if card:
+            sig = card.get('signal', '')
+            last_pos = n - 1
+            if sig == 'buy':
+                kps.append({'idx': last_pos, 'label': '买', 'y': lows[last_pos], 'type': 1})
+            elif sig == 'sell':
+                kps.append({'idx': last_pos, 'label': '卖', 'y': highs[last_pos], 'type': 1})
+    except Exception:
+        pass
+
+    # 支撑/压力线 — 综合支撑候选，取最近的一档
+    # 2026-06-02 v3: 支撑=前低+前高(角色互换)+突(突破)，均低于现价取最高
+    #               压力=前高+前低(角色互换)+突，均高于现价取最低
     cur_close = closes[-1] if closes else 0
     bk_pts = []
     hi_15 = None
+    nd20 = min(20, len(closes))
+
+    # 支撑候选：所有低于现价的关键点，取最高的（最接近现价）
+    support_candidates = [kp for kp in kps
+                          if kp['label'] in ('前低', '前高', '突')
+                          and kp['idx'] >= len(closes) - nd20
+                          and kp['y'] < cur_close]
+    if support_candidates:
+        best = max(support_candidates, key=lambda x: x['y'])
+        support_y = best['y']
+    else:
+        support_y = min(lows[-nd20:]) if nd20 > 0 else 0
+
+    # 压力候选：所有高于现价的关键点（全量数据），取最低的（最接近现价）
+    resistance_candidates = [kp for kp in kps
+                             if kp['label'] in ('前高', '前低', '突')
+                             and kp['y'] > cur_close]
+    if resistance_candidates:
+        best = min(resistance_candidates, key=lambda x: x['y'])
+        resistance_y = best['y']
+    else:
+        resistance_y = None
+        # 无高于现价的关键点 → 不画压力线（已突破所有历史压力）
+
     if stock_structure == '区间震荡':
-        # 支撑（D混合）: 突破点 → 前低 → 20日最低
-        bk_candidates = sorted(
-            [kp for kp in kps if kp['label'] == '突' and kp['y'] < cur_close],
-            key=lambda x: x['y'], reverse=True
-        )
-        if bk_candidates:
-            # 有突破点: 取最高的那个（最近的突破后支撑）
-            support_y = bk_candidates[0]['y']
-        else:
-            # 无突破: 取近20日最高前低
-            nd20 = min(20, len(closes))
-            recent_lows = [kp for kp in kps if kp['label'] == '前低'
-                           and kp['idx'] >= len(closes) - nd20 and kp['y'] < cur_close]
-            if recent_lows:
-                support_y = max(kp['y'] for kp in recent_lows)
-            else:
-                # 退到20日最低
-                support_y = min(lows[-nd20:]) if nd20 > 0 else 0
         bk_pts = [{'y': support_y, 'label': '支撑'}]
-        
-        # 压力（B统计边界）: 20日最高
-        nd20 = min(20, len(closes))
-        hi_15 = max(highs[-nd20:]) if nd20 > 0 else mx
+        hi_15 = resistance_y
 
     # ── 5. 组装 SVG ────────────────────────────────────────
     sv = []
@@ -572,7 +580,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
             continue
         xp = px(ai)
         yp = py_price(kp['y'])
-        clr_map = {'突': '#2196f3', '前高': '#ff9800', '前低': '#4caf50', '放↑': '#ff5722', '放↓': '#9c27b0', '缩': '#607d8b', '↯': '#ff9800'}
+        clr_map = {'突': '#2196f3', '前高': '#ff9800', '前低': '#4caf50', '放↑': '#ff5722', '放↓': '#9c27b0', '缩': '#607d8b', '↯': '#ff9800', '买': '#00e676', '卖': '#e94560'}
         clr = clr_map.get(kp['label'], '#ff9800')
         sv.append(
             f'<rect x="{xp - sz}" y="{yp - sz}" width="{sz * 2}" '
@@ -759,6 +767,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     legend_items = [
         ('#ffd700', 'EMA5'), ('#ff6b6b', 'EMA10'), ('#4ecdc4', 'EMA20'),
         ('#2196f3', '突破'), ('#ff9800', '前高/量'), ('#4caf50', '前低'),
+        ('#00e676', '买点'), ('#e94560', '卖点'),
     ]
     if has_today:
         legend_items.append(('#ffffff', st['legend_label']))
