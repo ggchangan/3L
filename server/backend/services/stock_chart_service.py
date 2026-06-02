@@ -423,6 +423,20 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     kps = _find_breakthrough_points(closes, highs, lows, volumes,
                                     structure=stock_structure, stage=stock_stage)
 
+    # ── 5. 当前买卖点 — 显示 get_stock_card() 的信号 ──
+    try:
+        from backend.services.stock_card_service import get_stock_card
+        card = get_stock_card(raw_code, last_date, klines=stocks) if last_date else None
+        if card:
+            sig = card.get('signal', '')
+            last_pos = n - 1
+            if sig == 'buy':
+                kps.append({'idx': last_pos, 'label': '买', 'y': lows[last_pos], 'type': 1})
+            elif sig == 'sell':
+                kps.append({'idx': last_pos, 'label': '卖', 'y': highs[last_pos], 'type': 1})
+    except Exception:
+        pass
+
     # 支撑/压力线 — 综合支撑候选，取最近的一档
     # 2026-06-02 v3: 支撑=前低+前高(角色互换)+突(突破)，均低于现价取最高
     #               压力=前高+前低(角色互换)+突，均高于现价取最低
@@ -566,7 +580,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
             continue
         xp = px(ai)
         yp = py_price(kp['y'])
-        clr_map = {'突': '#2196f3', '前高': '#ff9800', '前低': '#4caf50', '放↑': '#ff5722', '放↓': '#9c27b0', '缩': '#607d8b', '↯': '#ff9800'}
+        clr_map = {'突': '#2196f3', '前高': '#ff9800', '前低': '#4caf50', '放↑': '#ff5722', '放↓': '#9c27b0', '缩': '#607d8b', '↯': '#ff9800', '买': '#00e676', '卖': '#e94560'}
         clr = clr_map.get(kp['label'], '#ff9800')
         sv.append(
             f'<rect x="{xp - sz}" y="{yp - sz}" width="{sz * 2}" '
@@ -753,6 +767,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     legend_items = [
         ('#ffd700', 'EMA5'), ('#ff6b6b', 'EMA10'), ('#4ecdc4', 'EMA20'),
         ('#2196f3', '突破'), ('#ff9800', '前高/量'), ('#4caf50', '前低'),
+        ('#00e676', '买点'), ('#e94560', '卖点'),
     ]
     if has_today:
         legend_items.append(('#ffffff', st['legend_label']))
