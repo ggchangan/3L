@@ -61,6 +61,11 @@ def get_structure(closes):
     bias = (cur - cur_ema12) / cur_ema12 * 100 if cur_ema12 else 0
     
     if slope_pct > 0.8 and bias > -5:
+        # 补丁：EMA12最近5根连续下降 → 已见顶回落，判区间震荡
+        # 防12根斜率被早期上升段掩盖（如长川科技：前6根强升+后6根连降）
+        _recent5 = e12_recent[-5:]
+        if len(_recent5) >= 3 and all(_recent5[i] >= _recent5[i+1] for i in range(len(_recent5)-1)):
+            return '区间震荡'
         return '上涨趋势'
     elif slope_pct < -0.2 and bias < 3:
         return '下降趋势'
