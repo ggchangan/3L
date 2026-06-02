@@ -50,6 +50,26 @@ def _volume_ratio(klines, idx, field='volume'):
     vol = klines[idx].get(field, klines[idx].get('vol', 0))
     return vol / vma5 if vma5 > 0 else 0
 
+def _find_resistance_levels(klines, idx):
+    """找当前价之上的关键阻力位（从波峰检测计算）
+
+    与 _find_support_levels 对称，但找上方阻力而非下方支撑。
+    波峰定义：比前后各5根K线的最高都高（同图表关键点逻辑）。
+    返回当前价之上最近的波峰，若无则返回 None。
+    """
+    highs = [k['high'] for k in klines[:idx + 1]]
+    peaks = []
+    n = len(highs)
+    for i in range(5, min(idx, n - 1)):
+        if highs[i] > max(highs[i - 5:i]) and highs[i] >= max(highs[i + 1:min(i + 6, n)]):
+            peaks.append(highs[i])
+    if not peaks:
+        return None
+    cur = klines[idx]['close']
+    above = sorted([p for p in peaks if p > cur])
+    return above[0] if above else None
+
+
 def _find_support_levels(klines, idx):
     """找最近的关键支撑位（从突破点计算）"""
     highs = [k['high'] for k in klines[:idx+1]]
@@ -145,7 +165,7 @@ def _surge_threshold(market_position='', is_main_line=True):
     return round(base / factor, 2)
 
 
-def _breakout_score(close, prev_close, prev_10d_high, vol_ratio, body_ratio, high=None, low=None):
+def _breakout_score(close, prev_close, resistance, vol_ratio, body_ratio, high=None, low=None):
     """多维评分判定突破有效性 — 替代单一量比阈值
     
     硬条件（必须满足）：
@@ -174,7 +194,7 @@ def _breakout_score(close, prev_close, prev_10d_high, vol_ratio, body_ratio, hig
         if close <= mid_point and not is_limit_up:
             return False, 0, {'reason': f'收盘{close}≤中点{mid_point:.2f}，未收高位'}
     
-    break_pct = (close - prev_10d_high) / prev_10d_high * 100 if prev_10d_high else 0
+    break_pct = (close - resistance) / resistance * 100 if resistance else 0
     
     # 突破幅度分（越高越好）
     s1 = 3 if break_pct > 5 else (2 if break_pct > 3 else (1 if break_pct > 1 else 0))
@@ -437,8 +457,12 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
     ema_arr = get_ema_arrangement(closes_60)
     
     # ====== 支撑/阻力（提前计算，供突破确认用） ======
-    prev_10d_high = max(kls[idx-j]['high'] for j in range(1, 11)) if idx >= 10 else None
-    is_breakout = prev_10d_high and close > prev_10d_high  # 突破前10日最高
+    # 波峰阻力（用于上涨趋势的突破确认）：最近在上的波峰（前高），比前后5根都高
+    resistance = _find_resistance_levels(kls, idx)
+    # 区间高点阻力（用于区间震荡的突破确认）：最近15根的区间上沿
+    zone_resistance = max(highs[-15:]) if len(highs) >= 15 else None
+    # 默认用波峰阻力（上涨趋势场景），区间震荡场景在分支内单独判断
+    is_breakout = resistance and close > resistance
     
     # ====== 突破后3天确认机制 ======
     # 突破日买入，但结构改变需要3天确认
@@ -559,8 +583,8 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
         
     if is_breakout:
         # 多维评分判定突破有效性
-        is_breakout_valid, breakout_score, breakout_detail = _breakout_score(
-            close, prev_close, prev_10d_high, vol_ratio, body_ratio, high=high, low=low
+        is_breakout_valid, breakout_score_val, breakout_detail = _breakout_score(
+            close, prev_close, resistance, vol_ratio, body_ratio, high=high, low=low
         )
     
     # 上涨趋势中不产生突破买点：3天内已有评分≥6的有效突破就跳过
@@ -583,22 +607,25 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
                 break
     
     should_skip_breakout_buy = _has_recent_breakout
-    
-    if is_breakout and is_breakout_valid and not should_skip_breakout_buy:
-            # 突破前高 → 突破买点（有更高的优先级，覆盖中继）
-            buy_type = '突破买点'
-            score = 4
-            detail = {
-                'reason': f'突破前高(评分{breakout_score})',
-                'structure': structure,
-                'stage': stage,
-                'vol_ratio': round(vol_ratio, 2),
-                'breakout_pct': round((close - prev_10d_high) / prev_10d_high * 100, 2),
-                'breakout_score': breakout_score,
-                'breakout_detail': breakout_detail,
-            }
-    
+
+    # 突破买点 = 区间顶部+放量突破（设计文档第707行）
+    # 只允许 区间震荡→区间顶部 或 上涨趋势中的有效突破
+    if structure == '上涨趋势' and is_breakout and is_breakout_valid and not should_skip_breakout_buy:
+        # 上涨趋势中的有效突破 → 突破买点
+        buy_type = '突破买点'
+        score = 4
+        detail = {
+            'reason': f'上涨趋势突破(评分{breakout_score_val})',
+            'structure': structure,
+            'stage': stage,
+            'vol_ratio': round(vol_ratio, 2),
+            'breakout_pct': round((close - resistance) / resistance * 100, 2) if resistance else 0,
+            'breakout_score': breakout_score_val,
+            'breakout_detail': breakout_detail,
+        }
+
     elif structure == '区间震荡':
+        is_range_breakout = False
         if stage == '区间底部' and is_shrink:
             # 区间底部缩量企稳 → 中继买点
             buy_type = '中继买点'
@@ -611,13 +638,16 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
                 'shrink': True,
             }
         
-        if stage == '区间顶部' and is_breakout:
-            # 多维评分判定突破有效性
-            is_breakout_valid, breakout_score, breakout_detail = _breakout_score(
-                close, prev_close, prev_10d_high, vol_ratio, body_ratio, high=high, low=low
-            )
-        
-        if stage == '区间顶部' and is_breakout and is_breakout_valid:
+        if stage == '区间顶部':
+            # 区间震荡的突破阻力位 = 区间高点（max(highs[-15:])），不是波峰
+            is_range_breakout = zone_resistance and close > zone_resistance
+            if is_range_breakout:
+                # 多维评分判定突破有效性
+                is_breakout_valid, breakout_score, breakout_detail = _breakout_score(
+                    close, prev_close, zone_resistance, vol_ratio, body_ratio, high=high, low=low
+                )
+
+        if stage == '区间顶部' and is_range_breakout and is_breakout_valid:
             # 区顶放量突破 → 突破买点
             buy_type = '突破买点'
             score = 4
@@ -626,7 +656,7 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
                 'structure': structure,
                 'stage': stage,
                 'vol_ratio': round(vol_ratio, 2),
-                'breakout_pct': round((close - prev_10d_high) / prev_10d_high * 100, 2),
+                'breakout_pct': round((close - zone_resistance) / zone_resistance * 100, 2) if zone_resistance else 0,
                 'breakout_score': breakout_score,
                 'breakout_detail': breakout_detail,
             }
