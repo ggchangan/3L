@@ -422,42 +422,6 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     # 关键点（传入结构+阶段用于量价信号标注）
     kps = _find_breakthrough_points(closes, highs, lows, volumes,
                                     structure=stock_structure, stage=stock_stage)
-    # ── 5. 买卖点信号标注 — 在关键点上叠加买点/卖点标记 ──
-    n_data = len(closes)
-    scan_from = max(0, n_data - 30)
-    for pos in range(scan_from, n_data):
-        existing = [kp for kp in kps if kp['idx'] == pos and kp['label'] in ('买', '卖')]
-        if existing:
-            continue
-        cur_s = get_structure(closes[:pos + 1]) if pos >= 20 else ''
-        cur_h = highs[:pos + 1] if pos >= 0 else []
-        cur_l = lows[:pos + 1] if pos >= 0 else []
-        cur_v = volumes[:pos + 1] if pos >= 0 else []
-        cur_st = ''
-        if cur_s and len(cur_h) >= 15 and len(cur_l) >= 15:
-            cur_st = get_stage(closes[:pos + 1], cur_s, cur_h, cur_l, volumes=cur_v)
-        is_buy = False
-        if cur_s == '区间震荡' and pos >= 15:
-            prev_high = max(highs[max(0, pos-12):pos])
-            if closes[pos] > prev_high and closes[pos] > highs[pos] - (highs[pos] - lows[pos]) * 0.3:
-                is_buy = True
-                kps.append({'idx': pos, 'label': '买', 'y': lows[pos], 'type': 3})
-        if not is_buy and pos >= 20:
-            if cur_s == '上涨趋势' and cur_st in ('上行', '缩量整理'):
-                if pos >= 10:
-                    v10 = volumes[max(0, pos-10):pos]
-                    if len(v10) >= 5 and volumes[pos] < max(v10) * 0.7:
-                        kps.append({'idx': pos, 'label': '买', 'y': lows[pos], 'type': 3})
-        if cur_s == '下降趋势' or cur_st in ('转弱', '滞涨', '加速'):
-            if pos - max([kp['idx'] for kp in kps if kp['label'] == '卖'] + [-99]) >= 3:
-                kps.append({'idx': pos, 'label': '卖', 'y': highs[pos], 'type': 3})
-
-    # debug: 打印买卖点统计
-    buy_count = len([kp for kp in kps if kp['label'] == '买'])
-    sell_count = len([kp for kp in kps if kp['label'] == '卖'])
-    if buy_count or sell_count:
-        pass
-    
 
     # 支撑/压力线 — 综合支撑候选，取最近的一档
     # 2026-06-02 v3: 支撑=前低+前高(角色互换)+突(突破)，均低于现价取最高
@@ -602,7 +566,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
             continue
         xp = px(ai)
         yp = py_price(kp['y'])
-        clr_map = {'突': '#2196f3', '前高': '#ff9800', '前低': '#4caf50', '放↑': '#ff5722', '放↓': '#9c27b0', '缩': '#607d8b', '↯': '#ff9800', '买': '#00e676', '卖': '#e94560'}
+        clr_map = {'突': '#2196f3', '前高': '#ff9800', '前低': '#4caf50', '放↑': '#ff5722', '放↓': '#9c27b0', '缩': '#607d8b', '↯': '#ff9800'}
         clr = clr_map.get(kp['label'], '#ff9800')
         sv.append(
             f'<rect x="{xp - sz}" y="{yp - sz}" width="{sz * 2}" '
@@ -789,7 +753,6 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     legend_items = [
         ('#ffd700', 'EMA5'), ('#ff6b6b', 'EMA10'), ('#4ecdc4', 'EMA20'),
         ('#2196f3', '突破'), ('#ff9800', '前高/量'), ('#4caf50', '前低'),
-        ('#00e676', '买点'), ('#e94560', '卖点'),
     ]
     if has_today:
         legend_items.append(('#ffffff', st['legend_label']))
