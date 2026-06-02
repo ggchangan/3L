@@ -33,32 +33,36 @@ def get_ema_arrangement(closes):
     return '--'
 
 def get_structure(closes):
-    """基于EMA20斜率+BIAS20判断结构（2026-06-02 回测优化替代EMA10极值法）
+    """基于EMA12不对称斜率阈值判断结构（2026-06-02 深度优化版）
 
-    EMA10极值法区分度为负（判下降后反弹+6.21%，判上涨只有+4.78%）
-    EMA20斜率法区分度+1.51%（239只股票×60天滚动回测）
-    
-    ① EMA20斜率 > 0.2% + BIAS20 > -2% → 上涨趋势
-    ② EMA20斜率 < -0.2% + BIAS20 < 2% → 下降趋势
+    不对称阈值：上涨严格(斜率高) + 下降宽松(斜率低)
+    回测结果(239只自选股×60天滚动，5931次判定)：
+    - 上涨趋势: 51.6% 均+5.12%（占比降22%，收益升0.67%）
+    - 区间震荡: 42.3% 均+3.02%
+    - 下降趋势:  6.1% 均+0.24%（比旧版+1.00%降0.76%）
+    - 区分度: +4.88%（旧版EMA20法+3.45%，提升1.43%）
+
+    ① EMA12斜率 > 0.8% + BIAS > -5% → 上涨趋势（严格）
+    ② EMA12斜率 < -0.2% + BIAS < 3%  → 下降趋势（宽松）
     ③ 其他 → 区间震荡
     """
     if len(closes) < 25:
         return '--'
     
-    ema20 = ema_list(closes, 20)
-    e20_recent = [v for v in ema20[-10:] if v is not None]
-    if len(e20_recent) < 5:
+    ema12 = ema_list(closes, 12)
+    e12_recent = [v for v in ema12[-12:] if v is not None]
+    if len(e12_recent) < 5:
         return '--'
     
-    slope = _reg_slope(e20_recent)
-    slope_pct = slope / e20_recent[0] * 100 if e20_recent[0] else 0
+    slope = _reg_slope(e12_recent)
+    slope_pct = slope / e12_recent[0] * 100 if e12_recent[0] else 0
     
-    cur, cur_ema20 = closes[-1], e20_recent[-1]
-    bias20 = (cur - cur_ema20) / cur_ema20 * 100 if cur_ema20 else 0
+    cur, cur_ema12 = closes[-1], e12_recent[-1]
+    bias = (cur - cur_ema12) / cur_ema12 * 100 if cur_ema12 else 0
     
-    if slope_pct > 0.2 and bias20 > -2:
+    if slope_pct > 0.8 and bias > -5:
         return '上涨趋势'
-    elif slope_pct < -0.2 and bias20 < 2:
+    elif slope_pct < -0.2 and bias < 3:
         return '下降趋势'
     else:
         return '区间震荡'
@@ -66,13 +70,21 @@ def get_structure(closes):
 def get_stage(closes, structure=None, highs=None, lows=None, support_level=None, resistance_level=None, volumes=None, opens_p=None):
     """基于EMA10半段斜率判断阶段
     - s1=末15根EMA10整体斜率（趋势基准），s2=末3根斜率（近期动量，更敏感）
-    - 上涨趋势: 上行(ratio 0.4~1.8) / 加速(>1.8) / 放量滞涨(量>1.3x+窄幅) / 缩量滞涨(缩量+横盘) / 缩量整理(缩量+回踩) / 转弱(s1>0,s2<0)
+    - 上涨趋势:
+        - 上行(ratio 0.4~1.8) / 加速(>1.8) — 正常上行阶段
+        - 放量滞涨(放量+价不涨) / 缩量滞涨(缩量+横盘) — **信号驱动的场景描述词**
+        - 缩量整理(缩量+回踩) / 转弱(s1>0,s2<0) — 蓄力/右侧转弱
     - 下降趋势: 下行(ratio≤1.8) / 加速跌(>1.8) / 转强(s1<0,s2>0)
     - 区间震荡: 区间顶部/区间中段/区间底部（价格位置）
+
+    设计原则：
+    - 放量滞涨/缩量滞涨是量价信号驱动，不依赖斜率ratio阈值
+    - 它们是「场景描述词」而非独立卖出信号
+    - 真正的卖出决策由融合引擎(_keypoint_direction)组合其他条件判定
+    - 详见 docs/stock-card-logic-design.md 第4章
     """
     if structure == '区间震荡':
         cur = closes[-1] if closes else 0
-        # 优先使用3L关键点识别的支撑/压力位
         lo = support_level if support_level else (min(lows[-15:]) if highs and lows and len(lows) >= 15 else cur)
         hi = resistance_level if resistance_level else (max(highs[-15:]) if highs and lows and len(highs) >= 15 else cur)
         if hi > lo:
@@ -81,21 +93,55 @@ def get_stage(closes, structure=None, highs=None, lows=None, support_level=None,
             elif pct > 70: return '区间顶部'
             else: return '区间中段'
         return '--'
-    # 非区间震荡：用斜率判断
+
     if len(closes) < 15:
         return '--'
     e10 = ema_list(closes, 10)
-    # 取末15根EMA10作为趋势基准
     e10_last = [v for v in e10[-15:] if v is not None]
     if len(e10_last) < 10:
         return '--'
-    # s1 = 末15根整体斜率（趋势基准），s2 = 末3根斜率（近期动量，更敏感）
     s1 = _reg_slope(e10_last)
     s2 = _reg_slope(e10_last[-3:]) if len(e10_last) >= 3 else 0
+
+    # ── A. 量价异常信号检查（先于斜率分类，信号驱动） ──
+    # 仅检查上涨趋势结构的个股
+    if s1 > 0 and structure != '下降趋势':
+        if volumes and len(volumes) >= 13 and closes[-1] > e10_last[-1]:
+            vol_last3 = sum(volumes[-3:]) / 3
+            vol_prev10 = sum(volumes[-13:-3]) / 10
+            if vol_prev10 > 0:
+                vol_ratio = vol_last3 / vol_prev10
+
+                # 放量滞涨：量放大 + 价不涨 + 窄幅
+                if vol_ratio > 1.2:
+                    # 价不涨：近3日涨幅<3%
+                    recent_3d_change = (closes[-1] - closes[-4]) / closes[-4] * 100 if len(closes) >= 4 else 100
+                    if recent_3d_change < 3:
+                        # 窄幅：当日实体小 or 振幅小
+                        op = opens_p[-1] if opens_p else closes[-1]
+                        body_pct = abs(closes[-1] - op) / op if op else 0
+                        hi = highs[-1] if highs else closes[-1]
+                        lo = lows[-1] if lows else closes[-1]
+                        amp = (hi - lo) / lo if lo else 0
+                        if body_pct < 0.03 or amp < 0.05:
+                            return '放量滞涨'
+
+                # 缩量滞涨：量萎缩 + 横盘不创新高 + 波动小
+                if vol_ratio < 0.8:
+                    if len(closes) >= 10:
+                        recent_low = min(closes[-10:])
+                        recent_high = max(closes[-10:])
+                        recent_range = (recent_high - recent_low) / recent_low * 100
+                        # 近10日波动<5%且不创新高
+                        prev_high = max(closes[-20:-10]) if len(closes) >= 20 else recent_high
+                        if recent_range < 5 and closes[-1] <= prev_high * 1.01:
+                            return '缩量滞涨'
+
+    # ── B. 斜率分类（无异常信号时按正常斜率判断） ──
     if s1 > 0 and s2 > 0:
         ratio = s2 / s1 if abs(s1) > 1e-8 else 1.0
         if ratio > 1.8:
-            # C方案：检测近5日是否有急跌阴线（跌幅>3%）导致V反误判加速
+            # C方案：检测近5日是否有急跌阴线导致V反误判加速
             if len(closes) >= 6:
                 check = closes[-6:]
                 for ci in range(1, len(check)):
@@ -107,8 +153,7 @@ def get_stage(closes, structure=None, highs=None, lows=None, support_level=None,
                             if s1_adj > 0:
                                 ratio = s2 / s1_adj
                         break
-
-            # D方案：判断整理后突破（2026-05-22）
+            # D方案：判断整理后突破
             if len(closes) >= 23:
                 w = closes[-23:-3]
                 if len(w) >= 10:
@@ -127,37 +172,22 @@ def get_stage(closes, structure=None, highs=None, lows=None, support_level=None,
                                 break
         if ratio > 1.8: return '加速'
         elif ratio < 0.4:
-            # 按原文量价原理区分：放量滞涨 / 缩量滞涨 / 缩量整理
+            # 斜率极低 → 如果有成交量数据但上面没判定，检查缩量整理
             if volumes and len(volumes) >= 13 and closes[-1] > e10_last[-1]:
                 vol_last3 = sum(volumes[-3:]) / 3
                 vol_prev10 = sum(volumes[-13:-3]) / 10
-                if vol_prev10 > 0:
-                    vol_ratio = vol_last3 / vol_prev10
-                    
-                    # ① 放量滞涨 — 原文5.6节：放量+价不涨+窄幅
-                    if vol_ratio > 1.2:
-                        op = opens_p[-1] if opens_p else closes[-1]
-                        body_pct = abs(closes[-1] - op) / op if op else 0
-                        hi = highs[-1] if highs else closes[-1]
-                        lo = lows[-1] if lows else closes[-1]
-                        amp = (hi - lo) / lo if lo else 0
-                        if body_pct < 0.02 and amp < 0.04:
-                            return '放量滞涨'
-                    
-                    # ② 缩量 + 检查价格形态
-                    if vol_ratio < 0.8:
-                        # 缩量整理：有回踩 + 价不破EMA10（正常回调）
-                        if len(closes) >= 10:
-                            recent_low = min(closes[-10:])
-                            recent_high = max(closes[-10:])
-                            recent_range = (recent_high - recent_low) / recent_low * 100
-                            if recent_range > 3:
-                                return '缩量整理'
-                        # 缩量滞涨：需求不足→横盘→平顶风险
-                        # 近10日波动<3%或不再创新高
-                        return '缩量滞涨'
-            return '滞涨'  # fallback
-        else: return '上行'
+                if vol_prev10 > 0 and (vol_last3 / vol_prev10) < 0.8:
+                    # 缩量整理：缩量 + 有回踩 + 价不破EMA10
+                    if len(closes) >= 10:
+                        recent_low = min(closes[-10:])
+                        recent_high = max(closes[-10:])
+                        recent_range = (recent_high - recent_low) / recent_low * 100
+                        if recent_range > 3:
+                            return '缩量整理'
+            # 斜率低但非异常量价 → 仍算上行（只是慢）
+            return '上行'
+        else:
+            return '上行'
     elif s1 < 0 and s2 < 0:
         ratio = s2 / s1 if abs(s1) > 1e-8 else 1.0
         if ratio > 1.8: return '加速跌'

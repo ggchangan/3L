@@ -195,6 +195,10 @@ def _build_conclusion(card):
         return '斜率正常，EMA10持续向上，上行趋势健康，继续持有不动'
     elif stage == '加速':
         return 'EMA10斜率加速变陡，拉升阶段，关注放量滞涨等左侧止盈信号'
+    elif stage == '放量滞涨':
+        return '⚠️ 放量+价不涨，高位换手密集，左侧预警信号，建议减仓避险'
+    elif stage == '缩量滞涨':
+        return '⚠️ 缩量横盘不创新高，需求逐步衰竭，建议减仓观望'
     elif stage == '滞涨':
         return 'EMA10走平涨不动，警惕回调，考虑减仓'
     elif stage == '转弱':
@@ -381,7 +385,7 @@ def get_stock_card(code, date_str, market_position='波中',
     if signal == 'hold':
         struct = struct_info.get('structure', '')
         stage = struct_info.get('stage', '')
-        if struct == '下降趋势' or stage in ('转弱', '滞涨', '下行'):
+        if struct == '下降趋势' or stage in ('转弱', '滞涨', '放量滞涨', '缩量滞涨', '下行', '加速跌'):
             signal = 'sell'
             signal_text = signal_text or f'{stage}·建议减仓'
 
