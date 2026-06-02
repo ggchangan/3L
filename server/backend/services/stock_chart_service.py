@@ -431,38 +431,33 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
     kps = _find_breakthrough_points(closes, highs, lows, volumes,
                                     structure=stock_structure, stage=stock_stage)
 
-    # 支撑/压力线 — 仅区间震荡画（2026-06-02 回测优化）
-    # 支撑: D(混合) — 有突破点用突破点, 无则用前低, 再退到20日最低
-    # 压力: B(统计边界) — 20日最高
-    # 见 scripts/backtest_support_resistance.py 回测结果: 综合72.2%
+    # 支撑/压力线 — 基于近20日前低/前高，跨越结构通用
+    # 2026-06-02 v2: 废弃"突"点支撑法（突破点来自前区间，与当前价格范围无关）
+    #   改用统一逻辑：支撑=近20日最高前低（区间底部），压力=近20日最低前高（区间顶部）
     cur_close = closes[-1] if closes else 0
     bk_pts = []
     hi_15 = None
+    nd20 = min(20, len(closes))
+
+    # 统一支撑：近20日"前低"中最高且低于现价的
+    recent_lows = [kp for kp in kps if kp['label'] == '前低'
+                   and kp['idx'] >= len(closes) - nd20 and kp['y'] < cur_close]
+    if recent_lows:
+        support_y = max(kp['y'] for kp in recent_lows)
+    else:
+        support_y = min(lows[-nd20:]) if nd20 > 0 else 0
+
+    # 统一压力：近20日"前高"中最低且高于现价的
+    recent_highs = [kp for kp in kps if kp['label'] == '前高'
+                    and kp['idx'] >= len(closes) - nd20 and kp['y'] > cur_close]
+    if recent_highs:
+        resistance_y = min(kp['y'] for kp in recent_highs)
+    else:
+        resistance_y = max(highs[-nd20:]) if nd20 > 0 else mx
+
     if stock_structure == '区间震荡':
-        # 支撑（D混合）: 近30日突破点 → 前低 → 20日最低
-        bk_candidates = sorted(
-            [kp for kp in kps if kp['label'] == '突' and kp['y'] < cur_close
-             and kp['idx'] >= len(closes) - 30],
-            key=lambda x: x['y'], reverse=True
-        )
-        if bk_candidates:
-            # 有突破点: 取最高的那个（最近的突破后支撑）
-            support_y = bk_candidates[0]['y']
-        else:
-            # 无突破: 取近20日最高前低
-            nd20 = min(20, len(closes))
-            recent_lows = [kp for kp in kps if kp['label'] == '前低'
-                           and kp['idx'] >= len(closes) - nd20 and kp['y'] < cur_close]
-            if recent_lows:
-                support_y = max(kp['y'] for kp in recent_lows)
-            else:
-                # 退到20日最低
-                support_y = min(lows[-nd20:]) if nd20 > 0 else 0
         bk_pts = [{'y': support_y, 'label': '支撑'}]
-        
-        # 压力（B统计边界）: 20日最高
-        nd20 = min(20, len(closes))
-        hi_15 = max(highs[-nd20:]) if nd20 > 0 else mx
+        hi_15 = resistance_y
 
     # ── 5. 组装 SVG ────────────────────────────────────────
     sv = []
