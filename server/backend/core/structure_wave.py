@@ -230,7 +230,7 @@ def judge_structure_wave(klines: List[Dict], structure: Optional[str] = None):
         conds_p['上影线'] = us_pct > 1.5
         conds_p['放量下跌'] = gain_prev < -1.5 and vol_ratio > 1.2
         conds_p['bias5转负'] = bias5 <= 0
-        pk_score = sum(1 for v in conds_p.values() if v) if can_peak else 0
+        pk_score = sum(1 for v in conds_p.values() if v) if (can_peak and sum(1 for v in conds_p.values() if v) >= 3) else 0
 
         # 波谷（区间底+缩量企稳）
         conds_v = {}
