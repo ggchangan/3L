@@ -343,26 +343,31 @@ def update_index(client):
 # ════════════════════════════════════════════════════════════════
 
 def _fetch_sector_klines_akshare(sector_type, name):
-    """
-    拉取单个板块的日K线（只拉最近90天，足够60天+裁剪缓冲）
+    """拉取单个板块的日K线（带重试，对抗akshare限流）
     sector_type: 'industry' 或 'concept'
     name: 板块名称
     返回 [{date, open, close, high, low, volume}] 或 []
     """
     import akshare as ak
+    import time
     from datetime import datetime, timedelta
     today = datetime.now().strftime('%Y%m%d')
     start = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-    try:
-        if sector_type == 'industry':
-            df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)
-        else:
-            df = ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=today)
-        if df is None or len(df) == 0:
-            return []
-        return _df_to_kline(df)
-    except Exception:
-        return []
+
+    for attempt in range(3):
+        try:
+            if sector_type == 'industry':
+                df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)
+            else:
+                df = ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=today)
+            if df is None or len(df) == 0:
+                return []
+            return _df_to_kline(df)
+        except Exception:
+            if attempt < 2:
+                time.sleep(2 + attempt * 2)  # 2s → 4s → give up
+            continue
+    return []
 
 
 def update_sectors():
@@ -401,6 +406,7 @@ def update_sectors():
                 if klines:
                     industries[name] = klines
                     ind_new += 1
+                time.sleep(0.3)
                 continue
 
             # 已有板块：只追最新日
@@ -408,6 +414,7 @@ def update_sectors():
             existing_dates = {k['date'] for k in klines}
             fetched = _fetch_sector_klines_akshare('industry', name)
             if not fetched:
+                time.sleep(0.3)
                 continue
 
             added = 0
@@ -421,6 +428,7 @@ def update_sectors():
                     klines = klines[-60:]
                     industries[name] = klines
                 ind_updated += 1
+            time.sleep(0.3)
         except Exception as e:
             log(f'  ⚠️  行业-{name}: {e}')
 
@@ -434,12 +442,14 @@ def update_sectors():
                 if klines:
                     concepts[name] = klines
                     con_new += 1
+                time.sleep(0.3)
                 continue
 
             klines = concepts[name]
             existing_dates = {k['date'] for k in klines}
             fetched = _fetch_sector_klines_akshare('concept', name)
             if not fetched:
+                time.sleep(0.3)
                 continue
 
             added = 0
@@ -453,6 +463,7 @@ def update_sectors():
                     klines = klines[-60:]
                     concepts[name] = klines
                 con_updated += 1
+            time.sleep(0.3)
         except Exception as e:
             log(f'  ⚠️  概念-{name}: {e}')
 
