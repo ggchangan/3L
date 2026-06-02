@@ -33,32 +33,36 @@ def get_ema_arrangement(closes):
     return '--'
 
 def get_structure(closes):
-    """基于EMA20斜率+BIAS20判断结构（2026-06-02 回测优化替代EMA10极值法）
+    """基于EMA12不对称斜率阈值判断结构（2026-06-02 深度优化版）
 
-    EMA10极值法区分度为负（判下降后反弹+6.21%，判上涨只有+4.78%）
-    EMA20斜率法区分度+1.51%（239只股票×60天滚动回测）
-    
-    ① EMA20斜率 > 0.2% + BIAS20 > -2% → 上涨趋势
-    ② EMA20斜率 < -0.2% + BIAS20 < 2% → 下降趋势
+    不对称阈值：上涨严格(斜率高) + 下降宽松(斜率低)
+    回测结果(239只自选股×60天滚动，5931次判定)：
+    - 上涨趋势: 51.6% 均+5.12%（占比降22%，收益升0.67%）
+    - 区间震荡: 42.3% 均+3.02%
+    - 下降趋势:  6.1% 均+0.24%（比旧版+1.00%降0.76%）
+    - 区分度: +4.88%（旧版EMA20法+3.45%，提升1.43%）
+
+    ① EMA12斜率 > 0.8% + BIAS > -5% → 上涨趋势（严格）
+    ② EMA12斜率 < -0.2% + BIAS < 3%  → 下降趋势（宽松）
     ③ 其他 → 区间震荡
     """
     if len(closes) < 25:
         return '--'
     
-    ema20 = ema_list(closes, 20)
-    e20_recent = [v for v in ema20[-10:] if v is not None]
-    if len(e20_recent) < 5:
+    ema12 = ema_list(closes, 12)
+    e12_recent = [v for v in ema12[-12:] if v is not None]
+    if len(e12_recent) < 5:
         return '--'
     
-    slope = _reg_slope(e20_recent)
-    slope_pct = slope / e20_recent[0] * 100 if e20_recent[0] else 0
+    slope = _reg_slope(e12_recent)
+    slope_pct = slope / e12_recent[0] * 100 if e12_recent[0] else 0
     
-    cur, cur_ema20 = closes[-1], e20_recent[-1]
-    bias20 = (cur - cur_ema20) / cur_ema20 * 100 if cur_ema20 else 0
+    cur, cur_ema12 = closes[-1], e12_recent[-1]
+    bias = (cur - cur_ema12) / cur_ema12 * 100 if cur_ema12 else 0
     
-    if slope_pct > 0.2 and bias20 > -2:
+    if slope_pct > 0.8 and bias > -5:
         return '上涨趋势'
-    elif slope_pct < -0.2 and bias20 < 2:
+    elif slope_pct < -0.2 and bias < 3:
         return '下降趋势'
     else:
         return '区间震荡'
