@@ -120,14 +120,24 @@ def _calc_stop_loss(klines, idx):
         return None, None
 
 
-def _get_mainline_level(sector, main_line_names, sub_main_names):
-    """判断主线等级"""
+def _get_mainline_level(sector, main_line_names, sub_main_names, concept_names=None, concept_main=None, concept_sub=None):
+    """判断主线等级：行业主线优先，概念主线补充"""
     if not sector:
         return ''
+    # 行业主线判定
     if sector in main_line_names:
         return '主线'
     elif sector in sub_main_names:
         return '次级主线'
+    # 概念主线补充判定
+    if concept_names and concept_main:
+        for cn in concept_names:
+            if cn in concept_main:
+                return '主线'
+    if concept_names and concept_sub:
+        for cn in concept_names:
+            if cn in concept_sub:
+                return '次级主线'
     return '非主线'
 
 
@@ -255,6 +265,20 @@ def get_stock_card(code, date_str, market_position='波中',
         _mainlines = main_lines
     main_line_names = [l['name'] for l in _mainlines.get('lines', [])]
     sub_main_names = [l['name'] for l in _mainlines.get('secondary', [])]
+
+    # 概念主线数据
+    _cm = _mainlines.get('concept_mainline', {})
+    concept_main_names = [l['name'] for l in _cm.get('lines', [])]
+    concept_sub_names = [l['name'] for l in _cm.get('secondary', [])]
+    # 个股概念名称（for 概念主线补充判定）
+    _stock_concept_names = []
+    try:
+        from backend.core.data_layer import get_stock_concept_map
+        _scm = get_stock_concept_map()
+        _sinfo = _scm.get(code, {})
+        _stock_concept_names = _sinfo.get('concept_names', []) if isinstance(_sinfo, dict) else []
+    except:
+        pass
 
     # 1. 获取基础信息
     industry_map = get_industry_map()
@@ -471,8 +495,11 @@ def get_stock_card(code, date_str, market_position='波中',
             stop_loss = ema20_sl
             stop_loss_pct = round((close - ema20_sl) / close * 100, 2)
 
-    # 7. 主线定位
-    mainline_level = _get_mainline_level(sector, main_line_names, sub_main_names)
+    # 7. 主线定位（行业+概念双检）
+    mainline_level = _get_mainline_level(sector, main_line_names, sub_main_names,
+                                         concept_names=_stock_concept_names,
+                                         concept_main=concept_main_names,
+                                         concept_sub=concept_sub_names)
 
     # 8. 构建卡片
     card = {
