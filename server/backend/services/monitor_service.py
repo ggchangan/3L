@@ -117,9 +117,14 @@ def get_stop_loss_triggered():
 
 
 def get_top_sectors():
-    """获取行业板块排行榜（含5日趋势）"""
-    from backend.core.monitor_data import get_top_sectors_with_5d
-    return get_top_sectors_with_5d()
+    """获取行业板块+概念板块排行榜（含5日趋势）"""
+    from backend.core.monitor_data import get_top_sectors_with_5d, get_top_concept_sectors_with_5d
+    industry = get_top_sectors_with_5d()
+    concept = get_top_concept_sectors_with_5d()
+    return {
+        'industry': industry,
+        'concept': concept,
+    }
 
 
 def get_industry_leaders():
@@ -468,9 +473,42 @@ def get_leader_dashboard():
     switch_events.sort(key=lambda x: x['diff'], reverse=True)
     anomalies['switching'] = switch_events[:5]
 
+    # 7. 概念板块异动（涨跌幅 >3% 的领涨/领跌概念板块）
+    concept_anomalies = {'surge': [], 'plunge': []}
+    try:
+        from backend.core.monitor_data import get_top_concept_sectors_with_5d
+        concept_data = get_top_concept_sectors_with_5d()
+        ct = concept_data.get('today_top5', [])
+        for c in ct:
+            chg = c.get('chg', 0) or 0
+            if chg > 3:
+                concept_anomalies['surge'].append({
+                    'name': c['name'],
+                    'chg': round(chg, 2),
+                    'structure': c.get('structure', ''),
+                    'phase': c.get('phase', ''),
+                })
+        # 概念板块底部（今日跌幅前5）
+        from backend.core.data_layer import get_sector_daily
+        sd = get_sector_daily()
+        concepts_kline = sd.get('concepts', {})
+        bottom = []
+        for cname, klines in concepts_kline.items():
+            if not klines or len(klines) < 2:
+                continue
+            closes = [k['close'] for k in klines]
+            chg = round((closes[-1] / closes[-2] - 1) * 100, 2)
+            if chg < -3:
+                bottom.append({'name': cname, 'chg': chg})
+        bottom.sort(key=lambda x: x['chg'])
+        concept_anomalies['plunge'] = bottom[:5]
+    except Exception:
+        pass
+
     return {
         'watched': watched_items,
         'anomalies': anomalies,
+        'concept_anomalies': concept_anomalies,
     }
 
 

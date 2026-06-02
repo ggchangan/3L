@@ -13,6 +13,15 @@ export interface VolumeData {
 
 /** 板块监测API返回类型 */
 export interface SectorData {
+  industry: {
+    today_top5: SectorItem[]
+    chg20d_top10: SectorItem[]
+  }
+  concept: {
+    today_top5: SectorItem[]
+    chg20d_top10: SectorItem[]
+  }
+  /** 兼容旧版（后端 data={industry,concept} 嵌套前，fallback） */
   today_top5?: SectorItem[]
   chg20d_top10?: SectorItem[]
 }
@@ -58,7 +67,18 @@ export interface MarketLeaderItem {
 export interface LeaderDashboardData {
   watched: WatchedIndustryItem[]
   anomalies: AnomalyData
+  concept_anomalies?: {
+    surge: ConceptAnomalyItem[]
+    plunge: ConceptAnomalyItem[]
+  }
   error?: string
+}
+
+export interface ConceptAnomalyItem {
+  name: string
+  chg: number
+  structure?: string
+  phase?: string
 }
 
 export interface WatchedIndustryItem {

@@ -1047,6 +1047,121 @@ def get_market_leaders():
     return result
 
 
+def get_top_concept_sectors_with_5d():
+    """
+    获取概念板块排行
+    - 「今日涨幅TOP10」：今日涨跌幅前10
+    - 「20日涨幅TOP10」：近20交易日累计涨幅前10
+    数据源：sector_daily.json['concepts']（同花顺概念板块指数）
+    与 get_top_sectors_with_5d() 复用同一套结构/阶段计算逻辑
+    """
+    from backend.core.data_layer import get_sector_daily
+
+    sector_data = get_sector_daily()
+    concepts_kline = sector_data.get('concepts', {})
+
+    if not concepts_kline:
+        return {'today_top5': [], 'chg20d_top5': []}
+
+    # 工具函数（与 get_top_sectors_with_5d 保持一致）
+    def _ema_list(d, p):
+        r = [None]*len(d); m = 2/(p+1)
+        for i in range(len(d)):
+            if i == 0: r[i] = d[i]
+            elif r[i-1] is not None: r[i] = (d[i]-r[i-1])*m+r[i-1]
+        return r
+
+    def _reg_slope(y_list):
+        n = len(y_list); xs = list(range(n))
+        mx = sum(xs)/n; my = sum(y_list)/n
+        num = sum((xs[i]-mx)*(y_list[i]-my) for i in range(n))
+        den = sum((xs[i]-mx)**2 for i in range(n))
+        return num/den if den else 0
+
+    def _compute_one(name, klines):
+        """计算单个概念板块的结构、阶段、今日涨幅、20日涨幅"""
+        closes = [k['close'] for k in klines]
+        highs = [k['high'] for k in klines]
+        lows = [k['low'] for k in klines]
+
+        # 今日涨幅（最近两日收盘）
+        chg_today = 0
+        if len(closes) >= 2:
+            chg_today = round((closes[-1] / closes[-2] - 1) * 100, 2)
+
+        # 20日涨幅
+        chg20d = 0
+        if len(closes) >= 21:
+            chg20d = round((closes[-1] / closes[-21] - 1) * 100, 2)
+
+        # 结构（EMA10极值位置，同 get_top_sectors_with_5d）
+        c15 = closes[-15:] if len(closes) >= 15 else closes
+        e10 = _ema_list(c15, 10)
+        n = len(e10)
+        max_pos = max(range(n), key=lambda i: e10[i])
+        min_pos = min(range(n), key=lambda i: e10[i])
+        first_q = n // 4
+        last_q = n - 1 - n // 4
+        if max_pos >= last_q and min_pos <= first_q:
+            structure = '📈 上涨趋势'
+        elif min_pos >= last_q and max_pos <= first_q:
+            structure = '📉 下降趋势'
+        else:
+            structure = '➡ 区间震荡'
+
+        # 阶段
+        half = max(1, len(e10) // 2)
+        s1 = _reg_slope(e10[:half])
+        s2 = _reg_slope(e10[half:])
+
+        if structure == '📈 上涨趋势':
+            if s1 > 0 and s2 > 0:
+                ratio = s2 / s1 if s1 != 0 else 999
+                if ratio > 1.8:    phase = '🚀 加速'
+                elif ratio < 0.4:  phase = '⚠️ 滞涨'
+                else:              phase = '↑ 上行'
+            else:
+                phase = ''
+        elif structure == '📉 下降趋势':
+            if s1 < 0 and s2 < 0:
+                ratio = s2 / s1 if s1 != 0 else 0
+                if ratio > 1.8:    phase = '📉 加速跌'
+                else:              phase = '↓ 下行'
+            else:
+                phase = ''
+        else:
+            phase = ''
+
+        return {
+            'name': name,
+            'chg': chg_today,
+            'chg20d': chg20d,
+            'structure': structure,
+            'phase': phase,
+        }
+
+    # 计算所有概念板块
+    all_results = []
+    for name, klines in concepts_kline.items():
+        if not klines or len(klines) < 5:
+            continue
+        all_results.append(_compute_one(name, klines))
+
+    if not all_results:
+        return {'today_top5': [], 'chg20d_top5': []}
+
+    # 今日涨幅TOP10
+    today_top10 = sorted(all_results, key=lambda x: x['chg'], reverse=True)[:10]
+
+    # 20日涨幅TOP10
+    chg20d_top10 = sorted(all_results, key=lambda x: x['chg20d'], reverse=True)[:10]
+
+    return {
+        'today_top5': today_top10,
+        'chg20d_top10': chg20d_top10,
+    }
+
+
 if __name__ == '__main__':
     print("=== 测试数据源 ===\n")
     
