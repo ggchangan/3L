@@ -130,8 +130,8 @@ class TestBuildConclusion:
             'trading_system': '3l',
             'buy_point': '突破买点',
             'stage': '上行',
-            'stop_loss': 95.0,
-            'stop_loss_pct': 5.0,
+            'stop_loss': 97.0,
+            'stop_loss_pct': 3.0,
         }
         c = _build_conclusion(card)
         assert '突破买点' in c
@@ -145,8 +145,8 @@ class TestBuildConclusion:
             'trend_bias': 1.5,
             'buy_point': 'BIAS5乖离率买入',
             'stage': '上行',
-            'stop_loss': 95.0,
-            'stop_loss_pct': 5.0,
+            'stop_loss': 97.0,
+            'stop_loss_pct': 3.0,
         }
         c = _build_conclusion(card)
         assert 'BIAS5' in c

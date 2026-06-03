@@ -8,7 +8,7 @@
 import json, os, sqlite3, sys, tempfile, unittest
 from datetime import datetime, timedelta
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 os.environ['TQDM_DISABLE'] = '1'
 
 
@@ -612,5 +612,5 @@ class TestPlanTrackingV2(unittest.TestCase):
 
 if __name__ == '__main__':
     import sys
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
     unittest.main()

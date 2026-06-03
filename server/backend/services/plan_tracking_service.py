@@ -326,6 +326,83 @@ def judge_trade_exit(plan: dict, klines: list, all_stocks: dict = None) -> dict:
     return result
 
 
+def judge_next_day(plan: dict, klines: list) -> dict:
+    """简化版：仅判断次日的涨跌，用于交易计划追踪基础统计（非持有期扫描）
+
+    与 judge_trade_exit 的关系：这是早期版本的次日涨跌判定，
+    不做持有期扫描/止损/信号退出，只看次日一个交易日。
+
+    Args:
+        plan: 含 date / plan_close / action / stop_loss
+        klines: 升序 K 线 [{date, close, high, low, open}]
+
+    Returns:
+        更新后的 plan（result / change_pct / hit_stop_loss 等）
+    """
+    result = dict(plan)
+    date_compact = plan['date'].replace('-', '')
+
+    # 找入场日
+    entry_idx = None
+    for i, k in enumerate(klines):
+        if str(k.get('date', '')) == date_compact:
+            entry_idx = i
+            result['plan_close'] = float(k.get('close', 0))
+            break
+
+    plan_close = result.get('plan_close')
+    if not plan_close or plan_close == 0 or entry_idx is None:
+        result['result'] = 'pending'
+        return result
+
+    # 无次日K线
+    if entry_idx + 1 >= len(klines):
+        result['result'] = 'pending'
+        return result
+
+    nk = klines[entry_idx + 1]
+    nc = float(nk.get('close', 0))
+    nlow = float(nk.get('low', 0))
+    change = round((nc - plan_close) / plan_close * 100, 2)
+
+    result['next_date'] = str(nk.get('date', ''))
+    result['next_close'] = nc
+    result['change_pct'] = change
+
+    # 止损检查
+    stop_loss = plan.get('stop_loss')
+    if stop_loss is not None:
+        if nlow < float(stop_loss):
+            result['hit_stop_loss'] = True
+        else:
+            result['hit_stop_loss'] = False
+
+    # 持有类不判定
+    action = plan.get('action', '')
+    if '持有' in action:
+        result['result'] = None
+        return result
+
+    # 卖出类 — 反向
+    if '卖出' in action:
+        if change <= -0.5:
+            result['result'] = 'success'
+        elif change >= 0.5:
+            result['result'] = 'failure'
+        else:
+            result['result'] = 'flat'
+        return result
+
+    # 买入类
+    if change >= 0.5:
+        result['result'] = 'success'
+    elif change <= -0.5:
+        result['result'] = 'failure'
+    else:
+        result['result'] = 'flat'
+    return result
+
+
 # ═══════════════════════════════════════════════════════════════
 # 数据库 CRUD
 # ═══════════════════════════════════════════════════════════════
