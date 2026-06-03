@@ -81,6 +81,31 @@ def _has_recently_triggered(alarm: dict, minutes: int = 0.5) -> bool:
         return False
 
 
+def _auto_dismiss_price_alarm(alarm: dict):
+    """价格回升到止损价上方 → 自动标记为已解除"""
+    from backend.services.alarm_service import dismiss_alarm
+    alarm_id = alarm.get('id', '')
+    if alarm_id:
+        dismiss_alarm(alarm_id)
+
+
+def _auto_dismiss_index_alarm(code: str):
+    """指数恢复（价格回到EMA上方）→ 自动清除报警"""
+    from backend.services.alarm_service import _load, _save
+    data = _load()
+    changed = False
+    tomorrow = date.today() + timedelta(days=1)
+    silenced = f'{tomorrow.strftime("%Y%m%d")}150000'
+    for a in data.get('alarms', []):
+        if a.get('stock_code') == code and a.get('type') in ('market', 'market_critical') and a.get('status') != 'handled':
+            a['status'] = 'handled'
+            a['dismissed_at'] = datetime.now().isoformat()
+            a['silenced_until'] = silenced
+            changed = True
+    if changed:
+        _save(data)
+
+
 # ── 外部接口 ──────────────────────────────────────────
 
 
@@ -226,6 +251,10 @@ def check_index_alerts() -> list:
         is_big_drop = change_pct < -3
         is_break_10 = price < ema10
         is_break_20 = price < ema20
+
+        # 自动清除：价格回到EMA10/EMA20上方 → 消除旧的跌破报警
+        if not is_break_10 and not is_break_20:
+            _auto_dismiss_index_alarm(code)
 
         if is_big_drop and (is_break_10 or is_break_20):
             level = 'EMA10' if is_break_10 else 'EMA20'
@@ -417,6 +446,12 @@ def check_all_alerts() -> dict:
             price, _ = _get_realtime_data(code)
             if price <= 0:
                 continue
+
+            # 自动清除：价格回到止损价上方 → 报警已解除
+            if price > stop_loss and alarm.get('triggered_at'):
+                _auto_dismiss_price_alarm(alarm)
+                continue
+
             if price <= stop_loss:
                 loss_pct = round((price - stop_loss) / stop_loss * 100, 2)
                 triggered.append({
