@@ -122,7 +122,7 @@ def update_stocks(client):
             latest = sample.iloc[-1]['datetime'][:10].replace('-', '')
         else:
             latest = datetime.now().strftime('%Y%m%d')
-        if latest <= last_updated.replace('-', ''):
+        if latest < last_updated.replace('-', ''):
             log('✅  个股数据已最新，跳过')
             # 但还要返回 codes 给上游判断最新交易日
             return (0, 0, 0)
@@ -159,7 +159,14 @@ def update_stocks(client):
                 seen = {k['date'] for k in klines}
                 has_new = False
                 for r in records:
-                    if r['date'] > (last_updated or '').replace('-', ''):
+                    if r['date'] in seen and r['date'] == today_str:
+                        # 已有今天的数据 → 用 mootdx 覆盖（17:00 cron 的完整日K代替盘中半截数据）
+                        for i, k in enumerate(klines):
+                            if k['date'] == r['date']:
+                                klines[i] = r
+                                has_new = True
+                                break
+                    elif r['date'] > (last_updated or '').replace('-', ''):
                         if r['date'] not in seen:
                             klines.append(r)
                             has_new = True
