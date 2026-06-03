@@ -349,7 +349,7 @@ export default function Holdings() {
       <NavBar />
 
       <div className="header">
-        <h1>📋 持仓管理 · 私密</h1>
+        <h1>📋 持仓管理</h1>
         <div className="update-time" id="updateTime">
           {data?.update_date ? `📅 更新于 ${data.update_date}` : loading ? '加载中...' : '--'}
         </div>
