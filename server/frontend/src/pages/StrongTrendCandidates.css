@@ -1,0 +1,159 @@
+/* 强势趋势追踪 — 页面样式 */
+.sector-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.sector-tag {
+  display: inline-block;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 14px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.sector-tag.concept-tag {
+  border-color: #3a2a5a;
+  background: #1e1a30;
+}
+
+.chg-up { color: #e94560; }
+.chg-down { color: #4ecdc4; }
+
+.count-badge {
+  display: inline-block;
+  background: #2a2a4a;
+  border-radius: 10px;
+  padding: 1px 10px;
+  font-size: 12px;
+  color: #aaa;
+  margin-left: 8px;
+}
+
+/* 候选股卡片 */
+.candidate-card {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.card-score {
+  font-size: 22px;
+  font-weight: bold;
+  min-width: 36px;
+  text-align: center;
+}
+
+.card-name {
+  flex: 1;
+}
+
+.stock-name {
+  color: #e0e0e0;
+  font-size: 15px;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.stock-code {
+  color: #555;
+  font-size: 11px;
+  margin-right: 10px;
+}
+
+.stock-price {
+  color: #ccc;
+  font-size: 13px;
+  margin-right: 8px;
+}
+
+.card-chg5d {
+  font-size: 12px;
+  color: #888;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 板块标签 */
+.card-sectors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.sector-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  color: #ccc;
+}
+
+.industry-badge {
+  background: rgba(78, 205, 196, 0.12);
+  border: 1px solid rgba(78, 205, 196, 0.25);
+}
+
+.concept-badge {
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+}
+
+/* 指标行 */
+.card-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+}
+
+.metric {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.metric-label {
+  font-size: 11px;
+  color: #666;
+}
+
+.metric-val {
+  font-size: 12px;
+  color: #bbb;
+  font-weight: bold;
+}
+
+.card-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.analysis-link {
+  font-size: 11px;
+  color: #4ecdc4;
+  text-decoration: none;
+  padding: 3px 10px;
+  border: 1px solid rgba(78, 205, 196, 0.3);
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.analysis-link:hover {
+  background: rgba(78, 205, 196, 0.1);
+}

@@ -1,0 +1,213 @@
+import { useEffect, useState } from 'react'
+import NavBar, { BottomNav } from '../components/NavBar'
+import './StrongTrendCandidates.css'
+
+interface SectorInfo {
+  type: string
+  name: string
+  chg_20d: number
+  chg_5d: number
+}
+
+interface TrendMetrics {
+  ema_alignment: string
+  ema5_slope: number
+  ema10_slope: number
+  ema5: number
+  ema10: number
+  ema20: number
+  price_vs_ema20_pct: number
+}
+
+interface AdjustmentQuality {
+  max_drawdown_10d: number
+  max_consecutive_down_10d: number
+}
+
+interface Candidate {
+  code: string
+  name: string
+  price: number
+  chg_1d: number
+  chg_5d: number
+  sectors: SectorInfo[]
+  trend_metrics: TrendMetrics
+  adjustment_quality: AdjustmentQuality
+  score: number
+  score_breakdown: { sector_strength: number; trend: number }
+}
+
+interface TrendData {
+  date: string
+  top_industries: { name: string; chg_20d: number }[]
+  hot_industries: { name: string; chg_5d: number }[]
+  top_concepts: { name: string; chg_20d: number }[]
+  hot_concepts: { name: string; chg_5d: number }[]
+  candidates: Candidate[]
+}
+
+const ALIGNMENT_COLORS: Record<string, string> = {
+  'bullish': '#4ecdc4',
+  'partial': '#ffd700',
+  'bearish': '#e94560',
+}
+
+const ALIGNMENT_LABELS: Record<string, string> = {
+  'bullish': '多头排列',
+  'partial': '偏多',
+  'bearish': '空头排列',
+}
+
+export default function StrongTrendCandidates() {
+  const [data, setData] = useState<TrendData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/strong-trend-candidates?limit=30')
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          setData(d)
+        }
+      })
+      .catch(e => console.error('Failed to load:', e))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return (
+    <div className="page-container">
+      <NavBar />
+      <h1>📈 强势趋势追踪</h1>
+      <p className="subtitle">从强势板块筛选趋势完好的个股</p>
+      <div className="loading"><div className="spinner"></div><p>加载中...</p></div>
+      <BottomNav />
+      <div className="footer">3L 交易体系 · 强势趋势追踪 · Hermes Agent</div>
+    </div>
+  )
+
+  return (
+    <div className="page-container">
+      <NavBar />
+
+      <h1>📈 强势趋势追踪</h1>
+      <p className="subtitle">从强势板块筛选趋势完好的个股</p>
+
+      {data && (
+        <>
+          {/* 板块信息 */}
+          <div className="section">
+            <h2 className="section-title">🏭 强势行业</h2>
+            <div className="sector-tags">
+              {data.top_industries.map(s => (
+                <span key={s.name} className="sector-tag">
+                  {s.name} <span className="chg-up">+{s.chg_20d.toFixed(1)}%</span>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="section">
+            <h2 className="section-title">🔥 活跃行业（5日）</h2>
+            <div className="sector-tags">
+              {data.hot_industries.map(s => (
+                <span key={s.name} className="sector-tag">
+                  {s.name} <span className="chg-up">+{s.chg_5d.toFixed(1)}%</span>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="section">
+            <h2 className="section-title">💡 强势概念</h2>
+            <div className="sector-tags">
+              {data.top_concepts.map(s => (
+                <span key={s.name} className="sector-tag concept-tag">
+                  {s.name} <span className="chg-up">+{s.chg_20d.toFixed(1)}%</span>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* 候选股列表 */}
+          <div className="section">
+            <h2 className="section-title">
+              🎯 候选股 <span className="count-badge">{data.candidates.length}只</span>
+            </h2>
+            {data.candidates.length === 0 ? (
+              <div className="empty">暂无符合条件的候选股</div>
+            ) : (
+              data.candidates.map(c => (
+                <div key={c.code} className="candidate-card">
+                  <div className="card-header">
+                    <div className="card-score" style={{ color: c.score >= 8 ? '#4ecdc4' : c.score >= 6 ? '#ffd700' : '#e94560' }}>
+                      {c.score.toFixed(1)}
+                    </div>
+                    <div className="card-name">
+                      <span className="stock-name">{c.name}</span>
+                      <span className="stock-code">{c.code}</span>
+                      <span className="stock-price">¥{c.price.toFixed(2)}</span>
+                      <span className={`chg-${c.chg_1d >= 0 ? 'up' : 'down'}`}>
+                        {c.chg_1d >= 0 ? '+' : ''}{c.chg_1d.toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className="card-chg5d">
+                      5日: <span className={`chg-${c.chg_5d >= 0 ? 'up' : 'down'}`}>
+                        {c.chg_5d >= 0 ? '+' : ''}{c.chg_5d.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="card-sectors">
+                    {c.sectors.slice(0, 4).map(s => (
+                      <span key={s.name} className={`sector-badge ${s.type === 'industry' ? 'industry-badge' : 'concept-badge'}`}>
+                        {s.type === 'industry' ? '🏭' : '💡'} {s.name} {s.chg_20d > 0 ? `+${s.chg_20d.toFixed(1)}%` : ''}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="card-metrics">
+                    <div className="metric">
+                      <span className="metric-label">趋势</span>
+                      <span className="metric-val" style={{ color: ALIGNMENT_COLORS[c.trend_metrics.ema_alignment] || '#aaa' }}>
+                        {ALIGNMENT_LABELS[c.trend_metrics.ema_alignment] || c.trend_metrics.ema_alignment}
+                      </span>
+                    </div>
+                    <div className="metric">
+                      <span className="metric-label">EMA5斜率</span>
+                      <span className={`metric-val ${c.trend_metrics.ema5_slope >= 0 ? 'chg-up' : 'chg-down'}`}>
+                        {c.trend_metrics.ema5_slope.toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className="metric">
+                      <span className="metric-label">10日最大回撤</span>
+                      <span className="metric-val chg-down">
+                        {c.adjustment_quality.max_drawdown_10d.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="metric">
+                      <span className="metric-label">10日连跌</span>
+                      <span className="metric-val">{c.adjustment_quality.max_consecutive_down_10d}天</span>
+                    </div>
+                    <div className="metric">
+                      <span className="metric-label">价/EMA20</span>
+                      <span className={`metric-val ${c.trend_metrics.price_vs_ema20_pct >= 0 ? 'chg-up' : 'chg-down'}`}>
+                        {c.trend_metrics.price_vs_ema20_pct >= 0 ? '+' : ''}{c.trend_metrics.price_vs_ema20_pct.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="card-footer">
+                    <a href={`/stock_analysis.html?code=${c.code}`} className="analysis-link">🔍 个股分析</a>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+
+      <BottomNav />
+      <div className="footer">3L 交易体系 · 强势趋势追踪 · Hermes Agent</div>
+    </div>
+  )
+}
