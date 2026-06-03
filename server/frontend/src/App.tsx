@@ -19,6 +19,7 @@ const LogicTrackingDetail = lazy(() => import('./pages/LogicTrackingDetail'))
 const AlarmSounds = lazy(() => import('./pages/AlarmSounds'))
 const PlanTracking = lazy(() => import('./pages/PlanTracking'))
 const ConceptWaveTracking = lazy(() => import('./pages/ConceptWaveTracking'))
+const StrongTrendCandidates = lazy(() => import('./pages/StrongTrendCandidates'))
 
 export default function App() {
   return (
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/alarm-sounds" element={<AlarmSounds />} />
         <Route path="/plan-tracking" element={<PlanTracking />} />
         <Route path="/concept-wave" element={<ConceptWaveTracking />} />
+        <Route path="/strong-trend-candidates" element={<StrongTrendCandidates />} />
         <Route path="/" element={<Monitor />} />
 
         {/* 旧 HTML 重定向到 React 路由 */}
@@ -56,6 +58,7 @@ export default function App() {
         <Route path="/tips.html" element={<LegacyRedirect to="/tips" />} />
         <Route path="/simulation.html" element={<LegacyRedirect to="/simulation" />} />
         <Route path="/skills.html" element={<LegacyRedirect to="/skills" />} />
+        <Route path="/strong-trend-candidates.html" element={<LegacyRedirect to="/strong-trend-candidates" />} />
 
         {/* 未迁移的旧页面：通过 window.location 跳转 */}
         <Route path="/tip-detail" element={<LegacyRedirect to="/tip-detail.html" />} />
