@@ -16,7 +16,7 @@ describe('TopGainersPage', () => {
 
   it('渲染副标题', () => {
     renderPage()
-    expect(screen.getByText('全市场个股 · 指定区间涨幅排序 · 板块分布')).toBeTruthy()
+    expect(screen.getByText('全市场个股 · 指定区间涨幅排序 · 板块分布 · 操作信号')).toBeTruthy()
   })
 
   it('渲染控制栏（起始+截止日期）', () => {

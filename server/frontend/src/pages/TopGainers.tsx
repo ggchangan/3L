@@ -7,6 +7,10 @@ interface GainStock {
   change?: number; price?: number; sector?: string
   structure?: string; stage?: string
   vol_analysis?: string; trading_system?: string
+  signal?: string; buy_point?: string
+  stop_loss?: number | null; stop_loss_pct?: number | null
+  conclusion?: string; mainline_level?: string
+  fusion_type?: string
 }
 
 interface PieItem {
@@ -30,6 +34,18 @@ const STAGE_COLORS: Record<string, string> = {
   '滞涨': '#ff6b6b', '转弱': '#ff6b6b', '下行': '#666',
   '加速跌': '#e94560', '转强': '#4ecdc4',
   '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560',
+}
+
+const SIGNAL_COLORS: Record<string, string> = {
+  'buy': '#e94560',
+  'hold': '#ffd700',
+  'sell': '#4CAF50',
+}
+
+const SIGNAL_LABELS: Record<string, string> = {
+  'buy': '买入',
+  'hold': '持有',
+  'sell': '卖出',
 }
 
 function daysAgo(n: number): string {
@@ -121,7 +137,7 @@ export default function TopGainers() {
 
       <div className="header">
         <h1>📈 区间涨幅榜</h1>
-        <div className="subtitle">全市场个股 · 指定区间涨幅排序 · 板块分布</div>
+        <div className="subtitle">全市场个股 · 指定区间涨幅排序 · 板块分布 · 操作信号</div>
       </div>
 
       <div className="container">
@@ -201,6 +217,8 @@ export default function TopGainers() {
               const changeCls = (s.change || 0) >= 0 ? 'up' : 'down'
               const gainCls = s.gain >= 0 ? 'up' : 'down'
               const gainArrow = s.gain >= 0 ? '▲' : '▼'
+              const signalColor = SIGNAL_COLORS[s.signal || 'hold']
+              const signalLabel = SIGNAL_LABELS[s.signal || 'hold']
 
               return (
                 <div key={s.code} className="stock-item-wrapper" style={{ borderLeft: `3px solid ${leftColor}` }}>
@@ -222,13 +240,45 @@ export default function TopGainers() {
                       </div>
                     </div>
 
+                    {/* Signal + Trading System + Buy Point */}
+                    <div className="stock-signal-row">
+                      {s.signal && (
+                        <span className="signal-badge" style={{ background: signalColor }}>
+                          {signalLabel}
+                        </span>
+                      )}
+                      {s.trading_system === 'trend' ? (
+                        <span className="signal-badge trend-badge">趋势</span>
+                      ) : s.trading_system === '3l' ? (
+                        <span className="signal-badge badge-3l">3L</span>
+                      ) : null}
+                      {s.mainline_level && (
+                        <span className={`mainline-badge ${s.mainline_level === '主线' ? 'main' : s.mainline_level === '次级主线' ? 'sub' : 'non'}`}>
+                          {s.mainline_level}
+                        </span>
+                      )}
+                      {s.buy_point && (
+                        <span className="buy-point-badge">{s.buy_point}</span>
+                      )}
+                      {s.trading_system === 'trend' && (
+                        <span className="tag" style={{ fontSize: 10, color: '#aaa' }}>趋势交易</span>
+                      )}
+                    </div>
+
                     {/* Tags */}
                     <div className="stock-tags">
                       {s.sector && <span className="tag">{s.sector}</span>}
                       {s.structure && <span className="tag">{s.structure}</span>}
                       {s.stage && <span className="tag" style={{ color: STAGE_COLORS[s.stage] || '#888' }}>{s.stage}</span>}
-                      {s.vol_analysis && <span className="tag">{s.vol_analysis}</span>}
+                      {s.stop_loss_pct != null && (
+                        <span className="tag sl-tag">止损{s.stop_loss_pct.toFixed(1)}%</span>
+                      )}
                     </div>
+
+                    {/* Conclusion */}
+                    {s.conclusion && (
+                      <div className="stock-conclusion">{s.conclusion}</div>
+                    )}
 
                     {/* 区间涨幅 field */}
                     <div className="stock-field">
