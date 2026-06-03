@@ -9,15 +9,16 @@ const MAIN_NAV = [
 
   // ── 个股管理 ──
   { label: '📋 自选股',    href: '/watchlist.html',      id: 'watchlist' },
+  { label: '📋 持仓',      href: '/holdings',            id: 'holdings' },
   { label: '🔍 个股分析',  href: '/stock_analysis.html', id: 'stock_analysis' },
   { label: '🎯 趋势候选',  href: '/trend_candidates.html', id: 'trend' },
+  { label: '📈 涨幅榜',    href: '/top_gainers.html',    id: 'gainers' },
 
   // ── 板块/概念 ──
   { label: '🌊 概念波动',  href: '/concept-wave',        id: 'concept-wave' },
   { label: '🔬 行业追踪',  href: '/industry.html',       id: 'industry' },
 
   // ── 市场全景 ──
-  { label: '📈 涨幅榜',    href: '/top_gainers.html',    id: 'gainers' },
   { label: '🌍 宏观环境',  href: '/macro.html',          id: 'macro' },
 
   // ── 追踪回顾 ──
@@ -28,9 +29,10 @@ const MAIN_NAV = [
 
 const TOP_COLORS: Record<string, string> = {
   monitor: '#4ecdc4', review: '#e94560', workbench: '#f59e0b',
-  watchlist: '#22c55e', stock_analysis: '#e94560',
-  trend: '#4ecdc4', 'concept-wave': '#00bcd4', industry: '#22c55e',
-  gainers: '#e94560', macro: '#2196f3',
+  watchlist: '#22c55e', holdings: '#22c55e', stock_analysis: '#e94560',
+  trend: '#4ecdc4', gainers: '#e94560',
+  'concept-wave': '#00bcd4', industry: '#22c55e',
+  macro: '#2196f3',
   'plan-tracking': '#4ecdc4', logic: '#a855f7', tips: '#f59e0b',
 }
 

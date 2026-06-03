@@ -10,7 +10,7 @@ function renderPage() {
 describe('HoldingsPage', () => {
   it('渲染标题', () => {
     renderPage()
-    expect(screen.getByText('📋 持仓管理 · 私密')).toBeTruthy()
+    expect(screen.getByText('📋 持仓管理')).toBeTruthy()
   })
 
   it('渲染加载状态', () => {

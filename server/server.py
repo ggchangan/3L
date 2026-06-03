@@ -2,7 +2,7 @@
 """
 3L Daily Achievements Web Server + Review API
 """
-import os, json, signal, sys, base64, mimetypes, urllib.parse, time
+import os, json, signal, sys, mimetypes, urllib.parse, time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from urllib.parse import quote
@@ -13,14 +13,6 @@ log = get_logger('server')
 
 PORT = config.SERVER_PORT
 WWW_DIR = config.WWW_DIR
-AUTH_USER = config.AUTH_USER
-AUTH_PASS = config.AUTH_PASS
-
-if not AUTH_USER or not AUTH_PASS:
-    log.error('启动失败: AUTH_USER 或 AUTH_PASS 未设置，请在 .env 中配置')
-    sys.exit(1)
-
-PROTECTED_PREFIX = '/private/'
 
 # 前端构建输出目录（结构对齐原生开发：WWW_DIR/server/frontend/dist）
 FE_DIR = os.path.join(WWW_DIR, 'server', 'frontend', 'dist')
@@ -129,22 +121,6 @@ class Handler(SimpleHTTPRequestHandler):
     def handle_market(self):
         self.send_json(REVIEW_DATA.get('market', {}))
 
-    def send_error(self, code, message=None, explain=None):
-        if code == 401:
-            raw = (
-                'HTTP/1.1 401 Unauthorized\r\n'
-                'WWW-Authenticate: Basic realm="私密持仓"\r\n'
-                'Content-Type: text/plain\r\n'
-                'Content-Length: 19\r\n'
-                'Connection: close\r\n'
-                '\r\n'
-                '401 Unauthorized Login'
-            ).encode()
-            self.wfile.write(raw)
-            self.close_connection = True
-            return
-        super().send_error(code, message, explain)
-
     def _serve_file(self, fp, ct=None, no_cache=False, as_attachment=False):
         """Serve a file with proper headers."""
         with open(fp, 'rb') as f:
@@ -175,23 +151,6 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         load_review_data()
         path = self.path.split('?')[0]  # strip query string
-
-        # --- Protected paths with auth ---
-        if path.startswith(PROTECTED_PREFIX):
-            if not self._authenticate():
-                return
-            # Authed - serve the file (no-cache for HTML pages)
-            rel = path.lstrip('/')
-            if path.startswith('/private/'):
-                fp = os.path.join(config.PRIVATE_DIR, rel[len('private/'):])
-            else:
-                fp = os.path.join(WWW_DIR, rel)
-            if not os.path.isfile(fp):
-                self.send_error(404)
-                return
-            ct, _ = mimetypes.guess_type(fp)
-            self._serve_file(fp, ct, no_cache=(ct == 'text/html'))
-            return
 
         # --- Download endpoint (force attachment) ---
         if path.startswith('/download/'):
@@ -277,22 +236,6 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         super().do_GET()
-
-    def _authenticate(self):
-        """验证 HTTP Basic Auth，失败则发送 401。返回 True=通过"""
-        auth = self.headers.get('Authorization', '')
-        ok = False
-        if auth.startswith('Basic '):
-            try:
-                d = base64.b64decode(auth[6:]).decode()
-                u, p = d.split(':', 1)
-                ok = (u == AUTH_USER and p == AUTH_PASS)
-            except Exception:
-                pass
-        if not ok:
-            self.send_error(401)
-            return False
-        return True
 
     def do_POST(self):
         cl = int(self.headers.get('Content-Length', 0))
