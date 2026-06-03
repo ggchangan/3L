@@ -264,6 +264,8 @@ def get_strong_trend_candidates(
             code_set.add(code)
 
     # 4. 对每只候选股评分
+    from backend.services.stock_card_service import get_stock_card
+    today_str = datetime.date.today().strftime('%Y%m%d')
     candidates = []
     for code in code_set:
         klines = all_stocks[code]
@@ -286,6 +288,9 @@ def get_strong_trend_candidates(
                 aas = json.load(f)
             name = aas.get(code, code)
 
+        # 取信号数据（用已有的 K 线避免重复读文件）
+        card = get_stock_card(code, today_str, klines=klines)
+
         candidates.append({
             'code': code,
             'name': name,
@@ -299,7 +304,17 @@ def get_strong_trend_candidates(
             'score_breakdown': {
                 'sector_strength': round(sector_bonus, 1),
                 'trend': round(st['score'], 1),
-            }
+            },
+            'signal': card.get('signal', 'hold'),
+            'signal_text': card.get('signal_text', ''),
+            'buy_point': card.get('buy_point', ''),
+            'stop_loss': card.get('stop_loss'),
+            'stop_loss_pct': card.get('stop_loss_pct'),
+            'trading_system': card.get('trading_system', '3l'),
+            'triggered_signals': card.get('triggered_signals', []),
+            'fusion_type': card.get('fusion_type', ''),
+            'mainline_level': card.get('mainline_level', ''),
+            'conclusion': card.get('conclusion', ''),
         })
 
     # 5. 排序

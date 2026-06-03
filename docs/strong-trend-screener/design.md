@@ -1,7 +1,8 @@
-# 强势趋势追踪 — 设计文档 v1
+# 强势趋势追踪 — 设计文档 v2
 
-> **状态：** 设计阶段
+> **状态：** 已实现
 > **分支：** `feat/strong-trend-screener`
+> **版本：** v2 (2026-06-03)
 
 ---
 
@@ -13,7 +14,7 @@
 
 **布局说明：** 页面分为三部分——筛选条件栏（顶部）→ 候选股列表（中部）→ 底部导航。
 
-**核心布局一句话总结：** 从强势板块筛选出趋势完好的个股，按综合评分排序展示，每张卡片含板块信息、趋势指标、调整质量。
+**核心布局一句话总结：** 从强势板块筛选出趋势完好的个股，按综合评分排序展示，每张卡片含板块信息、趋势指标、调整质量、操作建议（信号/买点/止损/主线标记）。
 
 ---
 
@@ -40,10 +41,12 @@
   - 对每个强势板块，找出成分股中趋势完好的个股
   - 按综合评分排序展示候选股
   - 每张卡片包含板块强度、趋势斜率、调整深度等关键信息
-  - 支持点击展开查看个股分析
+  - 每张卡片展示操作建议（信号/买点/止损/主线标记/conclusion）
+  - 支持点击个股分析跳转到详情页面（带code参数）
+  - 支持板块健康度提示（所属板块是否仍在强势队列）
 
 - **不做什么：**
-  - 不涉及买卖点判定
+  - 不独立判定买卖点（复用`get_stock_card`信号，不做强势趋势单独体系）
   - 不做实时数据拉取（只读本地已缓存数据）
   - 不替代涨幅榜，两者并列作为不同发现路径
 
@@ -93,29 +96,38 @@
       "price": 28.46,
       "chg_1d": 2.3,
       "chg_5d": 8.1,
-      "chg_20d": 15.2,
       "sectors": [
-        {"type": "industry", "name": "半导体", "chg_20d": 6.29, "rank": 7},
-        {"type": "concept", "name": "AI PC", "chg_20d": 8.90, "rank": 15}
+        {"type": "industry", "name": "半导体", "chg_20d": 6.29},
+        {"type": "concept", "name": "AI PC", "chg_20d": 8.90}
       ],
       "trend_metrics": {
         "ema5_slope": 0.8,
         "ema10_slope": 0.6,
-        "ema20_slope": 0.4,
+        "ema5": 26.5,
+        "ema10": 25.2,
+        "ema20": 24.0,
         "ema_alignment": "bullish",
         "price_vs_ema20_pct": 3.5
       },
       "adjustment_quality": {
         "max_drawdown_10d": -2.3,
-        "max_consecutive_down_10d": 1,
-        "vol_ratio_5d_20d": 1.12
+        "max_consecutive_down_10d": 1
       },
       "score": 8.5,
       "score_breakdown": {
-        "sector_strength": 3.2,
-        "trend": 3.0,
-        "adjustment": 2.3
-      }
+        "sector_strength": 1.5,
+        "trend": 7.0
+      },
+      "signal": "buy",
+      "signal_text": "",
+      "buy_point": "突破买点",
+      "stop_loss": 26.0,
+      "stop_loss_pct": 5.2,
+      "trading_system": "3l",
+      "triggered_signals": ["突破压力"],
+      "fusion_type": "突破",
+      "mainline_level": "主线",
+      "conclusion": "趋势健康，持有区"
     }
   ]
 }
@@ -138,7 +150,8 @@ strong_trend_service.py:
      a. 查 EMA5/10/20 趋势指标
      b. 查近10日调整深度
      c. 计算综合评分
-  ⑥ 去重、排序、TOP 30 返回
+  ⑥ 对每个候选股调用 get_stock_card(code, klines=klines) 获取信号/买点/止损/主线级别
+  ⑦ 去重、排序、TOP 30 返回
   ↓
 前端 StrongTrendCandidates.tsx 渲染卡片列表
 ```
@@ -229,10 +242,11 @@ score = (
 │ 行业TOP N: [10] 概念TOP N: [10] 最低评分: [5]│
 ├─ 候选股列表 ───────────────────────────────┤
 │  ╭─ 卡片1 ──────────────────────────────╮  │
-│  │ 评分 8.5 | 🏆 元件 | 💡 PCB概念     │  │
-│  │ 300xxx 股票名 现价28.46 +5.2%        │  │
+│  │ 评分 8.5 | 🏭 元件 | 💡 PCB概念     │  │
+│  │ 000725 京东方A 现价21.36 +2.3%        │  │
 │  │ EMA5↑EMA10↑EMA20↑ 多头排列           │  │
 │  │ 近10日最大回撤 -2.3% 连跌1天          │  │
+│  │ 🔴买入 突破买点 3L 主线 止损5.2%     │  │
 │  │ [查看分析]                            │  │
 │  ╰─────────────────────────────────────╯  │
 │  ╭─ 卡片2 ...                            │  │
@@ -284,8 +298,10 @@ score = (
   docs/strong-trend-screener/plan.md                — 执行计划
 
 修改：
-  server/frontend/src/App.tsx                       — 添加路由
+  server/frontend/src/App.tsx                       — 添加路由 + strong-trend-candidates.html重定向
   server/frontend/src/components/NavBar.tsx         — 导航项
+  server/frontend/src/pages/StockAnalysis.tsx       — 支持URL ?code=参数自动搜索
+  server/frontend/src/pages/StrongTrendCandidates.css — 操作建议标签样式
 ```
 
 ### 6.4 变更日志
@@ -293,3 +309,4 @@ score = (
 | 版本 | 日期 | 变更内容 |
 |:----|:----|:--------|
 | v1 | 2026-06-03 | 初稿 — 强势趋势追踪方案 |
+| v2 | 2026-06-03 | 新增：信号/买点/止损/主线级别数据字段、操作建议展示、header/container布局规范化、个股分析跳转传参 |

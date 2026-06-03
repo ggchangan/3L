@@ -165,17 +165,18 @@ class TestStrongTrendService:
         assert result['ema_alignment'] != 'bullish'
         assert result['score'] <= 6.0
 
+    @patch('backend.services.stock_card_service.get_stock_card')
     @patch('backend.services.strong_trend_service.get_stock_concepts')
     @patch('backend.services.strong_trend_service.get_stock_industry')
     @patch('backend.services.strong_trend_service.load_sector_daily')
     @patch('backend.services.strong_trend_service.load_all_stocks')
-    def test_full_pipeline(self, mock_load_stocks, mock_sector, mock_industry, mock_concepts):
+    def test_full_pipeline(self, mock_load_stocks, mock_sector, mock_industry, mock_concepts, mock_card):
         """完整筛选流程返回正确格式"""
         from backend.services.strong_trend_service import get_strong_trend_candidates
 
         mock_load_stocks.return_value = _make_all_stocks()
         mock_sector.return_value = _make_sector_daily()
-        # 模拟个股行业归属：对指定code返回行业
+        # 模拟个股行业归属
         def _mock_industry(code):
             rev = _make_reverse_industry_map()
             for ind, codes in rev.items():
@@ -185,6 +186,23 @@ class TestStrongTrendService:
         mock_industry.side_effect = _mock_industry
         # 模拟个股概念归属：都返回空
         mock_concepts.return_value = []
+        # 模拟 get_stock_card 返回信号数据
+        def _mock_card(code, date_str, klines=None, **kwargs):
+            ind = _mock_industry(code)
+            has_signal = ind in ('元件', '半导体', '自动化设备')
+            return {
+                'signal': 'buy' if has_signal else 'hold',
+                'signal_text': '量价配合良好' if has_signal else '',
+                'buy_point': '突破买点' if has_signal else '',
+                'stop_loss': 45.0,
+                'stop_loss_pct': 5.2,
+                'trading_system': '3l',
+                'triggered_signals': [],
+                'fusion_type': '',
+                'mainline_level': '主线' if has_signal else '',
+                'conclusion': '趋势健康，持有区' if has_signal else '数据不足',
+            }
+        mock_card.side_effect = _mock_card
 
         result = get_strong_trend_candidates(top_industries=3, hot_industries=2,
                                               top_concepts=1, hot_concepts=1, limit=10)
@@ -202,3 +220,16 @@ class TestStrongTrendService:
         assert 'sectors' in c
         assert 'trend_metrics' in c
         assert 'adjustment_quality' in c
+        # 检查信号字段
+        assert 'signal' in c
+        assert 'buy_point' in c
+        assert 'stop_loss' in c
+        assert 'stop_loss_pct' in c
+        assert 'trading_system' in c
+        assert 'mainline_level' in c
+        assert 'conclusion' in c
+        assert c['signal'] in ('buy', 'hold', 'sell')
+        assert c['trading_system'] in ('3l', 'trend')
+        # 强势板块股应有 buy 信号
+        buy_candidates = [x for x in result['candidates'] if x['signal'] == 'buy']
+        assert len(buy_candidates) > 0, '至少有一个buy信号'

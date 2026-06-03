@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import NavBar, { BottomNav } from '../components/NavBar'
 import StockCard from '../components/StockCard'
 import type { BuySignalItem } from '../lib/types'
@@ -29,7 +30,8 @@ interface AnalysisData {
 }
 
 export default function StockAnalysis() {
-  const [q, setQ] = useState('')
+  const [searchParams] = useSearchParams()
+  const [q, setQ] = useState(searchParams.get('code') || '')
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
   const [btData, setBtData] = useState<BacktestData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -53,6 +55,14 @@ export default function StockAnalysis() {
     }, 200)
     return () => clearTimeout(searchTimer.current)
   }, [q])
+
+  // 从 URL 参数 ?code=xxx 自动搜索
+  useEffect(() => {
+    if (q && !analysis && !loading) {
+      doSearch()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function doSearch(code?: string) {
     const query = code || q.trim()

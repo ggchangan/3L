@@ -58,6 +58,7 @@ export default function App() {
         <Route path="/tips.html" element={<LegacyRedirect to="/tips" />} />
         <Route path="/simulation.html" element={<LegacyRedirect to="/simulation" />} />
         <Route path="/skills.html" element={<LegacyRedirect to="/skills" />} />
+        <Route path="/strong-trend-candidates.html" element={<LegacyRedirect to="/strong-trend-candidates" />} />
 
         {/* 未迁移的旧页面：通过 window.location 跳转 */}
         <Route path="/tip-detail" element={<LegacyRedirect to="/tip-detail.html" />} />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import NavBar, { BottomNav } from '../components/NavBar'
 import './StrongTrendCandidates.css'
 
@@ -35,6 +36,16 @@ interface Candidate {
   adjustment_quality: AdjustmentQuality
   score: number
   score_breakdown: { sector_strength: number; trend: number }
+  signal: string
+  signal_text: string
+  buy_point: string
+  stop_loss: number | null
+  stop_loss_pct: number | null
+  trading_system: string
+  triggered_signals: string[]
+  fusion_type: string
+  mainline_level: string
+  conclusion: string
 }
 
 interface TrendData {
@@ -59,6 +70,7 @@ const ALIGNMENT_LABELS: Record<string, string> = {
 }
 
 export default function StrongTrendCandidates() {
+  const navigate = useNavigate()
   const [data, setData] = useState<TrendData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -77,9 +89,13 @@ export default function StrongTrendCandidates() {
   if (loading) return (
     <div className="page-container">
       <NavBar />
-      <h1>📈 强势趋势追踪</h1>
-      <p className="subtitle">从强势板块筛选趋势完好的个股</p>
-      <div className="loading"><div className="spinner"></div><p>加载中...</p></div>
+      <div className="header">
+        <h1>📈 强势趋势追踪</h1>
+        <p className="subtitle">从强势板块筛选趋势完好的个股</p>
+      </div>
+      <div className="container">
+        <div className="loading"><div className="spinner"></div><p>加载中...</p></div>
+      </div>
       <BottomNav />
       <div className="footer">3L 交易体系 · 强势趋势追踪 · Hermes Agent</div>
     </div>
@@ -89,11 +105,14 @@ export default function StrongTrendCandidates() {
     <div className="page-container">
       <NavBar />
 
-      <h1>📈 强势趋势追踪</h1>
-      <p className="subtitle">从强势板块筛选趋势完好的个股</p>
+      <div className="header">
+        <h1>📈 强势趋势追踪</h1>
+        <p className="subtitle">从强势板块筛选趋势完好的个股</p>
+      </div>
 
-      {data && (
-        <>
+      <div className="container">
+        {data && (
+          <>
           {/* 板块信息 */}
           <div className="section">
             <h2 className="section-title">🏭 强势行业</h2>
@@ -196,8 +215,27 @@ export default function StrongTrendCandidates() {
                     </div>
                   </div>
 
+                  {/* 操作建议 */}
+                  <div className="card-signal">
+                    <span className={`sig-badge sig-${c.signal === 'buy' ? 'buy' : c.signal === 'sell' ? 'sell' : 'hold'}`}>
+                      {c.signal === 'buy' ? '🔴 买入' : c.signal === 'sell' ? '🟢 卖出' : '⚪ 持有'}
+                    </span>
+                    {c.buy_point && <span className="sig-badge sig-point">{c.buy_point}</span>}
+                    {c.trading_system === 'trend' ? (
+                      <span className="sig-badge sig-trend">趋势</span>
+                    ) : (
+                      <span className="sig-badge sig-3l">3L</span>
+                    )}
+                    {c.mainline_level === '主线' && <span className="sig-badge sig-mainline">主线</span>}
+                    {c.mainline_level === '次级主线' && <span className="sig-badge sig-submain">次级主线</span>}
+                    {c.stop_loss_pct != null && (
+                      <span className="sig-badge sig-sl">止损{c.stop_loss_pct.toFixed(1)}%</span>
+                    )}
+                  </div>
+                  {c.conclusion && <div className="card-conclusion">{c.conclusion}</div>}
+
                   <div className="card-footer">
-                    <a href={`/stock_analysis.html?code=${c.code}`} className="analysis-link">🔍 个股分析</a>
+                    <span className="analysis-link" onClick={() => navigate(`/stock_analysis?code=${c.code}`)}>🔍 个股分析</span>
                   </div>
                 </div>
               ))
@@ -206,6 +244,7 @@ export default function StrongTrendCandidates() {
         </>
       )}
 
+    </div>
       <BottomNav />
       <div className="footer">3L 交易体系 · 强势趋势追踪 · Hermes Agent</div>
     </div>
