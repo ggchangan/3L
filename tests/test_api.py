@@ -124,14 +124,14 @@ class TestCoreAPI:
             must_have(c, 'title', 'content')
 
     def test_top_gainers(self):
-        """30日涨幅榜 — 返回结构正确"""
-        d = api('/api/top-gainers?date=20260522&limit=5')
-        must_have(d, 'stocks', 'pie', 'total', 'limit', 'date')
+        """区间涨幅榜 — 返回结构正确"""
+        d = api('/api/top-gainers?start=20260502&end=20260522&limit=5')
+        must_have(d, 'stocks', 'pie', 'total', 'limit', 'start', 'end', 'days')
         assert isinstance(d['stocks'], list), 'stocks 应为数组'
         assert d['limit'] == 5
         if len(d['stocks']) > 0:
             s = d['stocks'][0]
-            must_have(s, 'code', 'name', 'price', 'change', 'gain_30d', 'sector')
+            must_have(s, 'code', 'name', 'price', 'change', 'gain', 'days', 'sector')
 
     def test_static_pages_serve_clean_html(self):
         """所有前端页面通过 HTTP 访问应以 <!DOCTYPE html> 开头"""
