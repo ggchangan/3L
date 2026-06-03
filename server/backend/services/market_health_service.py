@@ -12,7 +12,7 @@ from backend.config import DATA_DIR
 
 
 def _load_index_data():
-    """读 index_sh_data.json，返回 {closes, highs, lows, vols, last_close}"""
+    """读 index_sh_data.json（多指数格式），返回 {closes, highs, lows, vols, last_close}"""
     path = os.path.join(DATA_DIR, 'index_sh_data.json')
     if not os.path.isfile(path):
         return None
@@ -21,7 +21,9 @@ def _load_index_data():
             d = json.load(f)
     except Exception:
         return None
-    klines = d.get('klines', [])
+    indices = d.get('indices', {})
+    info = indices.get('000985', {})
+    klines = info.get('klines', [])
     if not klines or len(klines) < 30:
         return None
     closes = [k['close'] for k in klines]

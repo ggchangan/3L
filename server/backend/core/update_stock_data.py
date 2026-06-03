@@ -24,7 +24,7 @@ from backend.core.data_layer import (
     save_all_stocks,
     load_index_data_uncached,
     save_index_data,
-    INDEX_CODE,
+    INDEX_CODES,
     load_sector_daily_uncached,
     save_sector_daily,
 )
@@ -220,7 +220,7 @@ def update_stocks(client):
 
 
 # ════════════════════════════════════════════════════════════════
-# 指数（中证全指 000985）
+# 指数（中证全指 000985 + 上证 000001 + 科创50 000688）
 # ════════════════════════════════════════════════════════════════
 
 def _df_to_kline(df):
@@ -287,57 +287,63 @@ def _df_to_kline(df):
 
 
 def update_index(client):
-    """更新中证全指（000985）日K线"""
+    """更新所有指数日K线（上证000001 + 科创50 000688 + 中证全指000985）"""
     import akshare as ak
     import warnings
     warnings.filterwarnings('ignore')
 
     existing = load_index_data_uncached()
-    existing_klines = existing.get('klines', [])
-    last_updated = existing.get('last_updated', '')
+    indices = existing.get('indices', {})
+    total_added = 0
+    last_date = existing.get('last_updated', '')
 
-    # 拉取全量（akshare 返回所有历史日K线）
-    try:
-        df = ak.stock_zh_index_daily_tx(symbol=f'sh{INDEX_CODE}')
-    except Exception as e:
-        log(f'⚠️  指数拉取失败: {e}')
-        return (0, 0)
+    for code, name in INDEX_CODES.items():
+        info = indices.get(code, {'name': name, 'klines': []})
+        existing_klines = info.get('klines', [])
+        existing_dates = {k['date'] for k in existing_klines}
 
-    if df is None or len(df) == 0:
-        log('⚠️  指数数据为空')
-        return (0, 0)
+        try:
+            df = ak.stock_zh_index_daily_tx(symbol=f'sh{code}')
+        except Exception as e:
+            log(f'⚠️  {name}({code})拉取失败: {e}')
+            continue
 
-    new_klines = _df_to_kline(df)
+        if df is None or len(df) == 0:
+            log(f'⚠️  {name}({code})数据为空')
+            continue
 
-    # 去重：只追加比现有新的
-    existing_dates = {k['date'] for k in existing_klines}
-    added = 0
-    for k in new_klines:
-        if k['date'] not in existing_dates:
-            existing_klines.append(k)
-            added += 1
+        new_klines = _df_to_kline(df)
 
-    if added == 0:
-        log('✅  指数数据已最新')
-        # 确保 last_updated 更新
-        if new_klines:
-            existing['last_updated'] = new_klines[-1]['date']
-            save_index_data(existing)
-        return (0, 0)
+        added = 0
+        for k in new_klines:
+            if k['date'] not in existing_dates:
+                existing_klines.append(k)
+                added += 1
 
-    existing_klines.sort(key=lambda x: x['date'])
-    # 裁剪：保留最近200天足够
-    if len(existing_klines) > 200:
-        existing_klines = existing_klines[-200:]
+        if added > 0:
+            existing_klines.sort(key=lambda x: x['date'])
+            # 裁剪：保留最近200天
+            if len(existing_klines) > 200:
+                existing_klines = existing_klines[-200:]
+            last_kline = existing_klines[-1]
+            if last_kline['date'] > last_date:
+                last_date = last_kline['date']
+            log(f'📈  {name}: {added}条新增, 最新{last_kline["date"]}')
 
-    latest_date = existing_klines[-1]['date']
-    save_index_data({
-        'last_updated': latest_date,
-        'klines': existing_klines,
-    })
+        indices[code] = {'name': name, 'klines': existing_klines}
+        total_added += added
 
-    log(f'📈  指数: {added}条新增, 最新{latest_date}')
-    return (added, latest_date)
+    if total_added == 0:
+        log(f'✅  指数数据已最新')
+    else:
+        log(f'📈  指数合计: {total_added}条新增, 最新{last_date}')
+
+    # 统一保存
+    existing['indices'] = indices
+    existing['last_updated'] = last_date or existing.get('last_updated', '')
+    save_index_data(existing)
+
+    return (total_added, last_date)
 
 
 # ════════════════════════════════════════════════════════════════

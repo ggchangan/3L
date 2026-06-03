@@ -89,6 +89,26 @@ def _auto_dismiss_price_alarm(alarm: dict):
         dismiss_alarm(alarm_id)
 
 
+def _calc_ema(closes: list, period: int) -> float:
+    """计算EMA值，返回最新一天的EMA"""
+    if len(closes) < period:
+        return None
+    multiplier = 2.0 / (period + 1)
+    ema = closes[0]
+    for price in closes[1:]:
+        ema = (price - ema) * multiplier + ema
+    return round(ema, 2)
+
+
+def _try_refresh_index_data():
+    """检查指数数据是否过时，从 index_sh_data.json 增量同步中证全指
+    
+    在报警检查前调用，确保EMAs基于最新收盘数据计算。
+    不含网络请求，不会卡住。
+    """
+    _sync_index_from_sh()
+
+
 def _auto_dismiss_index_alarm(code: str):
     """指数恢复（价格回到EMA上方）→ 自动清除报警"""
     from backend.services.alarm_service import _load, _save
@@ -122,12 +142,17 @@ INDEX_CODES = {
 _index_alert_cache: dict = {}
 
 INDEX_DATA_PATH = os.path.join(
-    os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'public', 'index_data.json'
+    os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'index_sh_data.json'
 )
 
 
 def _read_index_data() -> dict:
-    """读取统一指数数据文件"""
+    """读取 index_sh_data.json（统一指数数据文件）
+
+    格式: {last_updated, indices: {code: {name, klines}}}
+    Returns:
+        完整指数数据 dict，失败返回 {}
+    """
     if not os.path.isfile(INDEX_DATA_PATH):
         return {}
     try:
@@ -154,14 +179,6 @@ def _get_index_realtime(qcode: str) -> tuple:
         return (0, 0)
     except Exception:
         return (0, 0)
-
-
-# 指数报警去重缓存：{(code, condition): triggered_timestamp}
-_index_alert_cache: dict = {}
-
-INDEX_DATA_PATH = os.path.join(
-    os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'public', 'index_data.json'
-)
 
 
 def _check_index_dedup(code: str, condition: str, alarm_type: str) -> bool:
@@ -234,9 +251,15 @@ def check_index_alerts() -> list:
         if not info:
             continue
 
-        ema10 = info.get('ema10')
-        ema20 = info.get('ema20')
-        if not ema10 or not ema20:
+        klines = info.get('klines', [])
+        if len(klines) < 20:
+            continue
+
+        # 实时从K线计算EMA10和EMA20
+        closes = [k['close'] for k in klines]
+        ema10 = _calc_ema(closes, 10)
+        ema20 = _calc_ema(closes, 20)
+        if ema10 is None or ema20 is None:
             continue
 
         # 检查用户是否已标记该指数为已处理（跟个股报警逻辑一致）
