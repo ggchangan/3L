@@ -2,32 +2,42 @@
 import { useLocation } from 'react-router-dom'
 
 const MAIN_NAV = [
-  { label: '📡 盘中盯盘',  href: '/monitor',         id: 'monitor' },
-  { label: '📋 每日复盘',  href: '/review',           id: 'review' },
-  { label: '🧑 工作台',    href: '/journal.html',      id: 'workbench' },
-  { label: '📋 自选股',    href: '/watchlist.html',    id: 'watchlist' },
+  // ── 盘中/盘后核心流程 ──
+  { label: '📡 盘中盯盘',  href: '/monitor',             id: 'monitor' },
+  { label: '📋 每日复盘',  href: '/review',              id: 'review' },
+  { label: '🧑 工作台',    href: '/journal.html',        id: 'workbench' },
+
+  // ── 个股管理 ──
+  { label: '📋 自选股',    href: '/watchlist.html',      id: 'watchlist' },
   { label: '🔍 个股分析',  href: '/stock_analysis.html', id: 'stock_analysis' },
   { label: '🎯 趋势候选',  href: '/trend_candidates.html', id: 'trend' },
-  { label: '🔬 行业追踪',  href: '/industry.html',    id: 'industry' },
-  { label: '📈 涨幅榜',    href: '/top_gainers.html',  id: 'gainers' },
-  { label: '🌍 宏观环境',  href: '/macro.html',        id: 'macro' },
-  { label: '📊 计划追踪',  href: '/plan-tracking.html', id: 'plan-tracking' },
-  { label: '📝 交易技巧',  href: '/tips.html',         id: 'tips' },
-  { label: '💡 逻辑追踪',  href: '/logic-tracking',    id: 'logic' },
+
+  // ── 板块/概念 ──
+  { label: '🌊 概念波动',  href: '/concept-wave',        id: 'concept-wave' },
+  { label: '🔬 行业追踪',  href: '/industry.html',       id: 'industry' },
+
+  // ── 市场全景 ──
+  { label: '📈 涨幅榜',    href: '/top_gainers.html',    id: 'gainers' },
+  { label: '🌍 宏观环境',  href: '/macro.html',          id: 'macro' },
+
+  // ── 追踪回顾 ──
+  { label: '📊 计划追踪',  href: '/plan-tracking.html',  id: 'plan-tracking' },
+  { label: '💡 逻辑追踪',  href: '/logic-tracking',     id: 'logic' },
+  { label: '📝 交易技巧',  href: '/tips.html',           id: 'tips' },
 ]
 
 const TOP_COLORS: Record<string, string> = {
   monitor: '#4ecdc4', review: '#e94560', workbench: '#f59e0b',
   watchlist: '#22c55e', stock_analysis: '#e94560',
-  trend: '#4ecdc4', industry: '#22c55e', gainers: '#e94560',
-  macro: '#2196f3', tips: '#f59e0b', logic: '#a855f7',
-  'plan-tracking': '#4ecdc4',
+  trend: '#4ecdc4', 'concept-wave': '#00bcd4', industry: '#22c55e',
+  gainers: '#e94560', macro: '#2196f3',
+  'plan-tracking': '#4ecdc4', logic: '#a855f7', tips: '#f59e0b',
 }
 
 const FOOTER_LINKS = [
   { label: '📋 每日成果',  href: '/index.html',      id: 'home' },
-  { label: '📖 Skills',   href: '/skills.html',      id: 'skills' },
   { label: '📊 模拟交易', href: '/simulation.html',  id: 'simulation' },
+  { label: '📖 Skills',   href: '/skills.html',      id: 'skills' },
   { label: '🎵 报警音乐', href: '/alarm-sounds',     id: 'alarm-sounds' },
 ]
 
