@@ -44,15 +44,23 @@ def get_top_gainers(start, end, limit=50, stocks=None):
             if len(_kls) < 2:
                 continue
 
-            # 找起始和截止索引
+            # 找起始和截止索引（自动对齐到最近交易日）
             _start_idx = -1
             _end_idx = -1
             for i, _k in enumerate(_kls):
                 _kd = str(_k['date']).replace('-', '')
-                if _kd == _start:
+                if _start_idx < 0 and _kd >= _start:
                     _start_idx = i
                 if _kd == _end:
                     _end_idx = i
+
+            # 截止日没精确命中 → 回退到最近的前一个交易日
+            if _end_idx < 0:
+                for i in range(len(_kls) - 1, -1, -1):
+                    _kd = str(_kls[i]['date']).replace('-', '')
+                    if _kd <= _end:
+                        _end_idx = i
+                        break
 
             if _start_idx < 0 or _end_idx < 0 or _end_idx <= _start_idx:
                 continue

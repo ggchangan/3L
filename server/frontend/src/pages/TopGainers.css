@@ -21,6 +21,10 @@
 .controls input[type="date"] {
   background: #0f0f1a; color: #e0e0e0; border: 1px solid #2a2a4e;
   border-radius: 6px; padding: 6px 12px; font-size: 13px;
+  color-scheme: dark;
+}
+.controls input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8); cursor: pointer;
 }
 .controls select {
   background: #0f0f1a; color: #e0e0e0; border: 1px solid #2a2a4e;

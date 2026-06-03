@@ -73,6 +73,12 @@ export default function TopGainers() {
   async function loadData() {
     setLoading(true); setError(''); setHint('加载中...')
     try {
+      // 日期校验
+      if (startDate > endDate) {
+        setError('起始日期不能晚于截止日期，已自动交换')
+        const tmp = startDate; setStartDate(endDate); setEndDate(tmp)
+        setLoading(false); setHint(''); return
+      }
       const start = formatDate(startDate)
       const end = formatDate(endDate)
       const r = await fetch(`/api/top-gainers?start=${start}&end=${end}&limit=${limit}`)
@@ -81,6 +87,9 @@ export default function TopGainers() {
       if (d.error) throw new Error(d.error)
       setData(d)
       setHint(`共 ${d.stocks.length} 只`)
+      if (d.stocks.length === 0) {
+        setHint('该区间无数据，可能是所选日期不在交易日期范围内')
+      }
     } catch (err: any) {
       setError(err.message)
       setData(null)
@@ -205,7 +214,10 @@ export default function TopGainers() {
 
         {/* Stock List */}
         {data && stocks.length === 0 && !loading && !error && (
-          <div className="error-card">该区间无数据</div>
+          <div className="error-card">
+            该区间无数据<br/>
+            <span style={{fontSize:12,color:'#666'}}>所选日期可能不在交易日范围内，系统会自动对齐到最近交易日，请尝试调整日期范围</span>
+          </div>
         )}
 
         {data && stocks.length > 0 && (
