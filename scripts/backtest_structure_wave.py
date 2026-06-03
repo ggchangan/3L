@@ -20,11 +20,13 @@ DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
 
 
 def load_index_klines():
-    """加载中证全指K线"""
+    """加载中证全指K线（从多指数格式 index_sh_data.json）"""
     path = os.path.join(DATA_DIR, 'index_sh_data.json')
     with open(path) as f:
         data = json.load(f)
-    return data.get('klines', [])
+    indices = data.get('indices', {})
+    info = indices.get('000985', {})
+    return info.get('klines', [])
 
 
 def judge_peak_valley_old(klines):

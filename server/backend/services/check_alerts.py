@@ -81,6 +81,51 @@ def _has_recently_triggered(alarm: dict, minutes: int = 0.5) -> bool:
         return False
 
 
+def _auto_dismiss_price_alarm(alarm: dict):
+    """价格回升到止损价上方 → 自动标记为已解除"""
+    from backend.services.alarm_service import dismiss_alarm
+    alarm_id = alarm.get('id', '')
+    if alarm_id:
+        dismiss_alarm(alarm_id)
+
+
+def _calc_ema(closes: list, period: int) -> float:
+    """计算EMA值，返回最新一天的EMA"""
+    if len(closes) < period:
+        return None
+    multiplier = 2.0 / (period + 1)
+    ema = closes[0]
+    for price in closes[1:]:
+        ema = (price - ema) * multiplier + ema
+    return round(ema, 2)
+
+
+def _try_refresh_index_data():
+    """检查指数数据是否过时，从 index_sh_data.json 增量同步中证全指
+    
+    在报警检查前调用，确保EMAs基于最新收盘数据计算。
+    不含网络请求，不会卡住。
+    """
+    _sync_index_from_sh()
+
+
+def _auto_dismiss_index_alarm(code: str):
+    """指数恢复（价格回到EMA上方）→ 自动清除报警"""
+    from backend.services.alarm_service import _load, _save
+    data = _load()
+    changed = False
+    tomorrow = date.today() + timedelta(days=1)
+    silenced = f'{tomorrow.strftime("%Y%m%d")}150000'
+    for a in data.get('alarms', []):
+        if a.get('stock_code') == code and a.get('type') in ('market', 'market_critical') and a.get('status') != 'handled':
+            a['status'] = 'handled'
+            a['dismissed_at'] = datetime.now().isoformat()
+            a['silenced_until'] = silenced
+            changed = True
+    if changed:
+        _save(data)
+
+
 # ── 外部接口 ──────────────────────────────────────────
 
 
@@ -97,12 +142,17 @@ INDEX_CODES = {
 _index_alert_cache: dict = {}
 
 INDEX_DATA_PATH = os.path.join(
-    os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'public', 'index_data.json'
+    os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'index_sh_data.json'
 )
 
 
 def _read_index_data() -> dict:
-    """读取统一指数数据文件"""
+    """读取 index_sh_data.json（统一指数数据文件）
+
+    格式: {last_updated, indices: {code: {name, klines}}}
+    Returns:
+        完整指数数据 dict，失败返回 {}
+    """
     if not os.path.isfile(INDEX_DATA_PATH):
         return {}
     try:
@@ -129,14 +179,6 @@ def _get_index_realtime(qcode: str) -> tuple:
         return (0, 0)
     except Exception:
         return (0, 0)
-
-
-# 指数报警去重缓存：{(code, condition): triggered_timestamp}
-_index_alert_cache: dict = {}
-
-INDEX_DATA_PATH = os.path.join(
-    os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'public', 'index_data.json'
-)
 
 
 def _check_index_dedup(code: str, condition: str, alarm_type: str) -> bool:
@@ -209,9 +251,15 @@ def check_index_alerts() -> list:
         if not info:
             continue
 
-        ema10 = info.get('ema10')
-        ema20 = info.get('ema20')
-        if not ema10 or not ema20:
+        klines = info.get('klines', [])
+        if len(klines) < 20:
+            continue
+
+        # 实时从K线计算EMA10和EMA20
+        closes = [k['close'] for k in klines]
+        ema10 = _calc_ema(closes, 10)
+        ema20 = _calc_ema(closes, 20)
+        if ema10 is None or ema20 is None:
             continue
 
         # 检查用户是否已标记该指数为已处理（跟个股报警逻辑一致）
@@ -226,6 +274,10 @@ def check_index_alerts() -> list:
         is_big_drop = change_pct < -3
         is_break_10 = price < ema10
         is_break_20 = price < ema20
+
+        # 自动清除：价格回到EMA10/EMA20上方 → 消除旧的跌破报警
+        if not is_break_10 and not is_break_20:
+            _auto_dismiss_index_alarm(code)
 
         if is_big_drop and (is_break_10 or is_break_20):
             level = 'EMA10' if is_break_10 else 'EMA20'
@@ -417,6 +469,12 @@ def check_all_alerts() -> dict:
             price, _ = _get_realtime_data(code)
             if price <= 0:
                 continue
+
+            # 自动清除：价格回到止损价上方 → 报警已解除
+            if price > stop_loss and alarm.get('triggered_at'):
+                _auto_dismiss_price_alarm(alarm)
+                continue
+
             if price <= stop_loss:
                 loss_pct = round((price - stop_loss) / stop_loss * 100, 2)
                 triggered.append({

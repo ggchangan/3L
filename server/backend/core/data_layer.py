@@ -82,11 +82,18 @@ def get_stock_klines(code, direction=None, stocks=None):
     return []
 
 
-# ====== 指数数据（中证全指 000985）======
+# ====== 指数数据（多指数结构）======
+# index_sh_data.json 格式: {last_updated, indices: {code: {name, klines: [{date, open, close, high, low, volume}]}}}
 INDEX_CODE = '000985'
 
+INDEX_CODES = {
+    '000001': '上证指数',
+    '000688': '科创50',
+    '000985': '中证全指',
+}
+
 def get_index_data():
-    """返回 {last_updated, klines: [{date, open, close, high, low, volume}]}（走缓存，TTL=60s）"""
+    """返回完整指数数据 {last_updated, indices: {code: {name, klines}}}（走缓存，TTL=60s）"""
     return cache.get('index_data', lambda: _load_json(INDEX_DATA_PATH, {}), ttl=60)
 
 def save_index_data(data):
@@ -96,22 +103,43 @@ def save_index_data(data):
 
 def load_index_data_uncached():
     """强制从磁盘读取指数数据（不走缓存），供更新脚本使用
-    兼容旧格式：纯 [{date, ...}] → 自动转换为 {last_updated, klines}
+    兼容旧格式：
+      - 纯 [{date, ...}] → 自动转换为多指数格式 {indices: {000985: {klines: ...}}}
+      - {last_updated, klines} → 自动转换为多指数格式
     """
     raw = _load_json(INDEX_DATA_PATH, {})
     if isinstance(raw, list):
-        # 旧格式迁移：纯K线列表 → 新格式
+        # 旧格式迁移：纯K线列表
         klines = raw
         latest = klines[-1]['date'] if klines else ''
-        data = {'last_updated': latest, 'klines': klines}
+        data = {
+            'last_updated': latest,
+            'indices': {
+                '000985': {'name': '中证全指', 'klines': klines},
+            }
+        }
+        _atomic_save_json(INDEX_DATA_PATH, data)
+        return data
+    if 'klines' in raw and 'indices' not in raw:
+        # 旧格式迁移：{last_updated, klines}
+        latest = raw.get('last_updated', '')
+        klines = raw.get('klines', [])
+        data = {
+            'last_updated': latest,
+            'indices': {
+                '000985': {'name': '中证全指', 'klines': klines},
+            }
+        }
         _atomic_save_json(INDEX_DATA_PATH, data)
         return data
     return raw
 
-def get_index_klines():
-    """返回指数K线列表 [{date, open, close, high, low, volume}]"""
+def get_index_klines(code=INDEX_CODE):
+    """返回指定指数代码的K线列表，默认中证全指"""
     data = get_index_data()
-    return data.get('klines', [])
+    indices = data.get('indices', {})
+    info = indices.get(code, {})
+    return info.get('klines', [])
 
 
 # ====== 板块日K线数据（行业+概念）======

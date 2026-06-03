@@ -103,9 +103,17 @@ def _handle_list(h, path):
 
 
 def _handle_list_all(h, path):
-    """GET /api/alarms/list-all — 返回全部报警（含已触发/过期）"""
+    """GET /api/alarms/list-all — 返回全部报警（含已触发/过期）
+    
+    只返回：
+    - 已触发的报警（有 triggered_at）
+    - 已处理的报警（status=handled）
+    不返回从未触发过的active报警（它们只是配置，不是待处理事项）
+    """
     alarms = get_alarms()
-    h.send_json({'alarms': alarms, 'count': len(alarms)})
+    # 过滤掉从未触发过的active报警
+    filtered = [a for a in alarms if a.get('triggered_at') or a.get('status') == 'handled']
+    h.send_json({'alarms': filtered, 'count': len(filtered)})
 
 
 def _handle_remove(h, path, body):

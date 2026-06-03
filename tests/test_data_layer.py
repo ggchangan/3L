@@ -206,17 +206,42 @@ class TestIndexData:
         from backend.core import data_layer as dl
         test_path = os.path.join(tmp_path, 'index_data.json')
         monkeypatch.setattr(dl, 'INDEX_DATA_PATH', test_path)
-        data = {'last_updated': '20260525', 'klines': [{'date': '20260525', 'close': 5000.0}]}
+        data = {
+            'last_updated': '20260525',
+            'indices': {
+                '000985': {'name': '中证全指', 'klines': [{'date': '20260525', 'close': 5000.0}]},
+            }
+        }
         dl.save_index_data(data)
         loaded = dl.load_index_data_uncached()
         assert loaded['last_updated'] == '20260525'
-        assert len(loaded['klines']) == 1
+        klines = loaded['indices']['000985']['klines']
+        assert len(klines) == 1
+
+    def test_save_and_uncached_load_old_format(self, monkeypatch, tmp_path):
+        """验证旧扁平格式自动迁移到多指数格式"""
+        from backend.core import data_layer as dl
+        test_path = os.path.join(tmp_path, 'index_data2.json')
+        monkeypatch.setattr(dl, 'INDEX_DATA_PATH', test_path)
+        # 保存旧格式 {last_updated, klines}
+        old_data = {'last_updated': '20260525', 'klines': [{'date': '20260525', 'close': 5000.0}]}
+        dl.save_index_data(old_data)
+        loaded = dl.load_index_data_uncached()
+        # 自动迁移后应该变成多指数格式
+        assert loaded['last_updated'] == '20260525'
+        klines = loaded['indices']['000985']['klines']
+        assert len(klines) == 1
 
     def test_get_index_klines(self, monkeypatch, tmp_path):
         from backend.core import data_layer as dl
         test_path = os.path.join(tmp_path, 'index_data.json')
         monkeypatch.setattr(dl, 'INDEX_DATA_PATH', test_path)
-        data = {'last_updated': '20260525', 'klines': [{'date': '20260525', 'close': 5000.0}]}
+        data = {
+            'last_updated': '20260525',
+            'indices': {
+                '000985': {'name': '中证全指', 'klines': [{'date': '20260525', 'close': 5000.0}]},
+            }
+        }
         dl.save_index_data(data)
         klines = dl.get_index_klines()
         assert len(klines) == 1
