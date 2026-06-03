@@ -3,10 +3,14 @@ import NavBar, { BottomNav } from '../components/NavBar'
 import './TopGainers.css'
 
 interface GainStock {
-  code: string; name: string; gain_30d: number
+  code: string; name: string; gain: number; days: number
   change?: number; price?: number; sector?: string
   structure?: string; stage?: string
   vol_analysis?: string; trading_system?: string
+  signal?: string; buy_point?: string
+  stop_loss?: number | null; stop_loss_pct?: number | null
+  conclusion?: string; mainline_level?: string
+  fusion_type?: string
 }
 
 interface PieItem {
@@ -15,6 +19,7 @@ interface PieItem {
 
 interface GainData {
   stocks: GainStock[]; pie: PieItem[]; total: number
+  start: string; end: string; days: number
 }
 
 const PIE_COLORS = [
@@ -31,8 +36,28 @@ const STAGE_COLORS: Record<string, string> = {
   '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560',
 }
 
+const SIGNAL_COLORS: Record<string, string> = {
+  'buy': '#e94560',
+  'hold': '#ffd700',
+  'sell': '#4CAF50',
+}
+
+const SIGNAL_LABELS: Record<string, string> = {
+  'buy': '买入',
+  'hold': '持有',
+  'sell': '卖出',
+}
+
+function daysAgo(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toISOString().split('T')[0]
+}
+
 export default function TopGainers() {
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
+  const today = new Date().toISOString().split('T')[0]
+  const [startDate, setStartDate] = useState(() => daysAgo(30))
+  const [endDate, setEndDate] = useState(today)
   const [limit, setLimit] = useState('50')
   const [data, setData] = useState<GainData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -41,15 +66,30 @@ export default function TopGainers() {
 
   useEffect(() => { loadData() }, [])
 
+  function formatDate(d: string) {
+    return d.replace(/-/g, '')
+  }
+
   async function loadData() {
     setLoading(true); setError(''); setHint('加载中...')
     try {
-      const r = await fetch(`/api/top-gainers?date=${date}&limit=${limit}`)
+      // 日期校验
+      if (startDate > endDate) {
+        setError('起始日期不能晚于截止日期，已自动交换')
+        const tmp = startDate; setStartDate(endDate); setEndDate(tmp)
+        setLoading(false); setHint(''); return
+      }
+      const start = formatDate(startDate)
+      const end = formatDate(endDate)
+      const r = await fetch(`/api/top-gainers?start=${start}&end=${end}&limit=${limit}`)
       if (!r.ok) throw new Error('HTTP ' + r.status)
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setData(d)
       setHint(`共 ${d.stocks.length} 只`)
+      if (d.stocks.length === 0) {
+        setHint('该区间无数据，可能是所选日期不在交易日期范围内')
+      }
     } catch (err: any) {
       setError(err.message)
       setData(null)
@@ -94,23 +134,28 @@ export default function TopGainers() {
 
   const stocks = data?.stocks || []
   const pieResult = data?.pie ? renderPie(data.pie) : null
-  const avgGain = stocks.length > 0 ? (stocks.reduce((s, st) => s + st.gain_30d, 0) / stocks.length).toFixed(1) : '0'
-  const maxGain = stocks.length > 0 ? stocks[0].gain_30d.toFixed(1) : '0'
+  const avgGain = stocks.length > 0 ? (stocks.reduce((s, st) => s + st.gain, 0) / stocks.length).toFixed(1) : '0'
+  const maxGain = stocks.length > 0 ? stocks[0].gain.toFixed(1) : '0'
+  const periodLabel = data
+    ? `${data.start.slice(0,4)}-${data.start.slice(4,6)}-${data.start.slice(6,8)} → ${data.end.slice(0,4)}-${data.end.slice(4,6)}-${data.end.slice(6,8)}（${data.days}个交易日）`
+    : ''
 
   return (
     <div className="page-container">
       <NavBar />
 
       <div className="header">
-        <h1>📈 30日涨幅榜</h1>
-        <div className="subtitle">全市场个股 · 近30日涨幅排序 · 板块分布</div>
+        <h1>📈 区间涨幅榜</h1>
+        <div className="subtitle">全市场个股 · 指定区间涨幅排序 · 板块分布 · 操作信号</div>
       </div>
 
       <div className="container">
         {/* Controls */}
         <div className="controls">
-          <label htmlFor="datePicker">📅 截止日期</label>
-          <input type="date" id="datePicker" value={date} onChange={e => setDate(e.target.value)} />
+          <label htmlFor="startPicker">📅 起始</label>
+          <input type="date" id="startPicker" value={startDate} onChange={e => setStartDate(e.target.value)} />
+          <label htmlFor="endPicker">→ 截止</label>
+          <input type="date" id="endPicker" value={endDate} onChange={e => setEndDate(e.target.value)} />
           <label htmlFor="limitSelect">展示</label>
           <select id="limitSelect" value={limit} onChange={e => setLimit(e.target.value)}>
             <option value="30">30只</option>
@@ -128,8 +173,8 @@ export default function TopGainers() {
         {data && stocks.length > 0 && (
           <div className="summary" style={{ display: 'flex' }}>
             <div className="summary-item">
-              <div className="label">截止日期</div>
-              <div className="value" style={{ fontSize: 16, color: '#e0e0e0' }}>{date}</div>
+              <div className="label">查询区间</div>
+              <div className="value" style={{ fontSize: 14, color: '#e0e0e0' }}>{periodLabel}</div>
             </div>
             <div className="summary-item">
               <div className="label">展示个股</div>
@@ -139,7 +184,7 @@ export default function TopGainers() {
             <div className="summary-item">
               <div className="label">平均涨幅</div>
               <div className="value" style={{ color: parseFloat(avgGain) >= 0 ? '#e94560' : '#4CAF50' }}>{avgGain}%</div>
-              <div className="sub">30日</div>
+              <div className="sub">区间</div>
             </div>
             <div className="summary-item">
               <div className="label">最高涨幅</div>
@@ -169,7 +214,10 @@ export default function TopGainers() {
 
         {/* Stock List */}
         {data && stocks.length === 0 && !loading && !error && (
-          <div className="error-card">该日期无数据</div>
+          <div className="error-card">
+            该区间无数据<br/>
+            <span style={{fontSize:12,color:'#666'}}>所选日期可能不在交易日范围内，系统会自动对齐到最近交易日，请尝试调整日期范围</span>
+          </div>
         )}
 
         {data && stocks.length > 0 && (
@@ -179,8 +227,10 @@ export default function TopGainers() {
               const rankLabel = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`
               const leftColor = STAGE_COLORS[s.stage || ''] || '#888'
               const changeCls = (s.change || 0) >= 0 ? 'up' : 'down'
-              const gainCls = s.gain_30d >= 0 ? 'up' : 'down'
-              const gainArrow = s.gain_30d >= 0 ? '▲' : '▼'
+              const gainCls = s.gain >= 0 ? 'up' : 'down'
+              const gainArrow = s.gain >= 0 ? '▲' : '▼'
+              const signalColor = SIGNAL_COLORS[s.signal || 'hold']
+              const signalLabel = SIGNAL_LABELS[s.signal || 'hold']
 
               return (
                 <div key={s.code} className="stock-item-wrapper" style={{ borderLeft: `3px solid ${leftColor}` }}>
@@ -189,7 +239,7 @@ export default function TopGainers() {
                     <div className="stock-top">
                       <div className="stock-left">
                         <span className="stock-name">{s.name}</span>
-                        <span className={`gain-rank ${rankClass}`}>{rankLabel} {s.gain_30d.toFixed(1)}%</span>
+                        <span className={`gain-rank ${rankClass}`}>{rankLabel} {s.gain.toFixed(1)}%</span>
                         <span className="stock-code">{s.code}</span>
                       </div>
                       <div className="stock-right">
@@ -202,18 +252,51 @@ export default function TopGainers() {
                       </div>
                     </div>
 
+                    {/* Signal + Trading System + Buy Point */}
+                    <div className="stock-signal-row">
+                      {s.signal && (
+                        <span className="signal-badge" style={{ background: signalColor }}>
+                          {signalLabel}
+                        </span>
+                      )}
+                      {s.trading_system === 'trend' ? (
+                        <span className="signal-badge trend-badge">趋势</span>
+                      ) : s.trading_system === '3l' ? (
+                        <span className="signal-badge badge-3l">3L</span>
+                      ) : null}
+                      {s.mainline_level && (
+                        <span className={`mainline-badge ${s.mainline_level === '主线' ? 'main' : s.mainline_level === '次级主线' ? 'sub' : 'non'}`}>
+                          {s.mainline_level}
+                        </span>
+                      )}
+                      {s.buy_point && (
+                        <span className="buy-point-badge">{s.buy_point}</span>
+                      )}
+                      {s.trading_system === 'trend' && (
+                        <span className="tag" style={{ fontSize: 10, color: '#aaa' }}>趋势交易</span>
+                      )}
+                    </div>
+
                     {/* Tags */}
                     <div className="stock-tags">
                       {s.sector && <span className="tag">{s.sector}</span>}
                       {s.structure && <span className="tag">{s.structure}</span>}
                       {s.stage && <span className="tag" style={{ color: STAGE_COLORS[s.stage] || '#888' }}>{s.stage}</span>}
-                      {s.vol_analysis && <span className="tag">{s.vol_analysis}</span>}
+                      {s.stop_loss_pct != null && (
+                        <span className="tag sl-tag">止损{s.stop_loss_pct.toFixed(1)}%</span>
+                      )}
                     </div>
 
-                    {/* 30日涨幅 field */}
+                    {/* Conclusion */}
+                    {s.conclusion && (
+                      <div className="stock-conclusion">{s.conclusion}</div>
+                    )}
+
+                    {/* 区间涨幅 field */}
                     <div className="stock-field">
-                      <span className="field-label">30日涨幅:</span>
-                      <span className={`field-value ${gainCls}`}>{gainArrow} {s.gain_30d >= 0 ? '+' : ''}{s.gain_30d.toFixed(2)}%</span>
+                      <span className="field-label">区间涨幅:</span>
+                      <span className={`field-value ${gainCls}`}>{gainArrow} {s.gain >= 0 ? '+' : ''}{s.gain.toFixed(2)}%</span>
+                      <span className="field-label" style={{ marginLeft: 8 }}>（{s.days}日）</span>
                     </div>
                   </div>
                 </div>

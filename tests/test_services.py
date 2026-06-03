@@ -900,7 +900,7 @@ class TestTopGainersServiceWithMock:
     def test_top_gainers_structure(self):
         """涨幅榜返回正确结构"""
         from backend.services.top_gainers_service import get_top_gainers
-        result = get_top_gainers('20260331', limit=5, stocks=MOCK_STOCKS)
+        result = get_top_gainers('20260301', '20260329', limit=5, stocks=MOCK_STOCKS)
         assert 'stocks' in result
         assert 'pie' in result
         assert 'total' in result
@@ -909,7 +909,7 @@ class TestTopGainersServiceWithMock:
     def test_top_gainers_empty_data(self):
         """空数据返回空列表"""
         from backend.services.top_gainers_service import get_top_gainers
-        result = get_top_gainers('20991231', limit=5, stocks={})
+        result = get_top_gainers('20991231', '20991231', limit=5, stocks={})
         assert result['stocks'] == []
 
 

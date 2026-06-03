@@ -5,9 +5,10 @@ from backend.services.top_gainers_service import get_top_gainers
 
 def _handle_top_gainers(h, path):
     params = parse_query(path)
-    date_str = params.get('date', [''])[0].replace('-', '')
+    start = params.get('start', [''])[0].replace('-', '')
+    end = params.get('end', [''])[0].replace('-', '')
     limit = int(params.get('limit', ['50'])[0])
-    h.send_json(get_top_gainers(date_str, limit))
+    h.send_json(get_top_gainers(start, end, limit))
 
 
 def register_routes(routes):
