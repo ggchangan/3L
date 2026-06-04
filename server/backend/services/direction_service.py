@@ -138,6 +138,42 @@ def format_direction(category: str, sub_direction: str) -> str:
     return sub_direction
 
 
+def _update_watchlist_on_key_change(old_key: str, new_key: str):
+    """更新 watchlist 中所有引用 old_key 的股票为 new_key"""
+    if old_key == new_key:
+        return
+    wl_path = os.path.join(DATA_DIR, 'watchlist.json')
+    if not os.path.isfile(wl_path):
+        return
+    try:
+        with open(wl_path, 'r') as f:
+            wl = json.load(f)
+        changed = 0
+        for s in wl.get('stocks', []):
+            # 新格式 directions 数组
+            dirs = s.get('directions', [])
+            if isinstance(dirs, list) and old_key in dirs:
+                dirs.remove(old_key)
+                if new_key not in dirs:
+                    dirs.append(new_key)
+                changed += 1
+            # 旧格式 direction 字符串
+            d = s.get('direction', '')
+            if d and d == old_key:
+                s['direction'] = new_key
+                changed += 1
+        if changed > 0:
+            with open(wl_path, 'w') as f:
+                json.dump(wl, f, ensure_ascii=False, indent=2)
+            try:
+                from scripts.cache_layer import cache as _cl
+                _cl.invalidate('watchlist')
+            except ImportError:
+                pass
+    except (OSError, json.JSONDecodeError):
+        pass
+
+
 # ═══════════════════════════════════════════════════════════
 # CATEGORY 操作
 # ═══════════════════════════════════════════════════════════
@@ -206,17 +242,21 @@ def rename_category(old_name: str, new_name: str) -> dict:
 
     # 更新所有细分方向的 category 字段和 key
     new_subs = {}
+    key_changes = []  # 记录 (old_key, new_key) 对，用于同步 watchlist
     for key, sub in data['sub_directions'].items():
         if sub.get('category') == old_name:
             sub['category'] = new_name
-            new_key = format_direction(new_name, sub['sub_name'] if 'sub_name' in sub else _extract_sub_name(key, old_name))
-            # 重建 key
             old_sub_name = _extract_sub_name(key, old_name)
             new_key = format_direction(new_name, old_sub_name)
             new_subs[new_key] = sub
+            if new_key != key:
+                key_changes.append((key, new_key))
         else:
             new_subs[key] = sub
     data['sub_directions'] = new_subs
+    # 同步更新 watchlist
+    for old_key, new_key in key_changes:
+        _update_watchlist_on_key_change(old_key, new_key)
     _save(data)
     return {'success': True}
 
@@ -338,14 +378,20 @@ def rename_sub_direction(category: str, old_name: str, new_name: str) -> dict:
     new_key = format_direction(category, new_name)
 
     data = _load()
+    # V1 兼容：如果 old_key 找不到，尝试直接用 old_name
     if old_key not in data['sub_directions']:
-        return {'success': False, 'error': f'细分方向 "{old_key}" 不存在'}
-    if new_key in data['sub_directions']:
+        if old_name in data['sub_directions']:
+            old_key = old_name
+        else:
+            return {'success': False, 'error': f'细分方向 "{old_key}" 不存在'}
+    if new_key in data['sub_directions'] and new_key != old_key:
         return {'success': False, 'error': f'细分方向 "{new_key}" 已存在'}
 
     data['sub_directions'][new_key] = data['sub_directions'].pop(old_key)
+    # 同步更新 watchlist
+    _update_watchlist_on_key_change(old_key, new_key)
     _save(data)
-    return {'success': True}
+    return {'success': True, 'old_key': old_key, 'new_key': new_key}
 
 
 def move_sub_direction(category: str, sub_name: str, new_category: str, *, auto_create_category: bool = True) -> dict:
@@ -396,38 +442,8 @@ def move_sub_direction(category: str, sub_name: str, new_category: str, *, auto_
     sub_info['order'] = max((s['order'] for s in same_cat_subs), default=-1) + 1
     data['sub_directions'][new_key] = sub_info
 
-    # 同步更新 watchlist 中股票的 directions 字段
-    wl_path = os.path.join(DATA_DIR, 'watchlist.json')
-    if os.path.isfile(wl_path):
-        try:
-            with open(wl_path, 'r') as f:
-                wl = json.load(f)
-            changed = 0
-            for s in wl.get('stocks', []):
-                dirs = s.get('directions', [])
-                # 新格式 directions 数组
-                if isinstance(dirs, list) and old_key in dirs:
-                    dirs.remove(old_key)
-                    if new_key not in dirs:
-                        dirs.append(new_key)
-                    changed += 1
-                # 旧格式 direction 字符串（也包括 directions=[] 但 direction 有值的情况）
-                d = s.get('direction', '')
-                if d and d == old_key:
-                    s['direction'] = new_key
-                    changed += 1
-            if changed > 0:
-                with open(wl_path, 'w') as f:
-                    json.dump(wl, f, ensure_ascii=False, indent=2)
-                # 强制刷新缓存
-                try:
-                    from scripts.cache_layer import cache as _cl
-                    _cl.invalidate('watchlist')
-                except ImportError:
-                    pass
-        except (OSError, json.JSONDecodeError):
-            pass
-
+    # 同步更新 watchlist
+    _update_watchlist_on_key_change(old_key, new_key)
     _save(data)
     return {'success': True, 'old_key': old_key, 'new_key': new_key}
 
