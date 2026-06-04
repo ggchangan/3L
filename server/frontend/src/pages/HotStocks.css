@@ -155,3 +155,26 @@
 }
 .page-num:hover { background: #2a2a4e; color: #e0e0e0; }
 .page-num.active { background: #e94560; color: #fff; font-weight: 700; }
+
+/* 加自选按钮 */
+.btn-add-wl {
+  background: rgba(78, 205, 196, 0.12);
+  color: #4ecdc4;
+  border: 1px solid rgba(78, 205, 196, 0.3);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.15s;
+  font-weight: 600;
+}
+.btn-add-wl:hover { background: rgba(78, 205, 196, 0.25); }
+.btn-add-wl:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.wl-added {
+  font-size: 10px;
+  color: #4ecdc4;
+  margin-left: auto;
+  font-weight: 600;
+}

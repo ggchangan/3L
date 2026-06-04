@@ -58,6 +58,8 @@ export default function HotStocks() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
+  const [watchlistCodes, setWatchlistCodes] = useState<Set<string>>(new Set())
+  const [addingCodes, setAddingCodes] = useState<Set<string>>(new Set())
 
   // Filters
   const [signalFilter, setSignalFilter] = useState('全部')
@@ -67,7 +69,34 @@ export default function HotStocks() {
   const [sortBy, setSortBy] = useState('hot_rank')
   const [page, setPage] = useState(1)
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData(); loadWatchlist() }, [])
+
+  async function loadWatchlist() {
+    try {
+      const r = await fetch('/api/watchlist')
+      if (!r.ok) return
+      const d = await r.json()
+      const stocks = Array.isArray(d) ? d : d.stocks || []
+      setWatchlistCodes(new Set(stocks.map((s: any) => s.code)))
+    } catch {}
+  }
+
+  async function addToWatchlist(code: string, name: string) {
+    if (watchlistCodes.has(code)) return
+    setAddingCodes(prev => new Set([...prev, code]))
+    try {
+      const r = await fetch('/api/watchlist/add-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, name }),
+      })
+      const d = await r.json()
+      if (d.success) {
+        setWatchlistCodes(prev => new Set([...prev, code]))
+      }
+    } catch {}
+    setAddingCodes(prev => { const n = new Set(prev); n.delete(code); return n })
+  }
 
   async function loadData() {
     setLoading(true); setError(''); setHint('加载中...')
@@ -278,6 +307,17 @@ export default function HotStocks() {
                     <span className="hot-value">🔥 {(s.hot_value / 10000).toFixed(0)}万</span>
                     {s.popularity_tag && (
                       <span className="popularity-tag">{s.popularity_tag}</span>
+                    )}
+                    {watchlistCodes.has(s.code) ? (
+                      <span className="wl-added">✔ 已自选</span>
+                    ) : (
+                      <button
+                        className="btn-add-wl"
+                        onClick={() => addToWatchlist(s.code, s.name)}
+                        disabled={addingCodes.has(s.code)}
+                      >
+                        {addingCodes.has(s.code) ? '...' : '+ 自选'}
+                      </button>
                     )}
                   </div>
 
