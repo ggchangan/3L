@@ -434,7 +434,7 @@ def update_sectors():
     for name in ind_names:
         try:
             # 已有且已是最新 → 跳过
-            if name in industries and industries[name] and industries[name][-1]['date'] == last_updated:
+            if name in industries and industries[name] and industries[name][-1]['date'] == today:
                 continue
 
             # 新板块：拉全量
