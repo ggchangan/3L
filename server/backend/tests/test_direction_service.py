@@ -453,6 +453,7 @@ class TestConceptBinding:
 
     def test_search_concepts_pinyin_match(self, ds):
         """拼音首字母匹配"""
+        pytest.importorskip('pypinyin', reason='需要 pypinyin 库')
         concept_path = os.path.join(ds.DATA_DIR, 'map', 'concept_list.json')
         os.makedirs(os.path.dirname(concept_path), exist_ok=True)
         with open(concept_path, 'w') as f:
