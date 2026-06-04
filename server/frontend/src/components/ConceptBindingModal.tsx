@@ -3,7 +3,6 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 interface ConceptResult {
   code: string
   name: string
-  stock_count: number
 }
 
 interface Props {
@@ -177,7 +176,6 @@ export default function ConceptBindingModal({ subDir, boundCodes, onClose, onSav
                   />
                   <span className="concept-item-name">{item.name}</span>
                 </div>
-                <span className="concept-item-count">{item.stock_count}只自选股</span>
               </label>
             )
           })}

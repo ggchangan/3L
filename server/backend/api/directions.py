@@ -576,14 +576,13 @@ def _handle_concepts_search(h, path):
         qs = parse_qs(urlparse(path).query)
         q = qs.get('q', [''])[0].strip()
         results = search_concepts(q)
-        # 转成 [{code, name, stock_count}] 格式
+        # 转成 [{code, name}] 格式（stock_count 来自 push2 不准确，不返回）
         items = []
         for code, info in results.items():
             if isinstance(info, dict):
-                items.append({'code': code, 'name': info.get('name', code), 'stock_count': info.get('stock_count', 0)})
+                items.append({'code': code, 'name': info.get('name', code)})
             else:
-                items.append({'code': code, 'name': info, 'stock_count': 0})
-        items.sort(key=lambda x: x['stock_count'], reverse=True)
+                items.append({'code': code, 'name': info})
         h.send_json({'results': items})
     except Exception as e:
         h.send_json({'success': False, 'error': str(e)})
