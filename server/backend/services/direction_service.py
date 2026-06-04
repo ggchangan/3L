@@ -361,7 +361,11 @@ def set_sub_direction_enabled(category: str, name: str, enabled: bool) -> dict:
     key = format_direction(category, name)
     data = _load()
     if key not in data['sub_directions']:
-        return {'success': False, 'error': f'细分方向 "{key}" 不存在'}
+        # V1 兼容：尝试直接用 name 查找（旧格式无前缀）
+        if name in data['sub_directions']:
+            key = name
+        else:
+            return {'success': False, 'error': f'细分方向 "{key}" 不存在'}
     data['sub_directions'][key]['enabled'] = enabled
     _save(data)
     return {'success': True}
