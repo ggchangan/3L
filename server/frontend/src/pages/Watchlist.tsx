@@ -7,12 +7,17 @@ import { pinyin } from 'pinyin-pro'
 import './Watchlist.css'
 
 interface WatchlistStock {
-  code: string; name: string; direction?: string; industry?: string
+  code: string; name: string; direction?: string; directions?: string[]; industry?: string
   price?: number; change?: number; signal?: string
   structure?: string; stage?: string; sector?: string
   trading_system?: string; trend_bias?: number
   buy_point?: string; profit_model1?: boolean; trend_stock?: boolean
   vol_analysis?: string
+}
+
+// 兼容新旧格式：新格式 directions 数组，旧格式 direction 字符串
+function getDirArray(s: WatchlistStock): string[] {
+  return s.directions || (s.direction ? [s.direction] : ['其他'])
 }
 
 interface DirCategory {
@@ -82,6 +87,7 @@ export default function Watchlist() {
   const dragSource = useRef<string | null>(null)
   const dragSubSource = useRef<string | null>(null)
   const [conceptModal, setConceptModal] = useState<{ subDir: string; concepts: Array<{ code: string; name: string }> } | null>(null)
+  const [openDirDropdown, setOpenDirDropdown] = useState<string | null>(null)
 
   // 派生数据：兼容新旧格式
   const activeDirs = dirData.active || []
@@ -90,6 +96,17 @@ export default function Watchlist() {
   const subDirections = dirData.sub_directions || {} as Record<string, SubDirectionInfo>
 
   useEffect(() => { loadAll() }, [])
+
+  // 点击其他地方关闭方向下拉
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (openDirDropdown && !(e.target as HTMLElement).closest('.dir-tag-add-wrap')) {
+        setOpenDirDropdown(null)
+      }
+    }
+    if (openDirDropdown) document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [openDirDropdown])
 
   async function loadAll() {
     try {
@@ -150,12 +167,13 @@ export default function Watchlist() {
   }
 
   // 方向Tab
-  const tracked = stocks.filter(s => activeDirs.includes(s.direction || '其他'))
+  const tracked = stocks.filter(s => getDirArray(s).some(d => activeDirs.includes(d)))
   const dirCounts: Record<string, number> = { '全部': stocks.length }
   activeDirs.forEach(d => dirCounts[d] = 0)
   stocks.forEach(s => {
-    const d = s.direction || '其他'
-    if (activeDirs.includes(d)) dirCounts[d] = (dirCounts[d] || 0) + 1
+    getDirArray(s).forEach(d => {
+      if (activeDirs.includes(d)) dirCounts[d] = (dirCounts[d] || 0) + 1
+    })
   })
   const tabs = [
     { name: '全部', label: `全部 (${stocks.length})` },
@@ -166,8 +184,8 @@ export default function Watchlist() {
   const filtered = stocks
     .filter(s => {
       if (activeDir !== '全部') {
-        const d = s.direction || '其他'
-        if (d !== activeDir || !activeDirs.includes(d)) return false
+        const dirs = getDirArray(s)
+        if (!dirs.includes(activeDir) || !activeDirs.includes(activeDir)) return false
       }
       if (filter) {
         const f = filter.toLowerCase()
@@ -182,8 +200,8 @@ export default function Watchlist() {
       return true
     })
     .sort((a, b) => {
-      const aa = activeDirs.includes(a.direction || '其他') ? 0 : 10
-      const bb = activeDirs.includes(b.direction || '其他') ? 0 : 10
+      const aa = getDirArray(a).some(d => activeDirs.includes(d)) ? 0 : 10
+      const bb = getDirArray(b).some(d => activeDirs.includes(d)) ? 0 : 10
       if (aa !== bb) return aa - bb
       const structOrder: Record<string, number> = { '上涨趋势': 0, '区间震荡': 1, '下降趋势': 2 }
       const sa = structOrder[a.structure || ''] ?? 3
@@ -368,7 +386,7 @@ export default function Watchlist() {
                                   setConceptModal({ subDir: sub.key, concepts: sub.info.concepts || [] })
                                 }}>⚙️</button>
                                 <button className="btn btn-red btn-sm" onClick={async () => {
-                                  const cnt = stocks.filter(s => (s.direction || '其他') === sub.key).length
+                                  const cnt = stocks.filter(s => getDirArray(s).includes(sub.key)).length
                                   if (!confirm(`确认删除细分方向 "${sub.name}"？该方向的 ${cnt} 只股票将同时从自选股删除`)) return
                                   try {
                                     const r = await fetch('/api/directions/remove', {
@@ -529,7 +547,7 @@ export default function Watchlist() {
               let prevStruct: string | null = null
               const html: JSX.Element[] = []
               filtered.forEach((s, i) => {
-                const tr = activeDirs.includes(s.direction || '其他')
+                const tr = getDirArray(s).some(d => activeDirs.includes(d))
                 const struct = s.structure || '--'
                 if (prevTracked !== tr || prevStruct !== struct) {
                   html.push(
@@ -551,28 +569,55 @@ export default function Watchlist() {
                     <div className="watchlist-card-actions">
                       <div className="wca-left">
                         {tr ? null : <span className="tag-untracked">未跟踪</span>}
-                        <select className="dir-select" style={{ width: 68 }} value={s.direction || '其他'}
-                          onChange={async e => {
-                            const newDir = e.target.value
-                            const stock = stocks.find(x => x.code === s.code)
-                            if (stock) {
-                              stock.direction = newDir
-                              try {
-                                const payload = stocks.map(x => ({ code: x.code, name: x.name, direction: x.direction, industry: x.industry || '' }))
-                                const r = await fetch('/api/watchlist/save', {
-                                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ stocks: payload, count: payload.length }),
-                                })
-                                const data = await r.json()
-                                if (data.success) { showToast(`✅ ${stock.name || s.code} → ${newDir}`); loadAll() }
-                                else showToast('⚠️ 保存失败', true)
-                              } catch { showToast('⚠️ 保存失败', true) }
-                            }
-                          }}>
-                          {[...new Set([...activeDirs, s.direction || '其他'])].map(d => (
-                            <option key={d} value={d}>{d}</option>
-                          ))}
-                        </select>
+                        {/* 方向Tags多选 */}
+                        <div className="dir-tags-box">
+                          {(() => {
+                            const dirs = getDirArray(s)
+                            return dirs.map(dir => (
+                              <span key={dir} className={`dir-tag ${dir === '其他' ? 'dir-tag-other' : ''}`}>
+                                {dir}
+                                {activeDirs.includes(dir) && (
+                                  <span className="dir-tag-x" onClick={async e => {
+                                    e.stopPropagation()
+                                    const newDirs = dirs.filter(d => d !== dir)
+                                    const finalDirs = newDirs.length > 0 ? newDirs : ['其他']
+                                    await saveStockDirs(s.code, finalDirs)
+                                  }}>✕</span>
+                                )}
+                              </span>
+                            ))
+                          })()}
+                          <div className="dir-tag-add-wrap">
+                            <span className="dir-tag-add" onClick={e => {
+                              e.stopPropagation()
+                              setOpenDirDropdown(openDirDropdown === s.code ? null : s.code)
+                            }}>+</span>
+                            {openDirDropdown === s.code && (
+                              <div className="dir-tag-dropdown">
+                                {activeDirs.map(d => {
+                                  const selected = getDirArray(s).includes(d)
+                                  return (
+                                    <div key={d}
+                                      className={`dir-tag-dd-item ${selected ? 'selected' : ''}`}
+                                      onClick={async e => {
+                                        e.stopPropagation()
+                                        const current = getDirArray(s).filter(x => x !== '其他')
+                                        const newDirs = selected
+                                          ? current.filter(x => x !== d)
+                                          : [...current, d]
+                                        const finalDirs = newDirs.length > 0 ? newDirs : ['其他']
+                                        setOpenDirDropdown(null)
+                                        await saveStockDirs(s.code, finalDirs)
+                                      }}>
+                                      <span className="dir-tag-dd-check">{selected ? '✓' : ''}</span>
+                                      {d}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <button className="btn btn-red btn-sm" onClick={async () => {
                         if (!confirm(`确认删除 ${s.name || s.code} ？`)) return
@@ -580,7 +625,7 @@ export default function Watchlist() {
                           const newStocks = stocks.filter(x => x.code !== s.code)
                           const r = await fetch('/api/watchlist/save', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ stocks: newStocks.map(x => ({ code: x.code, name: x.name, direction: x.direction, industry: x.industry || '' })), count: newStocks.length }),
+                            body: JSON.stringify({ stocks: newStocks.map(x => ({ code: x.code, name: x.name, direction: x.direction, directions: x.directions, industry: x.industry || '' })), count: newStocks.length }),
                           })
                           const data = await r.json()
                           if (data.success) { showToast(`❌ 已删除 ${s.name || s.code}`); loadAll() }
@@ -611,6 +656,32 @@ export default function Watchlist() {
     </>
   )
 
+  async function saveStockDirs(code: string, dirs: string[]) {
+    const stock = stocks.find(x => x.code === code)
+    if (!stock) return
+    // 先更新本地状态保证UI即时响应
+    setStocks(prev => prev.map(s => s.code === code
+      ? { ...s, directions: dirs, direction: dirs[0] || '其他' }
+      : s
+    ))
+    const label = dirs.filter(d => d !== '其他').join(', ') || '未跟踪'
+    try {
+      const payload = stocks.map(x => ({
+        code: x.code, name: x.name,
+        direction: x.code === code ? (dirs[0] || '其他') : x.direction,
+        directions: x.code === code ? dirs : x.directions,
+        industry: x.industry || ''
+      }))
+      const r = await fetch('/api/watchlist/save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stocks: payload, count: payload.length }),
+      })
+      const data = await r.json()
+      if (data.success) showToast(`✅ ${stock.name || code} → ${label}`)
+      else showToast('⚠️ 保存失败', true)
+    } catch { showToast('⚠️ 保存失败', true) }
+  }
+
   async function addStock() {
     if (!selectedCode) { showToast('⚠️ 请先搜索选择股票', true); return }
     const dir = boardDir || activeDirs[0]
@@ -626,7 +697,7 @@ export default function Watchlist() {
       if (data.results && data.results[0]) industry = data.results[0].industry || ''
     } catch { /* ignore */ }
     try {
-      const newStocks = [...stocks.map(s => ({ code: s.code, name: s.name, direction: s.direction, industry: s.industry || '' })),
+      const newStocks = [...stocks.map(s => ({ code: s.code, name: s.name, direction: s.direction, directions: s.directions, industry: s.industry || '' })),
         { code: selectedCode, name: selectedName, direction: dir, industry }]
       const r = await fetch('/api/watchlist/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -663,7 +734,7 @@ export default function Watchlist() {
       } catch { /* ignore */ }
     }
     try {
-      const newStocks = [...stocks.map(s => ({ code: s.code, name: s.name, direction: s.direction, industry: s.industry || '' })), ...toAdd]
+      const newStocks = [...stocks.map(s => ({ code: s.code, name: s.name, direction: s.direction, directions: s.directions, industry: s.industry || '' })), ...toAdd]
       const r = await fetch('/api/watchlist/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stocks: newStocks, count: newStocks.length }),

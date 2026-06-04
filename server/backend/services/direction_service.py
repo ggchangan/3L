@@ -572,6 +572,37 @@ def set_active(name: str, active: bool) -> dict:
     return set_sub_direction_enabled(cat, sub, active)
 
 
+# ── 个股方向读取工具（兼容旧格式 direction → 新格式 directions） ──
+
+def get_stock_directions(stock: dict) -> list:
+    """从 stock 对象读取方向列表，兼容旧格式 direction (str) 和新格式 directions (list)
+
+    旧格式: {"direction": "半导体"} → ["未分类.半导体"]
+    新格式: {"directions": ["科技.半导体"]} → ["科技.半导体"]
+    无方向: → ["其他.未分类"]
+    """
+    dirs = stock.get('directions')
+    if isinstance(dirs, list):
+        return dirs
+    d = stock.get('direction', '')
+    if isinstance(d, str) and d.strip():
+        # 旧格式没有大类前缀，尝试解析
+        cat, sub = parse_direction(d.strip())
+        if not cat:
+            return ['其他.未分类']
+        return [d.strip()]
+    return ['其他.未分类']
+
+
+def normalize_stock_directions(stock: dict) -> dict:
+    """将 stock 中的旧 direction 字段转为新 directions 数组（用于保存前标准化）"""
+    s = dict(stock)
+    dirs = get_stock_directions(s)
+    s['directions'] = dirs
+    s.pop('direction', None)
+    return s
+
+
 # ── 核心股 ──
 
 def get_core_stocks() -> dict:
