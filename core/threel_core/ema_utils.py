@@ -90,7 +90,12 @@ def get_structure(closes):
             return '区间震荡'  # 趋势转弱，降级
     
     if slope_pct < -0.2 and bias < 3:
-        return '下降趋势'
+        # 短周期确认：EMA5斜率和收盘价5日斜率也需为负
+        # 如果短期已走平/反弹 → 降级为区间震荡（与上涨趋势的转弱降级对称）
+        if ema5_slope_pct < 0 and close_slope_pct < 0:
+            return '下降趋势'
+        else:
+            return '区间震荡'  # 短期已走平，降级
     
     return '区间震荡'
 
