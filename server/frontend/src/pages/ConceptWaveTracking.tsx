@@ -124,6 +124,28 @@ interface WaveData {
   untracked_concepts?: { name: string; stock_count: number; stocks: string[] }[]
 }
 
+/* ═══════════════════════ Direction types ═══════════════════════ */
+
+interface DirCategory {
+  name: string
+  enabled: boolean
+  sub_count: number
+  order: number
+}
+
+interface SubDirectionInfo {
+  category: string
+  enabled: boolean
+  concepts: Array<{ code: string; name: string }>
+}
+
+interface DirectionData {
+  categories?: DirCategory[]
+  sub_directions?: Record<string, SubDirectionInfo>
+  active?: string[]
+  version?: number
+}
+
 const STAGE_PROB: Record<string, string> = {
   '波谷': '77.3%',
   '波峰': '61.3%',
@@ -451,6 +473,10 @@ export default function ConceptWaveTracking() {
   const [showHidden, setShowHidden] = useState(false)
   const [showAllStocks, setShowAllStocks] = useState<Record<string, boolean>>({})
 
+  // Direction-based view state
+  const [dirData, setDirData] = useState<DirectionData | null>(null)
+  const [activeTab, setActiveTab] = useState('全部')
+
   // Date range state
   const [startDate, setStartDate] = useState(daysAgo(60))
   const [endDate, setEndDate] = useState(todayStr())
@@ -465,9 +491,19 @@ export default function ConceptWaveTracking() {
   useEffect(() => {
     setLoading(true)
     setError('')
-    fetch('/api/concept-wave')
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then(d => setData(d))
+    Promise.all([
+      fetch('/api/concept-wave')
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() }),
+      fetch('/api/directions/get')
+        .then(r => r.json())
+        .catch(() => null), // directions API may not be deployed yet
+    ])
+      .then(([waveData, directions]) => {
+        setData(waveData)
+        if (directions && directions.categories) {
+          setDirData(directions as DirectionData)
+        }
+      })
       .catch(e => setError(e.message || '加载失败'))
       .finally(() => setLoading(false))
   }, [])
@@ -508,6 +544,65 @@ export default function ConceptWaveTracking() {
   const s = data?.stats
   const isEmpty = !loading && !data?.success
 
+  // ── Direction-based view helpers ──
+
+  // Build tab list: "全部" + enabled categories
+  const tabs = useMemo(() => {
+    const names: string[] = ['全部']
+    if (dirData?.categories) {
+      for (const cat of dirData.categories) {
+        if (cat.enabled) {
+          names.push(cat.name)
+        }
+      }
+    }
+    return names
+  }, [dirData])
+
+  // Map concept code → sub-direction full name (e.g. "科技.半导体")
+  const conceptToSubDir = useMemo(() => {
+    const map = new Map<string, string>()
+    if (!dirData?.sub_directions) return map
+    for (const [subDirName, info] of Object.entries(dirData.sub_directions)) {
+      if (!info.enabled) continue
+      for (const concept of info.concepts) {
+        // Only the first sub-direction a concept belongs to (should be unique)
+        if (!map.has(concept.code)) {
+          map.set(concept.code, subDirName)
+        }
+      }
+    }
+    return map
+  }, [dirData])
+
+  // Get set of concept codes for the currently active category tab
+  const activeCategory = activeTab === '全部' ? null : activeTab
+  const categoryCodes = useMemo(() => {
+    if (!activeCategory || !dirData?.sub_directions) return null
+    const codes = new Set<string>()
+    for (const [subDirName, info] of Object.entries(dirData.sub_directions)) {
+      if (info.category === activeCategory && info.enabled) {
+        for (const concept of info.concepts) {
+          codes.add(concept.code)
+        }
+      }
+    }
+    return codes
+  }, [activeCategory, dirData])
+
+  // Filter grouped data by active category (null = show all)
+  function getFilteredGrouped(): WaveData['grouped'] | null {
+    if (!data?.grouped) return null
+    if (!categoryCodes) return data.grouped // "全部" tab
+
+    const stages = ['valley', 'peak', 'rise', 'decline', 'mid'] as const
+    const result: WaveData['grouped'] = { valley: [], peak: [], rise: [], decline: [], mid: [] }
+    for (const stage of stages) {
+      result[stage] = (data.grouped[stage] || []).filter(i => categoryCodes.has(i.code))
+    }
+    return result
+  }
+
   function allItems(): ConceptItem[] {
     if (!data?.grouped) return []
     return [
@@ -543,6 +638,12 @@ export default function ConceptWaveTracking() {
     const meta = STAGE_META[item.stage] || { label: '', color: '#888', bg: '#1a1b2e' }
     const stageIcon = item.stage === '波谷' ? '🟢' : item.stage === '波中' ? '🟡' : '🔴'
 
+    // In direction view, show sub-direction name as prefix
+    const subDirName = activeCategory ? conceptToSubDir.get(item.code) : undefined
+    const displayName = subDirName
+      ? `${subDirName.split('.').pop()} · ${item.name}`
+      : item.name
+
     // Filtered klines for this card (computed only when expanded)
     const filteredKlines = isExpanded ? filterKlines(item.klines || []) : []
     const displayKlines = filteredKlines.length > 0 ? filteredKlines : (item.klines || [])
@@ -574,7 +675,7 @@ export default function ConceptWaveTracking() {
               </span>
               {item.mainline_badge === 'gold' && <span className="cw-gold">[金]</span>}
               {item.mainline_badge === 'silver' && <span className="cw-silver">[银]</span>}
-              <span className="cw-name">{item.name}</span>
+              <span className="cw-name">{displayName}</span>
               <span className="cw-vl">vl:<span className="cw-hl">{item.vl_score}</span></span>
             </span>
             <span className="cw-actions">
@@ -827,10 +928,27 @@ export default function ConceptWaveTracking() {
               </>
             )}
 
+            {/* ══════════ Direction Tab Bar ══════════ */}
+            {tabs.length > 1 && (
+              <div className="cw-tab-bar">
+                {tabs.map(tab => (
+                  <span
+                    key={tab}
+                    className={`cw-tab ${activeTab === tab ? 'active' : ''}`}
+                    onClick={() => setActiveTab(tab)}
+                  >
+                    {tab}
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* ══════════ Grouped concept areas ══════════ */}
             <div className="cw-chart-area">
               {(['valley', 'peak', 'rise', 'decline', 'mid'] as const).map(group => {
-                const items = data.grouped[group]
+                const grouped = getFilteredGrouped()
+                if (!grouped) return null
+                const items = grouped[group]
                 if (!items || items.length === 0) return null
                 const filtered = items.filter(i => !favs.has(i.code) && !hiddenCodes.has(i.code))
                 if (filtered.length === 0) return null

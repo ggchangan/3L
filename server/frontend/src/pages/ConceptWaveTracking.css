@@ -662,3 +662,39 @@
   background: #2a3a5e;
   color: #93c5fd;
 }
+
+/* ── 方向Tab栏 ── */
+.cw-tab-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 0 4px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #2a2b3d;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.cw-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7a7b92;
+  background: #1a1b2e;
+  border: 1px solid #2f3045;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.15s;
+}
+.cw-tab:hover {
+  color: #c8c9d4;
+  border-color: #3a3b55;
+}
+.cw-tab.active {
+  color: #e67700;
+  background: #2a1a00;
+  border-color: #e67700;
+}

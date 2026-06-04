@@ -250,10 +250,23 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/tips/save-journal': ('backend.api.tips', '_handle_save_journal'),
             '/api/update': ('backend.api.system', '_handle_update'),
             # 方向管理（独立模块）
+            # 方向管理（V1 兼容）
             '/api/directions/add': ('backend.api.directions', '_handle_add'),
             '/api/directions/remove': ('backend.api.directions', '_handle_remove'),
             '/api/directions/toggle': ('backend.api.directions', '_handle_set_active'),
             '/api/directions/reorder': ('backend.api.directions', '_handle_reorder'),
+            # 方向管理（V2 分层）
+            '/api/directions/category/add': ('backend.api.directions', '_handle_category_add'),
+            '/api/directions/category/remove': ('backend.api.directions', '_handle_category_remove'),
+            '/api/directions/category/toggle': ('backend.api.directions', '_handle_category_toggle'),
+            '/api/directions/category/reorder': ('backend.api.directions', '_handle_category_reorder'),
+            '/api/directions/sub/add': ('backend.api.directions', '_handle_sub_add'),
+            '/api/directions/sub/remove': ('backend.api.directions', '_handle_sub_remove'),
+            '/api/directions/sub/toggle': ('backend.api.directions', '_handle_sub_toggle'),
+            '/api/directions/sub/reorder': ('backend.api.directions', '_handle_sub_reorder'),
+            '/api/directions/bind': ('backend.api.directions', '_handle_bind'),
+            '/api/directions/unbind': ('backend.api.directions', '_handle_unbind'),
+            '/api/directions/migrate': ('backend.api.directions', '_handle_migrate'),
             '/api/workbench/save': ('backend.api.workbench', '_handle_save'),
             '/api/alarms/remove': ('backend.api.alarms', '_handle_remove'),
             '/api/alarms/dismiss': ('backend.api.alarms', '_handle_dismiss'),
