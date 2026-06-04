@@ -1,0 +1,157 @@
+/* 热点个股追踪 — HotStocks.css */
+
+.hot-header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  border-bottom: 2px solid #e94560;
+  padding: 24px 20px; text-align: center;
+}
+.hot-header h1 { font-size: 24px; color: #fff; letter-spacing: 3px; }
+.hot-header .hot-subtitle { color: #a0a0b0; font-size: 13px; margin-top: 6px; }
+
+.hot-container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+/* Controls */
+.hot-controls {
+  padding: 14px 16px; margin-bottom: 16px;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #2a2a4e; border-radius: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.hot-controls-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.hot-controls-row label { color: #a0a0b0; font-size: 13px; }
+.hot-controls-row select {
+  background: #0f0f1a; color: #e0e0e0; border: 1px solid #2a2a4e;
+  border-radius: 6px; padding: 6px 10px; font-size: 13px;
+}
+.hot-controls-row2 {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.checkbox-label {
+  display: flex; align-items: center; gap: 4px; cursor: pointer;
+  font-size: 12px; color: #a0a0b0;
+}
+.checkbox-label input[type="checkbox"] { accent-color: #e94560; }
+
+.btn-refresh {
+  background: #e94560; color: #fff; border: none; border-radius: 6px;
+  padding: 6px 16px; font-size: 12px; cursor: pointer; font-weight: 600;
+  transition: background 0.2s;
+}
+.btn-refresh:hover { background: #d63850; }
+.btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+.hot-scan-time { color: #555; font-size: 11px; }
+.loading-hint { color: #888; font-size: 12px; margin-left: auto; }
+
+/* Summary */
+.hot-summary {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.hot-summary .summary-item {
+  background: rgba(255,255,255,0.03); border: 1px solid #2a2a4e;
+  border-radius: 8px; padding: 8px 14px; flex: 1; min-width: 80px;
+  text-align: center;
+}
+.hot-summary .summary-item.wide { flex: 2; min-width: 200px; }
+.hot-summary .summary-label { font-size: 11px; color: #888; }
+.hot-summary .summary-value { font-size: 20px; font-weight: 700; margin-top: 2px; color: #e94560; }
+.hot-summary .summary-value.buy { color: #e94560; }
+.hot-summary .summary-value.hold { color: #ffd700; }
+.hot-summary .summary-value.sell { color: #4CAF50; }
+.hot-summary .summary-value.up { color: #ff4444; }
+.hot-summary .summary-value.down { color: #44aa44; }
+.hot-summary .summary-sectors {
+  display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 4px;
+}
+.sector-tag {
+  background: #2a2a4e; border-radius: 4px; padding: 2px 8px;
+  font-size: 11px; color: #e0e0e0;
+}
+
+/* Filter info */
+.hot-filter-info {
+  font-size: 12px; color: #888; margin-bottom: 12px; padding: 4px 0;
+}
+
+/* Loading / Error */
+.loading-area { text-align: center; padding: 40px 20px; color: #888; font-size: 14px; }
+.error-card {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px dashed #2a2a4e; border-radius: 12px;
+  padding: 30px; text-align: center; color: #666; font-size: 14px;
+}
+
+/* Stock Grid */
+.hot-stock-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+@media (max-width: 768px) {
+  .hot-stock-grid { grid-template-columns: 1fr; }
+}
+
+/* Hot Stock Card Wrapper */
+.hot-stock-card-wrapper {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 0 solid #2a2a4e; border-radius: 12px; overflow: hidden;
+  border-left: 3px solid #e94560;
+}
+
+/* Hot Rank Badge */
+.hot-rank-badge {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px 4px;
+  flex-wrap: wrap;
+}
+.rank-badge {
+  display: inline-block; font-size: 11px; font-weight: 700;
+  padding: 2px 8px; border-radius: 4px;
+}
+.rank-badge.top3 { background: #e94560; color: #fff; }
+.rank-badge.top10 { background: #ff9800; color: #000; }
+.rank-badge.normal { background: #2a2a4e; color: #888; }
+
+.hot-value {
+  font-size: 11px; color: #ff6b6b; font-weight: 600;
+}
+.popularity-tag {
+  background: rgba(233, 69, 96, 0.15); color: #e94560;
+  font-size: 10px; padding: 1px 6px; border-radius: 4px;
+  border: 1px solid rgba(233, 69, 96, 0.3);
+}
+
+/* Concept Tags */
+.concept-tags {
+  display: flex; gap: 4px; padding: 2px 14px 4px; flex-wrap: wrap;
+}
+.concept-tag {
+  background: rgba(78, 205, 196, 0.1); color: #4ecdc4;
+  font-size: 10px; padding: 1px 6px; border-radius: 4px;
+  border: 1px solid rgba(78, 205, 196, 0.2);
+}
+.concept-tag.more { background: #2a2a4e; color: #888; border-color: #444; }
+
+/* Ensure StockCard fits inside wrapper */
+.hot-stock-card-wrapper .stock-item {
+  border-bottom: none;
+}
+
+/* Pagination */
+.pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px; margin-top: 20px; padding: 12px 0;
+}
+.pagination button {
+  background: #2a2a4e; color: #aaa; border: none;
+  border-radius: 6px; padding: 6px 14px; font-size: 12px;
+  cursor: pointer; transition: all 0.15s;
+}
+.pagination button:hover:not(:disabled) { background: #3a3a5e; color: #fff; }
+.pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+.page-info { display: flex; gap: 4px; }
+.page-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 6px;
+  font-size: 12px; cursor: pointer; color: #888;
+  transition: all 0.15s;
+}
+.page-num:hover { background: #2a2a4e; color: #e0e0e0; }
+.page-num.active { background: #e94560; color: #fff; font-weight: 700; }
