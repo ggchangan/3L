@@ -1,5 +1,45 @@
 # Changelog
 
+## [v3.9.0] — 2026-06-04
+
+### 新增：方向分层系统补充功能 — 重命名/移动/拼音搜索/自动同步
+
+基于 direction-hierarchy 分支，补全方向分层系统的必要交互功能：
+
+**方向管理新功能：**
+- `rename_category(old_name, new_name)` — 重命名大类，自动更新所有 sub_directions key 和 watchlist 引用
+- `rename_sub_direction(category, old_name, new_name)` — 重命名细分方向，自动更新 watchlist
+- `move_sub_direction(category, sub_name, new_category)` — 将细分方向移动到另一个大类，自动更新 watchlist
+- `_update_watchlist_on_key_change(old_key, new_key)` — 内部辅助函数，同时兼容 `directions` 数组（新格式）和 `direction` 字符串（旧格式）
+- `set_sub_direction_enabled` 新增 V1 key 回退兼容（当 V2 格式 key 找不到时，尝试用 V1 无前缀格式查找）
+
+**搜索增强：**
+- `search_concepts(q)` 返回格式改为 `{code: {name, stock_count}}` 字典（之前是 `{code: name}`）
+- 新增拼音首字母模糊匹配（pypinyin 库），如输入 `"xpgn"` 可匹配 `"芯片概念"`
+- 支持代码精确匹配
+
+**新增 API 端点：**
+- `POST /api/directions/category/rename` — `{old_name, new_name}` 重命名大类
+- `POST /api/directions/sub/rename` — `{name, new_name}` 重命名细分方向
+- `POST /api/directions/sub/move` — `{name, new_category}` 移动细分方向
+
+**路由注册：**
+- `server/server.py` 中新增 3 条 POST 路由注册，映射到 `backend.api.directions` 的对应 handler
+
+**单元测试：**
+- `test_direction_service.py` — 从 53 个→69 个测试（+16）：重命名空名/重复/已存在、移动细分方向、watchlist 同步、拼音搜索、`_update_watchlist_on_key_change` 双格式兼容
+- `test_direction_api.py` — 从 26 个→39 个测试（+13）：`_handle_category_rename`、`_handle_sub_rename`、`_handle_sub_move` 及各种错误情况
+- 全部 108 个测试通过
+
+**设计文档更新：**
+- `docs/direction-hierarchy/design.md` — 更新 4.1 架构图（新增 rename/move/reorder_categories）、4.3 API 表（新增 5 个端点）、6.3 文件清单、6.4 变更日志
+
+### 修复
+- 修复 `test_search_concepts_returns_results` — `search_concepts` 返回格式已变为 `{code: {name, stock_count}}` 字典
+- 修复测试 fixture 中 `DATA_DIR` 和 `CONCEPT_LIST_PATH` 未指向临时目录的问题，确保 `_update_watchlist_on_key_change` 和 `search_concepts` 在测试中使用正确路径
+
+---
+
 ## [v3.8.1] — 2026-06-01
 
 ### 新增：P3 关键点×关键信号融合判定引擎（后端完成）

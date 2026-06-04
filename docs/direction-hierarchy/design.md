@@ -212,24 +212,26 @@ direction_service.py          ← 核心服务（新增/重写）
 │   ├── add_category(name, order?)
 │   ├── remove_category(name)
 │   ├── set_category_enabled(name, bool)
+│   ├── rename_category(old_name, new_name)  ← 重命名大类，同步更新 sub_directions key 和 watchlist
+│   ├── reorder_categories(names)            ← 按 names 顺序重排
 │   └── get_categories() → [{name, enabled, sub_count}]
 ├── SubDirection CRUD         ← 新增
 │   ├── add_sub_direction(name, category, order?)
 │   ├── remove_sub_direction(name)
-│   ├── set_sub_direction_enabled(name, bool)  ← 相当于原来的 set_active
+│   ├── set_sub_direction_enabled(name, bool)  ← 相当于原来的 set_active，支持 V1 key 回退
+│   ├── rename_sub_direction(category, old_name, new_name)  ← 重命名，同步 watchlist
+│   ├── move_sub_direction(category, sub_name, new_category)  ← 跨大类移动，同步 watchlist
+│   ├── reorder_sub_directions(category, names)  ← 按 names 重排
 │   └── get_sub_directions(category?) → [{name, category, enabled, concepts}]
 ├── Concept Binding           ← 新增
 │   ├── bind_concept(sub_dir, concept_code)
 │   ├── unbind_concept(sub_dir, concept_code)
-│   ├── search_concepts(q) → [{code, name, stock_count}]
+│   ├── search_concepts(q) → [{code, name, stock_count}]  ← 支持中文、拼音首字母、代码匹配
 │   └── get_bound_concepts(sub_dir) → [{code, name}]
-├── Legacy Support            ← 兼容旧数据
-│   ├── get_active()          ← 返回已启用的细分方向名列表（兼容旧调用方）
-│   ├── get_all_ordered()     ← 返回有序的所有细分方向名列表
-│   └── migrate_v1_to_v2()   ← 将平的 directions.json 转为层级格式
-└── Utils
-    ├── parse_direction(name) → (category, sub_dir)  ← "科技.半导体" → ("科技", "半导体")
-    └── format_direction(category, sub_dir) → "科技.半导体"
+├── Utils
+│   ├── _update_watchlist_on_key_change(old_key, new_key)  ← 内部辅助，更新 watchlist 引用
+│   ├── parse_direction(name) → (category, sub_dir)  ← "科技.半导体" → ("科技", "半导体")
+│   └── format_direction(category, sub_dir) → "科技.半导体"
 ```
 
 ### 4.2 解析工具函数
@@ -259,12 +261,17 @@ API 路由全在 `api/directions.py`（同一文件），新增/修改端点：
 | `/api/directions/category/add` | POST | 添加大类 `{name, order?}` |
 | `/api/directions/category/remove` | POST | 删除大类 `{name}` |
 | `/api/directions/category/toggle` | POST | 启用/禁用大类 `{name, enabled}` |
+| `/api/directions/category/reorder` | POST | 重排大类顺序 `{names}` |
+| `/api/directions/category/rename` | POST | **新增** 重命名大类 `{old_name, new_name}`，同步更新 sub_directions key 和 watchlist |
 | `/api/directions/sub/add` | POST | 添加细分方向 `{name, category, order?}` |
 | `/api/directions/sub/remove` | POST | 删除细分方向 `{name}` (该方向股票归入"其他") |
 | `/api/directions/sub/toggle` | POST | 启用/禁用细分方向 `{name, enabled}` |
+| `/api/directions/sub/reorder` | POST | 重排细分方向顺序 `{names}` |
+| `/api/directions/sub/rename` | POST | **新增** 重命名细分方向 `{name, new_name}`，同步更新 watchlist |
+| `/api/directions/sub/move` | POST | **新增** 移动细分方向到另一个大类 `{name, new_category}`，同步更新 watchlist |
 | `/api/directions/bind` | POST | 绑定概念 `{sub_dir, concept_code}` |
 | `/api/directions/unbind` | POST | 解绑概念 `{sub_dir, concept_code}` |
-| `/api/directions/concepts/search` | GET | 搜索可选概念 `?q=半导` |
+| `/api/directions/concepts/search` | GET | 搜索可选概念 `?q=半导`，支持中文、拼音首字母、代码精确匹配 |
 | `/api/directions/migrate` | POST | v1→v2数据迁移（仅执行一次） |
 
 **GET `/api/directions/get` 响应格式：**
@@ -456,15 +463,18 @@ API 路由全在 `api/directions.py`（同一文件），新增/修改端点：
 
 ```
 修改：
-  server/backend/services/direction_service.py     # 重写：层级CRUD + 概念绑定
-  server/backend/api/directions.py                  # 大改：新增层级API端点
+  server/backend/services/direction_service.py     # 重写：层级CRUD + 概念绑定 + 重命名/移动 + watchlist同步 + 拼音搜索
+  server/backend/api/directions.py                  # 大改：新增层级API端点（含 rename/move）
   server/backend/api/concept_wave.py                # 中改：新增group_by=direction
+  server/server.py                                  # 中改：新增POST路由注册（rename/move）
   server/frontend/src/pages/Watchlist.tsx           # 大改：方向面板两层树+概念绑定弹窗
   server/frontend/src/pages/ConceptWaveTracking.tsx # 中改：新增方向分组视图
   server/frontend/src/pages/Watchlist.css           # 小改：新UI样式
 
 新增：
   server/frontend/src/components/ConceptBindingModal.tsx  # 概念绑定弹窗组件
+  server/backend/tests/test_direction_service.py          # 69个测试（含 rename/move/watchlist/拼音）
+  server/backend/tests/test_direction_api.py              # 39个测试（含 rename/move API 端点）
 
 无需改动（仅加一层 parse_direction 解析的函数调用，并兼容 direction→directions）：
   server/backend/services/review_service.py        # directions[0]或方向列表遍历
@@ -484,3 +494,9 @@ API 路由全在 `api/directions.py`（同一文件），新增/修改端点：
 |:----|:----|:--------|
 | v1 | 2026-06-04 | 初稿 |
 | v1-implemented | 2026-06-04 | ✅ 已实现：方向分层+概念绑定+概念波谷分组+多选Tags，所有测试通过 |
+| v1.1 | 2026-06-04 | ✨ 新增：`rename_category`/`rename_sub_direction`/`move_sub_direction` 支持分类和细分方向的重命名/移动，自动同步 watchlist |
+| | | ✨ 新增：`_update_watchlist_on_key_change` 内部辅助函数，兼容新旧两种 watchlist 格式 |
+| | | ✨ 新增：`search_concepts` 支持拼音首字母（pypinyin）模糊匹配，返回 `{name, stock_count}` 字典 |
+| | | ✨ 新增：`set_sub_direction_enabled` V1 key 回退兼容 |
+| | | ✨ 新增：API 端点 `/api/directions/category/rename`、`/api/directions/sub/rename`、`/api/directions/sub/move` |
+| | | ✅ 单元测试：69 个 service 测试 + 39 个 API 测试，全部通过 |

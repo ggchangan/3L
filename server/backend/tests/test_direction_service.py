@@ -31,6 +31,8 @@ def ds(tmp_data_dir):
     ds_mod = importlib.reload(ds_mod)
     # 确保文件路径在临时目录
     ds_mod.DIRECTIONS_FILE = os.path.join(tmp_data_dir, 'directions.json')
+    ds_mod.DATA_DIR = tmp_data_dir
+    ds_mod.CONCEPT_LIST_PATH = os.path.join(tmp_data_dir, 'map', 'concept_list.json')
     return ds_mod
 
 
@@ -170,6 +172,37 @@ class TestCategory:
         r = ds.rename_category("不存在", "新名字")
         assert r['success'] is False
 
+    def test_rename_category_to_existing(self, ds):
+        """重命名到已存在的分类名应失败"""
+        ds.add_category("科技")
+        ds.add_category("医药")
+        r = ds.rename_category("科技", "医药")
+        assert r['success'] is False
+        assert '已存在' in r.get('error', '')
+
+    def test_rename_category_empty_new_name(self, ds):
+        """新名称为空时应失败"""
+        ds.add_category("科技")
+        r = ds.rename_category("科技", "")
+        assert r['success'] is False
+
+    def test_rename_category_updates_watchlist(self, ds, tmp_data_dir):
+        """重命名分类应同步更新 watchlist 中的引用"""
+        ds.add_category("科技")
+        ds.add_sub_direction("科技", "半导体")
+        # 写 watchlist
+        wl_path = os.path.join(tmp_data_dir, 'watchlist.json')
+        with open(wl_path, 'w') as f:
+            json.dump({"stocks": [
+                {"code": "000001", "name": "测试", "directions": ["科技.半导体"]}
+            ]}, f)
+        r = ds.rename_category("科技", "科学技术")
+        assert r['success'] is True
+        with open(wl_path, 'r') as f:
+            wl = json.load(f)
+        assert "科学技术.半导体" in wl['stocks'][0]['directions']
+        assert "科技.半导体" not in wl['stocks'][0]['directions']
+
     def test_reorder_categories(self, ds):
         ds.add_category("医药")
         ds.add_category("科技")
@@ -267,6 +300,71 @@ class TestSubDirection:
         assert "科技.先进封装" in subs
         assert "科技.半导体" not in subs
 
+    def test_rename_sub_direction_not_found(self, ds):
+        r = ds.rename_sub_direction("科技", "不存在", "新名字")
+        assert r['success'] is False
+
+    def test_rename_sub_direction_empty_new_name(self, ds):
+        ds.add_category("科技")
+        ds.add_sub_direction("科技", "半导体")
+        r = ds.rename_sub_direction("科技", "半导体", "")
+        assert r['success'] is False
+
+    def test_rename_sub_direction_duplicate(self, ds):
+        ds.add_category("科技")
+        ds.add_sub_direction("科技", "半导体")
+        ds.add_sub_direction("科技", "先进封装")
+        r = ds.rename_sub_direction("科技", "半导体", "先进封装")
+        assert r['success'] is False
+        assert '已存在' in r.get('error', '')
+
+    def test_move_sub_direction(self, ds):
+        ds.add_category("科技")
+        ds.add_category("医药")
+        ds.add_sub_direction("科技", "半导体")
+        r = ds.move_sub_direction("科技", "半导体", "医药")
+        assert r['success'] is True
+        subs = ds.get_sub_directions()
+        assert "医药.半导体" in subs
+        assert "科技.半导体" not in subs
+        assert subs["医药.半导体"]["category"] == "医药"
+
+    def test_move_sub_direction_auto_create_category(self, ds):
+        ds.add_category("科技")
+        ds.add_sub_direction("科技", "半导体")
+        r = ds.move_sub_direction("科技", "半导体", "新能源")
+        assert r['success'] is True
+        cats = ds.get_categories()
+        assert "新能源" in cats
+        assert "新能源.半导体" in ds.get_sub_directions()
+
+    def test_move_sub_direction_same_category(self, ds):
+        ds.add_category("科技")
+        ds.add_sub_direction("科技", "半导体")
+        r = ds.move_sub_direction("科技", "半导体", "科技")
+        assert r['success'] is False
+        assert '已经在当前分类中' in r.get('error', '')
+
+    def test_move_sub_direction_not_found(self, ds):
+        r = ds.move_sub_direction("科技", "不存在", "医药")
+        assert r['success'] is False
+
+    def test_move_sub_direction_updates_watchlist(self, ds, tmp_data_dir):
+        ds.add_category("科技")
+        ds.add_category("医药")
+        ds.add_sub_direction("科技", "半导体")
+        wl_path = os.path.join(tmp_data_dir, 'watchlist.json')
+        with open(wl_path, 'w') as f:
+            json.dump({"stocks": [
+                {"code": "000001", "name": "测试", "directions": ["科技.半导体"]}
+            ]}, f)
+        r = ds.move_sub_direction("科技", "半导体", "医药")
+        assert r['success'] is True
+        with open(wl_path, 'r') as f:
+            wl = json.load(f)
+        assert "医药.半导体" in wl['stocks'][0]['directions']
+        assert "科技.半导体" not in wl['stocks'][0]['directions']
+
     def test_reorder_sub_directions(self, ds):
         ds.add_category("科技")
         ds.add_sub_direction("科技", "半导体")
@@ -342,7 +440,8 @@ class TestConceptBinding:
         assert len(results) > 0
         assert "301085" in results
         assert "307940" in results
-        assert results["301085"] == "芯片概念"
+        assert results["301085"]["name"] == "芯片概念"
+        assert results["301085"]["stock_count"] == 50
 
     def test_search_concepts_empty_query(self, ds):
         results = ds.search_concepts("")
@@ -351,6 +450,31 @@ class TestConceptBinding:
     def test_search_concepts_no_match(self, ds):
         results = ds.search_concepts("ZZZZNOTEXIST12345")
         assert results == {}
+
+    def test_search_concepts_pinyin_match(self, ds):
+        """拼音首字母匹配"""
+        concept_path = os.path.join(ds.DATA_DIR, 'map', 'concept_list.json')
+        os.makedirs(os.path.dirname(concept_path), exist_ok=True)
+        with open(concept_path, 'w') as f:
+            json.dump({
+                "301085": {"name": "芯片概念", "stock_count": 50},
+                "307940": {"name": "存储芯片", "stock_count": 30},
+                "301459": {"name": "华为概念", "stock_count": 100},
+                "308969": {"name": "超超临界发电", "stock_count": 48},
+            }, f)
+        # "芯片概念" -> "xpgn"
+        results = ds.search_concepts("xpgn")
+        assert "301085" in results
+        assert results["301085"]["name"] == "芯片概念"
+        # "华为概念" -> "hwgn"
+        results2 = ds.search_concepts("hwgn")
+        assert "301459" in results2
+        # "超超临界发电" -> "ccljfd...
+        results3 = ds.search_concepts("cclj")
+        assert "308969" in results3
+        # short query (<2 chars) should not match pinyin
+        results4 = ds.search_concepts("x")
+        assert "301085" not in results4
 
 
 # ═══════════════════════════════════════════════════════════
@@ -530,6 +654,39 @@ class TestEdgeCases:
         assert data.get('version') == 2
         subs = ds.get_sub_directions()
         assert len(subs) == 2
+
+    def test_update_watchlist_on_key_change_both_formats(self, ds, tmp_data_dir):
+        """_update_watchlist_on_key_change 应同时更新新格式(directions数组)和旧格式(direction字符串)"""
+        ds.add_category("科技")
+        ds.add_sub_direction("科技", "半导体")
+        wl_path = os.path.join(tmp_data_dir, 'watchlist.json')
+        with open(wl_path, 'w') as f:
+            json.dump({"stocks": [
+                {"code": "000001", "name": "新格式", "directions": ["科技.半导体"]},
+                {"code": "000002", "name": "旧格式", "direction": "科技.半导体"},
+                {"code": "000003", "name": "无关股票", "directions": ["科技.算力"]},
+            ]}, f)
+        ds._update_watchlist_on_key_change("科技.半导体", "科技.先进封装")
+        with open(wl_path, 'r') as f:
+            wl = json.load(f)
+        assert "科技.先进封装" in wl['stocks'][0]['directions']
+        assert "科技.半导体" not in wl['stocks'][0]['directions']
+        assert wl['stocks'][1]['direction'] == "科技.先进封装"
+        assert wl['stocks'][2]['directions'] == ["科技.算力"]  # unchanged
+
+    def test_update_watchlist_on_key_change_no_file(self, ds):
+        """watchlist.json 不存在时应静默返回"""
+        ds._update_watchlist_on_key_change("old", "new")  # should not raise
+
+    def test_update_watchlist_on_key_change_same_key(self, ds, tmp_data_dir):
+        """old_key == new_key 时应直接返回"""
+        wl_path = os.path.join(tmp_data_dir, 'watchlist.json')
+        with open(wl_path, 'w') as f:
+            json.dump({"stocks": [{"code": "000001", "directions": ["科技.半导体"]}]}, f)
+        ds._update_watchlist_on_key_change("科技.半导体", "科技.半导体")
+        with open(wl_path, 'r') as f:
+            wl = json.load(f)
+        assert wl['stocks'][0]['directions'] == ["科技.半导体"]
 
     def test_reorder_sub_directions_with_full_keys(self, ds):
         """reorder_sub_directions 支持完整 key 列表"""

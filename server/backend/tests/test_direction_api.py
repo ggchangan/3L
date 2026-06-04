@@ -40,6 +40,8 @@ def ds(tmp_data_dir):
     import backend.services.direction_service as ds_mod
     ds_mod = importlib.reload(ds_mod)
     ds_mod.DIRECTIONS_FILE = os.path.join(tmp_data_dir, 'directions.json')
+    ds_mod.DATA_DIR = tmp_data_dir
+    ds_mod.CONCEPT_LIST_PATH = os.path.join(tmp_data_dir, 'map', 'concept_list.json')
     return ds_mod
 
 
@@ -52,6 +54,8 @@ def api(tmp_data_dir):
     import backend.services.direction_service as ds_mod
     ds_mod = importlib.reload(ds_mod)
     ds_mod.DIRECTIONS_FILE = os.path.join(tmp_data_dir, 'directions.json')
+    ds_mod.DATA_DIR = tmp_data_dir
+    ds_mod.CONCEPT_LIST_PATH = os.path.join(tmp_data_dir, 'map', 'concept_list.json')
     # 重新加载 api 模块以绑定新路径
     api_mod = importlib.reload(api_mod)
     return api_mod
@@ -360,3 +364,120 @@ class TestApiMigrate:
         api._handle_migrate(h, '/api/directions/migrate', '{}')
         assert h.sent['success'] is False
         assert '最新' in h.sent.get('error', '')
+
+
+# ═══════════════════════════════════════════════════════════
+# POST /api/directions/category/rename
+# ═══════════════════════════════════════════════════════════
+
+class TestApiCategoryRename:
+
+    def test_rename_category(self, ds, api):
+        _setup_basic_data(ds)
+        h = MockHandler()
+        api._handle_category_rename(h, '/api/directions/category/rename',
+                                     json.dumps({'old_name': '科技', 'new_name': '科学技术'}))
+        assert h.sent['success'] is True
+        cats = ds.get_categories()
+        assert '科学技术' in cats
+        assert '科技' not in cats
+
+    def test_rename_category_not_found(self, ds, api):
+        h = MockHandler()
+        api._handle_category_rename(h, '/api/directions/category/rename',
+                                     json.dumps({'old_name': '不存在', 'new_name': '新名字'}))
+        assert h.sent['success'] is False
+
+    def test_rename_category_empty_old_name(self, ds, api):
+        h = MockHandler()
+        api._handle_category_rename(h, '/api/directions/category/rename',
+                                     json.dumps({'old_name': '', 'new_name': '新名字'}))
+        assert h.sent['success'] is False
+
+    def test_rename_category_empty_new_name(self, ds, api):
+        _setup_basic_data(ds)
+        h = MockHandler()
+        api._handle_category_rename(h, '/api/directions/category/rename',
+                                     json.dumps({'old_name': '科技', 'new_name': ''}))
+        assert h.sent['success'] is False
+
+
+# ═══════════════════════════════════════════════════════════
+# POST /api/directions/sub/rename
+# ═══════════════════════════════════════════════════════════
+
+class TestApiSubRename:
+
+    def test_rename_sub(self, ds, api):
+        _setup_basic_data(ds)
+        h = MockHandler()
+        api._handle_sub_rename(h, '/api/directions/sub/rename',
+                                json.dumps({'name': '科技.半导体', 'new_name': '先进封装'}))
+        assert h.sent['success'] is True
+        subs = ds.get_sub_directions()
+        assert '科技.先进封装' in subs
+        assert '科技.半导体' not in subs
+
+    def test_rename_sub_not_found(self, ds, api):
+        h = MockHandler()
+        api._handle_sub_rename(h, '/api/directions/sub/rename',
+                                json.dumps({'name': '科技.不存在', 'new_name': '新名字'}))
+        assert h.sent['success'] is False
+
+    def test_rename_sub_empty_name(self, ds, api):
+        h = MockHandler()
+        api._handle_sub_rename(h, '/api/directions/sub/rename',
+                                json.dumps({'name': '', 'new_name': '新名字'}))
+        assert h.sent['success'] is False
+
+    def test_rename_sub_v1_format(self, ds, api):
+        """V1 格式（无分类前缀）也应支持"""
+        _setup_basic_data(ds)
+        h = MockHandler()
+        api._handle_sub_rename(h, '/api/directions/sub/rename',
+                                json.dumps({'name': '科技.半导体', 'new_name': '先进封装'}))
+        assert h.sent['success'] is True
+
+
+# ═══════════════════════════════════════════════════════════
+# POST /api/directions/sub/move
+# ═══════════════════════════════════════════════════════════
+
+class TestApiSubMove:
+
+    def test_move_sub(self, ds, api):
+        _setup_basic_data(ds)
+        h = MockHandler()
+        api._handle_sub_move(h, '/api/directions/sub/move',
+                              json.dumps({'name': '科技.半导体', 'new_category': '医药'}))
+        assert h.sent['success'] is True
+        subs = ds.get_sub_directions()
+        assert '医药.半导体' in subs
+        assert '科技.半导体' not in subs
+
+    def test_move_sub_auto_create_category(self, ds, api):
+        _setup_basic_data(ds)
+        h = MockHandler()
+        api._handle_sub_move(h, '/api/directions/sub/move',
+                              json.dumps({'name': '科技.半导体', 'new_category': '新能源'}))
+        assert h.sent['success'] is True
+        assert '新能源' in ds.get_categories()
+        assert '新能源.半导体' in ds.get_sub_directions()
+
+    def test_move_sub_not_found(self, ds, api):
+        h = MockHandler()
+        api._handle_sub_move(h, '/api/directions/sub/move',
+                              json.dumps({'name': '科技.不存在', 'new_category': '医药'}))
+        assert h.sent['success'] is False
+
+    def test_move_sub_empty_name(self, ds, api):
+        h = MockHandler()
+        api._handle_sub_move(h, '/api/directions/sub/move',
+                              json.dumps({'name': '', 'new_category': '医药'}))
+        assert h.sent['success'] is False
+
+    def test_move_sub_empty_category(self, ds, api):
+        h = MockHandler()
+        api._handle_sub_move(h, '/api/directions/sub/move',
+                              json.dumps({'name': '科技.半导体', 'new_category': ''}))
+        assert h.sent['success'] is False
