@@ -1,0 +1,19 @@
+{
+  "categories": [
+    {"name": "科技", "enabled": true, "sub_count": 5, "order": 0},
+    {"name": "医药", "enabled": true, "sub_count": 2, "order": 1},
+    {"name": "新能源", "enabled": true, "sub_count": 1, "order": 2}
+  ],
+  "sub_directions": {
+    "科技.半导体": {"category": "科技", "enabled": true, "concepts": [{"code": "301085", "name": "芯片概念"}, {"code": "307940", "name": "存储芯片"}]},
+    "科技.算力": {"category": "科技", "enabled": true, "concepts": [{"code": "301459", "name": "华为概念"}, {"code": "308828", "name": "人工智能"}]},
+    "科技.机器人": {"category": "科技", "enabled": true, "concepts": [{"code": "300816", "name": "机器人概念"}]},
+    "科技.CPO": {"category": "科技", "enabled": false, "concepts": [{"code": "309151", "name": "CPO/光通信"}]},
+    "科技.存储": {"category": "科技", "enabled": true, "concepts": [{"code": "307940", "name": "存储芯片"}]},
+    "医药.创新药": {"category": "医药", "enabled": true, "concepts": [{"code": "308014", "name": "阿尔茨海默概念"}]},
+    "医药.医疗器械": {"category": "医药", "enabled": false, "concepts": []},
+    "新能源.锂电池": {"category": "新能源", "enabled": true, "concepts": [{"code": "306380", "name": "锂电池概念"}]}
+  },
+  "active": ["科技.半导体", "科技.算力", "科技.机器人", "科技.存储", "医药.创新药", "新能源.锂电池"],
+  "version": 2
+}

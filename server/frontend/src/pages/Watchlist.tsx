@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
 import StockCard from '../components/StockCard'
+import ConceptBindingModal from '../components/ConceptBindingModal'
 import type { BuySignalItem } from '../lib/types'
 import { pinyin } from 'pinyin-pro'
 import './Watchlist.css'
 
 interface WatchlistStock {
-  code: string; name: string; direction?: string; industry?: string
+  code: string; name: string; direction?: string; directions?: string[]; industry?: string
   price?: number; change?: number; signal?: string
   structure?: string; stage?: string; sector?: string
   trading_system?: string; trend_bias?: number
@@ -14,11 +15,53 @@ interface WatchlistStock {
   vol_analysis?: string
 }
 
+// 兼容新旧格式：新格式 directions 数组，旧格式 direction 字符串
+function getDirArray(s: WatchlistStock): string[] {
+  return s.directions || (s.direction ? [s.direction] : ['其他'])
+}
+
+interface DirCategory {
+  name: string
+  enabled: boolean
+  sub_count: number
+  order: number
+}
+
+interface SubDirectionInfo {
+  category: string
+  enabled: boolean
+  concepts: Array<{ code: string; name: string }>
+}
+
 interface DirData {
-  directions: Record<string, boolean>
+  // New hierarchy format
+  categories?: DirCategory[]
+  sub_directions?: Record<string, SubDirectionInfo>
+  // Legacy format
+  directions?: Record<string, boolean>
   active: string[]
-  all: string[]
-  suggestions: { industry?: string[]; custom?: string[] }
+  all?: string[]
+  suggestions?: { industry?: string[]; custom?: string[] }
+}
+
+// 硬编码Mock数据（等后端上线后删除）
+const MOCK_DIR_DATA: DirData = {
+  categories: [
+    { name: '科技', enabled: true, sub_count: 5, order: 0 },
+    { name: '医药', enabled: true, sub_count: 2, order: 1 },
+    { name: '新能源', enabled: true, sub_count: 1, order: 2 },
+  ],
+  sub_directions: {
+    '科技.半导体': { category: '科技', enabled: true, concepts: [{ code: '301085', name: '芯片概念' }] },
+    '科技.算力': { category: '科技', enabled: true, concepts: [{ code: '301459', name: '华为概念' }] },
+    '科技.机器人': { category: '科技', enabled: true, concepts: [{ code: '300816', name: '机器人概念' }] },
+    '科技.CPO': { category: '科技', enabled: false, concepts: [{ code: '309151', name: 'CPO/光通信' }] },
+    '科技.存储': { category: '科技', enabled: true, concepts: [{ code: '307940', name: '存储芯片' }] },
+    '医药.创新药': { category: '医药', enabled: true, concepts: [{ code: '308014', name: '阿尔茨海默概念' }] },
+    '医药.医疗器械': { category: '医药', enabled: false, concepts: [] },
+    '新能源.锂电池': { category: '新能源', enabled: true, concepts: [{ code: '306380', name: '锂电池概念' }] },
+  },
+  active: ['科技.半导体', '科技.算力', '科技.机器人', '科技.存储', '医药.创新药', '新能源.锂电池'],
 }
 
 export default function Watchlist() {
@@ -28,6 +71,7 @@ export default function Watchlist() {
   const [activeDir, setActiveDir] = useState('全部')
   const [filter, setFilter] = useState('')
   const [dirPanelOpen, setDirPanelOpen] = useState(false)
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [addTab, setAddTab] = useState<'single' | 'board'>('single')
   const [searchQ, setSearchQ] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
@@ -41,11 +85,28 @@ export default function Watchlist() {
   const searchTimer = useRef<ReturnType<typeof setTimeout>>()
   const boardTimer = useRef<ReturnType<typeof setTimeout>>()
   const dragSource = useRef<string | null>(null)
+  const dragSubSource = useRef<string | null>(null)
+  const [conceptModal, setConceptModal] = useState<{ subDir: string; concepts: Array<{ code: string; name: string }> } | null>(null)
+  const [openDirDropdown, setOpenDirDropdown] = useState<string | null>(null)
 
+  // 派生数据：兼容新旧格式
   const activeDirs = dirData.active || []
-  const allDirs = dirData.all || []
+  const allDirs = dirData.all || Object.keys(dirData.sub_directions || {})
+  const categories = dirData.categories || []
+  const subDirections = dirData.sub_directions || {} as Record<string, SubDirectionInfo>
 
   useEffect(() => { loadAll() }, [])
+
+  // 点击其他地方关闭方向下拉
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (openDirDropdown && !(e.target as HTMLElement).closest('.dir-tag-add-wrap')) {
+        setOpenDirDropdown(null)
+      }
+    }
+    if (openDirDropdown) document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [openDirDropdown])
 
   async function loadAll() {
     try {
@@ -64,12 +125,18 @@ export default function Watchlist() {
     try {
       const r = await fetch('/api/directions/get')
       const data = await r.json()
+      // 新格式有 categories 字段
+      if (data.categories) {
+        setDirData(data as DirData)
+        return data as DirData
+      }
+      // 旧格式：转为新格式
       setDirData(data)
       return data
     } catch {
-      const empty: DirData = { directions: {}, active: [], all: [], suggestions: {} }
-      setDirData(empty)
-      return empty
+      // API不可用时使用Mock数据
+      setDirData(MOCK_DIR_DATA)
+      return MOCK_DIR_DATA
     }
   }
 
@@ -82,13 +149,35 @@ export default function Watchlist() {
     setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300) }, 2000)
   }
 
+  // 辅助：获取某大类的所有细分方向
+  function getSubsForCategory(catName: string): { key: string; name: string; info: SubDirectionInfo }[] {
+    return Object.entries(subDirections)
+      .filter(([_, info]) => info.category === catName)
+      .map(([key, info]) => {
+        // 兼容旧数据：key可能没有"."分隔（如"先进封装"），直接当名字用
+        const name = key.includes('.') ? key.split('.').slice(1).join('.') : key
+        return { key, name, info }
+      })
+  }
+
+  // 展开/折叠大类
+  function toggleCategory(name: string) {
+    setExpandedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
   // 方向Tab
-  const tracked = stocks.filter(s => activeDirs.includes(s.direction || '其他'))
+  const tracked = stocks.filter(s => getDirArray(s).some(d => activeDirs.includes(d)))
   const dirCounts: Record<string, number> = { '全部': stocks.length }
   activeDirs.forEach(d => dirCounts[d] = 0)
   stocks.forEach(s => {
-    const d = s.direction || '其他'
-    if (activeDirs.includes(d)) dirCounts[d] = (dirCounts[d] || 0) + 1
+    getDirArray(s).forEach(d => {
+      if (activeDirs.includes(d)) dirCounts[d] = (dirCounts[d] || 0) + 1
+    })
   })
   const tabs = [
     { name: '全部', label: `全部 (${stocks.length})` },
@@ -99,8 +188,8 @@ export default function Watchlist() {
   const filtered = stocks
     .filter(s => {
       if (activeDir !== '全部') {
-        const d = s.direction || '其他'
-        if (d !== activeDir || !activeDirs.includes(d)) return false
+        const dirs = getDirArray(s)
+        if (!dirs.includes(activeDir) || !activeDirs.includes(activeDir)) return false
       }
       if (filter) {
         const f = filter.toLowerCase()
@@ -115,8 +204,8 @@ export default function Watchlist() {
       return true
     })
     .sort((a, b) => {
-      const aa = activeDirs.includes(a.direction || '其他') ? 0 : 10
-      const bb = activeDirs.includes(b.direction || '其他') ? 0 : 10
+      const aa = getDirArray(a).some(d => activeDirs.includes(d)) ? 0 : 10
+      const bb = getDirArray(b).some(d => activeDirs.includes(d)) ? 0 : 10
       if (aa !== bb) return aa - bb
       const structOrder: Record<string, number> = { '上涨趋势': 0, '区间震荡': 1, '下降趋势': 2 }
       const sa = structOrder[a.structure || ''] ?? 3
@@ -162,6 +251,50 @@ export default function Watchlist() {
     '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560',
   }
 
+  // 大类重命名
+  async function renameCategory(name: string) {
+    const newName = prompt(`重命名大类 "${name}" 为：`, name)
+    if (!newName || newName.trim() === name) return
+    try {
+      const r = await fetch('/api/directions/category/rename', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ old_name: name, new_name: newName.trim() }),
+      })
+      const data = await r.json()
+      if (data.success) { showToast(`✅ 已重命名 "${name}" → "${newName.trim()}"`); await loadDirections(); loadAll() }
+      else showToast('⚠️ ' + (data.error || '重命名失败'), true)
+    } catch { showToast('⚠️ 重命名失败', true) }
+  }
+
+  // 大类删除
+  async function deleteCategory(name: string, subCount: number) {
+    if (!confirm(`确认删除大类 "${name}"？其下的 ${subCount} 个细分方向及对应的自选股将全部删除`)) return
+    try {
+      const r = await fetch('/api/directions/category/remove', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const data = await r.json()
+      if (data.success) { showToast(`❌ 已删除 "${name}"`); await loadDirections(); loadAll() }
+      else showToast('⚠️ ' + (data.error || '删除失败'), true)
+    } catch { showToast('⚠️ 删除失败', true) }
+  }
+
+  // 细分方向重命名
+  async function renameSubDirection(key: string, currentName: string) {
+    const newName = prompt(`重命名细分方向 "${currentName}" 为：`, currentName)
+    if (!newName || newName.trim() === currentName) return
+    try {
+      const r = await fetch('/api/directions/sub/rename', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: key, new_name: newName.trim() }),
+      })
+      const data = await r.json()
+      if (data.success) { showToast(`✅ 已重命名为 "${newName.trim()}"`); await loadDirections(); loadAll() }
+      else showToast('⚠️ ' + (data.error || '重命名失败'), true)
+    } catch { showToast('⚠️ 重命名失败', true) }
+  }
+
   return (
     <>
       <NavBar />
@@ -181,84 +314,180 @@ export default function Watchlist() {
 
         {dirPanelOpen && (
           <div className="dir-panel">
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '6px 0' }}>
-              <DirNameInput dirData={dirData} onAdd={async (name) => {
-                try {
-                  const r = await fetch('/api/directions/add', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name }),
-                  })
-                  const data = await r.json()
-                  if (data.success) { showToast(`✅ 已添加 "${name}"`); await loadDirections(); loadAll() }
-                  else showToast('⚠️ ' + (data.error || '添加失败'), true)
-                } catch { showToast('⚠️ 添加失败', true) }
-              }} />
-            </div>
+            {/* 新增大类 */}
+            <DirNameInput dirData={dirData} onAdd={async (name) => {
+              try {
+                const r = await fetch('/api/directions/category/add', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ name }),
+                })
+                const data = await r.json()
+                if (data.success) { showToast(`✅ 已添加大类 "${name}"`); await loadDirections(); loadAll() }
+                else showToast('⚠️ ' + (data.error || '添加失败'), true)
+              } catch { showToast('⚠️ 添加失败', true) }
+            }} />
             <div id="dirList">
-              {allDirs.filter(n => n !== '其他').map(name => {
-                const isActive = activeDirs.includes(name)
+              {categories.length > 0 ? categories.map(cat => {
+                const subs = getSubsForCategory(cat.name)
+                const isExpanded = expandedCategories.has(cat.name)
                 return (
-                  <div key={name} className={`dir-item ${isActive ? '' : 'inactive'}`}
-                    draggable data-dir-name={name}
-                    onDragStart={e => { dragSource.current = name; (e.currentTarget as HTMLElement).style.opacity = '0.4' }}
-                    onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = '#22c55e' }}
-                    onDrop={async e => {
-                      e.preventDefault();
-                      (e.currentTarget as HTMLElement).style.borderColor = ''
-                      if (!dragSource.current || dragSource.current === name) return
-                      const ordered = dirData.all || []
-                      const si = ordered.indexOf(dragSource.current)
-                      const ti = ordered.indexOf(name)
-                      if (si === -1 || ti === -1) return
-                      const newOrder = [...ordered]; newOrder.splice(si, 1); newOrder.splice(ti, 0, dragSource.current!)
-                      try {
-                        const r = await fetch('/api/directions/reorder', {
-                          method: 'POST', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ names: newOrder }),
-                        })
-                        const data = await r.json()
-                        if (data.success) { await loadDirections(); loadAll() }
-                        else showToast('⚠️ ' + (data.error || '排序失败'), true)
-                      } catch { showToast('⚠️ 排序失败', true) }
-                    }}
-                    onDragEnd={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; dragSource.current = null }}>
-                    <div>
-                      <span className="dir-item-name">{name}</span>
-                      <span className="dir-item-count">{stocks.filter(s => (s.direction || '其他') === name).length} 只</span>
-                      {isActive ? null : <span style={{ color: '#e94560', fontSize: 11, marginLeft: 6 }}>未跟踪</span>}
-                    </div>
-                    <div className="dir-item-actions">
-                      <span style={{ cursor: 'grab', color: '#555', marginRight: 6, fontSize: 14 }}>⠿</span>
-                      <button className={`dir-toggle ${isActive ? 'on' : 'off'}`} onClick={async () => {
+                  <div key={cat.name} className="dir-category">
+                    <div className="dir-category-header"
+                      onClick={() => toggleCategory(cat.name)}
+                      draggable
+                      onDragStart={e => { dragSource.current = cat.name; (e.currentTarget as HTMLElement).style.opacity = '0.4' }}
+                      onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = '#22c55e' }}
+                      onDrop={async e => {
+                        e.preventDefault();
+                        (e.currentTarget as HTMLElement).style.borderColor = ''
+                        if (!dragSource.current || dragSource.current === cat.name) return
+                        const ordered = dirData.categories || []
+                        const si = ordered.findIndex(c => c.name === dragSource.current)
+                        const ti = ordered.findIndex(c => c.name === cat.name)
+                        if (si === -1 || ti === -1) return
+                        const newOrder = [...ordered]; const moved = newOrder.splice(si, 1)[0]; newOrder.splice(ti, 0, moved)
                         try {
-                          const r = await fetch('/api/directions/toggle', {
+                          const r = await fetch('/api/directions/category/reorder', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name, active: !isActive }),
+                            body: JSON.stringify({ names: newOrder.map(c => c.name) }),
                           })
                           const data = await r.json()
-                          if (data.success) { showToast(isActive ? `⛔ 已禁用 "${name}"` : `✅ 已启用 "${name}"`); await loadDirections(); loadAll() }
-                          else showToast('⚠️ 操作失败', true)
-                        } catch { showToast('⚠️ 操作失败', true) }
-                      }}>{isActive ? '✅ 启用' : '⛔ 禁用'}</button>
-                      <button className="btn btn-red btn-sm" onClick={async () => {
-                        const cnt = stocks.filter(s => (s.direction || '其他') === name).length
-                        if (!confirm(`确认删除方向 "${name}"？该方向的 ${cnt} 只股票将同时从自选股删除`)) return
-                        try {
-                          const r = await fetch('/api/directions/remove', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name }),
-                          })
-                          const data = await r.json()
-                          if (data.success) { showToast(`❌ 已删除 "${name}"`); await loadDirections(); loadAll() }
-                          else showToast('⚠️ ' + (data.error || '删除失败'), true)
-                        } catch { showToast('⚠️ 删除失败', true) }
-                      }}>✕</button>
+                          if (data.success) { await loadDirections(); loadAll() }
+                          else showToast('⚠️ ' + (data.error || '排序失败'), true)
+                        } catch { showToast('⚠️ 排序失败', true) }
+                      }}
+                      onDragEnd={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; dragSource.current = null }}>
+                      <div className="dir-cat-left">
+                        <span className="dir-cat-icon">📁 {cat.name}</span>
+                        <span className="dir-cat-count">{subs.length}个细分</span>
+                      </div>
+                      <div className="dir-cat-right">
+                        <span
+                          className="dir-cat-rename"
+                          title="重命名"
+                          onClick={e => { e.stopPropagation(); renameCategory(cat.name) }}
+                        >✎</span>
+                        {cat.name !== '未分类' && (
+                          <span
+                            className="dir-cat-del"
+                            title="删除大类及所有细分方向"
+                            onClick={e => { e.stopPropagation(); deleteCategory(cat.name, subs.length) }}
+                          >✕</span>
+                        )}
+                        <span className="dir-expand-icon">{isExpanded ? '▾' : '▸'}</span>
+                      </div>
                     </div>
+                    {isExpanded && (
+                      <div className="dir-sub-list">
+                        {subs.map(sub => {
+                          const isActive = activeDirs.includes(sub.key)
+                          return (
+                            <div key={sub.key} className={`dir-sub-item ${isActive ? '' : 'inactive'}`}
+                              draggable
+                              data-dir-name={sub.key}
+                              onDragStart={e => { dragSubSource.current = sub.key; (e.currentTarget as HTMLElement).style.opacity = '0.4' }}
+                              onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = '#22c55e' }}
+                              onDrop={async e => {
+                                e.preventDefault();
+                                (e.currentTarget as HTMLElement).style.borderColor = ''
+                                if (!dragSubSource.current || dragSubSource.current === sub.key) return
+                                // 同大类内排序
+                                const mySubs = subs.map(s => s.key)
+                                const si = mySubs.indexOf(dragSubSource.current)
+                                const ti = mySubs.indexOf(sub.key)
+                                if (si === -1 || ti === -1) return
+                                const newOrder = [...mySubs]; newOrder.splice(si, 1); newOrder.splice(ti, 0, dragSubSource.current!)
+                                try {
+                                  const r = await fetch('/api/directions/sub/reorder', {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ category: cat.name, names: newOrder }),
+                                  })
+                                  const data = await r.json()
+                                  if (data.success) { await loadDirections(); loadAll() }
+                                  else showToast('⚠️ ' + (data.error || '排序失败'), true)
+                                } catch { showToast('⚠️ 排序失败', true) }
+                              }}
+                              onDragEnd={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; dragSubSource.current = null }}>
+                              <div className="dir-sub-left">
+                                <input type="checkbox" className="dir-sub-cb"
+                                  checked={isActive}
+                                  onChange={async () => {
+                                    try {
+                                      const r = await fetch('/api/directions/toggle', {
+                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ name: sub.key, active: !isActive }),
+                                      })
+                                      const data = await r.json()
+                                      if (data.success) { showToast(isActive ? `⛔ 已禁用 "${sub.name}"` : `✅ 已启用 "${sub.name}"`); await loadDirections(); loadAll() }
+                                      else showToast('⚠️ 操作失败', true)
+                                    } catch { showToast('⚠️ 操作失败', true) }
+                                  }} />
+                                <span className="dir-sub-name">{sub.name}</span>
+                                <span className="dir-sub-concepts">{sub.info.concepts.length > 0 ? `📎${sub.info.concepts.length}` : ''}</span>
+                                <select className="dir-sub-move" title="移动到大类"
+                                  value={cat.name}
+                                  onChange={async e => {
+                                    const newCat = e.target.value
+                                    if (newCat === cat.name) return
+                                    if (!confirm(`确认将 "${sub.name}" 从「${cat.name}」移动到「${newCat}」？`)) return
+                                    try {
+                                      const r = await fetch('/api/directions/sub/move', {
+                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ name: sub.key, new_category: newCat }),
+                                      })
+                                      const data = await r.json()
+                                      if (data.success) { showToast(`✅ "${sub.name}" → ${newCat}`); await loadDirections(); loadAll() }
+                                      else showToast('⚠️ ' + (data.error || '移动失败'), true)
+                                    } catch { showToast('⚠️ 移动失败', true) }
+                                  }}>
+                                  {categories.map(c => (
+                                    <option key={c.name} value={c.name}>{c.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="dir-sub-actions">
+                                <span style={{ cursor: 'grab', color: '#555', marginRight: 4, fontSize: 12 }}>⠿</span>
+                                <span className="dir-sub-rename-btn" title="重命名" onClick={() => renameSubDirection(sub.key, sub.name)}>✎</span>
+                                <button className="dir-cog-btn" title="概念绑定" onClick={() => {
+                                  setConceptModal({ subDir: sub.key, concepts: sub.info.concepts || [] })
+                                }}>⚙️</button>
+                                <button className="btn btn-red btn-sm" onClick={async () => {
+                                  const cnt = stocks.filter(s => getDirArray(s).includes(sub.key)).length
+                                  if (!confirm(`确认删除细分方向 "${sub.name}"？该方向的 ${cnt} 只股票将同时从自选股删除`)) return
+                                  try {
+                                    const r = await fetch('/api/directions/remove', {
+                                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ name: sub.key }),
+                                    })
+                                    const data = await r.json()
+                                    if (data.success) { showToast(`❌ 已删除 "${sub.name}"`); await loadDirections(); loadAll() }
+                                    else showToast('⚠️ ' + (data.error || '删除失败'), true)
+                                  } catch { showToast('⚠️ 删除失败', true) }
+                                }}>✕</button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {/* 底部添加细分方向 */}
+                        <div className="dir-sub-add-bottom">
+                          <DirSubInput category={cat.name} onAdd={async (subName, catName) => {
+                            try {
+                              const r = await fetch('/api/directions/sub/add', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ category: catName, name: subName }),
+                              })
+                              const data = await r.json()
+                              if (data.success) { showToast(`✅ 已添加 "${catName}.${subName}"`); await loadDirections(); loadAll() }
+                              else showToast('⚠️ ' + (data.error || '添加失败'), true)
+                            } catch { showToast('⚠️ 添加失败', true) }
+                          }} />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
-              })}
-              {allDirs.filter(n => n !== '其他').length === 0 && (
-                <div style={{ color: '#888', padding: 10, textAlign: 'center', fontSize: 13 }}>暂无方向，点击上方添加</div>
+              }) : (
+                <div style={{ color: '#888', padding: 10, textAlign: 'center', fontSize: 13 }}>暂无方向大类，点击上方添加</div>
               )}
             </div>
           </div>
@@ -384,7 +613,7 @@ export default function Watchlist() {
               let prevStruct: string | null = null
               const html: JSX.Element[] = []
               filtered.forEach((s, i) => {
-                const tr = activeDirs.includes(s.direction || '其他')
+                const tr = getDirArray(s).some(d => activeDirs.includes(d))
                 const struct = s.structure || '--'
                 if (prevTracked !== tr || prevStruct !== struct) {
                   html.push(
@@ -406,28 +635,55 @@ export default function Watchlist() {
                     <div className="watchlist-card-actions">
                       <div className="wca-left">
                         {tr ? null : <span className="tag-untracked">未跟踪</span>}
-                        <select className="dir-select" style={{ width: 68 }} value={s.direction || '其他'}
-                          onChange={async e => {
-                            const newDir = e.target.value
-                            const stock = stocks.find(x => x.code === s.code)
-                            if (stock) {
-                              stock.direction = newDir
-                              try {
-                                const payload = stocks.map(x => ({ code: x.code, name: x.name, direction: x.direction, industry: x.industry || '' }))
-                                const r = await fetch('/api/watchlist/save', {
-                                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ stocks: payload, count: payload.length }),
-                                })
-                                const data = await r.json()
-                                if (data.success) { showToast(`✅ ${stock.name || s.code} → ${newDir}`); loadAll() }
-                                else showToast('⚠️ 保存失败', true)
-                              } catch { showToast('⚠️ 保存失败', true) }
-                            }
-                          }}>
-                          {[...new Set([...activeDirs, s.direction || '其他'])].map(d => (
-                            <option key={d} value={d}>{d}</option>
-                          ))}
-                        </select>
+                        {/* 方向Tags多选 */}
+                        <div className="dir-tags-box">
+                          {(() => {
+                            const dirs = getDirArray(s)
+                            return dirs.map(dir => (
+                              <span key={dir} className={`dir-tag ${dir === '其他' ? 'dir-tag-other' : ''}`}>
+                                {dir}
+                                {activeDirs.includes(dir) && (
+                                  <span className="dir-tag-x" onClick={async e => {
+                                    e.stopPropagation()
+                                    const newDirs = dirs.filter(d => d !== dir)
+                                    const finalDirs = newDirs.length > 0 ? newDirs : ['其他']
+                                    await saveStockDirs(s.code, finalDirs)
+                                  }}>✕</span>
+                                )}
+                              </span>
+                            ))
+                          })()}
+                          <div className="dir-tag-add-wrap">
+                            <span className="dir-tag-add" onClick={e => {
+                              e.stopPropagation()
+                              setOpenDirDropdown(openDirDropdown === s.code ? null : s.code)
+                            }}>+</span>
+                            {openDirDropdown === s.code && (
+                              <div className="dir-tag-dropdown">
+                                {activeDirs.map(d => {
+                                  const selected = getDirArray(s).includes(d)
+                                  return (
+                                    <div key={d}
+                                      className={`dir-tag-dd-item ${selected ? 'selected' : ''}`}
+                                      onClick={async e => {
+                                        e.stopPropagation()
+                                        const current = getDirArray(s).filter(x => x !== '其他')
+                                        const newDirs = selected
+                                          ? current.filter(x => x !== d)
+                                          : [...current, d]
+                                        const finalDirs = newDirs.length > 0 ? newDirs : ['其他']
+                                        setOpenDirDropdown(null)
+                                        await saveStockDirs(s.code, finalDirs)
+                                      }}>
+                                      <span className="dir-tag-dd-check">{selected ? '✓' : ''}</span>
+                                      {d}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <button className="btn btn-red btn-sm" onClick={async () => {
                         if (!confirm(`确认删除 ${s.name || s.code} ？`)) return
@@ -435,7 +691,7 @@ export default function Watchlist() {
                           const newStocks = stocks.filter(x => x.code !== s.code)
                           const r = await fetch('/api/watchlist/save', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ stocks: newStocks.map(x => ({ code: x.code, name: x.name, direction: x.direction, industry: x.industry || '' })), count: newStocks.length }),
+                            body: JSON.stringify({ stocks: newStocks.map(x => ({ code: x.code, name: x.name, direction: x.direction, directions: x.directions, industry: x.industry || '' })), count: newStocks.length }),
                           })
                           const data = await r.json()
                           if (data.success) { showToast(`❌ 已删除 ${s.name || s.code}`); loadAll() }
@@ -454,8 +710,43 @@ export default function Watchlist() {
 
       <BottomNav />
       <div className="footer">自选股管理</div>
+
+      {conceptModal && (
+        <ConceptBindingModal
+          subDir={conceptModal.subDir}
+          boundCodes={conceptModal.concepts.map(c => c.code)}
+          onClose={() => setConceptModal(null)}
+          onSaved={() => { loadDirections(); loadAll() }}
+        />
+      )}
     </>
   )
+
+  async function saveStockDirs(code: string, dirs: string[]) {
+    const stock = stocks.find(x => x.code === code)
+    if (!stock) return
+    // 先更新本地状态保证UI即时响应
+    setStocks(prev => prev.map(s => s.code === code
+      ? { ...s, directions: dirs, direction: dirs[0] || '其他' }
+      : s
+    ))
+    const label = dirs.filter(d => d !== '其他').join(', ') || '未跟踪'
+    try {
+      const payload = stocks.map(x => ({
+        code: x.code, name: x.name,
+        direction: x.code === code ? (dirs[0] || '其他') : x.direction,
+        directions: x.code === code ? dirs : x.directions,
+        industry: x.industry || ''
+      }))
+      const r = await fetch('/api/watchlist/save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stocks: payload, count: payload.length }),
+      })
+      const data = await r.json()
+      if (data.success) showToast(`✅ ${stock.name || code} → ${label}`)
+      else showToast('⚠️ 保存失败', true)
+    } catch { showToast('⚠️ 保存失败', true) }
+  }
 
   async function addStock() {
     if (!selectedCode) { showToast('⚠️ 请先搜索选择股票', true); return }
@@ -472,7 +763,7 @@ export default function Watchlist() {
       if (data.results && data.results[0]) industry = data.results[0].industry || ''
     } catch { /* ignore */ }
     try {
-      const newStocks = [...stocks.map(s => ({ code: s.code, name: s.name, direction: s.direction, industry: s.industry || '' })),
+      const newStocks = [...stocks.map(s => ({ code: s.code, name: s.name, direction: s.direction, directions: s.directions, industry: s.industry || '' })),
         { code: selectedCode, name: selectedName, direction: dir, industry }]
       const r = await fetch('/api/watchlist/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -509,7 +800,7 @@ export default function Watchlist() {
       } catch { /* ignore */ }
     }
     try {
-      const newStocks = [...stocks.map(s => ({ code: s.code, name: s.name, direction: s.direction, industry: s.industry || '' })), ...toAdd]
+      const newStocks = [...stocks.map(s => ({ code: s.code, name: s.name, direction: s.direction, directions: s.directions, industry: s.industry || '' })), ...toAdd]
       const r = await fetch('/api/watchlist/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stocks: newStocks, count: newStocks.length }),
@@ -521,6 +812,7 @@ export default function Watchlist() {
   }
 }
 
+// 新增大类输入组件
 function DirNameInput({ dirData, onAdd }: { dirData: DirData; onAdd: (name: string) => void }) {
   const [val, setVal] = useState('')
   const suggestions = [
@@ -530,9 +822,9 @@ function DirNameInput({ dirData, onAdd }: { dirData: DirData; onAdd: (name: stri
   return (
     <div style={{ flex: 1 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input className="search-input" placeholder="新建方向名称..." maxLength={12} style={{ flex: 1 }}
+        <input className="search-input" placeholder="新增大类名称..." maxLength={12} style={{ flex: 1 }}
           value={val} onChange={e => setVal(e.target.value)} />
-        <button className="btn btn-blue btn-sm" onClick={() => { if (val.trim()) { onAdd(val.trim()); setVal('') } }}>新建</button>
+        <button className="btn btn-blue btn-sm" onClick={() => { if (val.trim()) { onAdd(val.trim()); setVal('') } }}>新建大类</button>
       </div>
       {val && suggestions.length > 0 && (
         <div className="dir-suggestions" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
@@ -545,4 +837,15 @@ function DirNameInput({ dirData, onAdd }: { dirData: DirData; onAdd: (name: stri
   )
 }
 
-// ── ──
+// 新增细分方向输入组件
+function DirSubInput({ category, onAdd }: { category: string; onAdd: (subName: string, category: string) => void }) {
+  const [val, setVal] = useState('')
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '4px 0' }}>
+      <input className="search-input" placeholder={`在"${category}"下新增细分...`} maxLength={12} style={{ flex: 1, fontSize: 11 }}
+        value={val} onChange={e => setVal(e.target.value)} />
+      <button className="btn btn-blue btn-sm" onClick={() => { if (val.trim()) { onAdd(val.trim(), category); setVal('') } }}
+        style={{ fontSize: 10, padding: '3px 8px' }}>+细分</button>
+    </div>
+  )
+}

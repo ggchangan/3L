@@ -1,12 +1,22 @@
-"""方向管理 API 路由"""
+"""方向管理 API 路由 — V2 分层 + 概念绑定"""
 import json
 import os
 import sys
 import requests
+from urllib.parse import urlparse, parse_qs
 from backend.config import DATA_DIR
 from backend.services.direction_service import (
     get_all, get_active, get_all_ordered, add, remove, set_active, get_suggestions,
     reorder,
+    # V2 新接口
+    get_categories, get_sub_directions,
+    add_category, remove_category, set_category_enabled, reorder_categories,
+    rename_category,
+    add_sub_direction, remove_sub_direction, set_sub_direction_enabled,
+    reorder_sub_directions, move_sub_direction, rename_sub_direction,
+    bind_concept, unbind_concept, get_bound_concepts,
+    search_concepts, parse_direction, format_direction,
+    migrate_v1_to_v2,
 )
 
 INDUSTRY_MAP_PATH = os.environ.get('INDUSTRY_MAP_PATH',
@@ -90,10 +100,7 @@ def _load_all_a_stocks():
 
 
 def _fetch_concept_stocks(name):
-    """获取概念板块成分股（缓存优先，按需抓取）
-
-    用 push2test.eastmoney.com 直连（push2主域名已被服务商IP封锁）
-    """
+    """获取概念板块成分股（缓存优先，按需抓取）"""
     board_constituents_path = os.path.join(DATA_DIR, 'board_constituents.json')
     if os.path.isfile(board_constituents_path):
         try:
@@ -108,12 +115,10 @@ def _fetch_concept_stocks(name):
                     return entry
         except:
             pass
-    # 直连 push2test（push2主域名被封，push2test可用）
     import requests as _req
     _h = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://quote.eastmoney.com/'}
     _base = 'https://push2test.eastmoney.com/api/qt/clist/get'
     try:
-        # 1. 获取概念板块列表，找 code
         _all_params = {
             'pn': '1', 'pz': '500', 'po': '1', 'np': '1',
             'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
@@ -131,7 +136,6 @@ def _fetch_concept_stocks(name):
                 break
         if not board_code:
             return []
-        # 2. 获取该板块的成分股
         _stk_params = {
             'pn': '1', 'pz': '200', 'po': '1', 'np': '1',
             'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
@@ -148,7 +152,6 @@ def _fetch_concept_stocks(name):
             if code.startswith('BK'):
                 continue
             stks.append({'code': code, 'name': item.get('f14', ''), 'industry': ''})
-        # 3. 缓存
         if stks:
             try:
                 with open(board_constituents_path) as f:
@@ -166,7 +169,6 @@ def _fetch_concept_stocks(name):
 
 def _handle_search_stocks(h, path):
     """搜索股票 — GET /api/directions/stocks?q=关键词"""
-    from urllib.parse import urlparse, parse_qs
     qs = parse_qs(urlparse(path).query)
     q = (qs.get('q', [''])[0]).strip().lower()
     if not q:
@@ -174,23 +176,20 @@ def _handle_search_stocks(h, path):
         return
 
     imap = _load_industry_map()
-    names = _load_all_a_stocks()  # 5317只全量A股
+    names = _load_all_a_stocks()
     boards = _load_board_constituents()
 
     matched = []
     seen = set()
 
-    # 0. 先检查是否匹配概念板块（优先于个股名称搜索）
     board_cache_path = os.path.join(DATA_DIR, 'board_names_cache.json')
     if os.path.isfile(board_cache_path):
         try:
             with open(board_cache_path) as f:
                 bc = json.load(f)
-            # 行业板块
             for name in bc.get('industry', []):
                 if q in name.lower():
-                    break  # industry boards are handled via layer 2
-            # 概念板块 — 按需抓取
+                    break
             for name in bc.get('concept', []):
                 if q in name.lower():
                     stocks_data = _fetch_concept_stocks(name)
@@ -214,7 +213,6 @@ def _handle_search_stocks(h, path):
         except:
             pass
 
-    # 1. 搜索全量A股：匹配 code / name
     for code, name in names.items():
         if code in seen:
             continue
@@ -225,7 +223,6 @@ def _handle_search_stocks(h, path):
                 'direction': info.get('direction', ''),
                 'industry': info.get('ths_industry', '')})
 
-    # 1.5 拼音首字母搜索（如 "fwkj" → 飞沃科技）
     if not matched or len(matched) < 20:
         pinyin_path = os.path.join(DATA_DIR, 'pinyin_initials.json')
         if os.path.isfile(pinyin_path):
@@ -242,7 +239,6 @@ def _handle_search_stocks(h, path):
             except:
                 pass
 
-    # 2. 搜索同花顺板块成分股映射
     for board_name, stocks in boards.items():
         if q in board_name.lower():
             for s in stocks:
@@ -255,7 +251,6 @@ def _handle_search_stocks(h, path):
                     matched.append({'code': code, 'name': names.get(code, ''), 'direction': direction, 'industry': industry})
 
     if not matched:
-        # 3. 兜底：检查行业板块名（概念板块已在 layer 0 处理）
         board_cache_path = os.path.join(DATA_DIR, 'board_names_cache.json')
         if os.path.isfile(board_cache_path):
             try:
@@ -296,14 +291,318 @@ def _handle_search_stocks(h, path):
     h.send_json({'stocks': stocks[:30], 'total': len(matched)})
 
 
-def _handle_get_all(h, path):
+# ═══════════════════════════════════════════════════════════
+# GET /api/directions/get — 完整状态快照
+# ═══════════════════════════════════════════════════════════
+
+def _handle_get(h, path):
+    """返回 categories（数组格式）, sub_directions（含 concepts 数组）, active, version"""
+    cat_dict = get_categories()
+    sub_dirs = get_sub_directions()
+    # 将 dict {name: {order, enabled}} 转为前端需要的数组格式 [{name, order, enabled, sub_count}]
+    categories_arr = []
+    for name, info in sorted(cat_dict.items(), key=lambda x: x[1].get('order', 0)):
+        sub_count = sum(1 for sd in sub_dirs.values() if sd.get('category') == name)
+        categories_arr.append({
+            'name': name,
+            'enabled': info.get('enabled', True),
+            'sub_count': sub_count,
+            'order': info.get('order', 0),
+        })
+    # 给每个 sub_direction 补上 concepts 数组（前端需要）
+    for key, sd in sub_dirs.items():
+        codes = sd.get('concept_codes', [])
+        names = sd.get('concept_names', [])
+        sd['concepts'] = [
+            {'code': codes[i], 'name': names[i]} if i < len(names) else {'code': codes[i], 'name': codes[i]}
+            for i in range(len(codes))
+        ]
     h.send_json({
-        'directions': get_all(),
+        'categories': categories_arr,
+        'sub_directions': sub_dirs,
         'active': get_active(),
-        'all': get_all_ordered(),
-        'suggestions': get_suggestions(),
+        'version': 2,
     })
 
+
+# ═══════════════════════════════════════════════════════════
+# CATEGORY 端点
+# ═══════════════════════════════════════════════════════════
+
+def _handle_category_add(h, path, body):
+    try:
+        data = json.loads(body)
+        name = data.get('name', '').strip()
+        if not name:
+            h.send_json({'success': False, 'error': '分类名称不能为空'})
+            return
+        r = add_category(name)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_category_remove(h, path, body):
+    try:
+        data = json.loads(body)
+        name = data.get('name', '').strip()
+        if not name:
+            h.send_json({'success': False, 'error': '分类名称不能为空'})
+            return
+        r = remove_category(name)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_category_toggle(h, path, body):
+    try:
+        data = json.loads(body)
+        name = data.get('name', '').strip()
+        enabled = data.get('enabled', True)
+        if not name:
+            h.send_json({'success': False, 'error': '分类名称不能为空'})
+            return
+        r = set_category_enabled(name, enabled)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_category_reorder(h, path, body):
+    try:
+        data = json.loads(body)
+        names = data.get('names', [])
+        if not names:
+            h.send_json({'success': False, 'error': '分类列表不能为空'})
+            return
+        r = reorder_categories(names)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_category_rename(h, path, body):
+    """POST /api/directions/category/rename — 重命名大类"""
+    try:
+        data = json.loads(body)
+        old_name = data.get('old_name', '').strip()
+        new_name = data.get('new_name', '').strip()
+        if not old_name:
+            h.send_json({'success': False, 'error': '原名称不能为空'})
+            return
+        if not new_name:
+            h.send_json({'success': False, 'error': '新名称不能为空'})
+            return
+        r = rename_category(old_name, new_name)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════════════
+# SUB_DIRECTION 端点
+# ═══════════════════════════════════════════════════════════
+
+def _handle_sub_add(h, path, body):
+    try:
+        data = json.loads(body)
+        name = data.get('name', '').strip()
+        category = data.get('category', '').strip()
+        if not name:
+            h.send_json({'success': False, 'error': '细分方向名称不能为空'})
+            return
+        if not category:
+            h.send_json({'success': False, 'error': '所属分类不能为空'})
+            return
+        # order 参数暂不支持，服务端自动计算
+        r = add_sub_direction(category, name)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_sub_remove(h, path, body):
+    try:
+        data = json.loads(body)
+        name = data.get('name', '').strip()
+        if not name:
+            h.send_json({'success': False, 'error': '细分方向名称不能为空'})
+            return
+        # name 为完整名称 "科技.半导体"，解析出分类和子方向名
+        cat, sub = parse_direction(name)
+        if not cat:
+            h.send_json({'success': False, 'error': '名称格式错误，需要完整路径如"科技.半导体"'})
+            return
+        r = remove_sub_direction(cat, sub)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_sub_toggle(h, path, body):
+    try:
+        data = json.loads(body)
+        name = data.get('name', '').strip()
+        enabled = data.get('enabled', True)
+        if not name:
+            h.send_json({'success': False, 'error': '细分方向名称不能为空'})
+            return
+        cat, sub = parse_direction(name)
+        if not cat:
+            h.send_json({'success': False, 'error': '名称格式错误，需要完整路径如"科技.半导体"'})
+            return
+        r = set_sub_direction_enabled(cat, sub, enabled)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_sub_reorder(h, path, body):
+    try:
+        data = json.loads(body)
+        names = data.get('names', [])
+        if not names:
+            h.send_json({'success': False, 'error': '细分方向列表不能为空'})
+            return
+        # 从第一个完整名称提取分类
+        cat, _ = parse_direction(names[0])
+        if not cat:
+            h.send_json({'success': False, 'error': '名称格式错误，需要完整路径如"科技.半导体"'})
+            return
+        r = reorder_sub_directions(cat, names)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_sub_move(h, path, body):
+    """POST /api/directions/sub/move — 将细分方向移动到另一个大类"""
+    try:
+        data = json.loads(body)
+        name = data.get('name', '').strip()
+        new_category = data.get('new_category', '').strip()
+        if not name:
+            h.send_json({'success': False, 'error': '细分方向完整名称不能为空'})
+            return
+        if not new_category:
+            h.send_json({'success': False, 'error': '目标分类名称不能为空'})
+            return
+        cat, sub = parse_direction(name)
+        if not cat:
+            cat = '未分类'
+        r = move_sub_direction(cat, sub, new_category)
+        if r.get('success'):
+            h.send_json({'success': True, 'old_key': name, 'new_key': r['new_key']})
+        else:
+            h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_sub_rename(h, path, body):
+    """POST /api/directions/sub/rename — 重命名细分方向"""
+    try:
+        data = json.loads(body)
+        name = data.get('name', '').strip()
+        new_name = data.get('new_name', '').strip()
+        if not name:
+            h.send_json({'success': False, 'error': '原名称不能为空'})
+            return
+        if not new_name:
+            h.send_json({'success': False, 'error': '新名称不能为空'})
+            return
+        cat, sub = parse_direction(name)
+        if not cat:
+            cat = '未分类'
+        r = rename_sub_direction(cat, sub, new_name)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════════════
+# 概念绑定端点
+# ═══════════════════════════════════════════════════════════
+
+def _handle_bind(h, path, body):
+    try:
+        data = json.loads(body)
+        sub_dir = data.get('sub_dir', '').strip()
+        concept_code = data.get('concept_code', '').strip()
+        if not sub_dir:
+            h.send_json({'success': False, 'error': 'sub_dir 不能为空'})
+            return
+        if not concept_code:
+            h.send_json({'success': False, 'error': 'concept_code 不能为空'})
+            return
+        cat, sub = parse_direction(sub_dir)
+        if not cat:
+            h.send_json({'success': False, 'error': 'sub_dir 格式错误，需要完整路径如"科技.半导体"'})
+            return
+        r = bind_concept(cat, sub, concept_code)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_unbind(h, path, body):
+    try:
+        data = json.loads(body)
+        sub_dir = data.get('sub_dir', '').strip()
+        concept_code = data.get('concept_code', '').strip()
+        if not sub_dir:
+            h.send_json({'success': False, 'error': 'sub_dir 不能为空'})
+            return
+        if not concept_code:
+            h.send_json({'success': False, 'error': 'concept_code 不能为空'})
+            return
+        cat, sub = parse_direction(sub_dir)
+        if not cat:
+            h.send_json({'success': False, 'error': 'sub_dir 格式错误，需要完整路径如"科技.半导体"'})
+            return
+        r = unbind_concept(cat, sub, concept_code)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════════════
+# GET /api/directions/concepts/search?q=xxx
+# ═══════════════════════════════════════════════════════════
+
+def _handle_concepts_search(h, path):
+    try:
+        qs = parse_qs(urlparse(path).query)
+        q = qs.get('q', [''])[0].strip()
+        results = search_concepts(q)
+        # 转成 [{code, name}] 格式（stock_count 来自 push2 不准确，不返回）
+        items = []
+        for code, info in results.items():
+            if isinstance(info, dict):
+                items.append({'code': code, 'name': info.get('name', code)})
+            else:
+                items.append({'code': code, 'name': info})
+        h.send_json({'results': items})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════════════
+# POST /api/directions/migrate — V1→V2 迁移
+# ═══════════════════════════════════════════════════════════
+
+def _handle_migrate(h, path, body):
+    try:
+        r = migrate_v1_to_v2()
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════════════
+# 旧接口兼容处理（已重写为调用 V2 服务）
+# ═══════════════════════════════════════════════════════════
 
 def _handle_add(h, path, body):
     try:
@@ -335,13 +634,11 @@ def _handle_remove(h, path, body):
         if name == '其他':
             h.send_json({'success': False, 'error': '不能删除"其他"方向'})
             return
-        # 1. 从 directions.json 删除该方向
-        from backend.services.direction_service import remove as _remove_dir
-        r = _remove_dir(name)
+        r = remove(name)
         if not r.get('success'):
             h.send_json(r)
             return
-        # 2. 从 watchlist 删除该方向的所有股票
+        # 从 watchlist 删除该方向的所有股票
         removed = 0
         wl_path = os.path.join(DATA_DIR, 'watchlist.json')
         if os.path.isfile(wl_path):
@@ -387,7 +684,13 @@ def _handle_reorder(h, path, body):
         h.send_json({'success': False, 'error': str(e)})
 
 
+# ═══════════════════════════════════════════════════════════
+# 路由注册
+# ═══════════════════════════════════════════════════════════
+
 def register_routes(routes):
-    routes.exact('/api/directions/get', func=_handle_get_all)
+    # GET 路由（通过 RouteRegistry）
+    routes.exact('/api/directions/get', func=_handle_get)
     routes.exact('/api/directions/stocks', func=_handle_search_stocks)
+    routes.exact('/api/directions/concepts/search', func=_handle_concepts_search)
     return routes
