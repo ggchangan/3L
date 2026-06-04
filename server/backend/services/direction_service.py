@@ -185,10 +185,12 @@ def add_category(name: str) -> dict:
         return {'success': False, 'error': '分类名称不能为空'}
     data = _load()
     if name in data['categories']:
+        logger.warning('add_category 重复: %s', name)
         return {'success': False, 'error': f'分类 "{name}" 已存在'}
     max_order = max((c['order'] for c in data['categories'].values()), default=-1)
     data['categories'][name] = {"order": max_order + 1, "enabled": True}
     _save(data)
+    logger.info('add_category: %s', name)
     return {'success': True, 'name': name}
 
 
@@ -196,6 +198,7 @@ def remove_category(name: str) -> dict:
     """删除分类及其下所有细分方向"""
     data = _load()
     if name not in data['categories']:
+        logger.warning('remove_category 不存在: %s', name)
         return {'success': False, 'error': f'分类 "{name}" 不存在'}
     del data['categories'][name]
     # 删除该分类下的所有细分方向
@@ -206,6 +209,7 @@ def remove_category(name: str) -> dict:
     for k in keys_to_delete:
         del data['sub_directions'][k]
     _save(data)
+    logger.info('remove_category: %s (removed %d sub_directions)', name, len(keys_to_delete))
     return {'success': True, 'removed_sub_directions': len(keys_to_delete)}
 
 
@@ -219,9 +223,11 @@ def set_category_enabled(name: str, enabled: bool) -> dict:
     """启用/禁用分类"""
     data = _load()
     if name not in data['categories']:
+        logger.warning('set_category_enabled 不存在: %s', name)
         return {'success': False, 'error': f'分类 "{name}" 不存在'}
     data['categories'][name]['enabled'] = enabled
     _save(data)
+    logger.info('set_category_enabled: %s → %s', name, enabled)
     return {'success': True}
 
 
@@ -230,9 +236,11 @@ def rename_category(old_name: str, new_name: str) -> dict:
     old_name = old_name.strip()
     new_name = new_name.strip()
     if not new_name:
+        logger.warning('rename_category 新名称为空: old=%s', old_name)
         return {'success': False, 'error': '新名称不能为空'}
     data = _load()
     if old_name not in data['categories']:
+        logger.warning('rename_category 不存在: %s', old_name)
         return {'success': False, 'error': f'分类 "{old_name}" 不存在'}
     if new_name in data['categories']:
         return {'success': False, 'error': f'分类 "{new_name}" 已存在'}
@@ -258,6 +266,7 @@ def rename_category(old_name: str, new_name: str) -> dict:
     for old_key, new_key in key_changes:
         _update_watchlist_on_key_change(old_key, new_key)
     _save(data)
+    logger.info('rename_category: %s → %s (updated %d sub_directions)', old_name, new_name, len(key_changes))
     return {'success': True}
 
 
@@ -278,10 +287,12 @@ def reorder_categories(names: list) -> dict:
         msg = []
         if missing: msg.append(f'缺少: {missing}')
         if extra: msg.append(f'多余: {extra}')
-        return {'success': False, 'error': '; '.join(msg) or '分类集合不匹配'}
+        logger.warning('reorder_categories 不匹配: missing=%s extra=%s', missing, extra)
+        return {'success': False, 'error': ';'.join(msg) or '分类集合不匹配'}
     for idx, name in enumerate(names):
         data['categories'][name]['order'] = idx
     _save(data)
+    logger.info('reorder_categories: %s', names)
     return {'success': True}
 
 
@@ -300,6 +311,7 @@ def add_sub_direction(category: str, name: str, *, auto_create_category: bool = 
     """
     name = name.strip()
     if not name:
+        logger.warning('add_sub_direction 名称为空, category=%s', category)
         return {'success': False, 'error': '细分方向名称不能为空'}
     data = _load()
 
@@ -307,11 +319,14 @@ def add_sub_direction(category: str, name: str, *, auto_create_category: bool = 
         if auto_create_category:
             max_order = max((c['order'] for c in data['categories'].values()), default=-1)
             data['categories'][category] = {"order": max_order + 1, "enabled": True}
+            logger.info('add_sub_direction 自动创建分类: %s', category)
         else:
+            logger.warning('add_sub_direction 分类不存在: %s', category)
             return {'success': False, 'error': f'分类 "{category}" 不存在，请先添加分类'}
 
     key = format_direction(category, name)
     if key in data['sub_directions']:
+        logger.warning('add_sub_direction 重复: %s', key)
         return {'success': False, 'error': f'细分方向 "{key}" 已存在'}
 
     # 计算 order
