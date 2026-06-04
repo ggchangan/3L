@@ -195,3 +195,27 @@
 .analysis-link:hover {
   background: rgba(78, 205, 196, 0.1);
 }
+
+/* 加自选按钮 */
+.btn-add-wl-trend {
+  background: rgba(78, 205, 196, 0.12);
+  color: #4ecdc4;
+  border: 1px solid rgba(78, 205, 196, 0.3);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-weight: 600;
+  margin-right: auto;
+}
+.btn-add-wl-trend:hover { background: rgba(78, 205, 196, 0.25); }
+.btn-add-wl-trend:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.wl-badge {
+  font-size: 11px;
+  color: #4ecdc4;
+  margin-right: auto;
+  font-weight: 600;
+  padding: 3px 0;
+}

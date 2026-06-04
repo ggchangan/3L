@@ -73,6 +73,8 @@ export default function StrongTrendCandidates() {
   const navigate = useNavigate()
   const [data, setData] = useState<TrendData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [watchlistCodes, setWatchlistCodes] = useState<Set<string>>(new Set())
+  const [addingCodes, setAddingCodes] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetch('/api/strong-trend-candidates?limit=30')
@@ -84,7 +86,35 @@ export default function StrongTrendCandidates() {
       })
       .catch(e => console.error('Failed to load:', e))
       .finally(() => setLoading(false))
+    loadWatchlist()
   }, [])
+
+  async function loadWatchlist() {
+    try {
+      const r = await fetch('/api/watchlist')
+      if (!r.ok) return
+      const d = await r.json()
+      const stocks = Array.isArray(d) ? d : d.stocks || []
+      setWatchlistCodes(new Set(stocks.map((s: any) => s.code)))
+    } catch {}
+  }
+
+  async function addToWatchlist(code: string, name: string) {
+    if (watchlistCodes.has(code)) return
+    setAddingCodes(prev => new Set([...prev, code]))
+    try {
+      const r = await fetch('/api/watchlist/add-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, name }),
+      })
+      const d = await r.json()
+      if (d.success) {
+        setWatchlistCodes(prev => new Set([...prev, code]))
+      }
+    } catch {}
+    setAddingCodes(prev => { const n = new Set(prev); n.delete(code); return n })
+  }
 
   if (loading) return (
     <div className="page-container">
@@ -235,6 +265,17 @@ export default function StrongTrendCandidates() {
                   {c.conclusion && <div className="card-conclusion">{c.conclusion}</div>}
 
                   <div className="card-footer">
+                    {watchlistCodes.has(c.code) ? (
+                      <span className="wl-badge">✔ 已自选</span>
+                    ) : (
+                      <button
+                        className="btn-add-wl-trend"
+                        onClick={() => addToWatchlist(c.code, c.name)}
+                        disabled={addingCodes.has(c.code)}
+                      >
+                        {addingCodes.has(c.code) ? '...' : '+ 自选'}
+                      </button>
+                    )}
                     <span className="analysis-link" onClick={() => navigate(`/stock_analysis?code=${c.code}`)}>🔍 个股分析</span>
                   </div>
                 </div>
