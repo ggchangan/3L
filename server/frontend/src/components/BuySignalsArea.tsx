@@ -20,6 +20,17 @@ export default function BuySignalsArea() {
   const [prevActiveDir, setPrevActiveDir] = useState('')
   const [dirOrder, setDirOrder] = useState<string[]>([])
 
+  // 提取扫描时间中的 HH:MM 部分
+  const scanTimeShort = scanMeta.scan_time
+    ? scanMeta.scan_time.length >= 16
+      ? scanMeta.scan_time.slice(11, 16)  // "2026-06-04 10:19:57" → "10:19"
+      : scanMeta.scan_time
+    : ''
+  // 下一次扫描 ≈ 当前整点 +1h（简化：只显示下一整点）
+  const nextScan = scanMeta.scan_time
+    ? (parseInt(scanMeta.scan_time.slice(11, 13)) + 1) % 24 + ':00'
+    : ''
+
   useEffect(() => {
     Promise.all([
       fetchBuySignals(),
@@ -85,6 +96,24 @@ export default function BuySignalsArea() {
 
   return (
     <>
+      {/* 扫描时间指示器 */}
+      {scanTimeShort && (
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '6px 8px', marginBottom: 6,
+          background: 'rgba(78, 205, 196, 0.08)', borderRadius: 6,
+          border: '1px solid rgba(78, 205, 196, 0.15)',
+        }}>
+          <span style={{ fontSize: 12, color: '#4ecdc4' }}>
+            ⏱ 上次扫描: <strong>{scanTimeShort}</strong>
+            {nextScan ? <span style={{ color: '#888', marginLeft: 12, fontSize: 11 }}>下次: ~{nextScan}</span> : ''}
+          </span>
+          <span style={{ fontSize: 11, color: '#888' }}>
+            {scanMeta.stocks_scanned || 0}只扫描 · {Object.values(groups).flat().length}个信号
+          </span>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10, borderBottom: '1px solid #333', paddingBottom: 6 }}>
         {dirs.map(dir => {
           const color = DIR_COLORS[dir] || '#888'
