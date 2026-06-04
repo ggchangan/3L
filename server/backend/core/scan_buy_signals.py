@@ -318,10 +318,12 @@ def main():
             continue
         
         # 构建全量分析数据（所有股票，不区分买卖）
+        card_sector = card.get('sector', '')
         analysis_entry = {
             'code': code,
             'name': name,
             'direction': direction,
+            'sector': card_sector,
             'price': card['price'],
             'change': card['change'],
             'change_pct': card['change'],
@@ -362,6 +364,7 @@ def main():
             'code': code,
             'name': name,
             'direction': direction,
+            'sector': card_sector,
             'price': card['price'],
             'change': card['change'],
             'change_pct': card['change'],

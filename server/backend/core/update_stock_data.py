@@ -554,7 +554,7 @@ def update_industry_map():
 
     url = 'https://push2test.eastmoney.com/api/qt/clist/get'
     params = {
-        'pn': '1', 'pz': '5000',
+        'pn': '1', 'pz': '6000',
         'po': '1', 'np': '1',
         'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
         'fltt': '2', 'invt': '2',

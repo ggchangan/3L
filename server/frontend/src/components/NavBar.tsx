@@ -1,5 +1,6 @@
-/** 左侧固定侧边栏 — 替代原顶部水平导航 */
+/** 左侧固定侧边栏 — 桌面固定 / 手机汉堡菜单 */
 import { useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 
 interface NavItem {
   label: string
@@ -49,136 +50,155 @@ const FOOTER_LINKS = [
 
 /** 判断当前路径是否匹配导航项 */
 function matchPath(path: string, item: NavItem): boolean {
-  // 精确匹配：/monitor → monitor
   if (path === item.href) return true
-  // 前缀匹配（用于 /logic-tracking/123 → logic-tracking）
   if (item.href !== '/' && path.startsWith(item.href + '/')) return true
-  // /workbench 也匹配工作台
   if (item.id === 'workbench' && (path === '/workbench' || path === '/journal')) return true
   return false
-}
-
-const SIDEBAR_STYLE: React.CSSProperties = {
-  width: 200,
-  minWidth: 200,
-  background: '#141428',
-  borderRight: '1px solid #2a2a4a',
-  height: '100vh',
-  position: 'fixed' as const,
-  left: 0,
-  top: 0,
-  zIndex: 100,
-  display: 'flex',
-  flexDirection: 'column',
-  overflow: 'hidden',
-}
-
-const SIDEBAR_HEADER: React.CSSProperties = {
-  padding: '18px 16px 14px',
-  fontSize: 11,
-  color: '#666',
-  textTransform: 'uppercase',
-  letterSpacing: 1,
-  borderBottom: '1px solid #2a2a4a',
-  flexShrink: 0,
-}
-
-const NAV_SCROLL: React.CSSProperties = {
-  flex: 1,
-  overflowY: 'auto',
-  padding: '6px 0',
-}
-
-const GROUP_LABEL: React.CSSProperties = {
-  padding: '14px 16px 4px',
-  fontSize: 10,
-  color: '#555',
-  textTransform: 'uppercase',
-  letterSpacing: 1,
-}
-
-const ITEM_BASE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '8px 16px',
-  fontSize: 13,
-  color: '#aaa',
-  textDecoration: 'none',
-  borderLeft: '3px solid transparent',
-  transition: 'all 0.15s',
-  cursor: 'pointer',
-}
-
-const FOOTER_STYLE: React.CSSProperties = {
-  borderTop: '1px solid #2a2a4a',
-  padding: '10px 16px',
-  flexShrink: 0,
 }
 
 export default function NavBar() {
   const path = useLocation().pathname
   const currentId = NAV_ITEMS.find(item => matchPath(path, item))?.id || null
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    setIsMobile(mq.matches)
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  const closeNav = () => setMobileOpen(false)
+
+  // 点击导航链接后自动关闭（手机端）
+  const handleNavClick = () => {
+    if (isMobile) closeNav()
+  }
+
+  const sidebarVisible = !isMobile || mobileOpen
 
   return (
-    <div className="sidebar" style={SIDEBAR_STYLE}>
-      <div style={SIDEBAR_HEADER}>3L · NAV</div>
+    <>
+      {/* 手机端：汉堡按钮 */}
+      {isMobile && (
+        <button
+          className="mobile-menu-btn"
+          onClick={() => setMobileOpen(v => !v)}
+          aria-label="打开导航"
+          style={{
+            position: 'fixed',
+            top: 10, left: 10, zIndex: 200,
+            width: 36, height: 36, borderRadius: 8,
+            background: '#141428', border: '1px solid #2a2a4a',
+            color: '#aaa', fontSize: 18, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 0, lineHeight: 1,
+          }}
+        >
+          {mobileOpen ? '✕' : '☰'}
+        </button>
+      )}
 
-      <div className="sidebar-nav" style={NAV_SCROLL}>
-        {GROUPS.map(group => (
-          <div key={group}>
-            <div style={GROUP_LABEL}>{group}</div>
-            {NAV_ITEMS.filter(item => item.group === group).map(item => {
-              const isCurrent = item.id === currentId
-              return (
-                <a
-                  key={item.id}
-                  href={item.href}
-                  className={`nav-item${isCurrent ? ' active' : ''}`}
-                  style={{
-                    ...ITEM_BASE,
-                    color: isCurrent ? '#fff' : '#aaa',
-                    borderLeftColor: isCurrent ? item.accent : 'transparent',
-                    background: isCurrent ? 'rgba(255,255,255,0.03)' : 'transparent',
-                  }}
-                  onMouseEnter={e => {
-                    if (!isCurrent) {
-                      (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'
-                      ;(e.currentTarget as HTMLElement).style.color = '#eee'
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (!isCurrent) {
-                      (e.currentTarget as HTMLElement).style.background = 'transparent'
-                      ;(e.currentTarget as HTMLElement).style.color = '#aaa'
-                    }
-                  }}
-                >
-                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: item.accent, flexShrink: 0 }} />
-                  {item.label}
-                </a>
-              )
-            })}
-          </div>
-        ))}
-      </div>
+      {/* 手机端：遮罩层 */}
+      {isMobile && mobileOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={closeNav}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 99,
+            background: 'rgba(0,0,0,0.6)',
+          }}
+        />
+      )}
 
-      <div className="sidebar-footer" style={FOOTER_STYLE}>
-        {FOOTER_LINKS.map((link, i) => (
-          <span key={link.id}>
-            {i > 0 && <span style={{ color: '#333', margin: '0 4px' }}>·</span>}
-            <a
-              href={link.href}
-              style={{ color: '#555', textDecoration: 'none', fontSize: 11 }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#888' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555' }}
-            >
-              {link.label}
-            </a>
-          </span>
-        ))}
+      {/* 侧边栏 */}
+      <div
+        className="sidebar"
+        style={{
+          width: 200,
+          minWidth: 200,
+          background: '#141428',
+          borderRight: '1px solid #2a2a4a',
+          height: '100vh',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          zIndex: 100,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          // 手机端：滑出/滑入动画
+          transform: isMobile ? (sidebarVisible ? 'translateX(0)' : 'translateX(-100%)') : 'none',
+          transition: isMobile ? 'transform 0.3s ease' : 'none',
+        }}
+      >
+        <div style={{ padding: '18px 16px 14px', fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: 1, borderBottom: '1px solid #2a2a4a', flexShrink: 0 }}>
+          3L · NAV
+        </div>
+
+        <div className="sidebar-nav" style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
+          {GROUPS.map(group => (
+            <div key={group}>
+              <div style={{ padding: '14px 16px 4px', fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: 1 }}>{group}</div>
+              {NAV_ITEMS.filter(item => item.group === group).map(item => {
+                const isCurrent = item.id === currentId
+                return (
+                  <a
+                    key={item.id}
+                    href={item.href}
+                    onClick={handleNavClick}
+                    className={`nav-item${isCurrent ? ' active' : ''}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 16px', fontSize: 13,
+                      color: isCurrent ? '#fff' : '#aaa',
+                      textDecoration: 'none',
+                      borderLeft: '3px solid',
+                      borderLeftColor: isCurrent ? item.accent : 'transparent',
+                      background: isCurrent ? 'rgba(255,255,255,0.03)' : 'transparent',
+                      transition: 'all 0.15s',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={e => {
+                      if (!isCurrent) {
+                        (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'
+                        ;(e.currentTarget as HTMLElement).style.color = '#eee'
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isCurrent) {
+                        (e.currentTarget as HTMLElement).style.background = 'transparent'
+                        ;(e.currentTarget as HTMLElement).style.color = '#aaa'
+                      }
+                    }}
+                  >
+                    <span style={{ width: 4, height: 4, borderRadius: '50%', background: item.accent, flexShrink: 0 }} />
+                    {item.label}
+                  </a>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+
+        <div className="sidebar-footer" style={{ borderTop: '1px solid #2a2a4a', padding: '10px 16px', flexShrink: 0 }}>
+          {FOOTER_LINKS.map((link, i) => (
+            <span key={link.id}>
+              {i > 0 && <span style={{ color: '#333', margin: '0 4px' }}>·</span>}
+              <a
+                href={link.href}
+                onClick={handleNavClick}
+                style={{ color: '#555', textDecoration: 'none', fontSize: 11 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#888' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#555' }}
+              >{link.label}</a>
+            </span>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 

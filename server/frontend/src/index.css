@@ -13,7 +13,16 @@ body {
   color: #e0e0e0;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
-  padding-left: 200px;  /* 为左侧固定侧边栏留位 */
+}
+
+/* 桌面版：为左侧固定侧边栏留位 */
+@media (min-width: 768px) {
+  body { padding-left: 200px; }
+}
+
+/* 手机版：无 padding，用汉堡菜单 */
+@media (max-width: 767px) {
+  body { padding-left: 0; }
 }
 
 /* ===== 动画 ===== */
