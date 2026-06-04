@@ -23,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: '🎯 趋势候选', href: '/trend_candidates.html', id: 'trend',         accent: '#4ecdc4', group: '个股管理' },
   { label: '📈 涨幅榜',   href: '/top_gainers.html',     id: 'gainers',        accent: '#e94560', group: '个股管理' },
   { label: '📈 强势趋势', href: '/strong-trend-candidates', id: 'strong-trend',  accent: '#4ecdc4', group: '个股管理' },
+  { label: '🔥 热点追踪', href: '/hot-stocks',              id: 'hot-stocks',     accent: '#ff6b00', group: '个股管理' },
 
   // ── 板块/概念 ──
   { label: '🔬 行业追踪', href: '/industry.html',       id: 'industry',        accent: '#22c55e', group: '板块 / 概念' },

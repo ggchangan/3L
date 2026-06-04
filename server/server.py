@@ -81,6 +81,7 @@ def register_api_routes(routes):
         'backend.api.market_health',
         'backend.api.concept_wave',
         'backend.api.strong_trend',
+        'backend.api.hot_stocks',
     ]
     for mod_name in api_modules:
         mod = importlib.import_module(mod_name)
@@ -179,6 +180,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/trend_candidates.html': '/trend_candidates',
             '/workbench.html': '/workbench',
             '/plan-tracking.html': '/plan-tracking',
+            '/hot-stocks.html': '/hot-stocks',
         }
         if path in html_redirects:
             self.send_response(302)
@@ -197,6 +199,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/plan-tracking',
             '/concept-wave',
             '/strong-trend-candidates',
+            '/hot-stocks',
         }
         if path in spa_routes:
             self.path = '/react.html'

@@ -169,6 +169,9 @@ def _handle_watchlist_add_stock(h, path, body):
                     suggested = info.get('direction', info.get('ths_industry', ''))
                     if suggested and suggested not in ('未知', '获取失败'):
                         direction = suggested
+                # 如果推断出的方向是裸大类（不含'.'），统一归入"未分类.XXX"
+                if direction and '.' not in direction and direction != '其他':
+                    direction = f'未分类.{direction}'
                 if not direction:
                     direction = '其他'
             except:

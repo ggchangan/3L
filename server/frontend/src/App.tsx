@@ -20,6 +20,7 @@ const AlarmSounds = lazy(() => import('./pages/AlarmSounds'))
 const PlanTracking = lazy(() => import('./pages/PlanTracking'))
 const ConceptWaveTracking = lazy(() => import('./pages/ConceptWaveTracking'))
 const StrongTrendCandidates = lazy(() => import('./pages/StrongTrendCandidates'))
+const HotStocks = lazy(() => import('./pages/HotStocks'))
 
 export default function App() {
   return (
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/plan-tracking" element={<PlanTracking />} />
         <Route path="/concept-wave" element={<ConceptWaveTracking />} />
         <Route path="/strong-trend-candidates" element={<StrongTrendCandidates />} />
+        <Route path="/hot-stocks" element={<HotStocks />} />
         <Route path="/" element={<Monitor />} />
 
         {/* 旧 HTML 重定向到 React 路由 */}
