@@ -536,3 +536,29 @@
 }
 .dir-sub-move:hover { border-color: #4ecdc4; color: #aaa; }
 .dir-sub-move option { background: #1a1a30; color: #e0e0e0; }
+
+/* 大类重命名/删除按钮 */
+.dir-cat-rename, .dir-cat-del {
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 4px;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+.dir-cat-rename { color: #4ecdc4; }
+.dir-cat-del { color: #e94560; }
+.dir-category-header:hover .dir-cat-rename,
+.dir-category-header:hover .dir-cat-del { opacity: 0.8; }
+.dir-cat-rename:hover, .dir-cat-del:hover { opacity: 1 !important; }
+
+/* 细分方向重命名按钮 */
+.dir-sub-rename-btn {
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 4px;
+  color: #4ecdc4;
+  opacity: 0.3;
+  transition: opacity 0.15s;
+}
+.dir-sub-item:hover .dir-sub-rename-btn { opacity: 0.8; }
+.dir-sub-rename-btn:hover { opacity: 1 !important; }

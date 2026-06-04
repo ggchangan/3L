@@ -528,7 +528,7 @@ def _lookup_concept_name(code: str) -> str:
 
 
 def search_concepts(q: str) -> dict:
-    """搜索概念 {code: name}，模糊匹配"""
+    """搜索概念 {code: {name, stock_count}}，支持中文和拼音首字母模糊匹配"""
     if not q:
         return {}
     results = {}
@@ -541,11 +541,35 @@ def search_concepts(q: str) -> dict:
     except (OSError, json.JSONDecodeError):
         return {}
 
-    q_lower = q.lower()
+    q_lower = q.lower().strip()
+    # 尝试导入 pypinyin
+    try:
+        from pypinyin import lazy_pinyin
+        has_pinyin = True
+    except ImportError:
+        has_pinyin = False
+
     for code, info in concepts.items():
-        name = info.get('name', '')
+        name = info.get('name', '') if isinstance(info, dict) else info
+        stock_count = info.get('stock_count', 0) if isinstance(info, dict) else 0
+
+        # 1. 中文模糊匹配
         if q_lower in name.lower():
-            results[code] = name
+            results[code] = {'name': name, 'stock_count': stock_count}
+            continue
+
+        # 2. 拼音首字母匹配（如 "XPGN" → "芯片概念"）
+        if has_pinyin and len(q_lower) >= 2:
+            initials = ''.join(w[0].lower() for w in lazy_pinyin(name) if w)
+            if q_lower in initials:
+                results[code] = {'name': name, 'stock_count': stock_count}
+                continue
+
+        # 3. 代码精确匹配
+        if q_lower == code.lower():
+            results[code] = {'name': name, 'stock_count': stock_count}
+            continue
+
     return results
 
 

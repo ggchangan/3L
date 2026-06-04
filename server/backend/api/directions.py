@@ -11,8 +11,9 @@ from backend.services.direction_service import (
     # V2 新接口
     get_categories, get_sub_directions,
     add_category, remove_category, set_category_enabled, reorder_categories,
+    rename_category,
     add_sub_direction, remove_sub_direction, set_sub_direction_enabled,
-    reorder_sub_directions, move_sub_direction,
+    reorder_sub_directions, move_sub_direction, rename_sub_direction,
     bind_concept, unbind_concept, get_bound_concepts,
     search_concepts, parse_direction, format_direction,
     migrate_v1_to_v2,
@@ -381,6 +382,24 @@ def _handle_category_reorder(h, path, body):
         h.send_json({'success': False, 'error': str(e)})
 
 
+def _handle_category_rename(h, path, body):
+    """POST /api/directions/category/rename — 重命名大类"""
+    try:
+        data = json.loads(body)
+        old_name = data.get('old_name', '').strip()
+        new_name = data.get('new_name', '').strip()
+        if not old_name:
+            h.send_json({'success': False, 'error': '原名称不能为空'})
+            return
+        if not new_name:
+            h.send_json({'success': False, 'error': '新名称不能为空'})
+            return
+        r = rename_category(old_name, new_name)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
 # ═══════════════════════════════════════════════════════════
 # SUB_DIRECTION 端点
 # ═══════════════════════════════════════════════════════════
@@ -481,6 +500,27 @@ def _handle_sub_move(h, path, body):
         h.send_json({'success': False, 'error': str(e)})
 
 
+def _handle_sub_rename(h, path, body):
+    """POST /api/directions/sub/rename — 重命名细分方向"""
+    try:
+        data = json.loads(body)
+        name = data.get('name', '').strip()
+        new_name = data.get('new_name', '').strip()
+        if not name:
+            h.send_json({'success': False, 'error': '原名称不能为空'})
+            return
+        if not new_name:
+            h.send_json({'success': False, 'error': '新名称不能为空'})
+            return
+        cat, sub = parse_direction(name)
+        if not cat:
+            cat = '未分类'
+        r = rename_sub_direction(cat, sub, new_name)
+        h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
 # ═══════════════════════════════════════════════════════════
 # 概念绑定端点
 # ═══════════════════════════════════════════════════════════
@@ -536,9 +576,15 @@ def _handle_concepts_search(h, path):
         qs = parse_qs(urlparse(path).query)
         q = qs.get('q', [''])[0].strip()
         results = search_concepts(q)
-        # 转成 [{code, name}] 格式
-        items = [{'code': code, 'name': name} for code, name in results.items()]
-        h.send_json(items)
+        # 转成 [{code, name, stock_count}] 格式
+        items = []
+        for code, info in results.items():
+            if isinstance(info, dict):
+                items.append({'code': code, 'name': info.get('name', code), 'stock_count': info.get('stock_count', 0)})
+            else:
+                items.append({'code': code, 'name': info, 'stock_count': 0})
+        items.sort(key=lambda x: x['stock_count'], reverse=True)
+        h.send_json({'results': items})
     except Exception as e:
         h.send_json({'success': False, 'error': str(e)})
 

@@ -251,6 +251,50 @@ export default function Watchlist() {
     '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560',
   }
 
+  // 大类重命名
+  async function renameCategory(name: string) {
+    const newName = prompt(`重命名大类 "${name}" 为：`, name)
+    if (!newName || newName.trim() === name) return
+    try {
+      const r = await fetch('/api/directions/category/rename', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ old_name: name, new_name: newName.trim() }),
+      })
+      const data = await r.json()
+      if (data.success) { showToast(`✅ 已重命名 "${name}" → "${newName.trim()}"`); await loadDirections(); loadAll() }
+      else showToast('⚠️ ' + (data.error || '重命名失败'), true)
+    } catch { showToast('⚠️ 重命名失败', true) }
+  }
+
+  // 大类删除
+  async function deleteCategory(name: string, subCount: number) {
+    if (!confirm(`确认删除大类 "${name}"？其下的 ${subCount} 个细分方向及对应的自选股将全部删除`)) return
+    try {
+      const r = await fetch('/api/directions/category/remove', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const data = await r.json()
+      if (data.success) { showToast(`❌ 已删除 "${name}"`); await loadDirections(); loadAll() }
+      else showToast('⚠️ ' + (data.error || '删除失败'), true)
+    } catch { showToast('⚠️ 删除失败', true) }
+  }
+
+  // 细分方向重命名
+  async function renameSubDirection(key: string, currentName: string) {
+    const newName = prompt(`重命名细分方向 "${currentName}" 为：`, currentName)
+    if (!newName || newName.trim() === currentName) return
+    try {
+      const r = await fetch('/api/directions/sub/rename', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: key, new_name: newName.trim() }),
+      })
+      const data = await r.json()
+      if (data.success) { showToast(`✅ 已重命名为 "${newName.trim()}"`); await loadDirections(); loadAll() }
+      else showToast('⚠️ ' + (data.error || '重命名失败'), true)
+    } catch { showToast('⚠️ 重命名失败', true) }
+  }
+
   return (
     <>
       <NavBar />
@@ -318,6 +362,18 @@ export default function Watchlist() {
                         <span className="dir-cat-count">{subs.length}个细分</span>
                       </div>
                       <div className="dir-cat-right">
+                        <span
+                          className="dir-cat-rename"
+                          title="重命名"
+                          onClick={e => { e.stopPropagation(); renameCategory(cat.name) }}
+                        >✎</span>
+                        {cat.name !== '未分类' && (
+                          <span
+                            className="dir-cat-del"
+                            title="删除大类及所有细分方向"
+                            onClick={e => { e.stopPropagation(); deleteCategory(cat.name, subs.length) }}
+                          >✕</span>
+                        )}
                         <span className="dir-expand-icon">{isExpanded ? '▾' : '▸'}</span>
                       </div>
                     </div>
@@ -391,6 +447,7 @@ export default function Watchlist() {
                               </div>
                               <div className="dir-sub-actions">
                                 <span style={{ cursor: 'grab', color: '#555', marginRight: 4, fontSize: 12 }}>⠿</span>
+                                <span className="dir-sub-rename-btn" title="重命名" onClick={() => renameSubDirection(sub.key, sub.name)}>✎</span>
                                 <button className="dir-cog-btn" title="概念绑定" onClick={() => {
                                   setConceptModal({ subDir: sub.key, concepts: sub.info.concepts || [] })
                                 }}>⚙️</button>
