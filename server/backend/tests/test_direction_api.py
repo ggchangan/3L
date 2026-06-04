@@ -81,14 +81,14 @@ class TestApiGet:
         assert 'sub_directions' in h.sent
         assert 'active' in h.sent
         assert 'version' in h.sent
-        assert '科技' in h.sent['categories']
+        assert '科技' in str(h.sent['categories'])
         assert '科技.半导体' in h.sent['sub_directions']
 
     def test_get_empty_state(self, ds, api):
         h = MockHandler()
         api._handle_get(h, '/api/directions/get')
         assert h.sent is not None
-        assert h.sent['categories'] == {}
+        assert h.sent['categories'] == []
         assert h.sent['sub_directions'] == {}
         assert h.sent['active'] == []
         assert h.sent['version'] == 2

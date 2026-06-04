@@ -264,6 +264,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/directions/sub/remove': ('backend.api.directions', '_handle_sub_remove'),
             '/api/directions/sub/toggle': ('backend.api.directions', '_handle_sub_toggle'),
             '/api/directions/sub/reorder': ('backend.api.directions', '_handle_sub_reorder'),
+            '/api/directions/sub/move': ('backend.api.directions', '_handle_sub_move'),
             '/api/directions/bind': ('backend.api.directions', '_handle_bind'),
             '/api/directions/unbind': ('backend.api.directions', '_handle_unbind'),
             '/api/directions/migrate': ('backend.api.directions', '_handle_migrate'),

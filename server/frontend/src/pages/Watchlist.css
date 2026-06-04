@@ -174,15 +174,16 @@
     border: 1px solid #2a2a4e;
     border-radius: 0 12px 12px 0;
     margin-bottom: 6px;
-    overflow: hidden;
 }
-.watchlist-card-wrapper.untracked { opacity: 0.55; }
-.watchlist-card-wrapper.untracked:hover { opacity: 0.85; }
 .watchlist-card-wrapper .stock-item {
     background: transparent;
     border: none;
     margin: 0;
+    border-radius: 0 12px 0 0;
+    overflow: hidden;
 }
+.watchlist-card-wrapper.untracked { opacity: 0.55; }
+.watchlist-card-wrapper.untracked:hover { opacity: 0.85; }
 .watchlist-card-actions {
     display: flex;
     justify-content: space-between;
@@ -519,3 +520,19 @@
   font-size: 12px;
   color: #888;
 }
+
+/* 细分方向移动大类下拉框 */
+.dir-sub-move {
+  background: transparent;
+  border: 1px solid #2a2a4e;
+  border-radius: 3px;
+  color: #888;
+  font-size: 10px;
+  padding: 1px 4px;
+  cursor: pointer;
+  max-width: 52px;
+  margin-left: 4px;
+  transition: border-color 0.15s;
+}
+.dir-sub-move:hover { border-color: #4ecdc4; color: #aaa; }
+.dir-sub-move option { background: #1a1a30; color: #e0e0e0; }

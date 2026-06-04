@@ -153,7 +153,11 @@ export default function Watchlist() {
   function getSubsForCategory(catName: string): { key: string; name: string; info: SubDirectionInfo }[] {
     return Object.entries(subDirections)
       .filter(([_, info]) => info.category === catName)
-      .map(([key, info]) => ({ key, name: key.split('.').slice(1).join('.'), info }))
+      .map(([key, info]) => {
+        // 兼容旧数据：key可能没有"."分隔（如"先进封装"），直接当名字用
+        const name = key.includes('.') ? key.split('.').slice(1).join('.') : key
+        return { key, name, info }
+      })
   }
 
   // 展开/折叠大类
@@ -319,21 +323,6 @@ export default function Watchlist() {
                     </div>
                     {isExpanded && (
                       <div className="dir-sub-list">
-                        {subs.length === 0 && (
-                          <div className="dir-sub-empty">
-                            <DirSubInput category={cat.name} onAdd={async (subName, catName) => {
-                              try {
-                                const r = await fetch('/api/directions/sub/add', {
-                                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ category: catName, name: subName }),
-                                })
-                                const data = await r.json()
-                                if (data.success) { showToast(`✅ 已添加 "${catName}.${subName}"`); await loadDirections(); loadAll() }
-                                else showToast('⚠️ ' + (data.error || '添加失败'), true)
-                              } catch { showToast('⚠️ 添加失败', true) }
-                            }} />
-                          </div>
-                        )}
                         {subs.map(sub => {
                           const isActive = activeDirs.includes(sub.key)
                           return (
@@ -379,6 +368,26 @@ export default function Watchlist() {
                                   }} />
                                 <span className="dir-sub-name">{sub.name}</span>
                                 <span className="dir-sub-concepts">{sub.info.concepts.length > 0 ? `📎${sub.info.concepts.length}` : ''}</span>
+                                <select className="dir-sub-move" title="移动到大类"
+                                  value={cat.name}
+                                  onChange={async e => {
+                                    const newCat = e.target.value
+                                    if (newCat === cat.name) return
+                                    if (!confirm(`确认将 "${sub.name}" 从「${cat.name}」移动到「${newCat}」？`)) return
+                                    try {
+                                      const r = await fetch('/api/directions/sub/move', {
+                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ name: sub.key, new_category: newCat }),
+                                      })
+                                      const data = await r.json()
+                                      if (data.success) { showToast(`✅ "${sub.name}" → ${newCat}`); await loadDirections(); loadAll() }
+                                      else showToast('⚠️ ' + (data.error || '移动失败'), true)
+                                    } catch { showToast('⚠️ 移动失败', true) }
+                                  }}>
+                                  {categories.map(c => (
+                                    <option key={c.name} value={c.name}>{c.name}</option>
+                                  ))}
+                                </select>
                               </div>
                               <div className="dir-sub-actions">
                                 <span style={{ cursor: 'grab', color: '#555', marginRight: 4, fontSize: 12 }}>⠿</span>

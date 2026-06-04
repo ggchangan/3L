@@ -348,6 +348,90 @@ def rename_sub_direction(category: str, old_name: str, new_name: str) -> dict:
     return {'success': True}
 
 
+def move_sub_direction(category: str, sub_name: str, new_category: str, *, auto_create_category: bool = True) -> dict:
+    """将细分方向移动到另一个大类
+
+    Args:
+        category: 当前所属分类
+        sub_name: 细分方向名称
+        new_category: 目标分类
+        auto_create_category: 目标分类不存在时自动创建
+    """
+    sub_name = sub_name.strip()
+    new_category = new_category.strip()
+    if not sub_name:
+        return {'success': False, 'error': '细分方向名称不能为空'}
+    if not new_category:
+        return {'success': False, 'error': '目标分类名称不能为空'}
+    if new_category == category:
+        return {'success': False, 'error': '已经在当前分类中'}
+
+    old_key = format_direction(category, sub_name)
+    data = _load()
+
+    # V1 迁移兼容：如果 format_direction 的 key 找不到，尝试直接用 sub_name（V1 格式无前缀）
+    if old_key not in data['sub_directions']:
+        if sub_name in data['sub_directions']:
+            old_key = sub_name
+        else:
+            return {'success': False, 'error': f'细分方向 "{old_key}" 或 "{sub_name}" 不存在'}
+
+    # 确保目标分类存在
+    if new_category not in data['categories']:
+        if auto_create_category:
+            max_order = max((c['order'] for c in data['categories'].values()), default=-1)
+            data['categories'][new_category] = {"order": max_order + 1, "enabled": True}
+        else:
+            return {'success': False, 'error': f'分类 "{new_category}" 不存在，请先添加分类'}
+
+    new_key = format_direction(new_category, sub_name)
+    if new_key in data['sub_directions']:
+        return {'success': False, 'error': f'目标细分方向 "{new_key}" 已存在'}
+
+    # 复制并更新 category 字段
+    sub_info = data['sub_directions'].pop(old_key)
+    sub_info['category'] = new_category
+    # 计算新分类下的 order
+    same_cat_subs = [v for v in data['sub_directions'].values() if v.get('category') == new_category]
+    sub_info['order'] = max((s['order'] for s in same_cat_subs), default=-1) + 1
+    data['sub_directions'][new_key] = sub_info
+
+    # 同步更新 watchlist 中股票的 directions 字段
+    wl_path = os.path.join(DATA_DIR, 'watchlist.json')
+    if os.path.isfile(wl_path):
+        try:
+            with open(wl_path, 'r') as f:
+                wl = json.load(f)
+            changed = 0
+            for s in wl.get('stocks', []):
+                dirs = s.get('directions', [])
+                # 新格式 directions 数组
+                if isinstance(dirs, list) and old_key in dirs:
+                    dirs.remove(old_key)
+                    if new_key not in dirs:
+                        dirs.append(new_key)
+                    changed += 1
+                # 旧格式 direction 字符串（也包括 directions=[] 但 direction 有值的情况）
+                d = s.get('direction', '')
+                if d and d == old_key:
+                    s['direction'] = new_key
+                    changed += 1
+            if changed > 0:
+                with open(wl_path, 'w') as f:
+                    json.dump(wl, f, ensure_ascii=False, indent=2)
+                # 强制刷新缓存
+                try:
+                    from scripts.cache_layer import cache as _cl
+                    _cl.invalidate('watchlist')
+                except ImportError:
+                    pass
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    _save(data)
+    return {'success': True, 'old_key': old_key, 'new_key': new_key}
+
+
 def reorder_sub_directions(category: str, names: list) -> dict:
     """按 names 顺序重新排列某分类下的细分方向
 

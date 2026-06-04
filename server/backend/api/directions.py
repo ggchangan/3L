@@ -12,7 +12,7 @@ from backend.services.direction_service import (
     get_categories, get_sub_directions,
     add_category, remove_category, set_category_enabled, reorder_categories,
     add_sub_direction, remove_sub_direction, set_sub_direction_enabled,
-    reorder_sub_directions,
+    reorder_sub_directions, move_sub_direction,
     bind_concept, unbind_concept, get_bound_concepts,
     search_concepts, parse_direction, format_direction,
     migrate_v1_to_v2,
@@ -295,10 +295,30 @@ def _handle_search_stocks(h, path):
 # ═══════════════════════════════════════════════════════════
 
 def _handle_get(h, path):
-    """返回 categories, sub_directions, active, version"""
+    """返回 categories（数组格式）, sub_directions（含 concepts 数组）, active, version"""
+    cat_dict = get_categories()
+    sub_dirs = get_sub_directions()
+    # 将 dict {name: {order, enabled}} 转为前端需要的数组格式 [{name, order, enabled, sub_count}]
+    categories_arr = []
+    for name, info in sorted(cat_dict.items(), key=lambda x: x[1].get('order', 0)):
+        sub_count = sum(1 for sd in sub_dirs.values() if sd.get('category') == name)
+        categories_arr.append({
+            'name': name,
+            'enabled': info.get('enabled', True),
+            'sub_count': sub_count,
+            'order': info.get('order', 0),
+        })
+    # 给每个 sub_direction 补上 concepts 数组（前端需要）
+    for key, sd in sub_dirs.items():
+        codes = sd.get('concept_codes', [])
+        names = sd.get('concept_names', [])
+        sd['concepts'] = [
+            {'code': codes[i], 'name': names[i]} if i < len(names) else {'code': codes[i], 'name': codes[i]}
+            for i in range(len(codes))
+        ]
     h.send_json({
-        'categories': get_categories(),
-        'sub_directions': get_sub_directions(),
+        'categories': categories_arr,
+        'sub_directions': sub_dirs,
         'active': get_active(),
         'version': 2,
     })
@@ -433,6 +453,30 @@ def _handle_sub_reorder(h, path, body):
             return
         r = reorder_sub_directions(cat, names)
         h.send_json(r)
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
+def _handle_sub_move(h, path, body):
+    """POST /api/directions/sub/move — 将细分方向移动到另一个大类"""
+    try:
+        data = json.loads(body)
+        name = data.get('name', '').strip()
+        new_category = data.get('new_category', '').strip()
+        if not name:
+            h.send_json({'success': False, 'error': '细分方向完整名称不能为空'})
+            return
+        if not new_category:
+            h.send_json({'success': False, 'error': '目标分类名称不能为空'})
+            return
+        cat, sub = parse_direction(name)
+        if not cat:
+            cat = '未分类'
+        r = move_sub_direction(cat, sub, new_category)
+        if r.get('success'):
+            h.send_json({'success': True, 'old_key': name, 'new_key': r['new_key']})
+        else:
+            h.send_json(r)
     except Exception as e:
         h.send_json({'success': False, 'error': str(e)})
 
