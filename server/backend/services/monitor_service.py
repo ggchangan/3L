@@ -3,8 +3,10 @@
 """
 import json
 import os
+import re
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
 
@@ -19,6 +21,10 @@ log = get_logger(__name__)
 _leaders_cache_data = None
 _leaders_cache_time = 0
 
+# ── 买点扫描：防重复 + 后台扫描 ────────────────────────
+_scan_in_progress = False
+_scan_lock = threading.Lock()
+
 
 def get_volume_comparison():
     """量价对比 — 今日/昨日/5日均量"""
@@ -26,35 +32,25 @@ def get_volume_comparison():
     return get_volume_comparison()
 
 
-def get_buy_signals():
-    """买点信号扫描（1小时缓存）"""
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    cache_file = os.path.join(
-        CACHE_DIR,
-        f'buy_signals_{datetime.now().strftime("%Y-%m-%d_%H")}.json'
-    )
-    # 1小时内已有缓存，且数据有效（至少2条信号且有完整字段），直接读取返回
-    if os.path.isfile(cache_file):
-        try:
-            with open(cache_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            sigs = data.get('signals', [])
-            # 校验：有效数据至少1条，且第1条有 name 字段（区分脏数据如 [{"code":"300750"}]）
-            if len(sigs) >= 1 and sigs[0].get('name') is not None:
-                log.info('买点信号缓存命中 (%d条)', len(sigs))
-                return data
-            elif data.get('error'):
-                # 错误字典直接返回
-                log.info('买点信号缓存命中（错误）')
-                return data
-            else:
-                log.warning('买点信号缓存无效（仅%d条或缺少字段），重新扫描', len(sigs))
-        except Exception:
-            log.warning('买点信号缓存读取失败，重新扫描')
-    # 超过1小时重新扫描
-    # 扫描脚本路径（结构对齐原生开发）
+def _find_latest_cache():
+    """找最近一次扫描的缓存文件（按文件名时间排序）"""
+    if not os.path.isdir(CACHE_DIR):
+        return None
+    candidates = []
+    for f in os.listdir(CACHE_DIR):
+        m = re.match(r'buy_signals_(\d{4}-\d{2}-\d{2})_(\d{2})\.json', f)
+        if m:
+            candidates.append((f, m.group(1) + ' ' + m.group(2) + ':00'))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    return os.path.join(CACHE_DIR, candidates[0][0])
+
+
+def _run_scan_sync(cache_file=None):
+    """同步执行扫描，保存到指定路径"""
     scan_file = os.path.join(WWW_DIR, 'server', 'scripts', 'scan_buy_signals.py')
-    log.info('买点信号缓存过期，启动扫描...')
+    log.info('买点信号扫描启动...')
     try:
         r = subprocess.run(
             [sys.executable, scan_file],
@@ -62,7 +58,8 @@ def get_buy_signals():
         )
         if r.returncode == 0:
             data = json.loads(r.stdout)
-            atomic_json_dump(data, cache_file)
+            if cache_file:
+                atomic_json_dump(data, cache_file)
             log.info('买点信号扫描完成 (%d条)', len(data.get('signals', [])))
             return data
         else:
@@ -71,6 +68,73 @@ def get_buy_signals():
     except Exception as e:
         log.error('买点信号扫描异常: %s', e)
         return {'error': str(e), 'signals': []}
+
+
+def get_buy_signals():
+    """买点信号 — 秒开策略：立即返回最近缓存，过期则后台自动扫描"""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+
+    now_hour = datetime.now().strftime('%Y-%m-%d_%H')
+    current_cache = os.path.join(CACHE_DIR, f'buy_signals_{now_hour}.json')
+
+    # 先试当前整点
+    if os.path.isfile(current_cache):
+        try:
+            with open(current_cache, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                sigs = data.get('signals', [])
+                if len(sigs) >= 1 and sigs[0].get('name') is not None:
+                    log.info('买点信号缓存命中 (%d条)', len(sigs))
+                    return data
+        except Exception:
+            pass
+
+    # 当前整点没有 -> 找最近一次缓存
+    latest = _find_latest_cache()
+    if latest:
+        try:
+            with open(latest, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            sigs = data.get('signals', [])
+            if len(sigs) >= 1 and sigs[0].get('name') is not None:
+                log.info('买点信号返回最近缓存 (%s)', os.path.basename(latest))
+                # 过期(>1小时)则后台启动新扫描，不阻塞
+                m = re.match(r'buy_signals_(\d{4}-\d{2}-\d{2})_(\d{2})\.json', os.path.basename(latest))
+                if m:
+                    cache_time = datetime.strptime(m.group(1) + ' ' + m.group(2) + ':00', '%Y-%m-%d %H:%M')
+                    hours_old = (datetime.now() - cache_time).total_seconds() / 3600
+                    if hours_old >= 1:
+                        _start_background_scan(current_cache)
+                return data
+        except Exception:
+            pass
+
+    # 完全没有缓存 -> 同步扫描（仅首次）
+    log.info('买点信号无任何缓存，首次同步扫描...')
+    return _run_scan_sync(current_cache)
+
+
+def _start_background_scan(cache_file):
+    """后台启动扫描，不阻塞当前请求"""
+    global _scan_in_progress
+    with _scan_lock:
+        if _scan_in_progress:
+            log.info('买点信号后台扫描已在进行，跳过')
+            return
+        _scan_in_progress = True
+
+    def _do_scan():
+        global _scan_in_progress
+        try:
+            _run_scan_sync(cache_file)
+        finally:
+            with _scan_lock:
+                _scan_in_progress = False
+
+    t = threading.Thread(target=_do_scan, daemon=True)
+    t.start()
+    log.info('买点信号后台扫描已启动')
 
 
 def get_stop_loss_triggered():
