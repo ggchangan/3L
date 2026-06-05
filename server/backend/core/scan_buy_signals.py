@@ -339,6 +339,8 @@ def main():
             'trend_buy_reason': card.get('trading_reason', ''),
             'stop_loss': card.get('stop_loss'),
             'stop_loss_pct': card.get('stop_loss_pct'),
+            'vs_sector_5d': card.get('vs_sector_5d'),
+            'sector_chg_5d': card.get('sector_chg_5d'),
         }
         all_analysis.append(analysis_entry)
         
@@ -381,6 +383,8 @@ def main():
             'trading_system': card['trading_system'],
             'trend_bias': card.get('trend_bias', 0),
             'trend_buy_reason': card.get('trading_reason', ''),
+            'vs_sector_5d': card.get('vs_sector_5d'),
+            'sector_chg_5d': card.get('sector_chg_5d'),
         }
         signals.append(signal)
     
