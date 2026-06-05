@@ -869,6 +869,9 @@ def get_realtime_kline(code, direction):
                 data = json.load(f)
             stocks = data.get('stocks', data) if isinstance(data, dict) else data
             sec_stocks = stocks.get(direction, {}) if isinstance(stocks, dict) else {}
+            if not sec_stocks and '.' in direction:
+                bare_dir = direction.split('.')[0]
+                sec_stocks = stocks.get(bare_dir, {})
             if code in sec_stocks:
                 cached = sec_stocks[code]
                 if isinstance(cached, list):

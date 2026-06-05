@@ -83,8 +83,13 @@ export default function Holdings() {
     try {
       const r = await fetch('/api/directions/get')
       const d = await r.json()
-      const dirs = Object.keys(d.directions || {})
-      setDirections(dirs)
+      // 新分层格式：active 数组；旧格式：directions 字典
+      if (d.active && d.active.length > 0) {
+        setDirections(d.active)
+      } else {
+        const dirs = Object.keys(d.directions || {})
+        setDirections(dirs)
+      }
     } catch { /* ignore */ }
   }
 

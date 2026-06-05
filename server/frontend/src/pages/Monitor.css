@@ -572,3 +572,69 @@
 }
 .search-box input:focus { border-color: #4ecdc4; }
 .search-box input::placeholder { color: #555; }
+
+/* ── 今日计划（PlanLayer）样式 ── */
+.plan-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+.plan-stock {
+  color: #e0e0e0;
+  font-size: 12px;
+}
+
+.plan-direction {
+  color: #4ecdc4;
+  font-size: 11px;
+}
+
+.plan-condition {
+  color: #888;
+  font-size: 11px;
+}
+
+.plan-stop-loss {
+  font-size: 10px;
+  color: #ff9800;
+  white-space: nowrap;
+}
+
+.plan-price {
+  font-size: 10px;
+  color: #888;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.plan-alert-icon {
+  font-size: 10px;
+  color: #ff9800;
+  margin-left: auto;
+}
+
+.plan-deviation {
+  font-size: 10px;
+  color: #ffd700;
+  white-space: nowrap;
+}
+
+.plan-date {
+  font-size: 9px;
+  color: #555;
+  margin-left: auto;
+}
+
+.plan-section-title {
+  font-size: 11px;
+}
+
+.plan-separator {
+  border-top: 1px solid #2a2a4e;
+  margin: 8px 0;
+}
