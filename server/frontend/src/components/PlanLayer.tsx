@@ -6,6 +6,12 @@ import type { BuySignalItem } from '../lib/types'
 const ALARM_TYPE_ICONS: Record<string, string> = { price: '🔴', deviation: '🟡', time: '⏰' }
 const ALARM_TYPE_LABELS: Record<string, string> = { price: '价格', deviation: '偏差', time: '时间' }
 
+/** 从 "华工科技(000988)" 提取 "000988" */
+function extractCode(stock: string): string {
+  const m = stock.match(/\((\d{6})\)/)
+  return m ? m[1] : stock
+}
+
 /** 获取今天日期 YYYY-MM-DD */
 function getTodayStr(): string {
   return new Date().toISOString().slice(0, 10)
@@ -25,6 +31,63 @@ function mergePlans(yesterday: PlanItem[], today: PlanItem[]): PlanItem[] {
   return merged
 }
 
+// ── 计划方向标签映射 ──
+const DIRECTION_LABELS: Record<string, string> = { buy: '买入', sell: '卖出', watch: '观察' }
+
+// ── 子组件 ──
+
+/** 单个持仓操作行 */
+function HoldingRow({ h, planInfo }: { h: BuySignalItem; planInfo?: { direction: string; condition?: string } }) {
+  const sp = h.stop_loss_price ?? (h as any).stop_loss
+  const spPct = (h as any).stop_loss_pct
+  const spFormatted = spPct != null ? ` (${spPct >= 0 ? '+' : ''}${spPct.toFixed(2)}%)` : ''
+  return (
+    <div className="plan-row" style={{ background: 'rgba(233,69,96,0.06)' }}>
+      <span className="plan-stock">{h.name}({h.code})</span>
+      {planInfo && (
+        <span className="plan-direction">→ {DIRECTION_LABELS[planInfo.direction] || planInfo.direction}</span>
+      )}
+      {planInfo?.condition && (
+        <span className="plan-condition">{planInfo.condition}</span>
+      )}
+      {sp != null && (
+        <span className="plan-stop-loss">止损{sp}{spFormatted}</span>
+      )}
+      {h.price != null && (
+        <span className="plan-price">
+          现价 {h.price} {h.change != null ? `${h.change >= 0 ? '+' : ''}${h.change.toFixed(1)}%` : ''}
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** 单行候选/计划行 */
+function CandidateRow({ p, _cat }: { p: PlanItem; _cat: string }) {
+  return (
+    <div className="plan-row" style={{ background: 'rgba(255,255,255,0.02)' }}>
+      <span className="plan-stock">{p.stock || '--'}</span>
+      <span className="plan-condition">{p.condition || ''}</span>
+      {p.stop_loss != null && (
+        <span className="plan-stop-loss">
+          止损{p.stop_loss}{p.stop_loss_pct != null ? `(${p.stop_loss_pct}%)` : ''}
+        </span>
+      )}
+      {renderAlertIcon(p)}
+    </div>
+  )
+}
+
+function renderAlertIcon(p: PlanItem) {
+  if (!p.alert || !p.alert.enabled) return null
+  const labels: Record<string, string> = { price: '🔴价格', deviation: '🟡偏差', time: '⏰时间' }
+  return (
+    <span className="plan-alert-icon" title={`${labels[p.alert.type] || ''}报警已设`}>🔔</span>
+  )
+}
+
+// ── 主组件 ──
+
 export default function PlanLayer() {
   const [collapsed, setCollapsed] = useState(false)
   const [buy, setBuy] = useState<PlanItem[]>([])
@@ -38,7 +101,6 @@ export default function PlanLayer() {
     const yst = getYesterdayStr()
     const tdy = getTodayStr()
 
-    // 并行加载计划、报警、持仓数据
     Promise.all([
       fetchWorkbenchPlan(yst),
       fetchWorkbenchPlan(tdy),
@@ -56,27 +118,66 @@ export default function PlanLayer() {
     }).catch(() => setLoaded(true))
   }, [])
 
-  // 持仓止损：只取有止损价的持仓（支持 stop_loss_price 和 stop_loss 两种字段名）
-  const holdingsStopLoss = holdings.filter(h => (h as any).stop_loss_price != null || h.stop_loss != null)
-  const holdingCodes = new Set(holdings.map(h => h.code))
+  // ── 分组逻辑 ──
 
-  // 取止损价，优先 stop_loss_price
-  function getStopPrice(h: any): number | undefined {
-    return h.stop_loss_price ?? h.stop_loss
-  }
-  function getStopPct(h: any): number | undefined {
-    return h.stop_loss_pct
+  // 持仓股（有止损价的）
+  const holdingsWithStop = holdings.filter(h =>
+    (h as any).stop_loss_price != null || h.stop_loss != null
+  )
+  const holdingCodes = new Set(holdingsWithStop.map(h => h.code))
+
+  // 建立持仓 → 计划映射
+  const planByCode = new Map<string, { direction: string; condition?: string; plan: PlanItem }>()
+  for (const p of [...buy, ...sell, ...watch]) {
+    if (!p.stock) continue
+    const code = extractCode(p.stock)
+    if (!planByCode.has(code)) {
+      // 从 buy/sell/watch 中找该股属于哪个分类
+      const direction = buy.find(x => x.stock === p.stock) ? 'buy'
+        : sell.find(x => x.stock === p.stock) ? 'sell' : 'watch'
+      planByCode.set(code, { direction, condition: p.condition, plan: p })
+    }
   }
 
-  // 计划报警：过滤掉持仓股的价格报警
+  // 持仓操作组：有止损的持仓，合并计划信息
+  const holdingsGroup = holdingsWithStop.map(h => {
+    const planInfo = planByCode.get(h.code)
+    return { h, planInfo }
+  })
+
+  // 候选组：非持仓的计划项（按 buy → sell → watch 排序）
+  const allPlanItems = [
+    ...buy.map(p => ({ ...p, _sortCat: 'buy' as const })),
+    ...sell.map(p => ({ ...p, _sortCat: 'sell' as const })),
+    ...watch.map(p => ({ ...p, _sortCat: 'watch' as const })),
+  ]
+  const candidateItems = allPlanItems.filter(p => {
+    if (!p.stock) return false
+    const code = extractCode(p.stock)
+    return !holdingCodes.has(code)
+  })
+  // 候选去重（同股不同方向只保留一次）
+  const seenCodes = new Set<string>()
+  const candidateDeduped = candidateItems.filter(p => {
+    if (!p.stock) return false
+    const code = extractCode(p.stock)
+    if (seenCodes.has(code)) return false
+    seenCodes.add(code)
+    return true
+  })
+
+  const hasHoldings = holdingsGroup.length > 0
+  const hasCandidates = candidateDeduped.length > 0
+
+  // 报警：过滤持仓股的价格报警（持仓止损已在持仓操作区展示）
   const planAlarms = alarms.filter(a => {
     if (a.type === 'price' && holdingCodes.has(a.stock_code)) return false
     return true
   })
 
-  const total = buy.length + sell.length + watch.length
-  const badgeBg = total > 0 ? '#e94560' : '#555'
-  const badgeText = loaded ? `${total}项` : '加载中'
+  const totalCount = holdingsGroup.length + candidateDeduped.length
+  const badgeBg = totalCount > 0 ? '#e94560' : '#555'
+  const badgeText = loaded ? `${totalCount}项` : '加载中'
 
   return (
     <div className="layer plan-layer">
@@ -89,136 +190,64 @@ export default function PlanLayer() {
         <div className="empty">正在加载计划…</div>
       ) : (
         <div id="todayPlanArea">
-          {/* ── 今日计划列表 ── */}
-          {total > 0 && (
+
+          {/* ── 🔴 持仓操作 ── */}
+          {hasHoldings && (
             <>
-              {buy.length > 0 && (
-                <>
-                  <div style={{ fontSize: 11, marginBottom: 4 }}>🟢 买入：</div>
-                  {buy.map((p, i) => renderPlanItem(p, i, 'buy'))}
-                </>
-              )}
-              {sell.length > 0 && (
-                <>
-                  <div style={{ fontSize: 11, margin: '6px 0 4px' }}>🔴 卖出：</div>
-                  {sell.map((p, i) => renderPlanItem(p, i, 'sell'))}
-                </>
-              )}
-              {watch.length > 0 && (
-                <>
-                  <div style={{ fontSize: 11, margin: '6px 0 4px' }}>👁️ 观察：</div>
-                  {watch.map((p, i) => (
-                    <div key={`w-${i}`} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.02)', marginBottom: 2, fontSize: 12 }}>
-                      <span style={{ color: '#e0e0e0' }}>{p.stock || p.sector || '--'}</span>
-                      {p.focus && <span style={{ color: '#888' }}>→ {p.focus}</span>}
-                      {renderStopLoss(p)}
-                      {renderAlertIcon(p)}
-                    </div>
-                  ))}
-                </>
-              )}
+              <div className="plan-section-title" style={{ marginBottom: 4 }}>
+                🔴 持仓操作 <span className="badge" style={{ background: '#e94560', fontSize: 9, padding: '1px 6px' }}>{holdingsGroup.length}只</span>
+              </div>
+              {holdingsGroup.map((item, i) => (
+                <HoldingRow key={`h-${i}`} h={item.h} planInfo={item.planInfo} />
+              ))}
             </>
-          )}
-          {total === 0 && holdingsStopLoss.length === 0 && planAlarms.length === 0 && (
-            <div className="empty">暂无计划</div>
           )}
 
-          {/* ── 🔴 持仓止损 ── */}
-          {holdingsStopLoss.length > 0 && (
+          {/* ── 🟢 候选 ── */}
+          {hasCandidates && (
             <>
-              <div style={{ borderTop: '1px solid #2a2a4e', margin: '8px 0' }} />
-              <div style={{ fontSize: 11, marginBottom: 4 }}>
-                🔴 持仓止损 <span className="badge" style={{ background: '#e94560', fontSize: 9, padding: '1px 6px' }}>{holdingsStopLoss.length}</span>
+              {hasHoldings && <div className="plan-separator" />}
+              <div className="plan-section-title" style={{ marginBottom: 4 }}>
+                🟢 候选 <span className="badge" style={{ background: '#4CAF50', fontSize: 9, padding: '1px 6px' }}>{candidateDeduped.length}只</span>
               </div>
-              {holdingsStopLoss.map((h, i) => {
-                const sp = getStopPrice(h)
-                const spPct = getStopPct(h)
-                const spFormatted = spPct != null ? ` (${spPct >= 0 ? '+' : ''}${spPct.toFixed(2)}%)` : ''
-                return (
-                <div key={`sl-${i}`} style={{
-                  display: 'flex', gap: 6, alignItems: 'center',
-                  padding: '3px 8px', borderRadius: 4,
-                  background: 'rgba(233,69,96,0.06)', marginBottom: 2, fontSize: 12,
-                }}>
-                  <span style={{ color: '#e0e0e0' }}>{h.name}({h.code})</span>
-                  <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
-                    止损 {sp}{spFormatted}
-                  </span>
-                  {h.price != null && (
-                    <span style={{ fontSize: 9, color: '#888', marginLeft: 'auto' }}>
-                      现价 {h.price} {h.change != null ? `${h.change >= 0 ? '+' : ''}${h.change.toFixed(1)}%` : ''}
-                    </span>
-                  )}
-                </div>
-                )
-              })}
+              {candidateDeduped.map((p, i) => (
+                <CandidateRow key={`c-${i}`} p={p} _cat={p._sortCat} />
+              ))}
             </>
+          )}
+
+          {/* 空提示 */}
+          {!hasHoldings && !hasCandidates && planAlarms.length === 0 && (
+            <div className="empty">暂无计划</div>
           )}
 
           {/* ── 🟡 计划报警 ── */}
           {planAlarms.length > 0 && (
             <>
-              <div style={{ borderTop: '1px solid #2a2a4e', margin: '8px 0' }} />
-              <div style={{ fontSize: 11, marginBottom: 4 }}>
+              <div className="plan-separator" />
+              <div className="plan-section-title" style={{ marginBottom: 4 }}>
                 🟡 计划报警 <span className="badge" style={{ background: '#ff9800', fontSize: 9, padding: '1px 6px' }}>{planAlarms.length}</span>
               </div>
               {planAlarms.map((a, i) => (
-                <div key={`alarm-${i}`} style={{
-                  display: 'flex', gap: 6, alignItems: 'center',
-                  padding: '3px 8px', borderRadius: 4,
-                  background: 'rgba(255,152,0,0.06)', marginBottom: 2, fontSize: 12,
-                }}>
+                <div key={`alarm-${i}`} className="plan-row" style={{ background: 'rgba(255,152,0,0.06)' }}>
                   <span title={ALARM_TYPE_LABELS[a.type]}>{ALARM_TYPE_ICONS[a.type] || '🔔'}</span>
-                  <span style={{ color: '#e0e0e0' }}>{a.stock}</span>
+                  <span className="plan-stock">{a.stock}</span>
                   {a.type === 'price' && a.stop_loss != null && (
-                    <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
+                    <span className="plan-stop-loss">
                       止损 {a.stop_loss}{a.stop_loss_pct != null ? `(${a.stop_loss_pct}%)` : ''}
                     </span>
                   )}
                   {a.type === 'deviation' && (
-                    <span style={{ fontSize: 10, color: '#ffd700', whiteSpace: 'nowrap' }}>
-                      ±{a.condition || 6}%
-                    </span>
+                    <span className="plan-deviation">±{a.condition || 6}%</span>
                   )}
-                  <span style={{ fontSize: 9, color: '#555', marginLeft: 'auto' }}>
-                    {a.created?.slice(0, 10) || ''}
-                  </span>
+                  <span className="plan-date">{a.created?.slice(0, 10) || ''}</span>
                 </div>
               ))}
             </>
           )}
+
         </div>
       ))}
     </div>
-  )
-}
-
-function renderPlanItem(p: PlanItem, i: number, _cat: string) {
-  return (
-    <div key={`${_cat}-${i}`} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.02)', marginBottom: 2, fontSize: 12 }}>
-      <span style={{ color: '#e0e0e0' }}>{p.stock || '--'}</span>
-      <span style={{ color: '#888', fontSize: 10 }}>{p.condition || ''}</span>
-      {renderStopLoss(p)}
-      {renderAlertIcon(p)}
-    </div>
-  )
-}
-
-function renderStopLoss(p: PlanItem) {
-  if (p.stop_loss == null) return null
-  return (
-    <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
-      止损{p.stop_loss}{p.stop_loss_pct != null ? `(${p.stop_loss_pct}%)` : ''}
-    </span>
-  )
-}
-
-function renderAlertIcon(p: PlanItem) {
-  if (!p.alert || !p.alert.enabled) return null
-  const labels: Record<string, string> = { price: '🔴价格', deviation: '🟡偏差', time: '⏰时间' }
-  return (
-    <span style={{ fontSize: 10, color: '#ff9800', marginLeft: 'auto' }} title={`${labels[p.alert.type] || ''}报警已设`}>
-      🔔
-    </span>
   )
 }
