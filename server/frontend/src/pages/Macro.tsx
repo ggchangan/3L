@@ -23,6 +23,16 @@ interface UsStockData {
   price: number; change_pct: number; name: string; code?: string; time?: string
 }
 
+interface AbnormalAlert {
+  name: string; code: string; change_pct: number; level: string; impact: string
+}
+
+interface AnalyzeResult {
+  success: boolean; code?: string; name?: string; change_pct?: number
+  news?: { title: string; time: string; source: string; url: string }[]
+  summary?: string; related_a_shares?: string[]; error?: string
+}
+
 interface ExternalAsiaIndex {
   code: string; name: string; region: string; flag?: string
 }
@@ -47,6 +57,7 @@ interface MacroData {
   fx?: Record<string, FxData>; cpi?: CpiData[]; ppi?: PpiData[]
   us_stocks?: Record<string, UsStockData>
   external?: ExternalData
+  abnormal_alerts?: AbnormalAlert[]
 }
 
 export default function Macro() {
@@ -56,6 +67,11 @@ export default function Macro() {
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
   const [catOpen, setCatOpen] = useState<Record<string, boolean>>({})
   const [stockExpand, setStockExpand] = useState<Record<string, boolean>>({})
+  const [modalShow, setModalShow] = useState(false)
+  const [modalStock, setModalStock] = useState<AbnormalAlert | null>(null)
+  const [modalResult, setModalResult] = useState<AnalyzeResult | null>(null)
+  const [modalLoading, setModalLoading] = useState(false)
+  const [modalError, setModalError] = useState('')
 
   useEffect(() => { loadData(); return () => clearTimeout(timerRef.current) }, [])
 
@@ -82,6 +98,30 @@ export default function Macro() {
   const usStocks = data?.us_stocks || {}
   const extAsia = data?.external?.asia_indices || []
   const extCats = data?.external?.categories || []
+  const abnormalAlerts = data?.abnormal_alerts || []
+
+  async function handleAnalyze(alert: AbnormalAlert) {
+    setModalStock(alert)
+    setModalResult(null)
+    setModalError('')
+    setModalLoading(true)
+    setModalShow(true)
+    try {
+      const r = await fetch('/api/macro/analyze-abnormal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: alert.code, name: alert.name, change_pct: alert.change_pct }),
+      })
+      if (!r.ok) throw new Error('HTTP ' + r.status)
+      const result: AnalyzeResult = await r.json()
+      if (!result.success) throw new Error(result.error || '分析失败')
+      setModalResult(result)
+    } catch (err: any) {
+      setModalError(err.message)
+    } finally {
+      setModalLoading(false)
+    }
+  }
 
   function renderIndexCard(name: string, idx: IndexData | undefined, showHighLow: boolean) {
     if (!idx) return null
@@ -215,6 +255,36 @@ export default function Macro() {
               </div>
             )}
 
+            {/* ⚠️ 外围异动监测 */}
+            {abnormalAlerts.length > 0 && (
+              <div className="section">
+                <div className="abnormal-summary">
+                  <div className="abnormal-summary-title">⚠️ 外围异动监测</div>
+                  <div className="abnormal-summary-list">
+                    {abnormalAlerts.map((a, i) => {
+                      const chgCls = a.change_pct >= 0 ? 'up' : 'down'
+                      const arrow = a.change_pct >= 0 ? '▲' : '▼'
+                      return (
+                        <div key={i} className="abnormal-summary-item" onClick={() => handleAnalyze(a)}>
+                          <span className={`abnormal-level-tag ${a.level}`}>
+                            {a.level === 'warning' ? '预警' : '注意'}
+                          </span>
+                          <span className="abnormal-name">{a.name}</span>
+                          <span className={`abnormal-chg ${chgCls}`}>
+                            {arrow} {a.change_pct >= 0 ? '+' : ''}{a.change_pct.toFixed(2)}%
+                          </span>
+                          <span className="abnormal-impact">→ {a.impact || ''}</span>
+                          <button className="abnormal-analyze-btn" onClick={e => { e.stopPropagation(); handleAnalyze(a) }}>
+                            🔍 分析原因
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 4. 外围美股供应链映射 */}
             {extCats.length > 0 && (
               <div className="section">
@@ -242,13 +312,23 @@ export default function Macro() {
                             const isExpanded = stockExpand[sk] ?? false
                             const chgCls = usPrice ? (usPrice.change_pct >= 0 ? 'up' : 'down') : ''
                             const arrow = usPrice ? (usPrice.change_pct >= 0 ? '▲' : '▼') : ''
+                            // 查找该股是否有异动
+                            const alertInfo = abnormalAlerts.find(a => a.name === s.name)
+                            const rowAbnormalCls = alertInfo
+                              ? (alertInfo.level === 'warning' ? ' abnormal-warning' : ' abnormal-caution')
+                              : ''
                             return (
                               <div key={sk} className="ext-stock-item">
                                 <div
-                                  className="ext-stock-row"
+                                  className={`ext-stock-row${rowAbnormalCls}`}
                                   onClick={() => setStockExpand(prev => ({ ...prev, [sk]: !prev[sk] }))}
                                 >
                                   <span className="ext-stock-code">{s.code}</span>
+                                  {alertInfo ? (
+                                    <span className={`abnormal-dot ${alertInfo.level}`} />
+                                  ) : (
+                                    <span className="abnormal-dot ok" />
+                                  )}
                                   <span className="ext-stock-name">{s.name}</span>
                                   {usPrice ? (
                                     <>
@@ -264,6 +344,11 @@ export default function Macro() {
                                     </>
                                   )}
                                   <span className="ext-stock-impact">→ {s.impact || ''}</span>
+                                  {alertInfo && (
+                                    <button className="abnormal-analyze-btn" onClick={e => { e.stopPropagation(); handleAnalyze(alertInfo) }}>
+                                      🔍
+                                    </button>
+                                  )}
                                   <span className="ext-expand-icon">{isExpanded ? '▲' : '▼'}</span>
                                 </div>
                                 {isExpanded && (
@@ -458,6 +543,65 @@ export default function Macro() {
                 })}
               </div>
             </div>
+
+            {/* 分析原因弹窗 */}
+            {modalShow && (
+              <div className="abnormal-modal-overlay" onClick={() => setModalShow(false)}>
+                <div className="abnormal-modal" onClick={e => e.stopPropagation()}>
+                  <div className="abnormal-modal-header">
+                    <div className="abnormal-modal-title">
+                      {modalStock ? modalStock.name : '分析中...'}
+                    </div>
+                    <button className="abnormal-modal-close" onClick={() => setModalShow(false)}>✕</button>
+                  </div>
+                  {modalLoading && (
+                    <div className="abnormal-modal-loading">
+                      <div className="spinner-sm" />
+                      <p>正在搜索相关新闻...</p>
+                    </div>
+                  )}
+                  {modalError && (
+                    <div className="abnormal-modal-error">
+                      ❌ {modalError}
+                    </div>
+                  )}
+                  {modalResult && (
+                    <>
+                      <div className={`abnormal-modal-chg ${modalResult.change_pct && modalResult.change_pct >= 0 ? 'up' : 'down'}`}>
+                        <span className="label">涨跌幅</span>{' '}
+                        {modalResult.change_pct && (modalResult.change_pct >= 0 ? '+' : '')}{modalResult.change_pct?.toFixed(2)}%
+                      </div>
+                      {modalResult.summary && (
+                        <div className="abnormal-modal-summary">{modalResult.summary}</div>
+                      )}
+                      {modalResult.related_a_shares && modalResult.related_a_shares.length > 0 && (
+                        <div className="abnormal-modal-related">
+                          <div className="label">影响A股方向</div>
+                          {modalResult.related_a_shares.map((r, i) => (
+                            <span key={i} className="tag">{r}</span>
+                          ))}
+                        </div>
+                      )}
+                      {modalResult.news && modalResult.news.length > 0 && (
+                        <>
+                          <div className="abnormal-modal-news-title">📰 相关新闻</div>
+                          {modalResult.news.map((n, i) => (
+                            <div key={i} className="abnormal-modal-news-item">
+                              <div className="news-title">{n.title}</div>
+                              <div className="news-meta">
+                                <span>{n.source || ''}</span>
+                                <span>{n.time || ''}</span>
+                                {n.url && <a href={n.url} target="_blank" rel="noreferrer">查看原文 ↗</a>}
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Footer */}
             <div style={{ textAlign: 'center', padding: 20, color: '#333', fontSize: 12 }}>

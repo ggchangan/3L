@@ -10,6 +10,28 @@ import requests
 from backend.config import CACHE_DIR
 
 
+# ── 美股代码对照表（与 external_mapping.json 的 23 只对齐） ──
+_US_CODES = {
+    'us.NVDA': '英伟达', 'us.AMD': '超威半导体', 'us.INTC': '英特尔',
+    'us.AVGO': '博通', 'us.ARM': 'Arm Holdings', 'us.TSM': '台积电',
+    'us.MU': '美光科技', 'us.WDC': '西部数据', 'us.SNDK': '闪迪', 'us.STX': '希捷科技',
+    'us.AAOI': '应用光电', 'us.LITE': 'Lumentum', 'us.GLW': '康宁', 'us.COHR': 'Coherent Corp',
+    'us.VRT': 'Vertiv', 'us.GEV': 'GE Vernova',
+    'us.ASML': '阿斯麦', 'us.TER': '泰瑞达', 'us.AXTI': 'AXT Inc',
+    'us.GOOGL': '谷歌', 'us.MSFT': '微软', 'us.ORCL': '甲骨文', 'us.META': 'Meta',
+}
+
+
+def get_alert_level(change_pct):
+    """判定涨跌幅的的异动等级"""
+    abs_chg = abs(change_pct)
+    if abs_chg >= 5:
+        return 'warning'
+    elif abs_chg >= 3:
+        return 'caution'
+    return None
+
+
 def get_macro_data():
     """
     获取宏观数据综合面板
@@ -145,14 +167,7 @@ def get_macro_data():
 
     # ── 美股实时行情（腾讯） ────────────────────────────
     us_stocks = {}
-    us_codes = {
-        'us.NVDA': '英伟达', 'us.AMD': '超威半导体', 'us.INTC': '英特尔',
-        'us.AVGO': '博通', 'us.ARM': 'Arm Holdings', 'us.TSM': '台积电',
-        'us.MU': '美光科技', 'us.WDC': '西部数据', 'us.STX': '希捷',
-        'us.GLW': '康宁', 'us.VRT': 'Vertiv', 'us.ASML': '阿斯麦',
-        'us.GOOGL': '谷歌', 'us.MSFT': '微软', 'us.ORCL': '甲骨文',
-        'us.META': 'Meta',
-    }
+    us_codes = _US_CODES
     try:
         r_us = requests.get(
             f'https://qt.gtimg.cn/q={",".join(us_codes.keys())}',
@@ -171,7 +186,7 @@ def get_macro_data():
             chg_pct = round((price - prev) / prev * 100, 2) if prev > 0 else 0
             us_stocks[name] = {
                 'price': price, 'change_pct': chg_pct,
-                'name': name, 'code': parts[2] if len(parts) > 2 else '',
+                'name': name, 'code': key.replace('us.', ''),
                 'time': parts[31] if len(parts) > 31 else '',
             }
     except Exception:
@@ -186,6 +201,26 @@ def get_macro_data():
         except Exception:
             pass
 
+    # ── 异动检测 ────────────────────────────────────────────
+    abnormal_alerts = []
+    ext_cats = external_mapping.get('categories', []) if isinstance(external_mapping, dict) else []
+    for cat in ext_cats:
+        for s in cat.get('stocks', []):
+            name = s.get('name', '')
+            stock_data = us_stocks.get(name)
+            if not stock_data:
+                continue
+            chg = stock_data.get('change_pct', 0)
+            level = get_alert_level(chg)
+            if level:
+                abnormal_alerts.append({
+                    'name': name,
+                    'code': s.get('code', ''),
+                    'change_pct': chg,
+                    'level': level,
+                    'impact': s.get('impact', ''),
+                })
+
     return {
         'indices': indices,
         'fx': fx,
@@ -193,5 +228,6 @@ def get_macro_data():
         'ppi': ppi or [],
         'us_stocks': us_stocks,
         'external': external_mapping,
+        'abnormal_alerts': abnormal_alerts,
         'updated': datetime.now().strftime('%Y-%m-%d %H:%M'),
     }
