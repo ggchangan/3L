@@ -868,14 +868,14 @@ def get_realtime_kline(code, direction):
             with open(STOCKS_FILE) as f:
                 data = json.load(f)
             stocks = data.get('stocks', data) if isinstance(data, dict) else data
-            sec_stocks = stocks.get(direction, {}) if isinstance(stocks, dict) else {}
-            if not sec_stocks and '.' in direction:
-                bare_dir = direction.split('.')[0]
-                sec_stocks = stocks.get(bare_dir, {})
-            if code in sec_stocks:
-                cached = sec_stocks[code]
-                if isinstance(cached, list):
-                    klines = list(cached)  # 复制，不修改原缓存
+            # 遍历所有行业找该股票的缓存K线（不依赖direction映射）
+            if isinstance(stocks, dict):
+                for sec_name, sec_codes in stocks.items():
+                    if isinstance(sec_codes, dict) and code in sec_codes:
+                        cached = sec_codes[code]
+                        if isinstance(cached, list):
+                            klines = list(cached)  # 复制，不修改原缓存
+                        break
         except:
             pass
 
