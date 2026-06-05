@@ -281,6 +281,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/monitor/remove-watched-industry': ('backend.api.monitor', '_handle_remove_watched'),
             '/api/alarm-sounds/upload': ('backend.api.alarms', '_handle_upload'),
             '/api/holdings/save': ('backend.api.holdings', '_handle_save'),
+            '/api/macro/analyze-abnormal': ('backend.api.macro', '_handle_analyze_abnormal'),
             '/api/logic-tracking/tags/add': ('backend.api.logic_tracking', '_handle_add_tag'),
             '/api/logic-tracking/tags/update': ('backend.api.logic_tracking', '_handle_update_tag'),
             '/api/logic-tracking/tags/delete': ('backend.api.logic_tracking', '_handle_delete_tag'),
