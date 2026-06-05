@@ -66,6 +66,23 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
     bpContent = <div className="field"><span className="l">买点:</span> <span className="v">{s.buy_point}</span></div>
   }
 
+  // 板块对比标识（个股 vs 板块 5日涨幅）
+  const vsSector = (s as any).vs_sector_5d
+  const sectorChg5d = (s as any).sector_chg_5d
+  let vsSectorContent = null
+  if (vsSector !== undefined && vsSector !== null) {
+    const isWeak = vsSector < -3
+    vsSectorContent = (
+      <div className="field" style={{ marginTop: 2 }}>
+        <span className="l">板块对比:</span>
+        <span className="v" style={{ color: isWeak ? '#ff9800' : '#888', fontSize: 11 }}>
+          {isWeak ? '⚠️ ' : ''}跑赢板块 {vsSector >= 0 ? '+' : ''}{vsSector.toFixed(1)}%
+          {isWeak ? ' 偏弱' : ''}
+        </span>
+      </div>
+    )
+  }
+
   // 结论
   let conclusion = `阶段${s.stage}，${s.structure}`
   let conclusionColor = '#aaa'
@@ -125,6 +142,7 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
         <div className="field"><span className="l">阶段:</span> <span className="v" style={{ color: stageColor, fontWeight: 'bold' }}>{icon} {s.stage || '--'}</span></div>
         {bpContent}
         {slContent}
+        {vsSectorContent}
         <div className="field">
           <span className="l">板块:</span>
           <span className="v" style={{ color: '#aaa', fontSize: 11 }}>{s.sector || '--'}</span>

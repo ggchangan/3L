@@ -48,6 +48,38 @@ from backend.core.signal_detector.fusion import fusion_judge
 from backend.core.signal_detector.sell_point_detection import detect_sell_point
 from backend.core.structure_wave import judge_structure_wave
 
+# 板块K线缓存（模块级，只加载一次）
+_SECTOR_DAILY = None
+
+def _load_sector_daily():
+    global _SECTOR_DAILY
+    if _SECTOR_DAILY is not None:
+        return _SECTOR_DAILY
+    _sdp = os.path.join(DATA_DIR, 'sector_daily.json')
+    if os.path.isfile(_sdp):
+        try:
+            import json
+            with open(_sdp) as _f:
+                _SECTOR_DAILY = json.load(_f)
+        except Exception:
+            _SECTOR_DAILY = {}
+    else:
+        _SECTOR_DAILY = {}
+    return _SECTOR_DAILY
+
+def _calc_sector_chg_5d(sector):
+    """计算板块5日涨跌幅"""
+    sd = _load_sector_daily()
+    industries = sd.get('industries', {}) if isinstance(sd, dict) else {}
+    klines = industries.get(sector, [])
+    if len(klines) < 6:
+        return None
+    close_now = klines[-1]['close']
+    close_5ago = klines[-6]['close']
+    if close_5ago <= 0:
+        return None
+    return round((close_now - close_5ago) / close_5ago * 100, 2)
+
 
 # ── 手动趋势股（不缓存，文件很小直接读）──
 MANUAL_TREND_PATH = _MANUAL_TREND_PATH
@@ -501,6 +533,15 @@ def get_stock_card(code, date_str, market_position='波中',
                                          concept_main=concept_main_names,
                                          concept_sub=concept_sub_names)
 
+    # 7b. 板块对比：个股5日涨幅 vs 板块5日涨幅
+    stock_chg_5d = None
+    vs_sector_5d = None
+    if len(closes_all) >= 6 and closes_all[-6] > 0:
+        stock_chg_5d = round((closes_all[-1] - closes_all[-6]) / closes_all[-6] * 100, 2)
+        sector_chg_5d = _calc_sector_chg_5d(sector)
+        if sector_chg_5d is not None:
+            vs_sector_5d = round(stock_chg_5d - sector_chg_5d, 2)
+
     # 8. 构建卡片
     card = {
         'code': code,
@@ -533,6 +574,8 @@ def get_stock_card(code, date_str, market_position='波中',
         'stop_loss': stop_loss,
         'stop_loss_pct': stop_loss_pct,
         'sector_chg': None,
+        'sector_chg_5d': sector_chg_5d,
+        'vs_sector_5d': vs_sector_5d,
         'score': score,
         'flags': flags,
         'triggered_signals': triggered_signals,
@@ -581,6 +624,8 @@ def _empty_card(code, name, sector, direction, reason):
         'stop_loss': None,
         'stop_loss_pct': None,
         'sector_chg': None,
+        'sector_chg_5d': None,
+        'vs_sector_5d': None,
         'score': 0,
         'flags': '',
         'triggered_signals': [],
