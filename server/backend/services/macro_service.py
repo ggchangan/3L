@@ -165,29 +165,33 @@ def get_macro_data():
     except Exception:
         ppi = []
 
-    # ── 美股实时行情（腾讯） ────────────────────────────
+    # ── 美股实时行情（新浪） ────────────────────────────
     us_stocks = {}
     us_codes = _US_CODES
     try:
+        sina_keys = {k.replace('us.', 'gb_').lower(): v for k, v in us_codes.items()}
         r_us = requests.get(
-            f'https://qt.gtimg.cn/q={",".join(us_codes.keys())}',
-            headers=headers, timeout=10
+            f'https://hq.sinajs.cn/list={",".join(sina_keys.keys())}',
+            headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.sina.com.cn'},
+            timeout=10
         )
         for line in r_us.text.strip().split(';'):
             if '="' not in line:
                 continue
-            key = line.split('=')[0].strip()
-            parts = line.split('"')[1].split('~') if '"' in line else []
+            parts = line.split('"')[1].split(',') if '"' in line else []
             if len(parts) < 10:
                 continue
-            name = us_codes.get(key, parts[1] if len(parts) > 1 else '')
-            price = float(parts[3]) if parts[3] else 0
-            prev = float(parts[4]) if parts[4] else price
-            chg_pct = round((price - prev) / prev * 100, 2) if prev > 0 else 0
+            key = line.split('=')[0].strip()
+            name = sina_keys.get(key, parts[0] if len(parts) > 0 else '')
+            try:
+                price = float(parts[1]) if parts[1] else 0
+                chg_pct = float(parts[2]) if parts[2] else 0
+            except (ValueError, IndexError):
+                continue
             us_stocks[name] = {
-                'price': price, 'change_pct': chg_pct,
-                'name': name, 'code': key.replace('us.', ''),
-                'time': parts[31] if len(parts) > 31 else '',
+                'price': price, 'change_pct': chg_pct if abs(chg_pct) < 100 else 0,
+                'name': name, 'code': key.replace('gb_', '').upper(),
+                'time': parts[3] if len(parts) > 3 else '',
             }
     except Exception:
         pass
@@ -221,6 +225,14 @@ def get_macro_data():
                     'impact': s.get('impact', ''),
                 })
 
+    # ── 恐慌监测 ──────────────────────────────────────────────
+    from backend.services.panic_monitor_service import get_panic_monitor
+    panic_monitor = get_panic_monitor(
+        indices,
+        decline_count=0,  # 腾讯API没有直接提供下跌家数，后续版本补充
+        total=5100,
+    )
+
     return {
         'indices': indices,
         'fx': fx,
@@ -229,5 +241,6 @@ def get_macro_data():
         'us_stocks': us_stocks,
         'external': external_mapping,
         'abnormal_alerts': abnormal_alerts,
+        'panic_monitor': panic_monitor,
         'updated': datetime.now().strftime('%Y-%m-%d %H:%M'),
     }

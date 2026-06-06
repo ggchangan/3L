@@ -545,6 +545,11 @@ def check_all_alerts() -> dict:
     index_triggered = check_index_alerts()
     triggered.extend(index_triggered)
 
+    # ⑤ 恐慌监测（A股恐慌检测+推送）
+    from backend.services.panic_monitor_service import check_panic_alerts_via_realtime
+    panic_triggered = check_panic_alerts_via_realtime()
+    triggered.extend(panic_triggered)
+
     return {'triggered': triggered, 'count': len(triggered)}
 
 
@@ -564,6 +569,7 @@ def _push_wechat(triggered: list):
     market_alarms = [t for t in triggered if t.get('type') in ('market', 'market_critical')]
     price_alarms = [t for t in triggered if t.get('type') in ('price', 'stop')]
     deviation_alarms = [t for t in triggered if t.get('type') in ('deviation', 'warn', 'stock')]
+    panic_alarms = [t for t in triggered if t.get('type') == 'panic']
 
     try:
         if market_alarms:
@@ -583,6 +589,10 @@ def _push_wechat(triggered: list):
                 for t in deviation_alarms
             )
             send_alert(f'🟡 异动偏离 ({len(deviation_alarms)}只)', items, alarm_type='deviation')
+
+        if panic_alarms:
+            for t in panic_alarms:
+                send_alert(f'🔴 A股恐慌', t.get('msg', ''), alarm_type='panic')
     except Exception:
         logger.exception('微信推送失败')
 

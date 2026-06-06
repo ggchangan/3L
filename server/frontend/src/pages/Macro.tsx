@@ -52,12 +52,36 @@ interface ExternalData {
   categories?: ExternalCategory[]
 }
 
+interface PanicTrigger {
+  index: string; change_pct: number; threshold: number; level: string
+}
+
+interface PanicPath {
+  name: string; probability: number; action: string
+}
+
+interface PanicStrategy {
+  paths: PanicPath[]; principle: string
+}
+
+interface PanicHistoryItem {
+  date: string; time: string; level: string; trigger: string
+}
+
+interface PanicMonitor {
+  level: string | null; triggered_at: string | null
+  triggers: PanicTrigger[]
+  strategy: PanicStrategy | Record<string, never>
+  history: PanicHistoryItem[]
+}
+
 interface MacroData {
   updated?: string; indices?: Record<string, IndexData>
   fx?: Record<string, FxData>; cpi?: CpiData[]; ppi?: PpiData[]
   us_stocks?: Record<string, UsStockData>
   external?: ExternalData
   abnormal_alerts?: AbnormalAlert[]
+  panic_monitor?: PanicMonitor
 }
 
 export default function Macro() {
@@ -99,6 +123,7 @@ export default function Macro() {
   const extAsia = data?.external?.asia_indices || []
   const extCats = data?.external?.categories || []
   const abnormalAlerts = data?.abnormal_alerts || []
+  const panicMon = data?.panic_monitor
 
   async function handleAnalyze(alert: AbnormalAlert) {
     setModalStock(alert)
@@ -280,6 +305,84 @@ export default function Macro() {
                         </div>
                       )
                     })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 🔴 恐慌监测 */}
+            {panicMon && panicMon.level && (
+              <div className="section">
+                <div className="panic-section">
+                  <div className={`panic-header ${panicMon.level}`}>
+                    <span className="panic-icon">
+                      {panicMon.level === 'warning' ? '🔴' : '⚠️'}
+                    </span>
+                    <span className="panic-title">
+                      {panicMon.level === 'warning' ? '恐慌预警' : '恐慌注意'}
+                    </span>
+                    <span className="panic-time">{panicMon.triggered_at || ''}</span>
+                    <span className="panic-expand-toggle">▼</span>
+                  </div>
+
+                  <div className="panic-body">
+                    {/* 触发原因 */}
+                    <div className="panic-triggers">
+                      <div className="panic-subtitle">触发原因</div>
+                      {panicMon.triggers.map((t, i) => (
+                        <div key={i} className="panic-trigger-item">
+                          <span className={`panic-trigger-level ${t.level}`}>
+                            {t.level === 'warning' ? '🔴' : '⚠️'}
+                          </span>
+                          <span className="panic-trigger-name">{t.index}</span>
+                          <span className={`panic-trigger-chg ${t.change_pct >= 0 ? 'up' : 'down'}`}>
+                            {t.change_pct.toFixed(2)}%
+                          </span>
+                          <span className="panic-trigger-threshold">
+                            阈值 {t.threshold}{t.is_decline_count ? '家' : '%'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 应对策略 */}
+                    {panicMon.strategy && panicMon.strategy.paths && (
+                      <div className="panic-strategy">
+                        <div className="panic-subtitle">📋 应对策略</div>
+                        {panicMon.strategy.paths.map((p, i) => (
+                          <div key={i} className="panic-path-card">
+                            <div className="panic-path-header">
+                              <span className="panic-path-prob">{p.probability}%</span>
+                              <span className="panic-path-name">{p.name}</span>
+                            </div>
+                            <div className="panic-path-action">{p.action}</div>
+                          </div>
+                        ))}
+                        {panicMon.strategy.principle && (
+                          <div className="panic-principle">
+                            {'💡 '}{panicMon.strategy.principle}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 历史记录 */}
+                    {panicMon.history && panicMon.history.length > 0 && (
+                      <div className="panic-history">
+                        <div className="panic-subtitle">📜 历史恐慌记录</div>
+                        <div className="panic-history-list">
+                          {panicMon.history.slice(0, 5).map((h, i) => (
+                            <div key={i} className="panic-history-item">
+                              <span className={`panic-history-level ${h.level}`}>
+                                {h.level === 'warning' ? '🔴' : '⚠️'}
+                              </span>
+                              <span className="panic-history-date">{h.date}</span>
+                              <span className="panic-history-trigger">{h.trigger}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -207,12 +207,80 @@
 }
 .ext-detail-val { color: #aaa; }
 
-/* 外围数据来源 */
+/* ── 外围数据来源 ── */
 .ext-source {
   text-align: center; padding: 8px; font-size: 11px; color: #555;
 }
 .ext-source a { color: #4a9eff; text-decoration: none; }
 .ext-source a:hover { text-decoration: underline; }
+
+/* ── 恐慌监测区块 ────────────────────── */
+.panic-section {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #2a2a4e;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.panic-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px; cursor: pointer;
+  font-size: 14px; user-select: none;
+}
+.panic-header.warning { background: rgba(233, 69, 96, 0.15); border-bottom: 1px solid #e94560; }
+.panic-header.caution { background: rgba(240, 165, 0, 0.12); border-bottom: 1px solid #f0a500; }
+.panic-icon { font-size: 16px; }
+.panic-title { font-weight: 700; color: #fff; flex-shrink: 0; }
+.panic-time { color: #888; font-size: 11px; margin-left: auto; }
+.panic-expand-toggle { color: #555; font-size: 10px; }
+.panic-body { padding: 12px 16px; }
+.panic-subtitle { font-size: 13px; color: #a0a0b0; margin-bottom: 8px; font-weight: 600; }
+
+/* 触发原因 */
+.panic-triggers { margin-bottom: 14px; }
+.panic-trigger-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; margin-bottom: 3px;
+  background: rgba(255,255,255,0.02); border-radius: 6px;
+  font-size: 12px;
+}
+.panic-trigger-level { font-size: 11px; }
+.panic-trigger-name { color: #ddd; min-width: 80px; }
+.panic-trigger-chg { font-weight: 600; min-width: 50px; }
+.panic-trigger-chg.down { color: #4CAF50; }
+.panic-trigger-chg.up { color: #e94560; }
+.panic-trigger-threshold { color: #555; font-size: 10px; margin-left: auto; }
+
+/* 策略卡片 */
+.panic-strategy { margin-bottom: 14px; }
+.panic-path-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid #2a2a4e; border-radius: 8px;
+  padding: 8px 12px; margin-bottom: 5px;
+}
+.panic-path-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.panic-path-prob {
+  font-size: 11px; background: rgba(74,158,255,0.15);
+  color: #4a9eff; padding: 1px 6px; border-radius: 4px;
+  font-weight: 700; min-width: 30px; text-align: center;
+}
+.panic-path-name { font-size: 12px; color: #ccc; font-weight: 600; }
+.panic-path-action { font-size: 11px; color: #888; padding-left: 38px; line-height: 1.4; }
+.panic-principle {
+  margin-top: 8px; font-size: 11px; color: #f0a500;
+  padding: 8px 12px; background: rgba(240,165,0,0.06);
+  border-radius: 6px; border-left: 2px solid #f0a500;
+  line-height: 1.5;
+}
+
+/* 历史记录 */
+.panic-history { margin-top: 4px; }
+.panic-history-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px; font-size: 11px; color: #888;
+}
+.panic-history-level { font-size: 10px; }
+.panic-history-date { color: #666; min-width: 80px; }
+.panic-history-trigger { color: #777; }
 
 /* ── 异动汇总区块 ───────────────────── */
 .abnormal-summary {
