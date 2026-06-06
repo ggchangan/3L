@@ -225,6 +225,14 @@ def get_macro_data():
                     'impact': s.get('impact', ''),
                 })
 
+    # ── 恐慌监测 ──────────────────────────────────────────────
+    from backend.services.panic_monitor_service import get_panic_monitor
+    panic_monitor = get_panic_monitor(
+        indices,
+        decline_count=0,  # 腾讯API没有直接提供下跌家数，后续版本补充
+        total=5100,
+    )
+
     return {
         'indices': indices,
         'fx': fx,
@@ -233,5 +241,6 @@ def get_macro_data():
         'us_stocks': us_stocks,
         'external': external_mapping,
         'abnormal_alerts': abnormal_alerts,
+        'panic_monitor': panic_monitor,
         'updated': datetime.now().strftime('%Y-%m-%d %H:%M'),
     }
