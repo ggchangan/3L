@@ -62,6 +62,14 @@ interface PanicPath {
 
 interface PanicStrategy {
   paths: PanicPath[]; principle: string
+  market_overview?: {
+    structure: string; stage: string
+    position_advice: string; bias20: number
+  }
+  mainline_sectors?: string[]
+  overall_summary?: {
+    principle: string; key_points: string[]; conclusion: string
+  }
 }
 
 interface PanicHistoryItem {
@@ -363,6 +371,63 @@ export default function Macro() {
                             {'💡 '}{panicMon.strategy.principle}
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* 市场环境 */}
+                    {panicMon.strategy?.market_overview && (
+                      <div className="panic-section-block">
+                        <div className="panic-subtitle">📊 市场环境</div>
+                        <div className="panic-overview-grid">
+                          <div className="panic-ov-item">
+                            <span className="panic-ov-label">结构</span>
+                            <span className="panic-ov-val">{panicMon.strategy.market_overview.structure}</span>
+                          </div>
+                          <div className="panic-ov-item">
+                            <span className="panic-ov-label">阶段</span>
+                            <span className="panic-ov-val">{panicMon.strategy.market_overview.stage}</span>
+                          </div>
+                          <div className="panic-ov-item">
+                            <span className="panic-ov-label">仓位建议</span>
+                            <span className="panic-ov-val">{panicMon.strategy.market_overview.position_advice}</span>
+                          </div>
+                          <div className="panic-ov-item">
+                            <span className="panic-ov-label">BIAS20</span>
+                            <span className={`panic-ov-val ${panicMon.strategy.market_overview.bias20 >= 0 ? 'up' : 'down'}`}>
+                              {panicMon.strategy.market_overview.bias20.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 主线与抗跌方向 */}
+                    {panicMon.strategy?.mainline_sectors && panicMon.strategy.mainline_sectors.length > 0 && (
+                      <div className="panic-section-block">
+                        <div className="panic-subtitle">🟢 主线与抗跌方向</div>
+                        <div className="panic-sectors">
+                          {panicMon.strategy.mainline_sectors.map((s, i) => (
+                            <span key={i} className="panic-sector-tag">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 整体策略 */}
+                    {panicMon.strategy?.overall_summary && (
+                      <div className="panic-section-block">
+                        <div className="panic-subtitle">📋 整体策略</div>
+                        <div className="panic-principle">
+                          {'💡 '}{panicMon.strategy.overall_summary.principle}
+                        </div>
+                        <div className="panic-key-points">
+                          {panicMon.strategy.overall_summary.key_points.map((p, i) => (
+                            <div key={i} className="panic-key-point">• {p}</div>
+                          ))}
+                        </div>
+                        <div className="panic-conclusion">
+                          『{panicMon.strategy.overall_summary.conclusion}』
+                        </div>
                       </div>
                     )}
 

@@ -242,7 +242,45 @@ def get_panic_monitor(indices_dict, decline_count=0, total=5100):
     
     # 生成策略
     strategy = generate_strategy(panic['level'], indices_dict)
-    
+
+    # 增强策略：加入市场环境+主线方向+整体策略
+    if panic['level']:
+        try:
+            from backend.services.market_health_service import get_market_health
+            mh = get_market_health()
+            if isinstance(mh, dict) and 'error' not in mh:
+                strategy['market_overview'] = {
+                    'structure': mh.get('structure', '—'),
+                    'stage': mh.get('stage', '—'),
+                    'position_advice': mh.get('position_advice', '—'),
+                    'bias20': mh.get('bias20', 0),
+                }
+                ml = mh.get('mainline', {})
+                if ml:
+                    top_sectors = []
+                    if isinstance(ml, dict):
+                        for k in ['top_industries', 'top_sectors', 'strong_sectors', 'leaders']:
+                            v = ml.get(k, [])
+                            if isinstance(v, list):
+                                top_sectors.extend(v[:5])
+                            elif isinstance(v, str):
+                                top_sectors.append(v)
+                    strategy['mainline_sectors'] = top_sectors[:8] if top_sectors else []
+        except Exception:
+            pass
+
+        # 整体策略总结
+        strategy['overall_summary'] = {
+            'principle': '恐慌急跌时不要卖 — 等第一个5-15分钟走完看后续确认。V反→持有，持续弱→减仓，快速修复→不动。',
+            'key_points': [
+                '上涨趋势的标的 → 恐慌是关注点，不是卖点',
+                '区间底部的标的 → 已经最低区域，向下空间有限',
+                '接近止损的标的 → 到了就走，不犹豫',
+                '突破被大盘拖回的标的 → 等两天看突破效力还在不在',
+            ],
+            'conclusion': '降低止损的核心，不完全在于止损点的设置，而在于耐心等待一个好买点',
+        }
+
     # 读取历史
     history = get_panic_history()
     
