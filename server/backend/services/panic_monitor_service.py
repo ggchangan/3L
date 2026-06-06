@@ -345,6 +345,46 @@ def _get_holdings_analysis() -> list:
     return result
 
 
+def _get_rising_from_bottom() -> list:
+    """从板块日数据中找出「底部突起」方向
+    条件：当日涨>1.5% 且 20日涨<3%（之前弱，最近一天突然走强）
+    返回 [{name, chg_1d, chg_20d}, ...]
+    """
+    result = []
+    try:
+        from backend.core.data_layer import get_sector_daily
+        sd = get_sector_daily()
+        if not sd:
+            return result
+        for stype in ('concepts',):
+            sectors = sd.get(stype, {})
+            for name, info in sectors.items():
+                klines = info if isinstance(info, list) else info.get('klines', [])
+                if len(klines) < 22:
+                    continue
+                last = klines[-1]
+                prev = klines[-2]
+                try:
+                    chg_1d = round((last['close'] - prev['close']) / prev['close'] * 100, 2)
+                except Exception:
+                    continue
+                prev20 = klines[-21]
+                try:
+                    chg_20d = round((last['close'] - prev20['close']) / prev20['close'] * 100, 2)
+                except Exception:
+                    chg_20d = 0
+                if chg_1d > 1.5 and chg_20d < 3:
+                    result.append({'name': name, 'chg_1d': chg_1d, 'chg_20d': chg_20d})
+        result.sort(key=lambda x: x['chg_1d'], reverse=True)
+        result.insert(0, {
+            'name': '— 底部突起 — 近日弱→突然走强',
+            'chg_1d': 0, 'chg_20d': 0, '_is_header': True
+        })
+        return result[:10]
+    except Exception:
+        return result
+
+
 def get_panic_monitor(indices_dict, decline_count=0, total=5100):
     """
     综合函数：检测恐慌+生成策略+读取历史
@@ -402,6 +442,11 @@ def get_panic_monitor(indices_dict, decline_count=0, total=5100):
                             elif isinstance(v, str):
                                 top_sectors.append(v)
                     strategy['mainline_sectors'] = top_sectors[:8] if top_sectors else []
+
+            # 同时读取板块数据找「底部突起」方向
+            _rising_sectors = _get_rising_from_bottom()
+            if _rising_sectors:
+                strategy['emerging_sectors'] = _rising_sectors
         except Exception:
             pass
 
