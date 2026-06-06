@@ -253,3 +253,100 @@ def get_panic_monitor(indices_dict, decline_count=0, total=5100):
         'strategy': strategy,
         'history': history,
     }
+
+
+def check_panic_alerts_via_realtime(indices_api_codes: dict = None) -> list:
+    """从腾讯API拉取实时指数数据，检测恐慌，返回 WxPusher 推送格式列表
+
+    供 check_alerts.py 的 check_all_alerts() 调用。
+    使用与 check_alerts.py 相同的腾讯API拉取模式。
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    now_ts = datetime.now().timestamp()
+    triggered = []
+
+    if indices_api_codes is None:
+        indices_api_codes = {
+            'sh000001': '上证指数', 'sz399001': '深证成指',
+            'sz399006': '创业板指', 'sh000688': '科创50',
+            'sh000985': '中证全指', 'us.INX': '标普500',
+        }
+
+    headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'}
+    q_str = ','.join(indices_api_codes.keys())
+    try:
+        import requests
+        r = requests.get(f'https://qt.gtimg.cn/q={q_str}', headers=headers, timeout=10)
+    except Exception:
+        logger.warning('恐慌检测：腾讯API请求失败')
+        return triggered
+
+    indices = {}
+    for line in r.text.strip().split(';'):
+        if '="' not in line:
+            continue
+        key = line.split('=')[0].strip()
+        parts = line.split('"')[1].split('~') if '"' in line else []
+        if len(parts) < 10:
+            continue
+        name = indices_api_codes.get(key, parts[1] if len(parts) > 1 else '')
+        price = float(parts[3]) if parts[3] else 0
+        prev = float(parts[4]) if parts[4] else price
+        chg = round((price - prev) / prev * 100, 2) if prev > 0 else 0
+        indices[name] = {'change_pct': chg, 'price': price}
+
+    if not indices:
+        return triggered
+
+    # 检查今天是否已经推送过同级别恐慌
+    last_panic_level = None
+    today = datetime.now().strftime('%Y-%m-%d')
+    if os.path.isfile(HISTORY_PATH):
+        try:
+            with open(HISTORY_PATH) as f:
+                data = json.load(f)
+            records = data if isinstance(data, list) else data.get('records', [])
+            for rec in records:
+                if rec.get('date') == today:
+                    last_panic_level = rec.get('level')
+                    break
+        except Exception:
+            pass
+
+    # 检测恐慌
+    panic = detect_panic(indices, decline_count=0, total=5100)
+
+    if panic['level'] and panic['level'] != last_panic_level:
+        trigger_desc = '; '.join(
+            f"{t['index']} {t['change_pct']:.2f}%" if not t.get('is_decline_count') else t['index']
+            for t in panic['triggers'][:3]
+        )
+        msg = (
+            f"🔴 A股恐慌{'预警' if panic['level'] == 'warning' else '注意'}\n"
+            f"触发: {trigger_desc}\n"
+            f"时间: {today} {panic['triggered_at']}\n\n"
+            f"📋 应对策略：\n"
+            f"① 低开→V反(50%)：持有，不急跌卖\n"
+            f"② 低开→走弱(35%)：减仓弱势股\n"
+            f"③ 低开→修复(15%)：持有不动\n"
+        )
+        triggered.append({
+            'type': 'panic',
+            'stock': 'A股恐慌',
+            'msg': msg,
+            'ts': now_ts,
+            'level': panic['level'],
+        })
+
+        # 持久化记录（用于去重+历史展示）
+        save_panic_record({
+            'date': today,
+            'time': panic['triggered_at'],
+            'level': panic['level'],
+            'trigger': trigger_desc,
+            'indices': {k: v.get('change_pct') for k, v in indices.items()},
+        })
+        logger.info(f"恐慌检测推送: {panic['level']} — {trigger_desc}")
+
+    return triggered
