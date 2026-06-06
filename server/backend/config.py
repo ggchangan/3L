@@ -92,6 +92,24 @@ REVIEW_DATA_PATH = os.path.join(PRIVATE_DIR, 'review_data.json')
 MAINLINES_CACHE_PATH = os.path.join(PRIVATE_DIR, 'mainlines_cache.json')
 
 # =====================================================
+# 数据源架构（2026-06-07 新增） — 多仓库+抽象层
+# =====================================================
+SOURCES_DIR = os.path.join(DATA_DIR, 'sources')    # 数据源独立仓库根目录
+SOURCE_HEALTH_PATH = os.path.join(DATA_DIR, 'source_health.json')  # 数据源健康状态
+
+# 各数据源仓库路径
+SOURCES_EM_DIR = os.path.join(SOURCES_DIR, 'em')       # EM仓(push2test)
+SOURCES_THS_DIR = os.path.join(SOURCES_DIR, 'ths')     # THS仓(akshare)
+SOURCES_TENCENT_DIR = os.path.join(SOURCES_DIR, 'tencent')  # 腾讯仓
+
+# EM仓文件
+SOURCES_EM_SECTOR_DAILY = os.path.join(SOURCES_EM_DIR, 'sector_daily.json')
+SOURCES_EM_CONCEPT_MAP = os.path.join(SOURCES_EM_DIR, 'concept_map.json')
+
+# THS仓文件
+SOURCES_THS_SECTOR_DAILY = os.path.join(SOURCES_THS_DIR, 'sector_daily.json')
+
+# =====================================================
 # 服务器配置
 # =====================================================
 SERVER_PORT = int(_env('PORT', '8080'))

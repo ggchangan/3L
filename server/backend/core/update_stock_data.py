@@ -443,6 +443,8 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
             low = float(item.get('f16', close) or close)
             open_ = float(item.get('f17', close) or close)
             volume = int(float(item.get('f5', 0) or 0))
+            change_pct = float(item.get('f3', 0) or 0)   # 当日涨跌幅%
+            prev_close = float(item.get('f18', 0) or 0)   # 昨收
             name_map[name] = {
                 'date': today,
                 'open': round(open_, 2),
@@ -450,6 +452,8 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
                 'high': round(high, 2),
                 'low': round(low, 2),
                 'volume': volume,
+                'change_pct': round(change_pct, 2),
+                'prev_close': round(prev_close, 2),
             }
 
     hit_rate = len(name_map) / len(name_list) * 100 if name_list else 0
@@ -543,37 +547,22 @@ def update_sectors():
 
     # ═══════════════════════════════════════════════════
     # 主源：push2test 批量获取今日数据
+    # push2test(东财)和旧akshare(同花顺)的指数基准不同，不能混合
+    # → 直接完全替换：有push2test数据的板块全部替换，没有的保留旧数据
     # ═══════════════════════════════════════════════════
     ind_today = _fetch_today_sectors_from_push2test('industry', ind_names)
     con_today = _fetch_today_sectors_from_push2test('concept', list(tracked_concepts))
 
-    # ── 辅助函数：合并今日数据到缓存 ──
-    def _merge_today(sector_dict, today_data, sector_label):
-        updated = 0
-        new_ = 0
-        fails = 0
-        for name, kline in today_data.items():
-            try:
-                if name not in sector_dict:
-                    sector_dict[name] = [kline]
-                    new_ += 1
-                    updated += 1
-                    continue
-                klines = sector_dict[name]
-                if klines and klines[-1]['date'] == kline['date']:
-                    continue  # 已是最新
-                klines.append(kline)
-                klines.sort(key=lambda x: x['date'])
-                if len(klines) > 60:
-                    sector_dict[name] = klines[-60:]
-                updated += 1
-            except Exception as e:
-                log(f'  ⚠️  {sector_label}-{name} 合并失败: {e}')
-                fails += 1
-        return updated, new_, fails
-
-    ind_updated, ind_new, ind_fail = _merge_today(industries, ind_today, '行业')
-    con_updated, con_new, con_fail = _merge_today(concepts, con_today, '概念')
+    # ── 保留旧THS数据不变，另存push2test数据到独立字段 ──
+    # push2test(东财)和akshare(同花顺)的指数绝对值不同，不能混
+    # push2test的f3字段本身就是当日涨跌幅，无需历史即可排行
+    push2test_data = {'industries': ind_today, 'concepts': con_today}
+    existing['_push2test'] = push2test_data
+    existing['_push2test_updated'] = today
+    
+    # 统计
+    ind_saved = len(ind_today)
+    con_saved = len(con_today)
 
     # ═══════════════════════════════════════════════════
     # 备源：akshare 补旧板块历史K线（akshare现已全部不可用，跳过）
@@ -601,25 +590,20 @@ def update_sectors():
     if con_tracked > 0 and len(con_today) == 0 and not any(name in concepts for name in tracked_concepts):
         raise RuntimeError('概念板块全源获取失败（追踪中），无任何缓存数据可用')
 
-    # ── 确定最新日期 ──
-    all_dates = set()
-    for name, kls in industries.items():
-        if kls:
-            all_dates.add(kls[-1]['date'])
-    for name, kls in concepts.items():
-        if kls:
-            all_dates.add(kls[-1]['date'])
-    latest_date = max(all_dates) if all_dates else last_updated
+    # 最新日期：来自push2test的更新时间
+    latest_date = existing.get('_push2test_updated', existing.get('last_updated', ''))
 
     save_sector_daily({
         'last_updated': latest_date,
         'industries': industries,
         'concepts': concepts,
+        '_push2test': existing.get('_push2test', {}),
+        '_push2test_updated': existing.get('_push2test_updated', ''),
     })
 
-    stats = f'行业{ind_updated}更新+{ind_new}新增({ind_fail}失败), 概念{con_updated}更新+{con_new}新增({con_fail}失败)'
+    stats = f'push2test: 行业{ind_saved}条, 概念{con_saved}条 (THS旧数据保留不变)'
     log(f'📈  板块: {stats}')
-    return (ind_updated + con_updated, ind_new + con_new)
+    return (ind_saved, con_saved)
 
 
 # ════════════════════════════════════════════════════════════════
