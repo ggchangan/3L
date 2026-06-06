@@ -70,6 +70,15 @@ interface PanicStrategy {
   overall_summary?: {
     principle: string; key_points: string[]; conclusion: string
   }
+  holdings_analysis?: PanicHoldingItem[]
+}
+
+interface PanicHoldingItem {
+  code: string; name: string
+  price: number | null; change_pct: number
+  structure: string; stage: string; direction: string
+  stop_loss: number; stop_loss_pct: number | null
+  ratio: number; signal: string; advice: string
 }
 
 interface PanicHistoryItem {
@@ -427,6 +436,39 @@ export default function Macro() {
                         </div>
                         <div className="panic-conclusion">
                           『{panicMon.strategy.overall_summary.conclusion}』
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 个股分析/操作建议 */}
+                    {panicMon.strategy?.holdings_analysis && panicMon.strategy.holdings_analysis.length > 0 && (
+                      <div className="panic-section-block">
+                        <div className="panic-subtitle">📈 持仓个股 · 操作建议 <span className="badge-sm">{panicMon.strategy.holdings_analysis.length}</span></div>
+                        <div className="panic-holdings-table">
+                          {panicMon.strategy.holdings_analysis.map((h, i) => {
+                            const signalCls = h.signal === 'positive' ? 'hp-positive' : h.signal === 'caution' ? 'hp-caution' : 'hp-hold'
+                            const chgCls = h.change_pct >= 0 ? 'up' : 'down'
+                            return (
+                              <div key={i} className="panic-holding-row">
+                                <div className="hp-name">
+                                  <span className="hp-code">{h.code}</span>
+                                  <span className="hp-name-text">{h.name}</span>
+                                </div>
+                                <div className="hp-info">
+                                  <span className="hp-price">{h.price ? h.price.toFixed(2) : '—'}</span>
+                                  <span className={`hp-chg ${chgCls}`}>
+                                    {h.change_pct ? `${h.change_pct >= 0 ? '+' : ''}${h.change_pct.toFixed(2)}%` : '—'}
+                                  </span>
+                                </div>
+                                <div className="hp-meta">
+                                  <span className="hp-structure">{h.structure}</span>
+                                  <span className="hp-stage">{h.stage}</span>
+                                  {h.stop_loss && <span className="hp-stop">止损{h.stop_loss}</span>}
+                                </div>
+                                <div className={`hp-advice ${signalCls}`}>{h.advice}</div>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     )}
