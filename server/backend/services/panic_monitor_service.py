@@ -209,6 +209,142 @@ def get_panic_history(path_override=None):
         return []
 
 
+def _get_holdings_analysis() -> list:
+    """从持仓数据+个股卡片生成逐只个股分析
+
+    用于恐慌监测的个股操作建议区块。
+    每只返回: {code, name, price, change_pct, structure, stage,
+                stop_loss, stop_loss_pct, signal, advice}
+    """
+    import logging, time
+    logger = logging.getLogger(__name__)
+    result = []
+
+    try:
+        from backend.core.data_layer import get_holdings
+        from backend.services.stock_card_service import get_stock_card
+        holdings = get_holdings()
+    except Exception:
+        return result
+
+    if not holdings or not isinstance(holdings, dict):
+        return result
+
+    stocks = holdings.get('holdings', [])
+    if not stocks:
+        return result
+
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    # 按仓位排序，最多取前12只
+    stocks_sorted = sorted(stocks, key=lambda s: s.get('ratio', 0), reverse=True)[:12]
+
+    # 批量拉实时行情（腾讯API）
+    q_str = ','.join(
+        f'sh{s["code"]}' if str(s['code']).startswith('6') else f'sz{s["code"]}'
+        for s in stocks_sorted if s.get('code')
+    )
+    prices = {}
+    if q_str:
+        try:
+            import requests
+            r = requests.get(
+                f'https://qt.gtimg.cn/q={q_str}',
+                headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
+                timeout=8,
+            )
+            for line in r.text.strip().split(';'):
+                if '="' not in line:
+                    continue
+                parts = line.split('"')[1].split('~') if '"' in line else []
+                if len(parts) < 32:
+                    continue
+                code_raw = parts[2] if len(parts) > 2 else ''
+                prices[code_raw] = {
+                    'price': float(parts[3]) if parts[3] else 0,
+                    'change_pct': round((float(parts[3]) - float(parts[4])) / float(parts[4]) * 100, 2)
+                    if parts[4] and float(parts[4]) > 0 else 0,
+                }
+        except Exception:
+            pass
+
+    for s in stocks_sorted:
+        code = str(s.get('code', ''))
+        name = s.get('name', '')
+        stop_loss = s.get('stop_loss', s.get('stop_loss_price', 0))
+        ratio = s.get('ratio', 0)
+        price_info = prices.get(code, {})
+
+        # 个股卡片数据
+        stock_card = {}
+        try:
+            card = get_stock_card(code, today)
+            if isinstance(card, dict):
+                stock_card = card
+        except Exception:
+            pass
+
+        price = price_info.get('price', 0) or stock_card.get('price', 0)
+        chg = price_info.get('change_pct', 0) or stock_card.get('change_pct', 0)
+        structure = stock_card.get('structure', '—')
+        stage = stock_card.get('stage', '—')
+        buy_point = stock_card.get('buy_point', '')
+        direction = stock_card.get('direction', '')
+
+        # 生成操作建议信号
+        signal = 'hold'
+        advice = '持有观察'
+
+        if stop_loss and price > 0:
+            loss_pct = round((price - stop_loss) / stop_loss * 100, 2)
+            if loss_pct <= 0:
+                signal = 'caution'
+                advice = f'⚠️ 接近止损({stop_loss})'
+            elif loss_pct <= 2:
+                signal = 'watch'
+                advice = '止损较近，关注'
+
+        if structure in ('上涨趋势',):
+            if chg >= 0:
+                signal = 'positive'
+                advice = '上涨趋势，持有'
+            else:
+                signal = 'hold'
+                advice = '上涨趋势回调，持有'
+
+        if structure in ('区间震荡',):
+            if stage in ('上行', '偏上行'):
+                signal = 'hold'
+                advice = '区间偏上行，持有'
+            else:
+                signal = 'watch'
+                advice = '区间偏下，关注企稳'
+
+        if structure in ('下降趋势',):
+            signal = 'caution'
+            advice = '下降趋势，注意风险'
+
+        if buy_point:
+            advice += f' · {buy_point}'
+
+        result.append({
+            'code': code,
+            'name': name,
+            'price': round(price, 2) if price > 0 else None,
+            'change_pct': chg,
+            'structure': structure,
+            'stage': stage,
+            'direction': direction,
+            'stop_loss': stop_loss,
+            'stop_loss_pct': round((price - stop_loss) / stop_loss * 100, 2) if stop_loss and price > 0 else None,
+            'ratio': ratio,
+            'signal': signal,
+            'advice': advice,
+        })
+
+    return result
+
+
 def get_panic_monitor(indices_dict, decline_count=0, total=5100):
     """
     综合函数：检测恐慌+生成策略+读取历史
@@ -242,7 +378,48 @@ def get_panic_monitor(indices_dict, decline_count=0, total=5100):
     
     # 生成策略
     strategy = generate_strategy(panic['level'], indices_dict)
-    
+
+    # 增强策略：加入市场环境+主线方向+整体策略
+    if panic['level']:
+        try:
+            from backend.services.market_health_service import get_market_health
+            mh = get_market_health()
+            if isinstance(mh, dict) and 'error' not in mh:
+                strategy['market_overview'] = {
+                    'structure': mh.get('structure', '—'),
+                    'stage': mh.get('stage', '—'),
+                    'position_advice': mh.get('position_advice', '—'),
+                    'bias20': mh.get('bias20', 0),
+                }
+                ml = mh.get('mainline', {})
+                if ml:
+                    top_sectors = []
+                    if isinstance(ml, dict):
+                        for k in ['top_industries', 'top_sectors', 'strong_sectors', 'leaders']:
+                            v = ml.get(k, [])
+                            if isinstance(v, list):
+                                top_sectors.extend(v[:5])
+                            elif isinstance(v, str):
+                                top_sectors.append(v)
+                    strategy['mainline_sectors'] = top_sectors[:8] if top_sectors else []
+        except Exception:
+            pass
+
+        # 整体策略总结
+        strategy['overall_summary'] = {
+            'principle': '恐慌急跌时不要卖 — 等第一个5-15分钟走完看后续确认。V反→持有，持续弱→减仓，快速修复→不动。',
+            'key_points': [
+                '上涨趋势的标的 → 恐慌是关注点，不是卖点',
+                '区间底部的标的 → 已经最低区域，向下空间有限',
+                '接近止损的标的 → 到了就走，不犹豫',
+                '突破被大盘拖回的标的 → 等两天看突破效力还在不在',
+            ],
+            'conclusion': '降低止损的核心，不完全在于止损点的设置，而在于耐心等待一个好买点',
+        }
+
+        # 个股分析（基于持仓数据+个股卡片）
+        strategy['holdings_analysis'] = _get_holdings_analysis()
+
     # 读取历史
     history = get_panic_history()
     
