@@ -139,11 +139,43 @@ def _last_trading_day():
 | 主线排序 | 按 chg_20d 降序 | 前5 = 主线 |
 | 概念主线同理 | `get_concept_mainline_data()` | 结构与行业主线一致 |
 
-### L4 — API验证
+### L4 — API 验证
 
-**职责：** 验证 API 端点返回正确结构、正确值。
+验证 `/api/review/today` 端点返回的数据结构正确。
 
-**不需要知道：** 前端怎么展示这些值。
+**关键注意：** `lines` 不在顶层，而是在 `mainline.lines` 下。
+**顶层结构：** `{date, market, mainline: {lines, secondary, all_ranked, concept_mainline}, holdings, buy_signals, ...}`
+
+```python
+# L4 验证核心
+data = requests.get('http://127.0.0.1:8080/api/review/today').json()
+
+# ✅ 正确路径
+lines = data['mainline']['lines']   # ← 顶层没有 'lines' 字段
+
+# ❌ 错误路径（我犯的错）
+lines = data.get('lines', [])       # ← 永远返回 []
+```
+
+运行：`python3 -m pytest tests/test_data_verify_l4_api.py -v`
+
+#### L4 检查清单（17项）
+
+| 检查类 | 检查项 |
+|:-------|:-------|
+| 顶层结构 | `date` 存在且 YYYY-MM-DD 格式 |
+| | `market` / `mainline` / `holdings` / `buy_signals` / `trading_plan` 存在 |
+| mainline结构 | `mainline.lines` 存在且非空（非交易日返回最后交易日数据） |
+| | 每条 line 含 `name`, `chg_1d`, `chg_20d`, `stage`, `is_mainline`, `is_secondary` |
+| | `mainline.secondary` 存在，`mainline.all_ranked` 非空 |
+| | lines ≤ 5 条 |
+| mainline数据 | chg_1d 在合理范围(-20%, 20%) |
+| | chg_20d 存在，stage 非空 |
+| 概念主线 | `mainline.concept_mainline` 存在且为 dict |
+| 市场数据 | market 含 `price`, `change`, `vl_score`, `position` |
+| | market.price > 0 |
+| 端到端 | 电子化学品在主线列表中 |
+| | 电子化学品的 chg_1d 合理 |
 
 | 验证项 | 方法 | 预期 |
 |:------|:----|:-----|
