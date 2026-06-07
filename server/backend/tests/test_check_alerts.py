@@ -1,4 +1,11 @@
 """测试 check_alerts 报警检查服务（基于 alarm_service 持久化报警）"""
+import sys, os
+_test_dir = os.path.dirname(__file__)
+_server_root = os.path.join(_test_dir, '..', '..')
+for p in [_server_root]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 import json
 import pytest
 from unittest.mock import patch, MagicMock
