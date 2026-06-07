@@ -385,6 +385,40 @@ def _get_rising_from_bottom() -> list:
         return result
 
 
+def _get_rising_from_bottom_v2() -> list:
+    """从_push2test（同花顺今日数据）中找出「底部突起」方向
+    条件：当日涨>1.5%（突然走强）
+    同时检查 industries + concepts
+    返回 [{name, chg_1d, chg_20d: 0}, ...]
+    """
+    result = []
+    try:
+        from backend.core.data_layer import get_sector_daily
+        sd = get_sector_daily()
+        if not sd:
+            return result
+        raw = sd.get('_push2test', {})
+        if not raw:
+            return result
+        for stype in ('industries', 'concepts'):
+            pool = raw.get(stype, {})
+            for name, info in pool.items():
+                chg = info.get('change_pct')
+                if chg is None:
+                    continue
+                if chg > 1.5:
+                    result.append({'name': name, 'chg_1d': chg, 'chg_20d': 0})
+        result.sort(key=lambda x: x['chg_1d'], reverse=True)
+        if result:
+            result.insert(0, {
+                'name': '— 底部突起 — 近日弱→突然走强',
+                'chg_1d': 0, 'chg_20d': 0, '_is_header': True
+            })
+        return result[:10]
+    except Exception:
+        return result
+
+
 def get_panic_monitor(indices_dict, decline_count=0, total=5100):
     """
     综合函数：检测恐慌+生成策略+读取历史
@@ -444,7 +478,7 @@ def get_panic_monitor(indices_dict, decline_count=0, total=5100):
                     strategy['mainline_sectors'] = top_sectors[:8] if top_sectors else []
 
             # 同时读取板块数据找「底部突起」方向
-            _rising_sectors = _get_rising_from_bottom()
+            _rising_sectors = _get_rising_from_bottom_v2()
             if _rising_sectors:
                 strategy['emerging_sectors'] = _rising_sectors
         except Exception:

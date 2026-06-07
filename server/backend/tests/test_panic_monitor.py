@@ -189,3 +189,72 @@ class TestPanicMonitorIntegration:
         assert 'level' in result['panic_monitor']
         assert 'strategy' in result['panic_monitor']
         assert 'history' in result['panic_monitor']
+
+
+class TestRisingFromBottom:
+    """底部突起方向检测（v2）测试"""
+
+    MOCK_PUSH2TEST = {
+        '_push2test': {
+            'industries': {
+                '电机': {'date': '20260605', 'change_pct': 3.12},
+                '煤炭开采加工': {'date': '20260605', 'change_pct': -1.45},
+                '元件': {'date': '20260605', 'change_pct': -1.44},
+            },
+            'concepts': {
+                '减速器': {'date': '20260605', 'change_pct': 3.27},
+                '创新药': {'date': '20260605', 'change_pct': 11.06},
+                'CPO概念': {'date': '20260605', 'change_pct': -1.26},
+                '阿里巴巴概念': {'date': '20260605', 'change_pct': 2.02},
+                '煤炭概念': {'date': '20260605', 'change_pct': 4.06},
+            },
+        }
+    }
+
+    def test_detects_emerging_industries_and_concepts(self):
+        """v2 应同时检测 industies 和 concepts 中的底部突起方向"""
+        from backend.services.panic_monitor_service import _get_rising_from_bottom_v2
+        with patch('backend.core.data_layer.get_sector_daily',
+                   return_value=self.MOCK_PUSH2TEST):
+            result = _get_rising_from_bottom_v2()
+        # result[0] 是 header，后面才是数据
+        names = [r['name'] for r in result if not r.get('_is_header')]
+        assert '电机' in names, f"电机应出现在底部突起方向中, 实际: {names}"
+        assert '减速器' in names, f"减速器应出现在底部突起方向中, 实际: {names}"
+
+    def test_sorted_by_change_desc(self):
+        """按涨幅降序排列"""
+        from backend.services.panic_monitor_service import _get_rising_from_bottom_v2
+        with patch('backend.core.data_layer.get_sector_daily',
+                   return_value=self.MOCK_PUSH2TEST):
+            result = _get_rising_from_bottom_v2()
+        items = [r for r in result if not r.get('_is_header')]
+        for i in range(len(items) - 1):
+            assert items[i]['chg_1d'] >= items[i + 1]['chg_1d'], \
+                f"顺序错误: {items[i]['name']}({items[i]['chg_1d']}) < {items[i+1]['name']}({items[i+1]['chg_1d']})"
+
+    def test_max_10_items(self):
+        """最多返回10条"""
+        from backend.services.panic_monitor_service import _get_rising_from_bottom_v2
+        with patch('backend.core.data_layer.get_sector_daily',
+                   return_value=self.MOCK_PUSH2TEST):
+            result = _get_rising_from_bottom_v2()
+        assert len(result) <= 10
+
+    def test_excludes_sectors_below_threshold(self):
+        """跌幅方向不出现在结果中"""
+        from backend.services.panic_monitor_service import _get_rising_from_bottom_v2
+        with patch('backend.core.data_layer.get_sector_daily',
+                   return_value=self.MOCK_PUSH2TEST):
+            result = _get_rising_from_bottom_v2()
+        names = [r['name'] for r in result if not r.get('_is_header')]
+        assert 'CPO概念' not in names, f"CPO概念(-1.26%)不应出现在底部突起中"
+        assert '煤炭开采加工' not in names, f"煤炭开采加工(-1.45%)不应出现在底部突起中"
+
+    def test_empty_when_no_push2test(self):
+        """无数据时返回空列表"""
+        from backend.services.panic_monitor_service import _get_rising_from_bottom_v2
+        with patch('backend.core.data_layer.get_sector_daily',
+                   return_value={}):
+            result = _get_rising_from_bottom_v2()
+        assert result == []
