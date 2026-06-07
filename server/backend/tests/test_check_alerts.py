@@ -107,7 +107,9 @@ def mock_active_alarms():
     """mock alarm_service.get_active_alarms() — 只返回 active 的报警"""
     active = [a for a in SAMPLE_ALARMS if a.get('status') == 'active']
     with patch('backend.services.check_alerts.get_active_alarms',
-               return_value=active):
+               return_value=active), \
+         patch('backend.services.check_alerts._is_weekend',
+               return_value=False):
         yield
 
 
@@ -115,7 +117,9 @@ def mock_active_alarms():
 def mock_empty_alarms():
     """mock — 空报警列表"""
     with patch('backend.services.check_alerts.get_active_alarms',
-               return_value=[]):
+               return_value=[]), \
+         patch('backend.services.check_alerts._is_weekend',
+               return_value=False):
         yield
 
 
