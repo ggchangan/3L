@@ -125,6 +125,39 @@ def _fetch_em_sector_ranking(date_str):
 def _fetch_em_concept_map():
     return _load_json(SOURCES_EM_CONCEPT_MAP)
 
+# --- THS实时排行获取函数（行业主源） ---
+def _fetch_ths_live_sector_ranking(date_str):
+    """从同花顺实时获取行业板块排行（chg_1d 取自 stock_board_industry_summary_ths）
+
+    同花顺行业数据稳定好用，90个行业一次返回。
+    返回值格式与 _fetch_em_sector_ranking 一致。
+    """
+    try:
+        os.environ['TQDM_DISABLE'] = '1'
+        import akshare as ak
+        df = ak.stock_board_industry_summary_ths()
+        today = _last_trading_day()
+        industries = {}
+        for _, row in df.iterrows():
+            name = str(row.get('板块', '')).strip()
+            chg = row.get('涨跌幅', None)
+            if name and chg is not None:
+                industries[name] = {
+                    'date': today,
+                    'change_pct': round(float(chg), 2),
+                    'up_count': int(row.get('上涨家数', 0) or 0),
+                    'down_count': int(row.get('下跌家数', 0) or 0),
+                    'net_flow': float(row.get('净流入', 0) or 0),
+                    'leader': str(row.get('领涨股', '') or ''),
+                    'leader_chg': round(float(row.get('领涨股-涨跌幅', 0) or 0), 2),
+                }
+        print(f'[data_source] THS live: 行业{len(industries)}个（同花顺主源）')
+        return {'last_updated': today, 'industries': industries, 'concepts': {}}
+    except Exception as e:
+        print(f'[data_source] THS live 失败: {e}')
+        return None
+
+
 # --- THS仓获取函数 ---
 def _fetch_em_sector_klines(sector_name, sector_type):
     """从 EM 仓获取单日K线（只有今日数据）"""
@@ -187,6 +220,7 @@ def _fetch_legacy_sector_klines(sector_name, sector_type):
 # ====== 调用链定义 ======
 DATA_SOURCE_CHAINS = {
     'sector_ranking': [
+        ('ths_live', lambda date: _fetch_ths_live_sector_ranking(date)),
         ('em_sector', lambda date: _fetch_em_sector_ranking(date)),
         ('legacy_sector', lambda date: _fetch_legacy_sector_ranking(date)),
         ('ths_sector', lambda date: _fetch_ths_sector_ranking(date)),

@@ -385,14 +385,67 @@ def _fetch_board_names_from_push2test(sector_type):
         return []
 
 
+def _fetch_today_industries_from_ths():
+    """【行业主源】从同花顺获取行业板块今日实时涨跌幅
+
+    数据源: stock_board_industry_summary_ths()
+    同花顺行业数据一直稳定好用，90个行业一次返回。
+    字段: 涨跌幅、总成交量、总成交额、净流入、上涨/下跌家数、领涨股
+    返回 {name: {date, change_pct, ...}}，全部失败返回 {}
+    """
+    try:
+        import os
+        os.environ['TQDM_DISABLE'] = '1'
+        import akshare as ak
+
+        df = ak.stock_board_industry_summary_ths()
+        today = datetime.now().strftime('%Y%m%d')
+        # 非交易日回退到上一个交易日
+        d = datetime.now()
+        for _ in range(7):
+            if d.weekday() < 5:
+                today = d.strftime('%Y%m%d')
+                break
+            d -= timedelta(days=1)
+
+        result = {}
+        for _, row in df.iterrows():
+            name = str(row.get('板块', '')).strip()
+            chg = row.get('涨跌幅', None)
+            up = row.get('上涨家数', None)
+            down = row.get('下跌家数', None)
+            vol = row.get('总成交量', None)
+            amt = row.get('总成交额', None)
+            net = row.get('净流入', None)
+            leader = row.get('领涨股', None)
+            leader_chg = row.get('领涨股-涨跌幅', None)
+            if name and chg is not None:
+                result[name] = {
+                    'date': today,
+                    'change_pct': round(float(chg), 2),
+                    'up_count': int(up) if up is not None else None,
+                    'down_count': int(down) if down is not None else None,
+                    'volume': float(vol) if vol is not None else None,
+                    'amount': float(amt) if amt is not None else None,
+                    'net_flow': float(net) if net is not None else None,
+                    'leader': str(leader) if leader else '',
+                    'leader_chg': round(float(leader_chg), 2) if leader_chg is not None else None,
+                }
+
+        log(f'  THS[industry]: 成功获取{len(result)}个行业（同花顺主源，含涨跌幅/上涨下跌家数/领涨股）')
+        return result
+    except Exception as e:
+        log(f'❌ THS行业数据获取失败: {type(e).__name__}: {e}')
+        return {}
+
+
 def _fetch_today_sectors_from_push2test(sector_type, name_list):
-    """主源：从 push2test.eastmoney.com 批量获取板块今日实时数据
+    """【概念主源】从 push2test.eastmoney.com 批量获取概念板块今日实时数据
     sector_type: 'industry' | 'concept'
     name_list: 板块名称列表（仅用于日志，实际拉全量再过滤）
     返回 {name: {date, open, close, high, low, volume}}，全部失败则返回 {}
     """
     import requests as _req
-    from datetime import datetime
 
     fs = _SECTOR_FS.get(sector_type)
     if not fs:
@@ -453,7 +506,11 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
 
 def update_sectors():
     """更新行业+概念板块日K线
-    数据源：push2test.eastmoney.com（主源，批量获取今日实时数据）
+
+    数据源：
+    - 行业（industries）：同花顺 THS（stock_board_industry_summary_ths）
+    - 概念（concepts）：push2test.eastmoney.com（同花顺没有批量概念接口）
+
     失败率>50%告警，全部失败抛异常
     """
     import warnings
@@ -470,18 +527,13 @@ def update_sectors():
     industries = existing.get('industries', {})
     concepts = existing.get('concepts', {})
 
-    # ── 获取板块名称列表（push2test优先 → 缓存兜底） ──
-    ind_names = _fetch_board_names_from_push2test('industry')
-    if not ind_names:
-        log('⚠️  行业板块列表获取失败，用缓存数据')
-        ind_names = list(industries.keys())
-
+    # ── 获取概念板块名称列表（概念数据需要从 push2test 拿到名称再过滤） ──
     con_names = _fetch_board_names_from_push2test('concept')
     if not con_names:
         log('⚠️  概念板块列表获取失败，用缓存数据')
         con_names = list(concepts.keys())
 
-    log(f'📋  行业{len(ind_names)}个, 概念{len(con_names)}个, 上次更新{last_updated}')
+    log(f'📋  概念{len(con_names)}个, 行业{len(industries)}个, 上次更新{last_updated}')
 
     # ── 确定追踪中的概念 ──
     today = datetime.now().strftime('%Y%m%d')
@@ -516,16 +568,20 @@ def update_sectors():
         tracked_concepts = set(con_names)
 
     # ═══════════════════════════════════════════════════
-    # 主源：push2test 批量获取今日数据
-    # push2test(东财)和旧akshare(同花顺)的指数基准不同，不能混合
-    # → 直接完全替换：有push2test数据的板块全部替换，没有的保留旧数据
+    # 【行业】主源：同花顺 stock_board_industry_summary_ths()
+    # 同花顺行业数据一直稳定好用，90个行业一次返回，名字无后缀
     # ═══════════════════════════════════════════════════
-    ind_today = _fetch_today_sectors_from_push2test('industry', ind_names)
+    ind_today = _fetch_today_industries_from_ths()
+
+    # ═══════════════════════════════════════════════════
+    # 【概念】主源：push2test 批量获取今日数据
+    # 同花顺没有批量概念接口，push2test 补充此空缺
+    # ═══════════════════════════════════════════════════
     con_today = _fetch_today_sectors_from_push2test('concept', list(tracked_concepts))
 
-    # ── 保留旧THS数据不变，另存push2test数据到独立字段 ──
-    # push2test(东财)和akshare(同花顺)的指数绝对值不同，不能混
-    # push2test的f3字段本身就是当日涨跌幅，无需历史即可排行
+    # ── 保存今日快照到独立字段 ──
+    # 行业来源：同花顺 THS，概念来源：push2test
+    # 字段名仍用 _push2test 保持向后兼容（各读者读取此字段获取 chg_1d）
     push2test_data = {'industries': ind_today, 'concepts': con_today}
     existing['_push2test'] = push2test_data
     existing['_push2test_updated'] = today
@@ -537,26 +593,23 @@ def update_sectors():
     # ═══════════════════════════════════════════════════
     # 失败率分析 + 告警
     # ═══════════════════════════════════════════════════
-    ind_total = len(ind_names)
+    # 行业：THS 要么全成功（90个），要么全失败（0个）
+    if len(ind_today) == 0 and industries:
+        log('🚨 行业板块从同花顺 THS 获取全部失败！回退使用旧缓存数据')
+
     con_tracked = len(tracked_concepts)
-    ind_miss = ind_total - len(ind_today)
     con_miss = con_tracked - len(con_today)
-
-    if ind_total > 0 and ind_miss / ind_total > 0.5:
-        msg = f'🚨 行业板块大面积获取失败: {ind_miss}/{ind_total}({ind_miss/ind_total*100:.0f}%) 未从push2test获取到数据'
-        log(msg)
-
     if con_tracked > 0 and con_miss / con_tracked > 0.5:
-        msg = f'🚨 概念板块大面积获取失败: {con_miss}/{con_tracked}({con_miss/con_tracked*100:.0f}%) 未从push2test获取到数据'
+        msg = f'🚨 概念板块大面积获取失败: {con_miss}/{con_tracked}({con_miss/con_tracked*100:.0f}%)'
         log(msg)
 
     # 全源全量失败 → 抛异常让cron能感知
-    if ind_total > 0 and len(ind_today) == 0 and not industries:
+    if len(ind_today) == 0 and not industries:
         raise RuntimeError('行业板块全源获取失败，无任何缓存数据可用')
     if con_tracked > 0 and len(con_today) == 0 and not any(name in concepts for name in tracked_concepts):
         raise RuntimeError('概念板块全源获取失败（追踪中），无任何缓存数据可用')
 
-    # 最新日期：来自push2test的更新时间
+    # 最新日期
     latest_date = existing.get('_push2test_updated', existing.get('last_updated', ''))
 
     save_sector_daily({
