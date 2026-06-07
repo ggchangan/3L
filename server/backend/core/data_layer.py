@@ -144,8 +144,17 @@ def get_index_klines(code=INDEX_CODE):
 
 # ====== 板块日K线数据（行业+概念）======
 def get_sector_daily():
-    """返回 {last_updated, industries: {板块名: [klines]}, concepts: {板块名: [klines]}}（走缓存，TTL=60s）"""
-    return cache.get('sector_daily', lambda: _load_json(SECTOR_DAILY_PATH, {}), ttl=60)
+    """返回 {last_updated, industries, concepts}（走缓存，TTL=60s）
+    
+    优先从 data_source 抽象层合并多源，兜底读 sector_daily.json
+    """
+    def _load_from_data_source():
+        try:
+            from backend.services.data_source import get_merged_sector_data
+            return get_merged_sector_data()
+        except Exception:
+            return _load_json(SECTOR_DAILY_PATH, {})
+    return cache.get('sector_daily', _load_from_data_source, ttl=60)
 
 def save_sector_daily(data):
     """原子保存板块日K线数据"""

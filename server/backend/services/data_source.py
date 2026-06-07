@@ -162,6 +162,69 @@ def get_concept_map():
     chain = DATA_SOURCE_CHAINS['concept_map']
     return _call_with_failover('concept_map', (), chain, fallback={})
 
+def get_merged_sector_data():
+    """获取合并后的全量板块数据 {last_updated, industries, concepts}
+    
+    合并策略：EM仓(今日数据) + THS仓(历史K线) + legacy(向后兼容)
+    以 legacy 的完整K线优先，EM仓补充今日数据，THS仓补充历史K线
+    """
+    # 1. 先读 legacy（最完整，包含历史K线）
+    legacy = _load_json(SECTOR_DAILY_PATH)
+    if legacy and 'industries' in legacy:
+        result = {
+            'last_updated': legacy.get('last_updated', ''),
+            'industries': dict(legacy.get('industries', {})),
+            'concepts': dict(legacy.get('concepts', {})),
+        }
+        report_success('legacy_sector')
+    else:
+        result = {
+            'last_updated': '',
+            'industries': {},
+            'concepts': {},
+        }
+    
+    # 2. THS仓补充历史K线（legacy没有的板块）
+    ths = _load_json(SOURCES_THS_SECTOR_DAILY)
+    if ths:
+        for key in ['industries', 'concepts']:
+            ths_container = ths.get(key, {})
+            for name, klines in ths_container.items():
+                if name not in result[key] and klines:
+                    result[key][name] = klines
+    
+    # 3. EM仓补充今日数据（含change_pct）
+    em = _load_json(SOURCES_EM_SECTOR_DAILY)
+    if em:
+        for key, em_key in [('industries', 'industries'), ('concepts', 'concepts')]:
+            em_container = em.get(em_key, {})
+            for name, entry in em_container.items():
+                if isinstance(entry, dict) and entry.get('date'):
+                    if name not in result[key] or not result[key][name]:
+                        # 新板块，创建单日K线
+                        result[key][name] = [{
+                            'date': entry['date'],
+                            'open': entry.get('open', 0),
+                            'close': entry.get('close', 0),
+                            'high': entry.get('high', 0),
+                            'low': entry.get('low', 0),
+                            'volume': entry.get('volume', 0),
+                            'change_pct': entry.get('change_pct', 0),
+                        }]
+                    elif result[key][name] and result[key][name][-1]['date'] != entry.get('date'):
+                        # 已有板块追加今日K线
+                        result[key][name].append({
+                            'date': entry['date'],
+                            'open': entry.get('open', 0),
+                            'close': entry.get('close', 0),
+                            'high': entry.get('high', 0),
+                            'low': entry.get('low', 0),
+                            'volume': entry.get('volume', 0),
+                            'change_pct': entry.get('change_pct', 0),
+                        })
+    
+    return result
+
 def get_data_source_status():
     health = get_all_health()
     return {

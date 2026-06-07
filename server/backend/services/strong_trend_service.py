@@ -7,12 +7,17 @@ DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
 # ── 数据加载 ──
 
 def load_sector_daily() -> dict:
-    """读取板块K线数据"""
-    path = os.path.join(DATA_DIR, 'sector_daily.json')
-    if os.path.isfile(path):
-        with open(path) as f:
-            return json.load(f)
-    return {'industries': {}, 'concepts': {}}
+    """读取板块K线数据（通过 data_source 抽象层合并多源）"""
+    try:
+        from backend.services.data_source import get_merged_sector_data
+        return get_merged_sector_data()
+    except Exception:
+        import json
+        path = os.path.join(DATA_DIR, 'sector_daily.json')
+        if os.path.isfile(path):
+            with open(path) as f:
+                return json.load(f)
+        return {'industries': {}, 'concepts': {}}
 
 
 def load_all_stocks() -> dict:
