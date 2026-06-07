@@ -215,6 +215,26 @@ def get_sector_klines(sector_name, sector_type='industry'):
         return data.get(key, {}).get(sector_name, [])
 
 
+def get_ths_concept_snapshots(name_list: list = None) -> dict:
+    """获取同花顺概念板块今日快照数据
+
+    通过 data_source 层调用 stock_board_concept_info_ths() 批量拉取。
+    使用名称映射表将系统概念名转为 THS 概念名。
+
+    Args:
+        name_list: 系统概念名称列表，None=获取所有已映射概念
+
+    Returns:
+        {系统名: {date, change_pct, up_count, down_count, ...}}
+    """
+    try:
+        from backend.services.data_source import get_ths_concept_snapshots as _ds_ths_concept
+        return _ds_ths_concept(name_list)
+    except Exception as e:
+        print(f'[data_layer] get_ths_concept_snapshots 失败: {e}')
+        return {}
+
+
 def verify_data_sources(verbose=False):
     """验证所有数据源的正确性、及时性、缓存一致性
 

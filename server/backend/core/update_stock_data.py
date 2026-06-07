@@ -509,7 +509,7 @@ def update_sectors():
 
     数据源：
     - 行业（industries）：同花顺 THS（stock_board_industry_summary_ths）
-    - 概念（concepts）：push2test.eastmoney.com（同花顺没有批量概念接口）
+    - 概念（concepts）：同花顺 THS（主源，stock_board_concept_info_ths）+ push2test fallback
 
     失败率>50%告警，全部失败抛异常
     """
@@ -527,13 +527,7 @@ def update_sectors():
     industries = existing.get('industries', {})
     concepts = existing.get('concepts', {})
 
-    # ── 获取概念板块名称列表（概念数据需要从 push2test 拿到名称再过滤） ──
-    con_names = _fetch_board_names_from_push2test('concept')
-    if not con_names:
-        log('⚠️  概念板块列表获取失败，用缓存数据')
-        con_names = list(concepts.keys())
-
-    log(f'📋  概念{len(con_names)}个, 行业{len(industries)}个, 上次更新{last_updated}')
+    log(f'📋  行业{len(industries)}个, 概念{len(concepts)}个, 上次更新{last_updated}')
 
     # ── 确定追踪中的概念 ──
     today = datetime.now().strftime('%Y%m%d')
@@ -574,13 +568,25 @@ def update_sectors():
     ind_today = _fetch_today_industries_from_ths()
 
     # ═══════════════════════════════════════════════════
-    # 【概念】主源：push2test 批量获取今日数据
-    # 同花顺没有批量概念接口，push2test 补充此空缺
+    # 【概念】主源：同花顺 THS 概念 info_ths()
+    # 使用 stock_board_concept_info_ths() 逐个拉取已映射概念的今日数据
+    # 数据准确（用户已验证培育钻石 -3.30% vs push2test +5.69%）
+    # 未映射到同花顺的概念走 push2test fallback
     # ═══════════════════════════════════════════════════
-    con_today = _fetch_today_sectors_from_push2test('concept', list(tracked_concepts))
+    from backend.core.data_layer import get_ths_concept_snapshots
+    ths_concept_data = get_ths_concept_snapshots(list(tracked_concepts))
+
+    # 未映射到 THS 的概念，走 push2test fallback
+    ths_mapped = set(ths_concept_data.keys())
+    push2test_needed = [n for n in tracked_concepts if n not in ths_mapped]
+    if push2test_needed:
+        push2test_concept_data = _fetch_today_sectors_from_push2test('concept', push2test_needed)
+        ths_concept_data.update(push2test_concept_data)
+        log(f'  push2test[概念fallback]: 补充{len(push2test_concept_data)}个')
+    con_today = ths_concept_data
 
     # ── 保存今日快照到独立字段 ──
-    # 行业来源：同花顺 THS，概念来源：push2test
+    # 行业来源：同花顺 THS，概念来源：同花顺 THS（主源）+ push2test（未映射fallback）
     # 字段名仍用 _push2test 保持向后兼容（各读者读取此字段获取 chg_1d）
     push2test_data = {'industries': ind_today, 'concepts': con_today}
     existing['_push2test'] = push2test_data

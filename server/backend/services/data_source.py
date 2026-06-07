@@ -459,6 +459,141 @@ def get_sector_constituents(sector_code: str) -> List[tuple]:
 
 
 # ════════════════════════════════════════════════════════════
+# THS概念板块快照获取（同花顺 stock_board_concept_info_ths）
+# 数据源切换：从 push2test 切换到同花顺 THS
+# ════════════════════════════════════════════════════════════
+
+def _load_concept_name_mapping():
+    """加载系统概念名 → THS概念名的映射表"""
+    from backend.config import CONCEPT_NAME_MAPPING_PATH
+    try:
+        return _load_json(CONCEPT_NAME_MAPPING_PATH, {})
+    except Exception:
+        return {}
+
+def _fetch_ths_concept_snapshots(name_list: list) -> dict:
+    """从同花顺批量获取概念板块今日快照数据
+
+    使用 stock_board_concept_info_ths(symbol) 逐个拉取。
+    使用名称映射表将系统名转为 THS 名。
+
+    Args:
+        name_list: 系统概念名称列表
+
+    Returns:
+        {系统名: {date, change_pct, up_count, down_count, ...}}
+    """
+    if not name_list:
+        return {}
+    name_map = _load_concept_name_mapping()
+    if not name_map:
+        print('[data_source] ⚠️ 概念名称映射表为空，跳过 THS 概念拉取')
+        return {}
+
+    today = _last_trading_day()
+    result = {}
+    os.environ['TQDM_DISABLE'] = '1'
+    import akshare as ak
+
+    total = len(name_list)
+    success = 0
+    fail = 0
+
+    for idx, sys_name in enumerate(name_list):
+        ths_name = name_map.get(sys_name)
+        if not ths_name:
+            continue  # 未映射的跳过（走 push2test fallback）
+
+        try:
+            df = ak.stock_board_concept_info_ths(symbol=ths_name)
+            if df is None or df.empty:
+                continue
+
+            # DataFrame 格式: {项目: [..., '板块涨幅', ...], 值: [..., '-3.30%', ...]}
+            # 用项目列查找对应的值
+            projects = df['项目'].tolist() if '项目' in df.columns else []
+            values = df['值'].tolist() if '值' in df.columns else []
+
+            def _get_val(project_name):
+                """从项目列表中查找对应值"""
+                try:
+                    idx = projects.index(project_name)
+                    v = values[idx]
+                    if isinstance(v, str):
+                        v = v.replace('%', '').replace(',', '')
+                    try:
+                        return float(v)
+                    except (ValueError, TypeError):
+                        return None
+                except (ValueError, IndexError):
+                    return None
+
+            chg = _get_val('板块涨幅')
+            if chg is None:
+                continue
+
+            entry = {
+                'date': today,
+                'change_pct': round(float(chg), 2),
+            }
+
+            up = _get_val('上涨家数')
+            if up is None:
+                # 涨跌家数格式: "3/15" → 上涨3家, 下跌15家
+                if '涨跌家数' in projects:
+                    idx = projects.index('涨跌家数')
+                    updown_str = str(values[idx])
+                    if '/' in updown_str:
+                        parts = updown_str.split('/')
+                        try:
+                            entry['up_count'] = int(parts[0])
+                            entry['down_count'] = int(parts[1])
+                        except (ValueError, IndexError):
+                            pass
+            else:
+                entry['up_count'] = int(up)
+                down = _get_val('下跌家数')
+                if down is not None:
+                    entry['down_count'] = int(down)
+
+            net = _get_val('资金净流入(亿)')
+            if net is not None:
+                entry['net_flow'] = round(float(net), 2)
+
+            result[sys_name] = entry
+            success += 1
+        except Exception as e:
+            fail += 1
+            if fail <= 3:  # 只打前3次失败日志
+                print(f'[data_source] THS概念[{ths_name}]失败: {type(e).__name__}: {e}')
+
+        # 限流：同花顺接口间隔≥0.5秒
+        if idx < total - 1:
+            import time
+            time.sleep(0.5)
+
+    print(f'[data_source] THS概念快照: 成功{success}/{total}个, 失败{fail}个'
+          f'(映射覆盖{len(name_map)}个)')
+    return result
+
+
+def get_ths_concept_snapshots(name_list: list = None) -> dict:
+    """获取THS概念快照数据的公开入口
+
+    如果不传 name_list，返回所有已映射概念的快照。
+    如果 name_list 不为空，只拉取列表中的概念。
+
+    返回 {系统名: {date, change_pct, up_count, down_count, ...}}
+    """
+    if name_list is None:
+        # 不传参时尝试从概念列表获取所有已映射的概念名
+        name_map = _load_concept_name_mapping()
+        name_list = list(name_map.keys())
+
+    return _fetch_ths_concept_snapshots(name_list)
+
+
+# ════════════════════════════════════════════════════════════
 # 数据源验证层 — 正确性/及时性/一致性
 # ════════════════════════════════════════════════════════════
 
