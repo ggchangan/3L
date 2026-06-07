@@ -79,9 +79,95 @@ def fetch_klines_from_mootdx(client, code, count=800):
                 'low': round(float(row['low']), 2),
                 'volume': int(float(row['volume'])) * 100,
             })
+        # 手动前复权矫正（mootdx的fq=True不返回正确前复权数据）
+        xdxr_records = client.xdxr(symbol=code)
+        if xdxr_records is not None and len(xdxr_records) > 0:
+            xdxr_events = []
+            for _, row in xdxr_records.iterrows():
+                xdxr_events.append({
+                    'year': row['year'], 'month': row['month'], 'day': row['day'],
+                    'category': row['category'],
+                    'qianzongguben': row['qianzongguben'],
+                    'houzongguben': row['houzongguben'],
+                    'fenhong': row['fenhong'],
+                    'panqianliutong': row['panqianliutong'],
+                    'panhouliutong': row['panhouliutong'],
+                })
+            records = _apply_fq_adjustment(records, xdxr_events)
         return records
     except Exception:
         return []
+
+
+def _apply_fq_adjustment(records, xdxr_events):
+    """对不复权的K线数据做前复权矫正
+
+    mootdx的bars(fq=True)不返回正确前复权数据（实证发现）。
+    用xdxr()获取除权除息事件后手动调整。
+
+    前复权逻辑：
+    - 送转股(category=9)：价格 × 前总股本/后总股本
+    - 分红(category=1)：价格下调（幅度小，精确度要求低时可不处理）
+    - 从最新事件往最旧事件逐次调整（前复权时序）
+    """
+    if not records or not xdxr_events:
+        return records
+
+    # 过滤出K线范围内的除权事件
+    dates = {r['date'] for r in records}
+    if not dates:
+        return records
+
+    min_date = min(dates)
+    max_date = max(dates)
+
+    # 只在K线范围内的除权事件
+    relevant = []
+    for ev in xdxr_events:
+        ev_date = f"{ev['year']}{ev['month']:02d}{ev['day']:02d}"
+        if ev_date >= min_date and ev_date <= max_date:
+            relevant.append((ev_date, ev))
+
+    if not relevant:
+        return records
+
+    # 按日期倒序（从最新除权事件往前调整）
+    relevant.sort(key=lambda x: x[0], reverse=True)
+
+    for ev_date, ev in relevant:
+        factor = 1.0
+
+        # 送转股调整
+        if ev['category'] == 9:
+            qzg = ev.get('qianzongguben')
+            hzg = ev.get('houzongguben')
+            if qzg and hzg and hzg > 0 and qzg > 0:
+                factor *= qzg / hzg
+
+        # 分红调整
+        if ev['category'] == 1:
+            fenhong = ev.get('fenhong')
+            if fenhong and fenhong > 0:
+                # 找到除权前最后一天的收盘价做分红系数
+                prev_close = None
+                for r in records:
+                    if r['date'] < ev_date:
+                        prev_close = r['close']
+                    else:
+                        break
+                if prev_close and prev_close > 0:
+                    factor *= (prev_close - fenhong) / prev_close
+
+        # 应用调整：除权日之前的所有K线乘以系数
+        if abs(factor - 1.0) > 0.001:
+            for r in records:
+                if r['date'] < ev_date:
+                    r['open'] = round(r['open'] * factor, 2)
+                    r['close'] = round(r['close'] * factor, 2)
+                    r['high'] = round(r['high'] * factor, 2)
+                    r['low'] = round(r['low'] * factor, 2)
+
+    return records
 
 
 def _flatten_stocks(sector_map):
