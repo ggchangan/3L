@@ -329,6 +329,13 @@ def get_mainline_data(date_str):
             if isinstance(data, dict) and 'change_pct' in data:
                 em_chg_1d[name] = float(data['change_pct'])
 
+    # 从 _push2test 获取更可靠的值（cron 保存的 push2test 数据）
+    from backend.core.data_layer import load_sector_daily_uncached
+    _sd = load_sector_daily_uncached()
+    push2test_data = _sd.get('_push2test', {})
+    push2test_inds = push2test_data.get('industries', {}) if isinstance(push2test_data, dict) else {}
+    # _push2test 的 change_pct 优先级高于实时 API（缓存了当日数据）
+
     # 从本地板块K线数据计算20日涨幅
     from backend.core.data_layer import get_sector_daily
     sector_data = get_sector_daily()
@@ -345,8 +352,12 @@ def get_mainline_data(date_str):
         try:
             if len(klines) < 1:
                 continue
-            # chg_1d：直接从 EM 排行取 change_pct，不从K线计算
-            chg_1d = em_chg_1d.get(name, 0)
+            # chg_1d：优先 _push2test（cron存），次选实时 API，最后K线计算
+            chg_1d = push2test_inds.get(name, {}).get('change_pct', None)
+            if chg_1d is None:
+                chg_1d = em_chg_1d.get(name, 0)
+            else:
+                chg_1d = float(chg_1d)
             # chg_20d：只有足够历史K线才计算
             if len(klines) >= 20:
                 chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100

@@ -9,7 +9,7 @@
 """
 
 import json, os, sys, time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 # ⚠️ 注意: file 在 server/backend/core/ 下
@@ -400,6 +400,13 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
         return {}
 
     today = datetime.now().strftime('%Y%m%d')
+    # 非交易日回退到上一个交易日
+    d = datetime.now()
+    for _ in range(7):
+        if d.weekday() < 5:
+            today = d.strftime('%Y%m%d')
+            break
+        d -= timedelta(days=1)
     params = {
         'pn': '1', 'pz': '2000', 'po': '1', 'np': '1',
         'ut': _PUSH2TEST_UT, 'fltt': '2', 'invt': '2',
@@ -419,6 +426,8 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
     for item in items:
         name = (item.get('f14') or '').strip()
         if name and name in name_list:
+            # 归一化名称：去掉东财的Ⅱ/Ⅲ/D后缀，对齐 legacy 命名
+            clean = name.replace('Ⅱ', '').replace('Ⅲ', '').replace('D', '').strip()
             close = float(item.get('f2', 0) or 0)
             high = float(item.get('f15', close) or close)
             low = float(item.get('f16', close) or close)
@@ -426,7 +435,7 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
             volume = int(float(item.get('f5', 0) or 0))
             change_pct = float(item.get('f3', 0) or 0)   # 当日涨跌幅%
             prev_close = float(item.get('f18', 0) or 0)   # 昨收
-            name_map[name] = {
+            name_map[clean] = {
                 'date': today,
                 'open': round(open_, 2),
                 'close': round(close, 2),
@@ -470,6 +479,13 @@ def update_sectors():
 
     # ── 确定追踪中的概念 ──
     today = datetime.now().strftime('%Y%m%d')
+    # 非交易日回退到上一个交易日
+    __d = datetime.now()
+    for _ in range(7):
+        if __d.weekday() < 5:
+            today = __d.strftime('%Y%m%d')
+            break
+        __d -= timedelta(days=1)
     try:
         _concept_list = get_concept_list()
         _stock_concept_map = get_stock_concept_map()
