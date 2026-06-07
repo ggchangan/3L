@@ -257,6 +257,28 @@ def get_concept_map():
     chain = DATA_SOURCE_CHAINS['concept_map']
     return _call_with_failover('concept_map', (), chain, fallback={})
 
+
+# ════════════════════════════════════════════════════════
+# 新增：_push2test 读取唯一入口
+# 所有业务代码必须通过此函数获取当日涨跌幅快照
+# 不直接读 sector_daily.json 的 _push2test 字段
+# ════════════════════════════════════════════════════════
+def get_sector_push2test():
+    """获取当日涨跌幅快照（_push2test 字段）
+
+    返回: {industries: {name: {change_pct, date, up_count, down_count, ...}},
+            concepts: {name: {change_pct, date, ...}}}
+
+    这是读取 _push2test 的唯一入口。
+    所有业务代码（get_mainline_data 等）必须通过此函数获取，
+    不得直接调 data_layer.load_sector_daily_uncached() 读原始文件。
+    """
+    data = _load_json(SECTOR_DAILY_PATH)
+    if not isinstance(data, dict):
+        return {}
+    return data.get('_push2test', {})
+
+
 # 合并数据内存缓存（TTL=1秒，避免同一批请求反复读6MB文件）
 _MERGED_CACHE = {'data': None, 'ts': 0.0}
 

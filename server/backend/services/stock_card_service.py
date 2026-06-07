@@ -70,7 +70,7 @@ def _load_sector_daily():
 def _calc_sector_chg_5d(sector):
     """计算板块5日涨跌幅（通过 data_source 抽象层获取K线）"""
     try:
-        from backend.services.data_source import get_sector_klines
+        from backend.core.data_layer import get_sector_klines
         klines = get_sector_klines(sector, 'industry')
     except Exception:
         klines = []

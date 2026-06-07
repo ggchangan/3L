@@ -387,49 +387,49 @@ class TestDataModels:
     """数据模型 dataclass 定义验证"""
 
     def test_sector_daily_push2test_model(self):
-        """SectorDailyPush2Test dataclass 可实例化"""
-        from backend.core.data_models import SectorDailyPush2Test, ChangePctSnapshot
-        model = SectorDailyPush2Test(
-            industries={'电子化学品': ChangePctSnapshot(
+        """SectorPush2Test + ThsIndustrySnapshot 可实例化"""
+        from backend.core.data_models import SectorPush2Test, ThsIndustrySnapshot, Push2TestConceptSnapshot
+        model = SectorPush2Test(
+            industries={'电子化学品': ThsIndustrySnapshot(
                 date='20260605', change_pct=-0.7,
-                close=2262.13, open=2260.0, high=2285.0, low=2240.0,
-                volume=1000000, prev_close=2262.13,
+                up_count=18, down_count=24,
+                leader='江化微', leader_chg=10.01, net_flow=5.7,
             )},
-            concepts={'AI手机': ChangePctSnapshot(
+            concepts={'AI手机': Push2TestConceptSnapshot(
                 date='20260605', change_pct=0.0,
-                close=2262.13, open=2260.0, high=2285.0, low=2240.0,
+                close=2262.13, open_=2260.0, high=2285.0, low=2240.0,
                 volume=1000000, prev_close=2262.13,
             )},
         )
         assert model.industries['电子化学品'].change_pct == -0.7
+        assert model.industries['电子化学品'].up_count == 18
+        assert model.industries['电子化学品'].leader == '江化微'
+        assert model.concepts['AI手机'].change_pct == 0.0
 
-    def test_sector_daily_file_model(self):
-        """SectorDailyFile dataclass 可实例化且get_chg_1d正确"""
-        from backend.core.data_models import SectorDailyFile, SectorDailyPush2Test, ChangePctSnapshot, Kline
-        p2 = SectorDailyPush2Test(
-            industries={'电子化学品': ChangePctSnapshot(
-                date='20260605', change_pct=-0.7,
-                close=2262.13, open=2260.0, high=2285.0, low=2240.0,
+    def test_sector_daily_get_change_pct(self):
+        """SectorPush2Test.get_change_pct() 正确"""
+        from backend.core.data_models import SectorPush2Test, ThsIndustrySnapshot, Push2TestConceptSnapshot
+        model = SectorPush2Test(
+            industries={'电子化学品': ThsIndustrySnapshot(date='20260605', change_pct=-0.7)},
+            concepts={'AI手机': Push2TestConceptSnapshot(
+                date='20260605', change_pct=0.0,
+                close=2262.13, open_=2260.0, high=2285.0, low=2240.0,
                 volume=1000000, prev_close=2262.13,
             )},
         )
-        model = SectorDailyFile(
-            last_updated='20260605',
-            industries={'半导体': [
-                Kline(date='20260603', open=9.5, close=10.0, high=10.2, low=9.4, volume=800),
-                Kline(date='20260604', open=10.0, close=10.5, high=11, low=9.5, volume=1000),
-            ]},
-            _push2test=p2,
-            _push2test_updated='20260605',
-        )
-        # 优先从 _push2test 取
-        chg = model.get_chg_1d('电子化学品')
-        assert chg == -0.7, f"get_chg_1d返回{chg}"
-        # 没有 _push2test 数据时，从K线算（需要≥2条）
-        chg2 = model.get_chg_1d('半导体')
-        expected = (10.5 / 10.0 - 1) * 100  # 5.0%
-        assert chg2 is not None, "半导体get_chg_1d返回None"
-        assert abs(chg2 - 5.0) < 0.01, f"半导体chg={chg2}，期望≈5.0%"
+        assert model.get_change_pct('电子化学品') == -0.7
+        assert model.get_change_pct('AI手机') == 0.0
+        assert model.get_change_pct('不存在的板块') is None
+
+    def test_sector_daily_dict_to_ths_snapshot(self):
+        """ths_dict_to_snapshot 正确转换"""
+        from backend.core.data_models import ths_dict_to_snapshot
+        d = {'date': '20260605', 'change_pct': -0.7, 'up_count': 18, 'down_count': 24,
+             'leader': '江化微', 'leader_chg': 10.01, 'net_flow': 5.7}
+        snap = ths_dict_to_snapshot(d)
+        assert snap.change_pct == -0.7
+        assert snap.up_count == 18
+        assert snap.leader == '江化微'
 
 
 # ====== 运行 ======

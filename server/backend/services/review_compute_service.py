@@ -320,23 +320,13 @@ def get_mainline_data(date_str):
         except Exception:
             pass
 
-    # 从 EM 仓直接获取板块排行（所有行业的 chg_1d 从 change_pct 字段取，无需计算）
-    from backend.services.data_source import get_sector_rankings
-    em_rankings = get_sector_rankings('industry')
-    em_chg_1d = {}  # {name: change_pct}
-    if isinstance(em_rankings, dict):
-        for name, data in em_rankings.items():
-            if isinstance(data, dict) and 'change_pct' in data:
-                em_chg_1d[name] = float(data['change_pct'])
+    # 从 _push2test 获取当日涨跌幅（data_layer 唯一入口）
+    from backend.core.data_layer import get_sector_push2test
+    push2test_data = get_sector_push2test()
+    push2test_inds = push2test_data.industries if hasattr(push2test_data, 'industries') else {}
+    # _push2test 是 cron 保存的当日涨跌幅快照，权威数据源
 
-    # 从 _push2test 获取更可靠的值（cron 保存的 push2test 数据）
-    from backend.core.data_layer import load_sector_daily_uncached
-    _sd = load_sector_daily_uncached()
-    push2test_data = _sd.get('_push2test', {})
-    push2test_inds = push2test_data.get('industries', {}) if isinstance(push2test_data, dict) else {}
-    # _push2test 的 change_pct 优先级高于实时 API（缓存了当日数据）
-
-    # 从本地板块K线数据计算20日涨幅
+    # 从本地板块K线数据计算20日涨幅（data_layer 唯一入口）
     from backend.core.data_layer import get_sector_daily
     sector_data = get_sector_daily()
     industries_data = sector_data.get('industries', {})
@@ -352,10 +342,15 @@ def get_mainline_data(date_str):
         try:
             if len(klines) < 1:
                 continue
-            # chg_1d：优先 _push2test（cron存），次选实时 API，最后K线计算
-            chg_1d = push2test_inds.get(name, {}).get('change_pct', None)
+            # chg_1d：优先 _push2test（cron存），次选K线计算
+            snap = push2test_inds.get(name)
+            chg_1d = snap.change_pct if snap is not None else None
             if chg_1d is None:
-                chg_1d = em_chg_1d.get(name, 0)
+                # 从K线计算（兜底）
+                if len(klines) >= 2:
+                    chg_1d = (klines[-1]['close'] / klines[-2]['close'] - 1) * 100
+                else:
+                    chg_1d = 0
             else:
                 chg_1d = float(chg_1d)
             # chg_20d：只有足够历史K线才计算
