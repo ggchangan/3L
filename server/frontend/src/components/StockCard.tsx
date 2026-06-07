@@ -26,8 +26,10 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
   const [showChart, setShowChart] = useState(false)
   const cls = s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold'
   const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--'
-  // 操作文字优先用卡片统一推导的 action_signal，次选 action_type，最后回退 signalText
-  const displayAction = s.action_signal || s.action_type || signalText
+  // 操作文字：主操作用 action_type（买入/卖出/持有/加仓/减仓/换股）
+  // action_signal 作为补充说明用小字显示
+  const displayAction = s.action_type || signalText
+  const hasSignalDetail = s.action_signal && s.action_signal !== s.action_type
 
   const isTrend = s.trading_system === 'trend'
   const systemIcon = isTrend ? '🔥' : '📘'

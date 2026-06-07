@@ -24,7 +24,7 @@ export default function TradingPlan({ plan }: Props) {
   if (!plan) return <div className="empty">暂无交易计划</div>
 
   return (
-    <div className="plan-card">
+    <div className="plan-card" style={{ overflowX: 'auto' }}>
       <div className="plan-title">📌 {plan.overall_strategy || '正常交易'}</div>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
         <span style={{ fontSize: 13 }}><span style={{ color: '#888' }}>仓位:</span> {plan.position_level || '--'}</span>
@@ -170,7 +170,7 @@ function UnifiedTable({ title, items, groupKey, renderAction, renderSignal, rend
                 <col style={{ width: 'auto' }} />
                 <col style={{ width: 'auto' }} />
                 <col style={{ width: 'auto' }} />
-                <col style={{ width: '1fr' }} />
+                <col style={{ width: '40%' }} />
                 <col style={{ width: 'auto' }} />
               </colgroup>
               <thead>
@@ -207,7 +207,7 @@ function UnifiedTable({ title, items, groupKey, renderAction, renderSignal, rend
                     <td style={{ padding: '3px 4px', whiteSpace: 'nowrap', color: '#555', fontSize: 10 }}>
                       {item.sector || ''}
                     </td>
-                    <td style={{ padding: '3px 4px', color: '#888', fontSize: 10, width: '100%' }}>
+                    <td style={{ padding: '3px 4px', color: '#888', fontSize: 10, wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', minWidth: 80 }}>
                       {item.reason}
                     </td>
                     <td style={{ padding: '3px 4px', whiteSpace: 'nowrap', textAlign: 'right' }}>

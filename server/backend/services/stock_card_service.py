@@ -271,110 +271,71 @@ def _build_tags(card):
 # 操作建议推导（与 StockCardData 合约一致）
 # ═══════════════════════════════════════════
 
-# 旧 _make_item_action 的分解 — 在 get_stock_card() 内部调用，
-# 确保 action_type/action_signal/action_priority/action_reason
-# 由卡片统一输出，外部不重复计算。
-
-# fusion_type → action_type 映射表
-_FUSION_ACTION_MAP = {
-    'strong_buy': '买入',
-    'signal_buy': '买入',
-    'signal_sell': '卖出',
-    'bullish_wait': '持有',
-    'conflict_bearish': '减仓',
-    'conflict_bullish': '持有',
-}
-
-# stage → action_type 回退映射（当 fusion_type 为空时）
-_STAGE_ACTION_MAP = {
-    '加速': '持有',
-    '缩量整理': '持有',
-    '上行': '持有',
-    '滞涨': '减仓',
-    '转弱': '换股',
-    '区间底部': '加仓',
-    '区间顶部': '减仓',
-    '区间中段': '持有',
-}
-
+# 以下 4 个函数严格对应旧 _make_item_action 逻辑（无 fusion 优先）。
+# 旧的 _make_item_action 只根据 signal → stage 推导，fusion_type 未参与。
 
 def _calc_action_type(signal, stage, fusion_type):
-    """计算操作类型
-
-    融合引擎优先，回退到 signal → stage 推导。
-    与旧 _make_item_action 逻辑完全一致。
-    """
-    # 融合引擎优先
-    if fusion_type in _FUSION_ACTION_MAP:
-        return _FUSION_ACTION_MAP[fusion_type]
-    # 回退 signal
+    """计算操作类型 — 严格对应旧 _make_item_action 逻辑"""
     if signal == 'sell':
         return '卖出'
     if signal == 'buy':
         return '买入'
-    # 回退 stage
-    return _STAGE_ACTION_MAP.get(stage, '持有')
+    _stage_action = {
+        '加速': '持有',
+        '缩量整理': '持有',
+        '上行': '持有',
+        '滞涨': '减仓',
+        '转弱': '换股',
+        '区间底部': '加仓',
+        '区间顶部': '减仓',
+        '区间中段': '持有',
+    }
+    return _stage_action.get(stage, '持有')
 
 
 def _calc_action_signal(signal, stage, fusion_type, triggered_signals):
-    """计算操作子标签
-
-    仅展示用文字，与旧 _make_item_action 逻辑一致。
-    """
-    if fusion_type == 'strong_buy' and signal == 'buy':
-        parts = [f'{t.get("name","")}({t.get("confidence",0):.0f})'
-                 for t in (triggered_signals or [])[:3]]
-        return f'强势买入·{"，".join(parts)}' if parts else '强势买入'
-    if fusion_type == 'signal_buy' and signal == 'buy':
-        parts = [f'{t.get("name","")}({t.get("confidence",0):.0f})'
-                 for t in (triggered_signals or [])[:2]]
-        return f'买入信号·{"，".join(parts)}' if parts else '买入信号'
-    if fusion_type == 'signal_sell' and signal == 'sell':
-        parts = [f'{t.get("name","")}({t.get("confidence",0):.0f})'
-                 for t in (triggered_signals or [])[:2]]
-        return f'卖出信号·{"，".join(parts)}' if parts else '卖出信号'
-    if fusion_type == 'bullish_wait':
-        return '偏多等确认'
-    if fusion_type == 'conflict_bearish':
-        return '空头冲突'
-    if fusion_type == 'conflict_bullish':
-        return '多头冲突'
-    # stage 回退
+    """计算操作子标签 — 严格对应旧 _make_item_action 逻辑"""
+    if signal == 'sell':
+        return ''
+    if signal == 'buy':
+        return '买点'  # 旧逻辑 buy 信号返回 buy_point or '买点'
     _stage_signal = {
         '加速': '关注止盈',
         '缩量整理': '可加仓',
+        '上行': '',
+        '滞涨': '警惕滞涨',
+        '转弱': '关注转弱',
         '区间底部': '支撑位',
         '区间顶部': '压力位',
+        '区间中段': '',
     }
     return _stage_signal.get(stage, '')
 
 
 def _calc_action_priority(signal, stage, fusion_type):
-    """计算优先级"""
-    if fusion_type:
-        return '高'
+    """计算优先级 — 严格对应旧 _make_item_action 逻辑"""
     if signal in ('buy', 'sell'):
         return '高'
-    if stage in ('加速', '滞涨', '转弱', '区间顶部'):
-        return '高'
-    if stage in ('缩量整理', '区间底部'):
-        return '中'
-    if stage in ('上行', '区间中段'):
-        return '低'
-    return '中'
+    _stage_pri = {
+        '加速': '中',
+        '缩量整理': '中',
+        '上行': '低',
+        '滞涨': '高',
+        '转弱': '高',
+        '区间底部': '中',
+        '区间顶部': '高',
+        '区间中段': '低',
+    }
+    return _stage_pri.get(stage, '中')
 
 
 def _calc_action_reason(signal, structure, stage, fusion_reason,
                         triggered_signals, buy_point):
-    """计算操作理由"""
-    if fusion_reason:
-        return fusion_reason
+    """计算操作理由 — 严格对应旧 _make_item_action 逻辑"""
     if signal == 'sell':
         return f'{structure}·{stage}'
     if signal == 'buy':
-        bp = buy_point or '买点'
-        return f'{structure}·{stage}·触发{bp}'
-    # stage 补充文字
+        return f'{structure}·{stage}'
     _stage_reason = {
         '加速': f'{structure}·{stage}，关注放量滞涨/加速变缓',
         '缩量整理': f'{structure}·{stage}，供应枯竭等待放量',
