@@ -239,43 +239,13 @@ def _get_holdings_analysis() -> list:
     # 按仓位排序，最多取前12只
     stocks_sorted = sorted(stocks, key=lambda s: s.get('ratio', 0), reverse=True)[:12]
 
-    # 批量拉实时行情（腾讯API）
-    q_str = ','.join(
-        f'sh{s["code"]}' if str(s['code']).startswith('6') else f'sz{s["code"]}'
-        for s in stocks_sorted if s.get('code')
-    )
-    prices = {}
-    if q_str:
-        try:
-            import requests
-            r = requests.get(
-                f'https://qt.gtimg.cn/q={q_str}',
-                headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-                timeout=8,
-            )
-            for line in r.text.strip().split(';'):
-                if '="' not in line:
-                    continue
-                parts = line.split('"')[1].split('~') if '"' in line else []
-                if len(parts) < 32:
-                    continue
-                code_raw = parts[2] if len(parts) > 2 else ''
-                prices[code_raw] = {
-                    'price': float(parts[3]) if parts[3] else 0,
-                    'change_pct': round((float(parts[3]) - float(parts[4])) / float(parts[4]) * 100, 2)
-                    if parts[4] and float(parts[4]) > 0 else 0,
-                }
-        except Exception:
-            pass
-
     for s in stocks_sorted:
         code = str(s.get('code', ''))
         name = s.get('name', '')
         stop_loss = s.get('stop_loss', s.get('stop_loss_price', 0))
         ratio = s.get('ratio', 0)
-        price_info = prices.get(code, {})
 
-        # 个股卡片数据
+        # 个股卡片数据（数据层统一入口）
         stock_card = {}
         try:
             card = get_stock_card(code, today)
@@ -284,8 +254,8 @@ def _get_holdings_analysis() -> list:
         except Exception:
             pass
 
-        price = price_info.get('price', 0) or stock_card.get('price', 0)
-        chg = price_info.get('change_pct', 0) or stock_card.get('change_pct', 0)
+        price = stock_card.get('price', 0)
+        chg = stock_card.get('change_pct', 0)
         structure = stock_card.get('structure', '—')
         stage = stock_card.get('stage', '—')
         buy_point = stock_card.get('buy_point', '')

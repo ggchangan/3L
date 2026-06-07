@@ -624,3 +624,84 @@ if __name__ == '__main__':
     print(f'自选股: {len(wl)} 只')
     h = get_holdings()
     print(f'持仓: {len(h)} 只')
+
+
+def calc_sector_leaders(stock_codes, kline_index, top_n=5):
+    """计算板块领涨股（按5日涨跌幅排名）
+
+    从 review_service._calc_stock_leaders 提取的公共版本。
+    Args:
+        stock_codes: 板块内个股代码列表
+        kline_index: {code: [kline,...]} 索引
+        top_n: 返回前N只（默认5）
+    Returns:
+        [{code, name, chg_1d, chg_5d, tag}, ...]
+    """
+    candidates = []
+    for _c in stock_codes:
+        _kls = kline_index.get(_c)
+        if not _kls or len(_kls) < 5:
+            continue
+        _close_now = _kls[-1]['close']
+        _close_1d = _kls[-2]['close'] if len(_kls) >= 2 else _close_now
+        _close_5d = _kls[-5]['close'] if len(_kls) >= 5 else _close_now
+        _chg_1d = round((_close_now - _close_1d) / _close_1d * 100, 1)
+        _chg_5d = round((_close_now - _close_5d) / _close_5d * 100, 1)
+        _name = _kls[0].get('name', _c) if isinstance(_kls[0], dict) else _c
+        _tag = '🏆领涨' if _chg_5d >= 5 else ('💪中军' if _chg_1d > 0 else '')
+        candidates.append({
+            'code': _c,
+            'name': _name or _c,
+            'chg_1d': _chg_1d,
+            'chg_5d': _chg_5d,
+            'tag': _tag,
+        })
+    candidates.sort(key=lambda x: -x['chg_5d'])
+    return candidates[:top_n]
+
+
+def build_kline_index(all_stocks_data=None):
+    """从 all_stocks 数据构建 {code: [kline,...]} 索引
+
+    Args:
+        all_stocks_data: get_all_stocks() 返回值（可选，不传则自动加载）
+    Returns: {code: [kline,...]}
+    """
+    from backend.config import ALL_STOCKS_PATH
+    import os, json
+    if all_stocks_data is None:
+        if os.path.isfile(ALL_STOCKS_PATH):
+            with open(ALL_STOCKS_PATH) as _f:
+                _raw = json.load(_f)
+            all_stocks_data = _raw.get('stocks', {})
+        else:
+            all_stocks_data = get_all_stocks()
+    index = {}
+    for _dir, _ss in all_stocks_data.items():
+        if isinstance(_ss, dict):
+            for _code, _kls in _ss.items():
+                index[_code] = _kls
+    return index
+
+
+def build_industry_stock_map(industry_map_data=None):
+    """从行业映射构建 {行业名: [code,...]} 索引
+
+    Args:
+        industry_map_data: get_industry_map() 返回值（可选）
+    Returns: {industry_name: [code, ...]}
+    """
+    from backend.config import INDUSTRY_MAP_PATH
+    import os, json
+    if industry_map_data is None:
+        if os.path.isfile(INDUSTRY_MAP_PATH):
+            with open(INDUSTRY_MAP_PATH) as _f:
+                industry_map_data = json.load(_f)
+        else:
+            industry_map_data = {}
+    mapping = {}
+    for _code, _info in industry_map_data.items():
+        _ind = _info.get('ths_industry', '')
+        if _ind:
+            mapping.setdefault(_ind, []).append(_code)
+    return mapping
