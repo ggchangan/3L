@@ -320,7 +320,16 @@ def get_mainline_data(date_str):
         except Exception:
             pass
 
-    # 从本地板块K线数据计算20日涨幅（cron 17:00 已通过 update_sectors() 拉好）
+    # 从 EM 仓直接获取板块排行（所有行业的 chg_1d 从 change_pct 字段取，无需计算）
+    from backend.services.data_source import get_sector_rankings
+    em_rankings = get_sector_rankings('industry')
+    em_chg_1d = {}  # {name: change_pct}
+    if isinstance(em_rankings, dict):
+        for name, data in em_rankings.items():
+            if isinstance(data, dict) and 'change_pct' in data:
+                em_chg_1d[name] = float(data['change_pct'])
+
+    # 从本地板块K线数据计算20日涨幅
     from backend.core.data_layer import get_sector_daily
     sector_data = get_sector_daily()
     industries_data = sector_data.get('industries', {})
@@ -334,15 +343,15 @@ def get_mainline_data(date_str):
     scores = []
     for name, klines in industries_data.items():
         try:
-            if len(klines) < 20:
+            if len(klines) < 1:
                 continue
-            chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
-            # chg_1d：优先用 EM 仓的 change_pct（含最新交易日数据）
-            # fallback：从最后2根K线计算
-            if 'change_pct' in klines[-1]:
-                chg_1d = float(klines[-1]['change_pct'])
+            # chg_1d：直接从 EM 排行取 change_pct，不从K线计算
+            chg_1d = em_chg_1d.get(name, 0)
+            # chg_20d：只有足够历史K线才计算
+            if len(klines) >= 20:
+                chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
             else:
-                chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
+                chg_20d = 0  # 历史不足，不参与20日排名
             # 阶段判定
             wave = _judge_wave(klines)
             stage = wave.get('stage', '--')
