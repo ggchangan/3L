@@ -10,6 +10,8 @@
 
 import json, os, sys, time
 from datetime import datetime, timedelta
+from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -297,6 +299,107 @@ def get_data_source_status():
             'degraded': sum(1 for s in health.get('sources', {}).values() if s.get('status') == 'DEGRADED'),
         }
     }
+
+
+# ════════════════════════════════════════════════════════════
+# 板块涨跌计算（从个股K线 → mootdx，不依赖 push2test f3）
+# ════════════════════════════════════════════════════════════
+
+def calc_sector_chg_from_stocks(sector_code: str, date_str: str = None) -> Optional[float]:
+    """从个股K线计算板块涨跌幅
+    
+    获取板块成分股 → mootdx 拉个股日K线 → 等权平均涨跌幅
+    不依赖 push2test f3 字段，周末也能拿到历史交易日数据。
+    
+    Args:
+        sector_code: 东财板块代码，如 'BK1039'
+        date_str: YYYYMMDD，默认最后一个交易日
+    
+    Returns:
+        等权平均涨跌幅（%），失败返回 None
+    """
+    if date_str is None:
+        date_str = _last_trading_day()
+    
+    # 1. 从push2test获取成分股代码
+    try:
+        import requests
+        url = 'https://push2test.eastmoney.com/api/qt/clist/get'
+        params = {'pn':'1','pz':'200','po':'0','np':'1',
+                  'ut':'bd1d9ddb04089700cf9c27f6f7426281','fltt':'2','invt':'2',
+                  'fs':f'b:{sector_code}','fields':'f12,f14'}
+        headers = {'User-Agent':'Mozilla/5.0','Referer':'https://quote.eastmoney.com/'}
+        r = requests.get(url, params=params, headers=headers, timeout=15)
+        items = r.json().get('data',{}).get('diff',[])
+        if not items:
+            return None
+        codes = [(it.get('f12',''),it.get('f14','')) for it in items if it.get('f12')]
+    except Exception:
+        return None
+    
+    # 2. 从mootdx获取个股K线，计算涨跌幅
+    try:
+        from mootdx.quotes import Quotes
+        client = Quotes.factory(market='std')
+    except Exception:
+        return None
+    
+    if not date_str or len(date_str) != 8:
+        return None
+    
+    # 前一个交易日
+    prev_date = datetime.strptime(date_str, '%Y%m%d')
+    for _ in range(7):
+        prev_date -= timedelta(days=1)
+        if prev_date.weekday() < 5:
+            break
+    prev_str = prev_date.strftime('%Y%m%d')
+    
+    changes = []
+    for code, name in codes:
+        if code.startswith(('9','8','4')):  # 北交所跳过
+            continue
+        try:
+            market = 0 if not code.startswith('6') else 1
+            klines = client.bars(symbol=code, category=4, offset=10)
+            if klines is None or len(klines) < 2:
+                continue
+            close_target = close_prev = None
+            for i in range(len(klines)-1, -1, -1):
+                row = klines.iloc[i]
+                ds = str(row.name)[:10].replace('-','')
+                if ds == date_str:
+                    close_target = row['close']
+                elif ds == prev_str:
+                    close_prev = row['close']
+            if close_target and close_prev and close_prev > 0:
+                chg = (close_target / close_prev - 1) * 100
+                changes.append(chg)
+        except Exception:
+            continue
+    
+    if not changes:
+        return None
+    return sum(changes) / len(changes)
+
+
+def get_sector_constituents(sector_code: str) -> List[tuple]:
+    """获取板块成分股列表 [(code, name), ...]
+    
+    用于验证、展示成分股构成。
+    """
+    try:
+        import requests
+        url = 'https://push2test.eastmoney.com/api/qt/clist/get'
+        params = {'pn':'1','pz':'200','po':'0','np':'1',
+                  'ut':'bd1d9ddb04089700cf9c27f6f7426281','fltt':'2','invt':'2',
+                  'fs':f'b:{sector_code}','fields':'f12,f14'}
+        headers = {'User-Agent':'Mozilla/5.0','Referer':'https://quote.eastmoney.com/'}
+        r = requests.get(url, params=params, headers=headers, timeout=15)
+        items = r.json().get('data',{}).get('diff',[])
+        return [(it.get('f12',''),it.get('f14','')) for it in items if it.get('f12')]
+    except Exception:
+        return []
 
 
 # ════════════════════════════════════════════════════════════
