@@ -110,20 +110,24 @@ def _try_refresh_index_data():
 
 
 def _auto_dismiss_index_alarm(code: str):
-    """指数恢复（价格回到EMA上方）→ 自动清除报警"""
+    """指数恢复（价格回到EMA上方）→ 自动清除报警，永久沉默"""
     from backend.services.alarm_service import _load, _save
     data = _load()
     changed = False
-    tomorrow = date.today() + timedelta(days=1)
-    silenced = f'{tomorrow.strftime("%Y%m%d")}150000'
     for a in data.get('alarms', []):
         if a.get('stock_code') == code and a.get('type') in ('market', 'market_critical') and a.get('status') != 'handled':
             a['status'] = 'handled'
             a['dismissed_at'] = datetime.now().isoformat()
-            a['silenced_until'] = silenced
             changed = True
     if changed:
         _save(data)
+
+
+def _is_non_trading_day() -> bool:
+    """判断当前是否为非交易日（复用 data_models.is_trading_day）"""
+    from backend.core.data_models import is_trading_day
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    return not is_trading_day(today_str)
 
 
 # ── 外部接口 ──────────────────────────────────────────
@@ -202,27 +206,16 @@ def _check_index_dedup(code: str, condition: str, alarm_type: str) -> bool:
 
 
 def _is_index_dismissed(code: str) -> bool:
-    """检查指数报警是否已被用户标记为已处理（status=handled 且沉默期未过）"""
+    """检查指数报警是否已被标记为已处理（handle=永久沉默）"""
     alarms_path = os.path.join(
         os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'private', 'alarms.json'
     )
     try:
         with open(alarms_path) as f:
             data = json.load(f)
-        now = datetime.now()
         for a in data.get('alarms', []):
             if a.get('stock_code') == code and a.get('status') == 'handled':
-                silenced = a.get('silenced_until', '')
-                if silenced:
-                    try:
-                        silenced_dt = datetime.strptime(silenced, '%Y%m%d%H%M%S')
-                        if now < silenced_dt:
-                            return True  # 沉默期未过，不报
-                    except (ValueError, TypeError):
-                        pass
-                # 没有 silenced_until 但有 handled → 永不清零，也跳过
-                if not silenced:
-                    return True
+                return True
     except (FileNotFoundError, json.JSONDecodeError, Exception):
         pass
     return False
@@ -360,12 +353,6 @@ def _sync_holdings_to_alarms():
     读取 holdings.json，将带 stop_loss_price 的持仓自动创建 price 报警。
     如果该股已有手动报警（source != holdings_auto），保留手动配置。
     """
-    # 全局跨日重置：扫描所有 handled 报警，恢复前一天 dismissed 的
-    try:
-        from backend.services.alarm_service import cross_day_reactivate
-        cross_day_reactivate()
-    except Exception:
-        pass
 
     try:
         holdings_path = os.path.join(DATA_DIR, 'private', 'holdings.json')
@@ -434,6 +421,10 @@ def check_all_alerts() -> dict:
     Returns:
         {'triggered': [{type, stock, code, msg, ts}], 'count': N}
     """
+    # 非交易日跳过报警检查（周五处理的报警，周六不重复报）
+    if _is_non_trading_day():
+        return {'triggered': [], 'count': 0}
+
     now_ts = datetime.now().timestamp()
 
     # ① 自动同步持仓止损到 alarms.json

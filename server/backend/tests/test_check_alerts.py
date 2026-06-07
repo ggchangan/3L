@@ -1,4 +1,11 @@
 """测试 check_alerts 报警检查服务（基于 alarm_service 持久化报警）"""
+import sys, os
+_test_dir = os.path.dirname(__file__)
+_server_root = os.path.join(_test_dir, '..', '..')
+for p in [_server_root]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 import json
 import pytest
 from unittest.mock import patch, MagicMock
@@ -100,7 +107,9 @@ def mock_active_alarms():
     """mock alarm_service.get_active_alarms() — 只返回 active 的报警"""
     active = [a for a in SAMPLE_ALARMS if a.get('status') == 'active']
     with patch('backend.services.check_alerts.get_active_alarms',
-               return_value=active):
+               return_value=active), \
+         patch('backend.services.check_alerts._is_non_trading_day',
+               return_value=False):
         yield
 
 
@@ -108,7 +117,9 @@ def mock_active_alarms():
 def mock_empty_alarms():
     """mock — 空报警列表"""
     with patch('backend.services.check_alerts.get_active_alarms',
-               return_value=[]):
+               return_value=[]), \
+         patch('backend.services.check_alerts._is_non_trading_day',
+               return_value=False):
         yield
 
 
