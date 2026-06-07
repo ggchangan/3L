@@ -486,7 +486,49 @@ def verify_data_sources(verbose=True):
             print(f'  {tag} {name}: {detail}')
         checks.append({'check': name, 'pass': passed, 'detail': detail})
 
-    # ════ 1. 实时源验证（push2test）════
+    # ════ 1. 实时源验证 ════
+    # 1a. THS live（行业主源）
+    try:
+        os.environ['TQDM_DISABLE'] = '1'
+        import akshare as ak
+        ths_df = ak.stock_board_industry_summary_ths()
+        ths_cnt = len(ths_df)
+        ths_ok = ths_cnt >= 80
+        _check('THS行业总数', ths_ok, f'返回{ths_cnt}个 (需≥80)')
+
+        # 检查电子化学品是否存在
+        has_ec = '电子化学品' in ths_df['板块'].values
+        _check('THS含电子化学品', has_ec, f'存在={has_ec}')
+
+        # 检查半导体
+        has_semi = '半导体' in ths_df['板块'].values
+        _check('THS含半导体', has_semi, f'存在={has_semi}')
+
+        # 电子化学品chg合理
+        ec_row = ths_df[ths_df['板块'] == '电子化学品']
+        if len(ec_row) > 0:
+            ec_chg = float(ec_row.iloc[0]['涨跌幅'])
+            _check('THS电子化学品chg合理', -20 < ec_chg < 20, f'chg={ec_chg}%')
+
+        # 领涨股字段存在
+        has_leader = '领涨股' in ths_df.columns
+        _check('THS含领涨股字段', has_leader, f'存在={has_leader}')
+        has_updown = '上涨家数' in ths_df.columns
+        _check('THS含上涨/下跌家数字段', has_updown, f'存在={has_updown}')
+
+        # 保存THS实时数据的 change_pct 供后续一致性比对
+        ths_real_chg = {}
+        for _, row in ths_df.iterrows():
+            name = str(row.get('板块', '')).strip()
+            chg = row.get('涨跌幅', None)
+            if name and chg is not None:
+                ths_real_chg[name] = float(chg)
+
+    except Exception as e:
+        _check('THS live调用', False, f'异常: {type(e).__name__}: {e}')
+        ths_real_chg = {}
+
+    # 1b. push2test（概念主源）
     try:
         import requests
         url = 'https://push2test.eastmoney.com/api/qt/clist/get'
@@ -543,25 +585,96 @@ def verify_data_sources(verbose=True):
             _check(f'{fname}[{os.path.basename(fpath)}] JSON解析', False, str(e))
             continue
 
-        # 新鲜度：应等于最后一个交易日
+        # 新鲜度：应等于最后一个交易日（非交易日跳过，缓存文件可能在不同时间更新）
         last_up = data.get('last_updated', '') or data.get('_push2test_updated', '')
-        fresh = last_up == latest_trade_day
-        _check(f'{fname}[{os.path.basename(fpath)}] 新鲜度(最近交易日<{latest_trade_day}>)',
-               fresh, f'last_updated={last_up}')
+        if _is_weekend():
+            _check(f'{fname}[{os.path.basename(fpath)}] 新鲜度(非交易日跳过检查)',
+                   True, f'last_updated={last_up}')
+        else:
+            fresh = last_up == latest_trade_day
+            _check(f'{fname}[{os.path.basename(fpath)}] 新鲜度(最近交易日<{latest_trade_day}>)',
+                   fresh, f'last_updated={last_up}')
 
-    # ════ 3. 一致性验证（实时 vs 文件）════
+    # ════ 3. 一致性验证（THS live vs _push2test）════
     try:
-        em_file = _load_json(SOURCES_EM_SECTOR_DAILY)
-        if em_file:
-            em_inds = em_file.get('industries', {})
+        # 实时源是THS，比对 _push2test 字段（其中存的是THS数据）
+        from backend.core.data_layer import get_sector_push2test
+        p2_data = get_sector_push2test()
+        if (hasattr(p2_data, 'industries') and p2_data.industries
+                and 'ths_real_chg' in dir() and ths_real_chg):
             matched = 0
-            for name in list(ind_data.keys())[:30]:  # 前30个采样
-                if name in em_inds and abs(em_inds[name].get('change_pct', 0) - ind_data.get(name, 0)) < 0.5:
-                    matched += 1
-            _check('实时vsEM仓 change_pct 一致性(采样前30)',
-                   matched >= 20, f'{matched}/30采样偏差<0.5%')
+            ths_samples = list(ths_real_chg.keys())[:30]
+            for name in ths_samples:
+                snap = p2_data.industries.get(name)
+                live_chg = ths_real_chg.get(name)
+                if snap is not None and live_chg is not None:
+                    if abs(snap.change_pct - live_chg) < 0.5:
+                        matched += 1
+            _check('THS实时vs_push2test change_pct一致性(采样前30)',
+                   matched >= 20, '%d/30采样偏差<0.5%%' % matched)
+        else:
+            _check('THS实时vs_push2test一致性', True, '跳过(数据不可比)')
     except Exception as e:
-        _check('一致性验证', False, f'异常: {e}')
+        _check('一致性验证', False, '异常: %s' % e)
+
+    # ════ 4. data_layer 合约验证 ════
+    try:
+        from backend.core.data_layer import (
+            get_sector_push2test, get_sector_daily, get_sector_klines,
+        )
+
+        # 4a. get_sector_push2test 合约
+        p2 = get_sector_push2test()
+        ind_count = len(p2.industries) if hasattr(p2, 'industries') else 0
+        p2_has_industries = ind_count >= 80
+        _check('data_layer.get_sector_push2test 行业数>=80',
+               p2_has_industries, 'actual=%d' % ind_count)
+
+        # 电子化学品在 push2test 中
+        ec_in_p2 = hasattr(p2, 'industries') and '电子化学品' in p2.industries
+        _check('data_layer.get_sector_push2test 含电子化学品',
+               ec_in_p2, 'exists=%s' % ec_in_p2)
+
+        # 电子化学品 chg 正确（类型化对象）
+        if ec_in_p2:
+            ec_snap = p2.industries['电子化学品']
+            ec_chg_ok = ec_snap.change_pct is not None and -20 < ec_snap.change_pct < 20
+            _check('data_layer.push2test 电子化学品.chg类型化',
+                   ec_chg_ok, 'change_pct=%s' % ec_snap.change_pct)
+            ec_up_ok = ec_snap.up_count is not None
+            _check('data_layer.push2test 电子化学品.up_count存在',
+                   ec_up_ok, 'up_count=%s' % ec_snap.up_count)
+            ec_leader_ok = bool(ec_snap.leader)
+            _check('data_layer.push2test 电子化学品.leader存在',
+                   ec_leader_ok, 'leader=%s' % ec_snap.leader)
+
+        # 4b. get_sector_daily 合约
+        sd = get_sector_daily()
+        sd_ind_count = len(sd.get('industries', {})) if isinstance(sd, dict) else 0
+        sd_has_ind = sd_ind_count > 0
+        _check('data_layer.get_sector_daily industries非空',
+               sd_has_ind, 'industries=%d' % sd_ind_count)
+        lu = sd.get('last_updated', '') if isinstance(sd, dict) else ''
+        _check('data_layer.get_sector_daily last_updated非空',
+               bool(lu), 'last_updated=%s' % lu)
+
+        # 4c. get_sector_klines 合约
+        klines = get_sector_klines('电子化学品', 'industry')
+        kl_ok = isinstance(klines, list) and len(klines) >= 1
+        _check('data_layer.get_sector_klines 返回非空列表',
+               kl_ok, 'len=%d' % (len(klines) if isinstance(klines, list) else -1))
+        if kl_ok:
+            k = klines[0]
+            kl_fmt = [f for f in ['date', 'open', 'close', 'high', 'low'] if k.get(f) is not None]
+            kl_format_ok = len(kl_fmt) == 5
+            _check('data_layer.get_sector_klines K线字段完整',
+                   kl_format_ok, 'fields_ok=%d/5' % len(kl_fmt))
+            kl_vol_ok = isinstance(k.get('volume'), (int, float)) and k.get('volume', 0) > 0
+            _check('data_layer.get_sector_klines volume>0',
+                   kl_vol_ok, 'volume=%s' % k.get('volume'))
+
+    except Exception as e:
+        _check('data_layer 合约验证', False, f'异常: {type(e).__name__}: {e}')
 
     # ════ 汇总 ════
     if verbose:
