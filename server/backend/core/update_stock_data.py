@@ -459,6 +459,12 @@ def update_sectors():
     import warnings
     warnings.filterwarnings('ignore')
 
+    # 非交易日跳过（push2test 返回的是旧缓存，不可信）
+    now = datetime.now()
+    if now.weekday() >= 5:
+        log('⏭️  非交易日，跳过板块更新')
+        return (0, 0)
+
     existing = load_sector_daily_uncached()
     last_updated = existing.get('last_updated', '')
     industries = existing.get('industries', {})
