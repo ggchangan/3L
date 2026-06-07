@@ -109,10 +109,12 @@ class TestSectorMaxK:
         spec.loader.exec_module(mod)
         assert mod.MAX_K == 60
 
-    def test_update_sectors_uses_push2test(self):
-        """update_sectors() 使用 push2test 主源（单日数据，无需裁剪）"""
+    def test_update_sectors_uses_ths_for_industry(self):
+        """update_sectors() 行业用同花顺THS，概念用push2test"""
         import inspect
         from backend.core.update_stock_data import update_sectors
         source = inspect.getsource(update_sectors)
-        # push2test 主源写今日数据，无需历史K线裁剪
+        # 行业走THS
+        assert '_fetch_today_industries_from_ths' in source
+        # 概念走后端测试API
         assert '_fetch_today_sectors_from_push2test' in source
