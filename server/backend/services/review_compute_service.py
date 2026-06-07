@@ -739,7 +739,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             plan['holdings_action'].append({
                 'name': name,  # "名称(代码)" 格式
                 **base, 'action_type': at, 'signal': sig_txt,
-                'action': f'{at}·{sig_txt}' if sig_txt else at,
+                'action': at,
                 'reason': f'{chain}→{reason}', 'priority': pri,
             })
 
