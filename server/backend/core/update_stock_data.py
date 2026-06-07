@@ -385,25 +385,6 @@ def _fetch_board_names_from_push2test(sector_type):
         return []
 
 
-def _fetch_board_names_from_akshare(sector_type):
-    """从 akshare(同花顺) 获取板块名称列表（备源）
-    sector_type: 'industry' | 'concept'
-    返回 [name, ...]，失败返回 []
-    """
-    import akshare as ak
-    try:
-        if sector_type == 'industry':
-            df = ak.stock_board_industry_name_ths()
-        else:
-            df = ak.stock_board_concept_name_ths()
-        names = list(df['name'])
-        log(f'  akshare[{sector_type}]: {len(names)}个板块名（备源）')
-        return names
-    except Exception as e:
-        log(f'❌ akshare[{sector_type}] 板块列表失败: {type(e).__name__}: {e}')
-        return []
-
-
 def _fetch_today_sectors_from_push2test(sector_type, name_list):
     """主源：从 push2test.eastmoney.com 批量获取板块今日实时数据
     sector_type: 'industry' | 'concept'
@@ -461,38 +442,9 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
     return name_map
 
 
-def _fetch_sector_klines_akshare(sector_type, name):
-    """备源：akshare(同花顺)拉取单个板块历史K线
-    仅用于新板块首次拉历史数据，今日数据已有则无需调用
-    返回 [{date, open, close, high, low, volume}] 或 []
-    """
-    import akshare as ak
-    import time
-    from datetime import datetime, timedelta
-    today = datetime.now().strftime('%Y%m%d')
-    start = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-
-    for attempt in range(3):
-        try:
-            if sector_type == 'industry':
-                df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)
-            else:
-                df = ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=today)
-            if df is None or len(df) == 0:
-                return []
-            return _df_to_kline(df)
-        except Exception as e:
-            if attempt < 2:
-                log(f'  ⚠️  akshare[{sector_type}/{name}] 重试#{attempt+1}: {type(e).__name__}: {str(e)[:120]}')
-                time.sleep(2 + attempt * 2)
-            continue
-    log(f'  ❌ akshare[{sector_type}/{name}] 3次重试全部失败，放弃')
-    return []
-
-
 def update_sectors():
     """更新行业+概念板块日K线
-    双源自动切换：主源push2test(今日实时) → 备源akshare(历史K线)
+    数据源：push2test.eastmoney.com（主源，批量获取今日实时数据）
     失败率>50%告警，全部失败抛异常
     """
     import warnings
@@ -503,19 +455,15 @@ def update_sectors():
     industries = existing.get('industries', {})
     concepts = existing.get('concepts', {})
 
-    # ── 获取板块名称列表（双源：push2test优先 → akshare兜底 → 缓存兜底） ──
+    # ── 获取板块名称列表（push2test优先 → 缓存兜底） ──
     ind_names = _fetch_board_names_from_push2test('industry')
     if not ind_names:
-        ind_names = _fetch_board_names_from_akshare('industry')
-    if not ind_names:
-        log('⚠️  行业板块列表全源失败，用缓存数据')
+        log('⚠️  行业板块列表获取失败，用缓存数据')
         ind_names = list(industries.keys())
 
     con_names = _fetch_board_names_from_push2test('concept')
     if not con_names:
-        con_names = _fetch_board_names_from_akshare('concept')
-    if not con_names:
-        log('⚠️  概念板块列表全源失败，用缓存数据')
+        log('⚠️  概念板块列表获取失败，用缓存数据')
         con_names = list(concepts.keys())
 
     log(f'📋  行业{len(ind_names)}个, 概念{len(con_names)}个, 上次更新{last_updated}')
@@ -563,10 +511,6 @@ def update_sectors():
     # 统计
     ind_saved = len(ind_today)
     con_saved = len(con_today)
-
-    # ═══════════════════════════════════════════════════
-    # 备源：akshare 补旧板块历史K线（akshare现已全部不可用，跳过）
-    # ═══════════════════════════════════════════════════
 
     # ═══════════════════════════════════════════════════
     # 失败率分析 + 告警

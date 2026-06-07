@@ -91,73 +91,6 @@ class TestDfToKline:
         assert klines == []
 
 
-# ── 场景B: _fetch_sector_klines_akshare 必须传start_date/end_date ──
-
-class TestFetchSectorKlinesAkshare:
-
-    def test_passes_start_end_date_to_industry(self, monkeypatch):
-        """行业板块调用必须传start_date和end_date"""
-        from backend.core.update_stock_data import _fetch_sector_klines_akshare
-
-        called_kwargs = {}
-
-        def mock_industry(symbol, **kwargs):
-            called_kwargs.update(kwargs)
-            return pd.DataFrame({
-                'date': ['2026-05-27'],
-                'open': [100.0],
-                'close': [102.0],
-                'high': [103.0],
-                'low': [99.0],
-                'volume': [1000000],
-            })
-
-        monkeypatch.setattr(
-            'akshare.stock_board_industry_index_ths',
-            mock_industry,
-        )
-        monkeypatch.setattr(
-            'akshare.stock_board_concept_index_ths',
-            lambda symbol, **kw: pd.DataFrame(),
-        )
-
-        result = _fetch_sector_klines_akshare('industry', '半导体')
-
-        assert 'start_date' in called_kwargs, "必须传 start_date 参数"
-        assert 'end_date' in called_kwargs, "必须传 end_date 参数"
-        assert len(result) >= 1
-
-    def test_passes_start_end_date_to_concept(self, monkeypatch):
-        """概念板块调用也必须传start_date和end_date"""
-        from backend.core.update_stock_data import _fetch_sector_klines_akshare
-
-        called_kwargs = {}
-
-        def mock_concept(symbol, **kwargs):
-            called_kwargs.update(kwargs)
-            return pd.DataFrame({
-                'date': ['2026-05-27'],
-                'open': [100.0],
-                'close': [102.0],
-                'high': [103.0],
-                'low': [99.0],
-                'volume': [1000000],
-            })
-
-        monkeypatch.setattr(
-            'akshare.stock_board_industry_index_ths',
-            lambda symbol, **kw: pd.DataFrame(),
-        )
-        monkeypatch.setattr(
-            'akshare.stock_board_concept_index_ths',
-            mock_concept,
-        )
-
-        result = _fetch_sector_klines_akshare('concept', 'AI概念')
-
-        assert 'start_date' in called_kwargs
-        assert 'end_date' in called_kwargs
-
 
 # ── 场景C: 板块数据裁剪 MAX_K=60 ──
 
@@ -176,10 +109,10 @@ class TestSectorMaxK:
         spec.loader.exec_module(mod)
         assert mod.MAX_K == 60
 
-    def test_update_sectors_trims_to_60(self):
-        """update_sectors() 增量更新后裁剪到60行"""
+    def test_update_sectors_uses_push2test(self):
+        """update_sectors() 使用 push2test 主源（单日数据，无需裁剪）"""
         import inspect
         from backend.core.update_stock_data import update_sectors
         source = inspect.getsource(update_sectors)
-        assert 'len(klines) > 60' in source
-        assert 'klines[-60:]' in source
+        # push2test 主源写今日数据，无需历史K线裁剪
+        assert '_fetch_today_sectors_from_push2test' in source

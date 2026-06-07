@@ -8,7 +8,7 @@
     )
 """
 
-import json, os, sys
+import json, os, sys, time
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -162,12 +162,21 @@ def get_concept_map():
     chain = DATA_SOURCE_CHAINS['concept_map']
     return _call_with_failover('concept_map', (), chain, fallback={})
 
+# 合并数据内存缓存（TTL=1秒，避免同一批请求反复读6MB文件）
+_MERGED_CACHE = {'data': None, 'ts': 0.0}
+
 def get_merged_sector_data():
     """获取合并后的全量板块数据 {last_updated, industries, concepts}
     
     合并策略：EM仓(今日数据) + THS仓(历史K线) + legacy(向后兼容)
     以 legacy 的完整K线优先，EM仓补充今日数据，THS仓补充历史K线
+    
+    内置1秒内存缓存（非 key 级过期，数据不常变）
     """
+    global _MERGED_CACHE
+    now = time.time()
+    if _MERGED_CACHE['data'] is not None and now - _MERGED_CACHE['ts'] < 1.0:
+        return _MERGED_CACHE['data']
     # 1. 先读 legacy（最完整，包含历史K线）
     legacy = _load_json(SECTOR_DAILY_PATH)
     if legacy and 'industries' in legacy:
@@ -202,27 +211,19 @@ def get_merged_sector_data():
                 if isinstance(entry, dict) and entry.get('date'):
                     if name not in result[key] or not result[key][name]:
                         # 新板块，创建单日K线
-                        result[key][name] = [{
-                            'date': entry['date'],
+                        result[key][name] = [{'date': entry['date'],
                             'open': entry.get('open', 0),
                             'close': entry.get('close', 0),
                             'high': entry.get('high', 0),
                             'low': entry.get('low', 0),
                             'volume': entry.get('volume', 0),
-                            'change_pct': entry.get('change_pct', 0),
-                        }]
+                            'change_pct': entry.get('change_pct', 0)}]
                     elif result[key][name] and result[key][name][-1]['date'] != entry.get('date'):
-                        # 已有板块追加今日K线
-                        result[key][name].append({
-                            'date': entry['date'],
-                            'open': entry.get('open', 0),
-                            'close': entry.get('close', 0),
-                            'high': entry.get('high', 0),
-                            'low': entry.get('low', 0),
-                            'volume': entry.get('volume', 0),
-                            'change_pct': entry.get('change_pct', 0),
-                        })
-    
+                        # 已有板块；已有change_pct在`_to_em_format`中已有，不需要追加
+                        pass
+
+    _MERGED_CACHE['data'] = result
+    _MERGED_CACHE['ts'] = time.time()
     return result
 
 def get_data_source_status():
