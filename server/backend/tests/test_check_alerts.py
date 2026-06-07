@@ -108,7 +108,7 @@ def mock_active_alarms():
     active = [a for a in SAMPLE_ALARMS if a.get('status') == 'active']
     with patch('backend.services.check_alerts.get_active_alarms',
                return_value=active), \
-         patch('backend.services.check_alerts._is_weekend',
+         patch('backend.services.check_alerts._is_non_trading_day',
                return_value=False):
         yield
 
@@ -118,7 +118,7 @@ def mock_empty_alarms():
     """mock — 空报警列表"""
     with patch('backend.services.check_alerts.get_active_alarms',
                return_value=[]), \
-         patch('backend.services.check_alerts._is_weekend',
+         patch('backend.services.check_alerts._is_non_trading_day',
                return_value=False):
         yield
 

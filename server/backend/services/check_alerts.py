@@ -123,9 +123,11 @@ def _auto_dismiss_index_alarm(code: str):
         _save(data)
 
 
-def _is_weekend() -> bool:
-    """判断是否非交易日（周六/周日），是则跳过报警检查"""
-    return datetime.now().weekday() >= 5
+def _is_non_trading_day() -> bool:
+    """判断当前是否为非交易日（复用 review_compute_service.is_trading_day）"""
+    from backend.services.review_compute_service import is_trading_day
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    return not is_trading_day(today_str)
 
 
 # ── 外部接口 ──────────────────────────────────────────
@@ -420,7 +422,7 @@ def check_all_alerts() -> dict:
         {'triggered': [{type, stock, code, msg, ts}], 'count': N}
     """
     # 非交易日跳过报警检查（周五处理的报警，周六不重复报）
-    if _is_weekend():
+    if _is_non_trading_day():
         return {'triggered': [], 'count': 0}
 
     now_ts = datetime.now().timestamp()
