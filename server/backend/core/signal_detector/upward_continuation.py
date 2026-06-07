@@ -87,6 +87,12 @@ def detect_upward_continuation(klines: List[Dict], idx: int = -1) -> SignalResul
 
     pullback_pct = (today['close'] - recent_high) / (recent_high or 1)
 
+    # 高点距今不足2天：上影线/当天冲高回落，不是真正回踩
+    if days_since_high < 2:
+        return make_result(False, 0, '上涨中继', 'upward_continuation',
+                           f'非有效回踩（高点距今仅{days_since_high}天）',
+                           {**scores, 'pullback': 0})
+
     if pullback_pct >= MIN_PULLBACK_PCT:
         return make_result(False, 0, '上涨中继', 'upward_continuation',
                            f'未回踩（距高点{pullback_pct:+.1f}%）',
@@ -214,7 +220,7 @@ def detect_upward_continuation(klines: List[Dict], idx: int = -1) -> SignalResul
     else:
         accel_penalty = 100
     scores['accel_filter'] = accel_penalty
-    total += accel_penalty * 0.10  # 权重10%（作为扣分项）
+    total += accel_penalty * 0.20  # 权重20%（加速末端风险高，加重扣分）
 
     # ── 条件⑧：60天相对位置检查 ──
     # 如果股价已在60天高位，回踩失败的几率增加
