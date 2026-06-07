@@ -215,6 +215,19 @@ def get_sector_klines(sector_name, sector_type='industry'):
         return data.get(key, {}).get(sector_name, [])
 
 
+def verify_data_sources(verbose=False):
+    """验证所有数据源的正确性、及时性、缓存一致性
+
+    通过 data_layer 统一入口调用 data_source 的验证逻辑，
+    update_stock_data.py 等更新脚本通过此函数验证数据完整性。
+    """
+    try:
+        from backend.services.data_source import verify_data_sources as _ds_verify
+        return _ds_verify(verbose=verbose)
+    except Exception as e:
+        return {'status': 'fail', 'error': str(e), 'checks': [], 'pass_count': 0, 'fail_count': 1}
+
+
 # ====== 自选股 ======
 def _load_watchlist_from_disk():
     raw = _load_json(WATCHLIST_PATH, {})

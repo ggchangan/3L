@@ -640,7 +640,7 @@ def update_sectors():
 
     # ── 板块数据验证 ──
     try:
-        from backend.services.data_source import verify_data_sources
+        from backend.core.data_layer import verify_data_sources
         vresult = verify_data_sources(verbose=False)
         vpass = vresult['pass_count'] if 'pass_count' in vresult else sum(1 for c in vresult['checks'] if c['pass'])
         vtotal = len(vresult['checks'])
