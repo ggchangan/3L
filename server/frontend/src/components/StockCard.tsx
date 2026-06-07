@@ -26,6 +26,10 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
   const [showChart, setShowChart] = useState(false)
   const cls = s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold'
   const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--'
+  // 操作文字：主操作用 action_type（买入/卖出/持有/加仓/减仓/换股）
+  // action_signal 作为补充说明用小字显示
+  const displayAction = s.action_type || signalText
+  const hasSignalDetail = s.action_signal && s.action_signal !== s.action_type
 
   const isTrend = s.trading_system === 'trend'
   const systemIcon = isTrend ? '🔥' : '📘'
@@ -137,7 +141,7 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
       </div>
       <div className="row" style={{ marginTop: 6 }}>
         <div className="field"><span className="l">方法:</span> <span className="v" title={s.trading_reason || ''}>{systemIcon}{systemText}</span></div>
-        <div className="field"><span className="l">操作:</span> <span className={`v ${cls}`} style={{ fontWeight: 'bold' }}>{signalText}</span></div>
+        <div className="field"><span className="l">操作:</span> <span className={`v ${cls}`} style={{ fontWeight: 'bold' }}>{displayAction}</span></div>
         <div className="field"><span className="l">结构:</span> <span className="v">{structIcon} {s.structure || '--'}</span></div>
         <div className="field"><span className="l">阶段:</span> <span className="v" style={{ color: stageColor, fontWeight: 'bold' }}>{icon} {s.stage || '--'}</span></div>
         {bpContent}

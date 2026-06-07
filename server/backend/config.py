@@ -51,6 +51,7 @@ LOGIC_TRACKING_PATH = os.path.join(DATA_DIR, 'logic_tracking.json')
 ON_DEMAND_CACHE_PATH = os.path.join(DATA_DIR, 'stock_on_demand_cache.json')
 CONCEPT_LIST_PATH = os.path.join(DATA_DIR, 'map', 'concept_list.json')
 STOCK_CONCEPT_MAP_PATH = os.path.join(DATA_DIR, 'map', 'stock_concept.json')
+CONCEPT_NAME_MAPPING_PATH = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.json')
 SCRIPTS_DIR = os.path.join(WWW_DIR, 'scripts')
 
 # =====================================================
@@ -108,6 +109,13 @@ SOURCES_EM_CONCEPT_MAP = os.path.join(SOURCES_EM_DIR, 'concept_map.json')
 
 # THS仓文件
 SOURCES_THS_SECTOR_DAILY = os.path.join(SOURCES_THS_DIR, 'sector_daily.json')
+
+# =====================================================
+# 数据源切换配置（2026-06-07 新增工厂模式）
+# 概念板块当前使用的数据源，切换时只改此处
+# 可选值: 'ths'（同花顺，当前主源）| 'eastmoney'（东财push2test，备源）
+# =====================================================
+CONCEPT_DATA_SOURCE = 'ths'
 
 # =====================================================
 # 服务器配置

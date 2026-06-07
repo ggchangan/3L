@@ -68,10 +68,12 @@ def _load_sector_daily():
     return _SECTOR_DAILY
 
 def _calc_sector_chg_5d(sector):
-    """计算板块5日涨跌幅"""
-    sd = _load_sector_daily()
-    industries = sd.get('industries', {}) if isinstance(sd, dict) else {}
-    klines = industries.get(sector, [])
+    """计算板块5日涨跌幅（通过 data_source 抽象层获取K线）"""
+    try:
+        from backend.core.data_layer import get_sector_klines
+        klines = get_sector_klines(sector, 'industry')
+    except Exception:
+        klines = []
     if len(klines) < 6:
         return None
     close_now = klines[-1]['close']
@@ -263,6 +265,88 @@ def _build_tags(card):
     if card.get('trend_stock'):
         tags.append('📈 趋势股')
     return tags
+
+
+# ═══════════════════════════════════════════
+# 操作建议推导（与 StockCardData 合约一致）
+# ═══════════════════════════════════════════
+
+# 以下 4 个函数严格对应旧 _make_item_action 逻辑（无 fusion 优先）。
+# 旧的 _make_item_action 只根据 signal → stage 推导，fusion_type 未参与。
+
+def _calc_action_type(signal, stage, fusion_type):
+    """计算操作类型 — 严格对应旧 _make_item_action 逻辑"""
+    if signal == 'sell':
+        return '卖出'
+    if signal == 'buy':
+        return '买入'
+    _stage_action = {
+        '加速': '持有',
+        '缩量整理': '持有',
+        '上行': '持有',
+        '滞涨': '减仓',
+        '转弱': '换股',
+        '区间底部': '加仓',
+        '区间顶部': '减仓',
+        '区间中段': '持有',
+    }
+    return _stage_action.get(stage, '持有')
+
+
+def _calc_action_signal(signal, stage, fusion_type, triggered_signals):
+    """计算操作子标签 — 严格对应旧 _make_item_action 逻辑"""
+    if signal == 'sell':
+        return ''
+    if signal == 'buy':
+        return '买点'  # 旧逻辑 buy 信号返回 buy_point or '买点'
+    _stage_signal = {
+        '加速': '关注止盈',
+        '缩量整理': '可加仓',
+        '上行': '',
+        '滞涨': '警惕滞涨',
+        '转弱': '关注转弱',
+        '区间底部': '支撑位',
+        '区间顶部': '压力位',
+        '区间中段': '',
+    }
+    return _stage_signal.get(stage, '')
+
+
+def _calc_action_priority(signal, stage, fusion_type):
+    """计算优先级 — 严格对应旧 _make_item_action 逻辑"""
+    if signal in ('buy', 'sell'):
+        return '高'
+    _stage_pri = {
+        '加速': '中',
+        '缩量整理': '中',
+        '上行': '低',
+        '滞涨': '高',
+        '转弱': '高',
+        '区间底部': '中',
+        '区间顶部': '高',
+        '区间中段': '低',
+    }
+    return _stage_pri.get(stage, '中')
+
+
+def _calc_action_reason(signal, structure, stage, fusion_reason,
+                        triggered_signals, buy_point):
+    """计算操作理由 — 严格对应旧 _make_item_action 逻辑"""
+    if signal == 'sell':
+        return f'{structure}·{stage}'
+    if signal == 'buy':
+        return f'{structure}·{stage}'
+    _stage_reason = {
+        '加速': f'{structure}·{stage}，关注放量滞涨/加速变缓',
+        '缩量整理': f'{structure}·{stage}，供应枯竭等待放量',
+        '上行': f'{structure}·{stage}，趋势健康',
+        '滞涨': f'{structure}·{stage}，EMA10走平',
+        '转弱': f'{structure}·{stage}，EMA10拐头向下',
+        '区间底部': f'{structure}·{stage}，区底企稳',
+        '区间顶部': f'{structure}·{stage}，区顶受阻',
+        '区间中段': f'{structure}·{stage}，方向未明',
+    }
+    return _stage_reason.get(stage, f'{structure}·{stage}')
 
 
 # ═══════════════════════════════════════════
@@ -542,6 +626,15 @@ def get_stock_card(code, date_str, market_position='波中',
         if sector_chg_5d is not None:
             vs_sector_5d = round(stock_chg_5d - sector_chg_5d, 2)
 
+    # 7c. 操作建议（由卡片统一推导，外部不重复计算）
+    action_type = _calc_action_type(signal, struct_info.get('stage', '--'), fusion_type)
+    action_signal = _calc_action_signal(signal, struct_info.get('stage', '--'),
+                                         fusion_type, triggered_signals)
+    action_priority = _calc_action_priority(signal, struct_info.get('stage', '--'), fusion_type)
+    action_reason = _calc_action_reason(signal, struct_info.get('structure', '--'),
+                                         struct_info.get('stage', '--'),
+                                         fusion_reason, triggered_signals, buy_point)
+
     # 8. 构建卡片
     card = {
         'code': code,
@@ -582,6 +675,11 @@ def get_stock_card(code, date_str, market_position='波中',
         'fusion_type': fusion_type,
         'fusion_reason': fusion_reason,
         'wave_position': wave_position,
+        # 操作建议（卡片统一推导）
+        'action_type': action_type,
+        'action_signal': action_signal,
+        'action_priority': action_priority,
+        'action_reason': action_reason,
         'conclusion': '',
         'tags': [],
     }
@@ -632,6 +730,10 @@ def _empty_card(code, name, sector, direction, reason):
         'fusion_type': '',
         'fusion_reason': '',
         'wave_position': '',
+        'action_type': '持有',
+        'action_signal': '',
+        'action_priority': '中',
+        'action_reason': '--',
         'conclusion': reason,
         'tags': [],
     }

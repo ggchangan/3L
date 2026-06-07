@@ -320,7 +320,13 @@ def get_mainline_data(date_str):
         except Exception:
             pass
 
-    # 从本地板块K线数据计算20日涨幅（cron 17:00 已通过 update_sectors() 拉好）
+    # 从 _push2test 获取当日涨跌幅（data_layer 唯一入口）
+    from backend.core.data_layer import get_sector_push2test
+    push2test_data = get_sector_push2test()
+    push2test_inds = push2test_data.industries if hasattr(push2test_data, 'industries') else {}
+    # _push2test 是 cron 保存的当日涨跌幅快照，权威数据源
+
+    # 从本地板块K线数据计算20日涨幅（data_layer 唯一入口）
     from backend.core.data_layer import get_sector_daily
     sector_data = get_sector_daily()
     industries_data = sector_data.get('industries', {})
@@ -334,10 +340,24 @@ def get_mainline_data(date_str):
     scores = []
     for name, klines in industries_data.items():
         try:
-            if len(klines) < 20:
+            if len(klines) < 1:
                 continue
-            chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
-            chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
+            # chg_1d：优先 _push2test（cron存），次选K线计算
+            snap = push2test_inds.get(name)
+            chg_1d = snap.change_pct if snap is not None else None
+            if chg_1d is None:
+                # 从K线计算（兜底）
+                if len(klines) >= 2:
+                    chg_1d = (klines[-1]['close'] / klines[-2]['close'] - 1) * 100
+                else:
+                    chg_1d = 0
+            else:
+                chg_1d = float(chg_1d)
+            # chg_20d：只有足够历史K线才计算
+            if len(klines) >= 20:
+                chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
+            else:
+                chg_20d = 0  # 历史不足，不参与20日排名
             # 阶段判定
             wave = _judge_wave(klines)
             stage = wave.get('stage', '--')
@@ -711,40 +731,15 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'fusion_reason': h.get('fusion_reason', ''),
             }
 
-            # 共用函数：根据 signal+stage 判定操作（拆分为 action_type + signal 两列）
-            def _make_item_action(item_sig, item_stage, item_struct, base_dict,
-                                  reason_chain, buy_point=''):
-                """返回 (action_type, signal_text, reason, priority)"""
-                if item_sig == 'sell':
-                    return ('卖出', '', f'{item_struct}·{item_stage}', '高')
-                elif item_sig == 'buy':
-                    bp = buy_point or '买点'
-                    return ('买入', bp, f'{item_struct}·{item_stage}', '高')
-                elif item_stage == '加速':
-                    return ('持有', '关注止盈', f'{item_struct}·{item_stage}，关注放量滞涨/加速变缓', '中')
-                elif item_stage == '缩量整理':
-                    return ('持有', '可加仓', f'{item_struct}·{item_stage}，供应枯竭等待放量', '中')
-                elif item_stage == '上行':
-                    return ('持有', '', f'{item_struct}·{item_stage}，趋势健康', '低')
-                elif item_stage == '滞涨':
-                    return ('减仓', '警惕滞涨', f'{item_struct}·{item_stage}，EMA10走平', '高')
-                elif item_stage == '转弱':
-                    return ('换股', '关注转弱', f'{item_struct}·{item_stage}，EMA10拐头向下', '高')
-                elif item_stage == '区间底部':
-                    return ('加仓', '支撑位', f'{item_struct}·{item_stage}，区底企稳', '中')
-                elif item_stage == '区间顶部':
-                    return ('减仓', '压力位', f'{item_struct}·{item_stage}，区顶受阻', '高')
-                elif item_stage == '区间中段':
-                    return ('持有', '', f'{item_struct}·{item_stage}，方向未明', '低')
-                else:
-                    return ('持有', '', f'{item_struct}·{item_stage}', '中')
-
-            at, sig_txt, reason, pri = _make_item_action(
-                sig, stage, struct, base, chain, h.get('buy_point', ''))
+            # ── 操作建议（已由 get_stock_card 统一推导，这里直接读取）──
+            at = h.get('action_type', '持有')
+            sig_txt = h.get('action_signal', '')
+            reason = h.get('action_reason', '')
+            pri = h.get('action_priority', '中')
             plan['holdings_action'].append({
                 'name': name,  # "名称(代码)" 格式
                 **base, 'action_type': at, 'signal': sig_txt,
-                'action': f'{at}·{sig_txt}' if sig_txt else at,
+                'action': at,
                 'reason': f'{chain}→{reason}', 'priority': pri,
             })
 
@@ -764,10 +759,10 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                     opp_reason = f'{sec_name}·无板块数据'
                 else:
                     opp_reason = f'{sec_name}·暂无信号'
-            at, sig_txt, _, pri = _make_item_action(
-                bs.get('signal', 'buy'), bs.get('stage', ''),
-                bs.get('structure', ''), {}, '',
-                bs.get('buy_point', '') or bs.get('flags', '') or '买点信号')
+            # 操作建议（已由 get_stock_card 统一推导，这里直接读取）
+            at = bs.get('action_type', '买入')
+            sig_txt = bs.get('action_signal', '')
+            pri = bs.get('action_priority', '高')
             plan['buy_priority'].append({
                 'name': f"{bs.get('name', '')}({bs.get('code', '')})",
                 'code': bs.get('code', ''),

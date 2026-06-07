@@ -63,11 +63,38 @@ def save_all_stocks(stocks, last_updated=None):
     data = {'last_updated': last_updated or datetime.now().strftime('%Y%m%d'), 'stocks': stocks}
     _atomic_save_json(ALL_STOCKS_PATH, data)
     cache.invalidate('all_stocks')
+    # K线数据变更 → 清除已缓存的SVG图表（下次访问时基于新数据重新生成）
+    _clear_stock_chart_svg_cache()
 
 def load_all_stocks_uncached():
     """强制从磁盘读取K线数据（不走缓存），供更新脚本使用"""
     raw = _load_json(ALL_STOCKS_PATH, {})
     return raw.get('stocks', raw)
+
+
+def _clear_stock_chart_svg_cache():
+    """清除所有个股SVG图表缓存
+
+    当存储的K线数据被修改（如前复权矫正、新数据追加）时调用。
+    直接删除磁盘上的缓存文件，下次页面访问时自动基于新数据重新生成。
+    """
+    try:
+        from backend.config import CHARTS_DIR
+        if not os.path.isdir(CHARTS_DIR):
+            return
+        removed = 0
+        for fname in os.listdir(CHARTS_DIR):
+            if fname.startswith('zzqz_stock_chart_') and fname.endswith('.svg'):
+                os.remove(os.path.join(CHARTS_DIR, fname))
+                removed += 1
+            elif fname.startswith('zzqz_trend_stock_chart_') and fname.endswith('.svg'):
+                os.remove(os.path.join(CHARTS_DIR, fname))
+                removed += 1
+        if removed:
+            from backend.services.logger import get_logger
+            get_logger('data_layer').info(f'已清除{removed}个SVG图表缓存')
+    except Exception:
+        pass
 
 def get_stock_klines(code, direction=None, stocks=None):
     """获取单只股票K线列表，stocks 为 get_all_stocks() 返回值"""
@@ -144,8 +171,17 @@ def get_index_klines(code=INDEX_CODE):
 
 # ====== 板块日K线数据（行业+概念）======
 def get_sector_daily():
-    """返回 {last_updated, industries: {板块名: [klines]}, concepts: {板块名: [klines]}}（走缓存，TTL=60s）"""
-    return cache.get('sector_daily', lambda: _load_json(SECTOR_DAILY_PATH, {}), ttl=60)
+    """返回 {last_updated, industries, concepts}（走缓存，TTL=60s）
+    
+    优先从 data_source 抽象层合并多源，兜底读 sector_daily.json
+    """
+    def _load_from_data_source():
+        try:
+            from backend.services.data_source import get_merged_sector_data
+            return get_merged_sector_data()
+        except Exception:
+            return _load_json(SECTOR_DAILY_PATH, {})
+    return cache.get('sector_daily', _load_from_data_source, ttl=60)
 
 def save_sector_daily(data):
     """原子保存板块日K线数据"""
@@ -155,6 +191,109 @@ def save_sector_daily(data):
 def load_sector_daily_uncached():
     """强制从磁盘读取板块日K线数据（不走缓存），供更新脚本使用"""
     return _load_json(SECTOR_DAILY_PATH, {})
+
+
+def get_sector_push2test():
+    """获取当日涨跌幅快照（_push2test 字段）
+
+    返回 SectorPush2Test 包含：
+    - industries: {name: ThsIndustrySnapshot} — 来自同花顺THS（含上涨家数/领涨股）
+    - concepts: {name: Push2TestConceptSnapshot} — 来自 push2test
+
+    这是业务代码读取 _push2test 的唯一入口。
+    不得直接调 load_sector_daily_uncached() 读原始文件。
+    """
+    from backend.core.data_models import SectorPush2Test, ths_dict_to_snapshot, push2test_dict_to_snapshot
+    data = _load_json(SECTOR_DAILY_PATH, {})
+    raw = data.get('_push2test', {})
+    if not isinstance(raw, dict):
+        return SectorPush2Test()
+
+    industries = {}
+    for name, entry in raw.get('industries', {}).items():
+        if isinstance(entry, dict):
+            industries[name] = ths_dict_to_snapshot(entry)
+
+    concepts = {}
+    for name, entry in raw.get('concepts', {}).items():
+        if isinstance(entry, dict):
+            concepts[name] = push2test_dict_to_snapshot(entry)
+
+    return SectorPush2Test(industries=industries, concepts=concepts)
+
+
+def get_sector_klines(sector_name, sector_type='industry'):
+    """获取单个板块的历史K线数据
+
+    内部通过 data_source 的多源故障切换获取（THS→EM→legacy）
+
+    Args:
+        sector_name: 板块名称（如 '电子化学品'）
+        sector_type: 'industry' 或 'concept'
+
+    Returns: [{date, open, close, high, low, volume}, ...] 或 []
+    """
+    try:
+        from backend.services.data_source import get_sector_klines as _ds_klines
+        return _ds_klines(sector_name, sector_type)
+    except Exception:
+        data = _load_json(SECTOR_DAILY_PATH, {})
+        key = 'industries' if sector_type == 'industry' else 'concepts'
+        return data.get(key, {}).get(sector_name, [])
+
+
+def get_concept_snapshots(name_list: list = None) -> dict:
+    """获取概念板块今日快照数据
+
+    通过 data_source 统一入口路由到当前数据源实现（当前：同花顺 THS）。
+    使用名称映射表将系统概念名转为数据源概念名。
+
+    Args:
+        name_list: 系统概念名称列表，None=获取所有已映射概念
+
+    Returns:
+        {系统名: {date, change_pct, up_count, down_count, ...}}
+    """
+    try:
+        from backend.services.data_source import get_concept_snapshots as _ds_get
+        return _ds_get(name_list)
+    except Exception as e:
+        print(f'[data_layer] get_concept_snapshots 失败: {e}')
+        return {}
+
+
+def get_concept_klines(name_list: list) -> dict:
+    """获取概念板块最新日K线数据
+
+    通过 data_source 统一入口路由到当前数据源实现（当前：同花顺 THS）。
+    仅拉取已映射的概念。
+
+    Args:
+        name_list: 系统概念名称列表
+
+    Returns:
+        {系统名: {date, open, close, high, low, volume}}
+        只返回成功拉取到的概念
+    """
+    try:
+        from backend.services.data_source import get_concept_klines as _ds_klines
+        return _ds_klines(name_list)
+    except Exception as e:
+        print(f'[data_layer] get_concept_klines 失败: {e}')
+        return {}
+
+
+def verify_data_sources(verbose=False):
+    """验证所有数据源的正确性、及时性、缓存一致性
+
+    通过 data_layer 统一入口调用 data_source 的验证逻辑，
+    update_stock_data.py 等更新脚本通过此函数验证数据完整性。
+    """
+    try:
+        from backend.services.data_source import verify_data_sources as _ds_verify
+        return _ds_verify(verbose=verbose)
+    except Exception as e:
+        return {'status': 'fail', 'error': str(e), 'checks': [], 'pass_count': 0, 'fail_count': 1}
 
 
 # ====== 自选股 ======

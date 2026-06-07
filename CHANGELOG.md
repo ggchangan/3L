@@ -1,5 +1,27 @@
 # Changelog
 
+## [v3.9.1] — 2026-06-07
+
+### 修复：行业板块数据源切回同花顺 THS
+
+**问题：** 之前将行业数据源从同花顺 THS 切换到 push2test，但同花顺行业数据一直稳定好用，不应被替换。
+
+**改动：**
+- `update_sectors()`: 行业（industries）切回同花顺 `stock_board_industry_summary_ths()`，概念（concepts）保留 push2test（同花顺无批量概念接口）
+- `data_source.py`: 新增 `_fetch_ths_live_sector_ranking()`，加入数据源链首位
+- 补数据：周日非交易日用 THS 写入周五准确数据到 `_push2test.industries`
+
+**数据优势（THS vs push2test）：**
+| 字段 | THS（新） | push2test（旧） |
+|:-----|:---------|:---------------|
+| 涨跌幅% | ✅ 90个行业 | ✅ 含概念 |
+| 上涨/下跌家数 | ✅ 新增 | ❌ |
+| 领涨股 | ✅ 新增 | ❌ |
+| 净流入 | ✅ 新增 | ❌ |
+| 名字后缀 | 无（电子化学品） | 有（电子化学品Ⅱ） |
+
+**分层验证：** L1~L3 全部通过（23/23），详见 `docs/data-source-verification/design.md`
+
 ## [v3.9.0] — 2026-06-04
 
 ### 新增：方向分层系统补充功能 — 重命名/移动/拼音搜索/自动同步

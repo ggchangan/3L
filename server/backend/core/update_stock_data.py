@@ -9,12 +9,12 @@
 """
 
 import json, os, sys, time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 # ⚠️ 注意: file 在 server/backend/core/ 下
 # dirname×1=core/  ×2=backend/  ×3=server/（backend 包所在位置）
-from backend.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH
+from backend.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH, SOURCES_EM_SECTOR_DAILY
 from backend.core.data_layer import (
     get_watchlist,
     load_all_stocks_uncached,
@@ -79,9 +79,95 @@ def fetch_klines_from_mootdx(client, code, count=800):
                 'low': round(float(row['low']), 2),
                 'volume': int(float(row['volume'])) * 100,
             })
+        # 手动前复权矫正（mootdx的fq=True不返回正确前复权数据）
+        xdxr_records = client.xdxr(symbol=code)
+        if xdxr_records is not None and len(xdxr_records) > 0:
+            xdxr_events = []
+            for _, row in xdxr_records.iterrows():
+                xdxr_events.append({
+                    'year': row['year'], 'month': row['month'], 'day': row['day'],
+                    'category': row['category'],
+                    'qianzongguben': row['qianzongguben'],
+                    'houzongguben': row['houzongguben'],
+                    'fenhong': row['fenhong'],
+                    'panqianliutong': row['panqianliutong'],
+                    'panhouliutong': row['panhouliutong'],
+                })
+            records = _apply_fq_adjustment(records, xdxr_events)
         return records
     except Exception:
         return []
+
+
+def _apply_fq_adjustment(records, xdxr_events):
+    """对不复权的K线数据做前复权矫正
+
+    mootdx的bars(fq=True)不返回正确前复权数据（实证发现）。
+    用xdxr()获取除权除息事件后手动调整。
+
+    前复权逻辑：
+    - 送转股(category=9)：价格 × 前总股本/后总股本
+    - 分红(category=1)：价格下调（幅度小，精确度要求低时可不处理）
+    - 从最新事件往最旧事件逐次调整（前复权时序）
+    """
+    if not records or not xdxr_events:
+        return records
+
+    # 过滤出K线范围内的除权事件
+    dates = {r['date'] for r in records}
+    if not dates:
+        return records
+
+    min_date = min(dates)
+    max_date = max(dates)
+
+    # 只在K线范围内的除权事件
+    relevant = []
+    for ev in xdxr_events:
+        ev_date = f"{ev['year']}{ev['month']:02d}{ev['day']:02d}"
+        if ev_date >= min_date and ev_date <= max_date:
+            relevant.append((ev_date, ev))
+
+    if not relevant:
+        return records
+
+    # 按日期倒序（从最新除权事件往前调整）
+    relevant.sort(key=lambda x: x[0], reverse=True)
+
+    for ev_date, ev in relevant:
+        factor = 1.0
+
+        # 送转股调整
+        if ev['category'] == 9:
+            qzg = ev.get('qianzongguben')
+            hzg = ev.get('houzongguben')
+            if qzg and hzg and hzg > 0 and qzg > 0:
+                factor *= qzg / hzg
+
+        # 分红调整
+        if ev['category'] == 1:
+            fenhong = ev.get('fenhong')
+            if fenhong and fenhong > 0:
+                # 找到除权前最后一天的收盘价做分红系数
+                prev_close = None
+                for r in records:
+                    if r['date'] < ev_date:
+                        prev_close = r['close']
+                    else:
+                        break
+                if prev_close and prev_close > 0:
+                    factor *= (prev_close - fenhong) / prev_close
+
+        # 应用调整：除权日之前的所有K线乘以系数
+        if abs(factor - 1.0) > 0.001:
+            for r in records:
+                if r['date'] < ev_date:
+                    r['open'] = round(r['open'] * factor, 2)
+                    r['close'] = round(r['close'] * factor, 2)
+                    r['high'] = round(r['high'] * factor, 2)
+                    r['low'] = round(r['low'] * factor, 2)
+
+    return records
 
 
 def _flatten_stocks(sector_map):
@@ -385,33 +471,67 @@ def _fetch_board_names_from_push2test(sector_type):
         return []
 
 
-def _fetch_board_names_from_akshare(sector_type):
-    """从 akshare(同花顺) 获取板块名称列表（备源）
-    sector_type: 'industry' | 'concept'
-    返回 [name, ...]，失败返回 []
+def _fetch_today_industries_from_ths():
+    """【行业主源】从同花顺获取行业板块今日实时涨跌幅
+
+    数据源: stock_board_industry_summary_ths()
+    同花顺行业数据一直稳定好用，90个行业一次返回。
+    字段: 涨跌幅、总成交量、总成交额、净流入、上涨/下跌家数、领涨股
+    返回 {name: {date, change_pct, ...}}，全部失败返回 {}
     """
-    import akshare as ak
     try:
-        if sector_type == 'industry':
-            df = ak.stock_board_industry_name_ths()
-        else:
-            df = ak.stock_board_concept_name_ths()
-        names = list(df['name'])
-        log(f'  akshare[{sector_type}]: {len(names)}个板块名（备源）')
-        return names
+        import os
+        os.environ['TQDM_DISABLE'] = '1'
+        import akshare as ak
+
+        df = ak.stock_board_industry_summary_ths()
+        today = datetime.now().strftime('%Y%m%d')
+        # 非交易日回退到上一个交易日
+        d = datetime.now()
+        for _ in range(7):
+            if d.weekday() < 5:
+                today = d.strftime('%Y%m%d')
+                break
+            d -= timedelta(days=1)
+
+        result = {}
+        for _, row in df.iterrows():
+            name = str(row.get('板块', '')).strip()
+            chg = row.get('涨跌幅', None)
+            up = row.get('上涨家数', None)
+            down = row.get('下跌家数', None)
+            vol = row.get('总成交量', None)
+            amt = row.get('总成交额', None)
+            net = row.get('净流入', None)
+            leader = row.get('领涨股', None)
+            leader_chg = row.get('领涨股-涨跌幅', None)
+            if name and chg is not None:
+                result[name] = {
+                    'date': today,
+                    'change_pct': round(float(chg), 2),
+                    'up_count': int(up) if up is not None else None,
+                    'down_count': int(down) if down is not None else None,
+                    'volume': float(vol) if vol is not None else None,
+                    'amount': float(amt) if amt is not None else None,
+                    'net_flow': float(net) if net is not None else None,
+                    'leader': str(leader) if leader else '',
+                    'leader_chg': round(float(leader_chg), 2) if leader_chg is not None else None,
+                }
+
+        log(f'  THS[industry]: 成功获取{len(result)}个行业（同花顺主源，含涨跌幅/上涨下跌家数/领涨股）')
+        return result
     except Exception as e:
-        log(f'❌ akshare[{sector_type}] 板块列表失败: {type(e).__name__}: {e}')
-        return []
+        log(f'❌ THS行业数据获取失败: {type(e).__name__}: {e}')
+        return {}
 
 
 def _fetch_today_sectors_from_push2test(sector_type, name_list):
-    """主源：从 push2test.eastmoney.com 批量获取板块今日实时数据
+    """【概念主源】从 push2test.eastmoney.com 批量获取概念板块今日实时数据
     sector_type: 'industry' | 'concept'
     name_list: 板块名称列表（仅用于日志，实际拉全量再过滤）
     返回 {name: {date, open, close, high, low, volume}}，全部失败则返回 {}
     """
     import requests as _req
-    from datetime import datetime
 
     fs = _SECTOR_FS.get(sector_type)
     if not fs:
@@ -419,6 +539,13 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
         return {}
 
     today = datetime.now().strftime('%Y%m%d')
+    # 非交易日回退到上一个交易日
+    d = datetime.now()
+    for _ in range(7):
+        if d.weekday() < 5:
+            today = d.strftime('%Y%m%d')
+            break
+        d -= timedelta(days=1)
     params = {
         'pn': '1', 'pz': '2000', 'po': '1', 'np': '1',
         'ut': _PUSH2TEST_UT, 'fltt': '2', 'invt': '2',
@@ -438,6 +565,8 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
     for item in items:
         name = (item.get('f14') or '').strip()
         if name and name in name_list:
+            # 归一化名称：去掉东财的Ⅱ/Ⅲ/D后缀，对齐 legacy 命名
+            clean = name.replace('Ⅱ', '').replace('Ⅲ', '').replace('D', '').strip()
             close = float(item.get('f2', 0) or 0)
             high = float(item.get('f15', close) or close)
             low = float(item.get('f16', close) or close)
@@ -445,7 +574,7 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
             volume = int(float(item.get('f5', 0) or 0))
             change_pct = float(item.get('f3', 0) or 0)   # 当日涨跌幅%
             prev_close = float(item.get('f18', 0) or 0)   # 昨收
-            name_map[name] = {
+            name_map[clean] = {
                 'date': today,
                 'open': round(open_, 2),
                 'close': round(close, 2),
@@ -461,67 +590,40 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
     return name_map
 
 
-def _fetch_sector_klines_akshare(sector_type, name):
-    """备源：akshare(同花顺)拉取单个板块历史K线
-    仅用于新板块首次拉历史数据，今日数据已有则无需调用
-    返回 [{date, open, close, high, low, volume}] 或 []
-    """
-    import akshare as ak
-    import time
-    from datetime import datetime, timedelta
-    today = datetime.now().strftime('%Y%m%d')
-    start = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-
-    for attempt in range(3):
-        try:
-            if sector_type == 'industry':
-                df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)
-            else:
-                df = ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=today)
-            if df is None or len(df) == 0:
-                return []
-            return _df_to_kline(df)
-        except Exception as e:
-            if attempt < 2:
-                log(f'  ⚠️  akshare[{sector_type}/{name}] 重试#{attempt+1}: {type(e).__name__}: {str(e)[:120]}')
-                time.sleep(2 + attempt * 2)
-            continue
-    log(f'  ❌ akshare[{sector_type}/{name}] 3次重试全部失败，放弃')
-    return []
-
-
 def update_sectors():
     """更新行业+概念板块日K线
-    双源自动切换：主源push2test(今日实时) → 备源akshare(历史K线)
+
+    数据源：
+    - 行业（industries）：同花顺 THS（stock_board_industry_summary_ths）
+    - 概念（concepts）：同花顺 THS（stock_board_concept_info_ths）
+
     失败率>50%告警，全部失败抛异常
     """
     import warnings
     warnings.filterwarnings('ignore')
+
+    # 非交易日跳过（push2test 返回的是旧缓存，不可信）
+    now = datetime.now()
+    if now.weekday() >= 5:
+        log('⏭️  非交易日，跳过板块更新')
+        return (0, 0)
 
     existing = load_sector_daily_uncached()
     last_updated = existing.get('last_updated', '')
     industries = existing.get('industries', {})
     concepts = existing.get('concepts', {})
 
-    # ── 获取板块名称列表（双源：push2test优先 → akshare兜底 → 缓存兜底） ──
-    ind_names = _fetch_board_names_from_push2test('industry')
-    if not ind_names:
-        ind_names = _fetch_board_names_from_akshare('industry')
-    if not ind_names:
-        log('⚠️  行业板块列表全源失败，用缓存数据')
-        ind_names = list(industries.keys())
-
-    con_names = _fetch_board_names_from_push2test('concept')
-    if not con_names:
-        con_names = _fetch_board_names_from_akshare('concept')
-    if not con_names:
-        log('⚠️  概念板块列表全源失败，用缓存数据')
-        con_names = list(concepts.keys())
-
-    log(f'📋  行业{len(ind_names)}个, 概念{len(con_names)}个, 上次更新{last_updated}')
+    log(f'📋  行业{len(industries)}个, 概念{len(concepts)}个, 上次更新{last_updated}')
 
     # ── 确定追踪中的概念 ──
     today = datetime.now().strftime('%Y%m%d')
+    # 非交易日回退到上一个交易日
+    __d = datetime.now()
+    for _ in range(7):
+        if __d.weekday() < 5:
+            today = __d.strftime('%Y%m%d')
+            break
+        __d -= timedelta(days=1)
     try:
         _concept_list = get_concept_list()
         _stock_concept_map = get_stock_concept_map()
@@ -546,16 +648,23 @@ def update_sectors():
         tracked_concepts = set(con_names)
 
     # ═══════════════════════════════════════════════════
-    # 主源：push2test 批量获取今日数据
-    # push2test(东财)和旧akshare(同花顺)的指数基准不同，不能混合
-    # → 直接完全替换：有push2test数据的板块全部替换，没有的保留旧数据
+    # 【行业】主源：同花顺 stock_board_industry_summary_ths()
+    # 同花顺行业数据一直稳定好用，90个行业一次返回，名字无后缀
     # ═══════════════════════════════════════════════════
-    ind_today = _fetch_today_sectors_from_push2test('industry', ind_names)
-    con_today = _fetch_today_sectors_from_push2test('concept', list(tracked_concepts))
+    ind_today = _fetch_today_industries_from_ths()
 
-    # ── 保留旧THS数据不变，另存push2test数据到独立字段 ──
-    # push2test(东财)和akshare(同花顺)的指数绝对值不同，不能混
-    # push2test的f3字段本身就是当日涨跌幅，无需历史即可排行
+    # ═══════════════════════════════════════════════════
+    # 【概念】主源：同花顺 THS 概念 info_ths()
+    # 使用 stock_board_concept_info_ths() 逐个拉取已映射概念的今日数据
+    # 未映射到同花顺的概念不拉取（用户说"对不上的回头再看"）
+    # 数据准确（用户已验证培育钻石 -3.30% vs push2test +5.69%）
+    # ═══════════════════════════════════════════════════
+    from backend.core.data_layer import get_concept_snapshots
+    con_today = get_concept_snapshots(list(tracked_concepts))
+
+    # ── 保存今日快照到独立字段 ──
+    # 行业来源：同花顺 THS，概念来源：同花顺 THS
+    # 字段名仍用 _push2test 保持向后兼容（各读者读取此字段获取 chg_1d）
     push2test_data = {'industries': ind_today, 'concepts': con_today}
     existing['_push2test'] = push2test_data
     existing['_push2test_updated'] = today
@@ -565,32 +674,25 @@ def update_sectors():
     con_saved = len(con_today)
 
     # ═══════════════════════════════════════════════════
-    # 备源：akshare 补旧板块历史K线（akshare现已全部不可用，跳过）
-    # ═══════════════════════════════════════════════════
-
-    # ═══════════════════════════════════════════════════
     # 失败率分析 + 告警
     # ═══════════════════════════════════════════════════
-    ind_total = len(ind_names)
+    # 行业：THS 要么全成功（90个），要么全失败（0个）
+    if len(ind_today) == 0 and industries:
+        log('🚨 行业板块从同花顺 THS 获取全部失败！回退使用旧缓存数据')
+
     con_tracked = len(tracked_concepts)
-    ind_miss = ind_total - len(ind_today)
     con_miss = con_tracked - len(con_today)
-
-    if ind_total > 0 and ind_miss / ind_total > 0.5:
-        msg = f'🚨 行业板块大面积获取失败: {ind_miss}/{ind_total}({ind_miss/ind_total*100:.0f}%) 未从push2test获取到数据'
-        log(msg)
-
     if con_tracked > 0 and con_miss / con_tracked > 0.5:
-        msg = f'🚨 概念板块大面积获取失败: {con_miss}/{con_tracked}({con_miss/con_tracked*100:.0f}%) 未从push2test获取到数据'
+        msg = f'🚨 概念板块大面积获取失败: {con_miss}/{con_tracked}({con_miss/con_tracked*100:.0f}%)'
         log(msg)
 
     # 全源全量失败 → 抛异常让cron能感知
-    if ind_total > 0 and len(ind_today) == 0 and not industries:
+    if len(ind_today) == 0 and not industries:
         raise RuntimeError('行业板块全源获取失败，无任何缓存数据可用')
     if con_tracked > 0 and len(con_today) == 0 and not any(name in concepts for name in tracked_concepts):
         raise RuntimeError('概念板块全源获取失败（追踪中），无任何缓存数据可用')
 
-    # 最新日期：来自push2test的更新时间
+    # 最新日期
     latest_date = existing.get('_push2test_updated', existing.get('last_updated', ''))
 
     save_sector_daily({
@@ -601,8 +703,38 @@ def update_sectors():
         '_push2test_updated': existing.get('_push2test_updated', ''),
     })
 
+    # 同步刷新 EM 仓（供 get_sector_rankings 使用，确保 chg_1d 为当日数据）
+    try:
+        em_dir = os.path.dirname(SOURCES_EM_SECTOR_DAILY)
+        os.makedirs(em_dir, exist_ok=True)
+        em_data = {
+            'last_updated': latest_date,
+            'industries': {k: v for k, v in ind_today.items()},
+            'concepts': {k: v for k, v in con_today.items()},
+        }
+        with open(SOURCES_EM_SECTOR_DAILY, 'w', encoding='utf-8') as f:
+            json.dump(em_data, f, ensure_ascii=False, indent=2)
+        log(f'📤  EM仓同步完成: 行业{len(ind_today)}条, 概念{len(con_today)}条')
+    except Exception as e:
+        log(f'⚠️  EM仓同步失败: {e}')
+
     stats = f'push2test: 行业{ind_saved}条, 概念{con_saved}条 (THS旧数据保留不变)'
     log(f'📈  板块: {stats}')
+
+    # ── 板块数据验证 ──
+    try:
+        from backend.core.data_layer import verify_data_sources
+        vresult = verify_data_sources(verbose=False)
+        vpass = vresult['pass_count'] if 'pass_count' in vresult else sum(1 for c in vresult['checks'] if c['pass'])
+        vtotal = len(vresult['checks'])
+        if vresult['status'] == 'pass':
+            log(f'✅  数据源验证通过: {vpass}/{vtotal}')
+        else:
+            fails = [c for c in vresult['checks'] if not c['pass']]
+            log(f'⚠️  数据源验证: {vpass}/{vtotal}, 失败项: {[c["check"] for c in fails]}')
+    except Exception as e:
+        log(f'⚠️  数据源验证异常: {e}')
+
     return (ind_saved, con_saved)
 
 

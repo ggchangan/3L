@@ -113,6 +113,11 @@ def generate_holdings_review(holdings, stocks, buy_signals,
             'fusion_type': card.get('fusion_type', ''),
             'fusion_reason': card.get('fusion_reason', ''),
             'wave_position': card.get('wave_position', ''),
+            # 操作建议（由卡片统一推导，外部不重复计算）
+            'action_type': card.get('action_type', '持有'),
+            'action_signal': card.get('action_signal', ''),
+            'action_priority': card.get('action_priority', '中'),
+            'action_reason': card.get('action_reason', ''),
         })
 
     result.sort(key=lambda x: struct_priority.get(x['structure'], 3))
@@ -208,6 +213,11 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             "fusion_type": card.get('fusion_type', ''),
             "fusion_reason": card.get('fusion_reason', ''),
             "wave_position": card.get('wave_position', ''),
+            # 操作建议（由卡片统一推导，外部不重复计算）
+            "action_type": card.get('action_type', '持有'),
+            "action_signal": card.get('action_signal', ''),
+            "action_priority": card.get('action_priority', '中'),
+            "action_reason": card.get('action_reason', ''),
         })
 
     # 按分数降序
