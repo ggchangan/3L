@@ -268,6 +268,127 @@ def _build_tags(card):
 
 
 # ═══════════════════════════════════════════
+# 操作建议推导（与 StockCardData 合约一致）
+# ═══════════════════════════════════════════
+
+# 旧 _make_item_action 的分解 — 在 get_stock_card() 内部调用，
+# 确保 action_type/action_signal/action_priority/action_reason
+# 由卡片统一输出，外部不重复计算。
+
+# fusion_type → action_type 映射表
+_FUSION_ACTION_MAP = {
+    'strong_buy': '买入',
+    'signal_buy': '买入',
+    'signal_sell': '卖出',
+    'bullish_wait': '持有',
+    'conflict_bearish': '减仓',
+    'conflict_bullish': '持有',
+}
+
+# stage → action_type 回退映射（当 fusion_type 为空时）
+_STAGE_ACTION_MAP = {
+    '加速': '持有',
+    '缩量整理': '持有',
+    '上行': '持有',
+    '滞涨': '减仓',
+    '转弱': '换股',
+    '区间底部': '加仓',
+    '区间顶部': '减仓',
+    '区间中段': '持有',
+}
+
+
+def _calc_action_type(signal, stage, fusion_type):
+    """计算操作类型
+
+    融合引擎优先，回退到 signal → stage 推导。
+    与旧 _make_item_action 逻辑完全一致。
+    """
+    # 融合引擎优先
+    if fusion_type in _FUSION_ACTION_MAP:
+        return _FUSION_ACTION_MAP[fusion_type]
+    # 回退 signal
+    if signal == 'sell':
+        return '卖出'
+    if signal == 'buy':
+        return '买入'
+    # 回退 stage
+    return _STAGE_ACTION_MAP.get(stage, '持有')
+
+
+def _calc_action_signal(signal, stage, fusion_type, triggered_signals):
+    """计算操作子标签
+
+    仅展示用文字，与旧 _make_item_action 逻辑一致。
+    """
+    if fusion_type == 'strong_buy' and signal == 'buy':
+        parts = [f'{t.get("name","")}({t.get("confidence",0):.0f})'
+                 for t in (triggered_signals or [])[:3]]
+        return f'强势买入·{"，".join(parts)}' if parts else '强势买入'
+    if fusion_type == 'signal_buy' and signal == 'buy':
+        parts = [f'{t.get("name","")}({t.get("confidence",0):.0f})'
+                 for t in (triggered_signals or [])[:2]]
+        return f'买入信号·{"，".join(parts)}' if parts else '买入信号'
+    if fusion_type == 'signal_sell' and signal == 'sell':
+        parts = [f'{t.get("name","")}({t.get("confidence",0):.0f})'
+                 for t in (triggered_signals or [])[:2]]
+        return f'卖出信号·{"，".join(parts)}' if parts else '卖出信号'
+    if fusion_type == 'bullish_wait':
+        return '偏多等确认'
+    if fusion_type == 'conflict_bearish':
+        return '空头冲突'
+    if fusion_type == 'conflict_bullish':
+        return '多头冲突'
+    # stage 回退
+    _stage_signal = {
+        '加速': '关注止盈',
+        '缩量整理': '可加仓',
+        '区间底部': '支撑位',
+        '区间顶部': '压力位',
+    }
+    return _stage_signal.get(stage, '')
+
+
+def _calc_action_priority(signal, stage, fusion_type):
+    """计算优先级"""
+    if fusion_type:
+        return '高'
+    if signal in ('buy', 'sell'):
+        return '高'
+    if stage in ('加速', '滞涨', '转弱', '区间顶部'):
+        return '高'
+    if stage in ('缩量整理', '区间底部'):
+        return '中'
+    if stage in ('上行', '区间中段'):
+        return '低'
+    return '中'
+
+
+def _calc_action_reason(signal, structure, stage, fusion_reason,
+                        triggered_signals, buy_point):
+    """计算操作理由"""
+    if fusion_reason:
+        return fusion_reason
+    if signal == 'sell':
+        return f'{structure}·{stage}'
+    if signal == 'buy':
+        bp = buy_point or '买点'
+        return f'{structure}·{stage}·触发{bp}'
+    # stage 补充文字
+    _stage_reason = {
+        '加速': f'{structure}·{stage}，关注放量滞涨/加速变缓',
+        '缩量整理': f'{structure}·{stage}，供应枯竭等待放量',
+        '上行': f'{structure}·{stage}，趋势健康',
+        '滞涨': f'{structure}·{stage}，EMA10走平',
+        '转弱': f'{structure}·{stage}，EMA10拐头向下',
+        '区间底部': f'{structure}·{stage}，区底企稳',
+        '区间顶部': f'{structure}·{stage}，区顶受阻',
+        '区间中段': f'{structure}·{stage}，方向未明',
+    }
+    return _stage_reason.get(stage, f'{structure}·{stage}')
+
+
+# ═══════════════════════════════════════════
 # 主入口
 # ═══════════════════════════════════════════
 
@@ -544,6 +665,15 @@ def get_stock_card(code, date_str, market_position='波中',
         if sector_chg_5d is not None:
             vs_sector_5d = round(stock_chg_5d - sector_chg_5d, 2)
 
+    # 7c. 操作建议（由卡片统一推导，外部不重复计算）
+    action_type = _calc_action_type(signal, struct_info.get('stage', '--'), fusion_type)
+    action_signal = _calc_action_signal(signal, struct_info.get('stage', '--'),
+                                         fusion_type, triggered_signals)
+    action_priority = _calc_action_priority(signal, struct_info.get('stage', '--'), fusion_type)
+    action_reason = _calc_action_reason(signal, struct_info.get('structure', '--'),
+                                         struct_info.get('stage', '--'),
+                                         fusion_reason, triggered_signals, buy_point)
+
     # 8. 构建卡片
     card = {
         'code': code,
@@ -584,6 +714,11 @@ def get_stock_card(code, date_str, market_position='波中',
         'fusion_type': fusion_type,
         'fusion_reason': fusion_reason,
         'wave_position': wave_position,
+        # 操作建议（卡片统一推导）
+        'action_type': action_type,
+        'action_signal': action_signal,
+        'action_priority': action_priority,
+        'action_reason': action_reason,
         'conclusion': '',
         'tags': [],
     }
@@ -634,6 +769,10 @@ def _empty_card(code, name, sector, direction, reason):
         'fusion_type': '',
         'fusion_reason': '',
         'wave_position': '',
+        'action_type': '持有',
+        'action_signal': '',
+        'action_priority': '中',
+        'action_reason': '--',
         'conclusion': reason,
         'tags': [],
     }

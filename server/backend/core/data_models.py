@@ -178,3 +178,70 @@ def push2test_dict_to_snapshot(d: dict) -> Push2TestConceptSnapshot:
         volume=int(float(d.get('volume', 0) or 0)),
         prev_close=float(d.get('prev_close', 0)),
     )
+
+
+# ════════════════════════════════════════════════════════════
+# 个股卡片合约
+# ════════════════════════════════════════════════════════════
+
+
+@dataclass
+class StockCardData:
+    """个股卡片统一数据合约 — get_stock_card() 输出
+
+    所有个股展示数据唯一来源。外部代码只读取不做推导。
+    新增字段必须同步更新 get_stock_card()、_empty_card()、前端 BuySignalItem 类型。
+    """
+    # ── 基础字段 ──
+    code: str                    # 6位股票代码
+    name: str                    # 股票名称
+    sector: str                  # 所属行业/板块
+    direction: str               # 方向（大类.子类）
+    price: float                 # 当前价格
+    change: float                # 当日涨跌幅%
+    date: str                    # 数据日期 YYYYMMDD
+
+    # ── 技术分析 ──
+    structure: str               # '上涨趋势'/'区间震荡'/'下降趋势'
+    stage: str                   # '上行'/'加速'/'缩量整理'/...
+    ema: str                     # EMA排列状态
+    ema5: Optional[float]        # EMA5值
+    ema10: Optional[float]       # EMA10值
+    ema20: Optional[float]       # EMA20值
+    ema30: Optional[float]       # EMA30值
+    deviation_pct: float         # 偏离率%
+    vol_ratio: float             # 量比
+    vol_analysis: str            # 量能分析
+
+    # ── 信号和融合判定 ──
+    signal: str                  # 原始信号 'buy'/'hold'/'sell'
+    signal_text: str             # 信号文字
+    buy_point: str               # 买点类型
+    profit_model1: bool          # 是否盈利模式1
+    trend_stock: bool            # 是否趋势交易股
+    trading_system: str          # '3l'/'trend'
+    trading_reason: str          # 系统选择理由
+    trend_buy_type: str          # 趋势买点类型
+    trend_bias: str              # 趋势BIAS偏离率
+    mainline_level: str          # 主线定位
+    score: int                   # 综合评分
+    flags: str                   # 标记
+    triggered_signals: list      # 触发的关键信号
+    fusion_type: str             # 融合判定类型
+    fusion_reason: str           # 融合理由
+    wave_position: str           # 波峰波谷位置
+
+    # ── 操作建议（由卡片内部推导，外部不重复计算）──
+    action_type: str             # 操作类型 '买入'/'卖出'/'持有'/'加仓'/'减仓'/'换股'
+    action_signal: str           # 操作子标签（如 '强势买入·缩量回踩(85)'）
+    action_priority: str         # 优先级 '高'/'中'/'低'
+    action_reason: str           # 操作理由
+
+    # ── 其他 ──
+    stop_loss: Optional[float]   # 止损价
+    stop_loss_pct: Optional[float]  # 止损百分比
+    sector_chg: Optional[float]  # 板块今日涨幅
+    sector_chg_5d: Optional[float]  # 板块5日涨幅
+    vs_sector_5d: Optional[float]   # 个股vs板块5日对比
+    conclusion: str              # 结论文字
+    tags: list                   # 标签列表
