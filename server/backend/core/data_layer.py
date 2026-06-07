@@ -63,11 +63,38 @@ def save_all_stocks(stocks, last_updated=None):
     data = {'last_updated': last_updated or datetime.now().strftime('%Y%m%d'), 'stocks': stocks}
     _atomic_save_json(ALL_STOCKS_PATH, data)
     cache.invalidate('all_stocks')
+    # K线数据变更 → 清除已缓存的SVG图表（下次访问时基于新数据重新生成）
+    _clear_stock_chart_svg_cache()
 
 def load_all_stocks_uncached():
     """强制从磁盘读取K线数据（不走缓存），供更新脚本使用"""
     raw = _load_json(ALL_STOCKS_PATH, {})
     return raw.get('stocks', raw)
+
+
+def _clear_stock_chart_svg_cache():
+    """清除所有个股SVG图表缓存
+
+    当存储的K线数据被修改（如前复权矫正、新数据追加）时调用。
+    直接删除磁盘上的缓存文件，下次页面访问时自动基于新数据重新生成。
+    """
+    try:
+        from backend.config import CHARTS_DIR
+        if not os.path.isdir(CHARTS_DIR):
+            return
+        removed = 0
+        for fname in os.listdir(CHARTS_DIR):
+            if fname.startswith('zzqz_stock_chart_') and fname.endswith('.svg'):
+                os.remove(os.path.join(CHARTS_DIR, fname))
+                removed += 1
+            elif fname.startswith('zzqz_trend_stock_chart_') and fname.endswith('.svg'):
+                os.remove(os.path.join(CHARTS_DIR, fname))
+                removed += 1
+        if removed:
+            from backend.services.logger import get_logger
+            get_logger('data_layer').info(f'已清除{removed}个SVG图表缓存')
+    except Exception:
+        pass
 
 def get_stock_klines(code, direction=None, stocks=None):
     """获取单只股票K线列表，stocks 为 get_all_stocks() 返回值"""
