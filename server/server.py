@@ -82,6 +82,7 @@ def register_api_routes(routes):
         'backend.api.concept_wave',
         'backend.api.strong_trend',
         'backend.api.hot_stocks',
+        'backend.api.data_source_health',
     ]
     for mod_name in api_modules:
         mod = importlib.import_module(mod_name)

@@ -350,10 +350,120 @@ def update_index(client):
 # 板块（行业+概念）
 # ════════════════════════════════════════════════════════════════
 
+# ── push2test 常量（主数据源：东财测试API，实测可用） ──
+_PUSH2TEST_URL = 'https://push2test.eastmoney.com/api/qt/clist/get'
+_PUSH2TEST_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+    'Referer': 'https://quote.eastmoney.com/',
+}
+_PUSH2TEST_UT = 'bd1d9ddb04089700cf9c27f6f7426281'
+_SECTOR_FS = {'industry': 'm:90+t:2', 'concept': 'm:90+t:3'}
+
+
+def _fetch_board_names_from_push2test(sector_type):
+    """从 push2test 获取板块名称列表
+    sector_type: 'industry' | 'concept'
+    返回 [name, ...]，失败返回 []
+    """
+    import requests as _req
+    fs = _SECTOR_FS.get(sector_type)
+    if not fs:
+        return []
+    params = {
+        'pn': '1', 'pz': '2000', 'po': '1', 'np': '1',
+        'ut': _PUSH2TEST_UT, 'fltt': '2', 'invt': '2',
+        'fs': fs, 'fields': 'f14',
+    }
+    try:
+        r = _req.get(_PUSH2TEST_URL, params=params, headers=_PUSH2TEST_HEADERS, timeout=15)
+        items = r.json().get('data', {}).get('diff', [])
+        names = [(item.get('f14') or '').strip() for item in items if item.get('f14')]
+        log(f'  push2test[{sector_type}]: {len(names)}个板块名')
+        return names
+    except Exception as e:
+        log(f'❌ push2test[{sector_type}] 板块列表失败: {type(e).__name__}: {e}')
+        return []
+
+
+def _fetch_board_names_from_akshare(sector_type):
+    """从 akshare(同花顺) 获取板块名称列表（备源）
+    sector_type: 'industry' | 'concept'
+    返回 [name, ...]，失败返回 []
+    """
+    import akshare as ak
+    try:
+        if sector_type == 'industry':
+            df = ak.stock_board_industry_name_ths()
+        else:
+            df = ak.stock_board_concept_name_ths()
+        names = list(df['name'])
+        log(f'  akshare[{sector_type}]: {len(names)}个板块名（备源）')
+        return names
+    except Exception as e:
+        log(f'❌ akshare[{sector_type}] 板块列表失败: {type(e).__name__}: {e}')
+        return []
+
+
+def _fetch_today_sectors_from_push2test(sector_type, name_list):
+    """主源：从 push2test.eastmoney.com 批量获取板块今日实时数据
+    sector_type: 'industry' | 'concept'
+    name_list: 板块名称列表（仅用于日志，实际拉全量再过滤）
+    返回 {name: {date, open, close, high, low, volume}}，全部失败则返回 {}
+    """
+    import requests as _req
+    from datetime import datetime
+
+    fs = _SECTOR_FS.get(sector_type)
+    if not fs:
+        log(f'❌ _fetch_today_sectors_from_push2test: 未知板块类型 {sector_type}')
+        return {}
+
+    today = datetime.now().strftime('%Y%m%d')
+    params = {
+        'pn': '1', 'pz': '2000', 'po': '1', 'np': '1',
+        'ut': _PUSH2TEST_UT, 'fltt': '2', 'invt': '2',
+        'fs': fs,
+        'fields': 'f2,f12,f14,f15,f16,f17,f18,f5,f6',
+    }
+
+    try:
+        r = _req.get(_PUSH2TEST_URL, params=params, headers=_PUSH2TEST_HEADERS, timeout=20)
+        items = r.json().get('data', {}).get('diff', [])
+    except Exception as e:
+        log(f'❌ push2test板块列表请求失败 [{sector_type}]: {type(e).__name__}: {e}')
+        return {}
+
+    # 建立 name → 数据的映射
+    name_map = {}
+    for item in items:
+        name = (item.get('f14') or '').strip()
+        if name and name in name_list:
+            close = float(item.get('f2', 0) or 0)
+            high = float(item.get('f15', close) or close)
+            low = float(item.get('f16', close) or close)
+            open_ = float(item.get('f17', close) or close)
+            volume = int(float(item.get('f5', 0) or 0))
+            change_pct = float(item.get('f3', 0) or 0)   # 当日涨跌幅%
+            prev_close = float(item.get('f18', 0) or 0)   # 昨收
+            name_map[name] = {
+                'date': today,
+                'open': round(open_, 2),
+                'close': round(close, 2),
+                'high': round(high, 2),
+                'low': round(low, 2),
+                'volume': volume,
+                'change_pct': round(change_pct, 2),
+                'prev_close': round(prev_close, 2),
+            }
+
+    hit_rate = len(name_map) / len(name_list) * 100 if name_list else 0
+    log(f'  push2test[{sector_type}]: 命中{len(name_map)}/{len(name_list)} ({hit_rate:.0f}%)')
+    return name_map
+
+
 def _fetch_sector_klines_akshare(sector_type, name):
-    """拉取单个板块的日K线（带重试，对抗akshare限流）
-    sector_type: 'industry' 或 'concept'
-    name: 板块名称
+    """备源：akshare(同花顺)拉取单个板块历史K线
+    仅用于新板块首次拉历史数据，今日数据已有则无需调用
     返回 [{date, open, close, high, low, volume}] 或 []
     """
     import akshare as ak
@@ -371,16 +481,20 @@ def _fetch_sector_klines_akshare(sector_type, name):
             if df is None or len(df) == 0:
                 return []
             return _df_to_kline(df)
-        except Exception:
+        except Exception as e:
             if attempt < 2:
-                time.sleep(2 + attempt * 2)  # 2s → 4s → give up
+                log(f'  ⚠️  akshare[{sector_type}/{name}] 重试#{attempt+1}: {type(e).__name__}: {str(e)[:120]}')
+                time.sleep(2 + attempt * 2)
             continue
+    log(f'  ❌ akshare[{sector_type}/{name}] 3次重试全部失败，放弃')
     return []
 
 
 def update_sectors():
-    """更新行业+概念板块日K线"""
-    import akshare as ak
+    """更新行业+概念板块日K线
+    双源自动切换：主源push2test(今日实时) → 备源akshare(历史K线)
+    失败率>50%告警，全部失败抛异常
+    """
     import warnings
     warnings.filterwarnings('ignore')
 
@@ -389,21 +503,24 @@ def update_sectors():
     industries = existing.get('industries', {})
     concepts = existing.get('concepts', {})
 
-    # 获取板块名称列表
-    try:
-        ind_names = list(ak.stock_board_industry_name_ths()['name'])
-    except Exception as e:
-        log(f'⚠️  行业板块列表拉取失败: {e}')
-        ind_names = list(industries.keys())  # 用缓存的
-    try:
-        con_names = list(ak.stock_board_concept_name_ths()['name'])
-    except Exception as e:
-        log(f'⚠️  概念板块列表拉取失败: {e}')
+    # ── 获取板块名称列表（双源：push2test优先 → akshare兜底 → 缓存兜底） ──
+    ind_names = _fetch_board_names_from_push2test('industry')
+    if not ind_names:
+        ind_names = _fetch_board_names_from_akshare('industry')
+    if not ind_names:
+        log('⚠️  行业板块列表全源失败，用缓存数据')
+        ind_names = list(industries.keys())
+
+    con_names = _fetch_board_names_from_push2test('concept')
+    if not con_names:
+        con_names = _fetch_board_names_from_akshare('concept')
+    if not con_names:
+        log('⚠️  概念板块列表全源失败，用缓存数据')
         con_names = list(concepts.keys())
 
     log(f'📋  行业{len(ind_names)}个, 概念{len(con_names)}个, 上次更新{last_updated}')
 
-    # ── 确定追踪中的概念（自选股关联≥6只才拉K线） ──
+    # ── 确定追踪中的概念 ──
     today = datetime.now().strftime('%Y%m%d')
     try:
         _concept_list = get_concept_list()
@@ -428,109 +545,65 @@ def update_sectors():
         log(f'⚠️  计算追踪概念失败: {e}，回退到全量更新')
         tracked_concepts = set(con_names)
 
-    # 更新行业
-    ind_updated = 0
-    ind_new = 0
-    for name in ind_names:
-        try:
-            # 已有且已是最新 → 跳过
-            if name in industries and industries[name] and industries[name][-1]['date'] == today:
-                continue
+    # ═══════════════════════════════════════════════════
+    # 主源：push2test 批量获取今日数据
+    # push2test(东财)和旧akshare(同花顺)的指数基准不同，不能混合
+    # → 直接完全替换：有push2test数据的板块全部替换，没有的保留旧数据
+    # ═══════════════════════════════════════════════════
+    ind_today = _fetch_today_sectors_from_push2test('industry', ind_names)
+    con_today = _fetch_today_sectors_from_push2test('concept', list(tracked_concepts))
 
-            # 新板块：拉全量
-            if name not in industries:
-                klines = _fetch_sector_klines_akshare('industry', name)
-                if klines:
-                    industries[name] = klines
-                    ind_new += 1
-                time.sleep(0.3)
-                continue
+    # ── 保留旧THS数据不变，另存push2test数据到独立字段 ──
+    # push2test(东财)和akshare(同花顺)的指数绝对值不同，不能混
+    # push2test的f3字段本身就是当日涨跌幅，无需历史即可排行
+    push2test_data = {'industries': ind_today, 'concepts': con_today}
+    existing['_push2test'] = push2test_data
+    existing['_push2test_updated'] = today
+    
+    # 统计
+    ind_saved = len(ind_today)
+    con_saved = len(con_today)
 
-            # 已有板块但落后：只追最新日
-            klines = industries[name]
-            existing_dates = {k['date'] for k in klines}
-            fetched = _fetch_sector_klines_akshare('industry', name)
-            if not fetched:
-                time.sleep(0.3)
-                continue
+    # ═══════════════════════════════════════════════════
+    # 备源：akshare 补旧板块历史K线（akshare现已全部不可用，跳过）
+    # ═══════════════════════════════════════════════════
 
-            added = 0
-            for k in fetched:
-                if k['date'] not in existing_dates:
-                    klines.append(k)
-                    added += 1
-            if added > 0:
-                klines.sort(key=lambda x: x['date'])
-                if len(klines) > 60:
-                    klines = klines[-60:]
-                    industries[name] = klines
-                ind_updated += 1
-            time.sleep(0.3)
-        except Exception as e:
-            log(f'  ⚠️  行业-{name}: {e}')
+    # ═══════════════════════════════════════════════════
+    # 失败率分析 + 告警
+    # ═══════════════════════════════════════════════════
+    ind_total = len(ind_names)
+    con_tracked = len(tracked_concepts)
+    ind_miss = ind_total - len(ind_today)
+    con_miss = con_tracked - len(con_today)
 
-    # 更新概念（只拉追踪中的，非追踪概念保持旧数据不变）
-    con_updated = 0
-    con_new = 0
-    for name in con_names:
-        # 跳过非追踪概念
-        if name not in tracked_concepts:
-            continue
+    if ind_total > 0 and ind_miss / ind_total > 0.5:
+        msg = f'🚨 行业板块大面积获取失败: {ind_miss}/{ind_total}({ind_miss/ind_total*100:.0f}%) 未从push2test获取到数据'
+        log(msg)
 
-        try:
-            # 已有且已有今天数据 → 跳过
-            if name in concepts and concepts[name] and concepts[name][-1]['date'] == today:
-                continue
+    if con_tracked > 0 and con_miss / con_tracked > 0.5:
+        msg = f'🚨 概念板块大面积获取失败: {con_miss}/{con_tracked}({con_miss/con_tracked*100:.0f}%) 未从push2test获取到数据'
+        log(msg)
 
-            if name not in concepts:
-                klines = _fetch_sector_klines_akshare('concept', name)
-                if klines:
-                    concepts[name] = klines
-                    con_new += 1
-                time.sleep(0.3)
-                continue
+    # 全源全量失败 → 抛异常让cron能感知
+    if ind_total > 0 and len(ind_today) == 0 and not industries:
+        raise RuntimeError('行业板块全源获取失败，无任何缓存数据可用')
+    if con_tracked > 0 and len(con_today) == 0 and not any(name in concepts for name in tracked_concepts):
+        raise RuntimeError('概念板块全源获取失败（追踪中），无任何缓存数据可用')
 
-            klines = concepts[name]
-            existing_dates = {k['date'] for k in klines}
-            fetched = _fetch_sector_klines_akshare('concept', name)
-            if not fetched:
-                time.sleep(0.3)
-                continue
-
-            added = 0
-            for k in fetched:
-                if k['date'] not in existing_dates:
-                    klines.append(k)
-                    added += 1
-            if added > 0:
-                klines.sort(key=lambda x: x['date'])
-                if len(klines) > 60:
-                    klines = klines[-60:]
-                    concepts[name] = klines
-                con_updated += 1
-            time.sleep(0.3)
-        except Exception as e:
-            log(f'  ⚠️  概念-{name}: {e}')
-
-    # 确定最新日期
-    all_dates = set()
-    for name, kls in industries.items():
-        if kls:
-            all_dates.add(kls[-1]['date'])
-    for name, kls in concepts.items():
-        if kls:
-            all_dates.add(kls[-1]['date'])
-    latest_date = max(all_dates) if all_dates else last_updated
+    # 最新日期：来自push2test的更新时间
+    latest_date = existing.get('_push2test_updated', existing.get('last_updated', ''))
 
     save_sector_daily({
         'last_updated': latest_date,
         'industries': industries,
         'concepts': concepts,
+        '_push2test': existing.get('_push2test', {}),
+        '_push2test_updated': existing.get('_push2test_updated', ''),
     })
 
-    stats = f'行业{ind_updated}只更新+{ind_new}只新增, 概念{con_updated}只更新+{con_new}只新增'
+    stats = f'push2test: 行业{ind_saved}条, 概念{con_saved}条 (THS旧数据保留不变)'
     log(f'📈  板块: {stats}')
-    return (ind_updated + con_updated, ind_new + con_new)
+    return (ind_saved, con_saved)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -896,7 +969,14 @@ def main():
 
     # 阶段3: 板块
     log('━━━ 板块更新 ━━━')
-    s3 = update_sectors()
+    try:
+        s3 = update_sectors()
+    except Exception as e:
+        log(f'🚨 板块更新失败: {e}')
+        import traceback
+        for line in traceback.format_exc().splitlines():
+            log(f'  {line}')
+        raise  # 非零退出码让cron感知
 
     elapsed = time.time() - t0
     log(f'{"━"*30}')
