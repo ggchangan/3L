@@ -9,7 +9,7 @@
 """
 
 import json, os, sys, time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -23,6 +23,19 @@ from backend.config import (
 from backend.services.source_health import (
     report_success, report_failure, is_source_available, get_all_health
 )
+
+
+def _last_trading_day():
+    """返回最后一个交易日字符串 YYYYMMDD
+    周末回退到周五，简单实现不考虑法定节假日
+    """
+    d = datetime.now()
+    for _ in range(7):
+        if d.weekday() < 5:  # Mon=0..Fri=4
+            return d.strftime('%Y%m%d')
+        d -= timedelta(days=1)
+    return d.strftime('%Y%m%d')
+
 
 class DataUnavailableError(Exception):
     def __init__(self, data_type):
@@ -65,7 +78,7 @@ def _fetch_em_sector_ranking(date_str):
     返回 {last_updated, industries: {name: {date, change_pct, close, ...}},
            concepts: {...}}
     """
-    today = datetime.now().strftime('%Y%m%d')
+    today = _last_trading_day()
     try:
         import requests
         url = 'https://push2test.eastmoney.com/api/qt/clist/get'
@@ -301,6 +314,7 @@ def verify_data_sources(verbose=True):
     返回 {"status": "pass"|"fail", "checks": [...], "now": date_str}
     """
     now = datetime.now().strftime('%Y%m%d')
+    latest_trade_day = _last_trading_day()
     checks = []
     all_pass = True
 
@@ -370,11 +384,11 @@ def verify_data_sources(verbose=True):
             _check(f'{fname}[{os.path.basename(fpath)}] JSON解析', False, str(e))
             continue
 
-        # 新鲜度
+        # 新鲜度：应等于最后一个交易日
         last_up = data.get('last_updated', '') or data.get('_push2test_updated', '')
-        fresh = last_up == now
-        _check(f'{fname}[{os.path.basename(fpath)}] 新鲜度(当天)',
-               fresh or _is_weekend(), f'last_updated={last_up}')
+        fresh = last_up == latest_trade_day
+        _check(f'{fname}[{os.path.basename(fpath)}] 新鲜度(最近交易日<{latest_trade_day}>)',
+               fresh, f'last_updated={last_up}')
 
     # ════ 3. 一致性验证（实时 vs 文件）════
     try:
