@@ -150,7 +150,7 @@ export default function Workbench() {
       const id = `ha-${i}`
       if (!checkedIds.has(id)) return
       const stockName = item.stock || ''
-      const act = (item.action_type || item.action || '').toLowerCase()
+      const act = (item.action || '').toLowerCase()
       const pi: PlanItem = { stock: stockName, condition: item.reason || '', qty: '', status: 'pending', alert: null, stop_loss: item.stop_loss, stop_loss_pct: item.stop_loss_pct }
       if (act.startsWith('卖出')) {
         newPlan.sell.push(pi)
@@ -292,7 +292,7 @@ export default function Workbench() {
                         <span style={{ color: checkedIds.has(id) ? '#22c55e' : '#555', fontSize: 14 }}>{checkedIds.has(id) ? '☑' : '☐'}</span>
                         <span style={{ fontSize: 10, color: priColor, fontWeight: 600 }}>[{item.priority}]</span>
                         <span style={{ fontSize: 12, color: '#e0e0e0' }}>{item.stock || ''}</span>
-                        <span style={{ fontSize: 11, color: '#22c55e' }}>{item.action_type || item.action || ''}</span>
+                        <span style={{ fontSize: 11, color: '#22c55e' }}>{item.action || ''}</span>
                         <span style={{ fontSize: 10, color: '#888' }}>{item.reason || ''}</span>
                         {(item.stop_loss != null || item.stop_loss_pct != null) && (
                           <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
