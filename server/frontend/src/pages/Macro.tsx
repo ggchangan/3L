@@ -67,6 +67,7 @@ interface PanicStrategy {
     position_advice: string; bias20: number
   }
   mainline_sectors?: string[]
+  emerging_sectors?: { name: string; chg_1d: number; chg_20d: number; _is_header?: boolean }[]
   overall_summary?: {
     principle: string; key_points: string[]; conclusion: string
   }
@@ -413,11 +414,32 @@ export default function Macro() {
                     {/* 主线与抗跌方向 */}
                     {panicMon.strategy?.mainline_sectors && panicMon.strategy.mainline_sectors.length > 0 && (
                       <div className="panic-section-block">
-                        <div className="panic-subtitle">🟢 主线与抗跌方向</div>
+                        <div className="panic-subtitle">🟢 主线抗跌方向</div>
                         <div className="panic-sectors">
                           {panicMon.strategy.mainline_sectors.map((s, i) => (
-                            <span key={i} className="panic-sector-tag">{s}</span>
+                            <span key={i} className="panic-sector-tag mainline">{s}</span>
                           ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 底部突起方向（弱转强） */}
+                    {panicMon.strategy?.emerging_sectors && panicMon.strategy.emerging_sectors.length > 0 && (
+                      <div className="panic-section-block">
+                        <div className="panic-subtitle">🔵 底部突起方向</div>
+                        <div className="panic-emerging-list">
+                          {panicMon.strategy.emerging_sectors.map((s, i) => {
+                            if (s._is_header) {
+                              return <div key={i} className="panic-emerging-header">{s.name}</div>
+                            }
+                            return (
+                              <div key={i} className="panic-emerging-item">
+                                <span className="panic-emerging-name">{s.name}</span>
+                                <span className="panic-emerging-chg">{s.chg_1d > 0 ? '+' : ''}{s.chg_1d.toFixed(2)}%</span>
+                                <span className="panic-emerging-20d">{s.chg_20d > 0 ? '+' : ''}{s.chg_20d.toFixed(2)}% (20日)</span>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     )}

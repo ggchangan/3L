@@ -290,6 +290,22 @@
   font-size: 10px; background: rgba(74,158,255,0.1);
   color: #4a9eff; padding: 3px 8px; border-radius: 4px;
 }
+.panic-sector-tag.mainline { background: rgba(76,175,80,0.1); color: #4CAF50; }
+
+/* 底部突起方向 */
+.panic-emerging-list { display: flex; flex-direction: column; gap: 2px; }
+.panic-emerging-header {
+  font-size: 11px; color: #666; font-style: italic;
+  padding: 2px 4px; margin-bottom: 2px;
+}
+.panic-emerging-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 8px; font-size: 11px;
+  background: rgba(255,255,255,0.02); border-radius: 4px;
+}
+.panic-emerging-name { color: #bbb; min-width: 80px; }
+.panic-emerging-chg { color: #e94560; font-weight: 600; min-width: 50px; }
+.panic-emerging-20d { color: #666; font-size: 10px; margin-left: auto; }
 .panic-key-points { margin-top: 6px; }
 .panic-key-point {
   font-size: 11px; color: #999; padding: 3px 8px;
