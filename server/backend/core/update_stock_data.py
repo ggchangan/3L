@@ -14,7 +14,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 # ⚠️ 注意: file 在 server/backend/core/ 下
 # dirname×1=core/  ×2=backend/  ×3=server/（backend 包所在位置）
-from backend.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH
+from backend.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH, SOURCES_EM_SECTOR_DAILY
 from backend.core.data_layer import (
     get_watchlist,
     load_all_stocks_uncached,
@@ -545,8 +545,38 @@ def update_sectors():
         '_push2test_updated': existing.get('_push2test_updated', ''),
     })
 
+    # 同步刷新 EM 仓（供 get_sector_rankings 使用，确保 chg_1d 为当日数据）
+    try:
+        em_dir = os.path.dirname(SOURCES_EM_SECTOR_DAILY)
+        os.makedirs(em_dir, exist_ok=True)
+        em_data = {
+            'last_updated': latest_date,
+            'industries': {k: v for k, v in ind_today.items()},
+            'concepts': {k: v for k, v in con_today.items()},
+        }
+        with open(SOURCES_EM_SECTOR_DAILY, 'w', encoding='utf-8') as f:
+            json.dump(em_data, f, ensure_ascii=False, indent=2)
+        log(f'📤  EM仓同步完成: 行业{len(ind_today)}条, 概念{len(con_today)}条')
+    except Exception as e:
+        log(f'⚠️  EM仓同步失败: {e}')
+
     stats = f'push2test: 行业{ind_saved}条, 概念{con_saved}条 (THS旧数据保留不变)'
     log(f'📈  板块: {stats}')
+
+    # ── 板块数据验证 ──
+    try:
+        from backend.services.data_source import verify_data_sources
+        vresult = verify_data_sources(verbose=False)
+        vpass = vresult['pass_count'] if 'pass_count' in vresult else sum(1 for c in vresult['checks'] if c['pass'])
+        vtotal = len(vresult['checks'])
+        if vresult['status'] == 'pass':
+            log(f'✅  数据源验证通过: {vpass}/{vtotal}')
+        else:
+            fails = [c for c in vresult['checks'] if not c['pass']]
+            log(f'⚠️  数据源验证: {vpass}/{vtotal}, 失败项: {[c["check"] for c in fails]}')
+    except Exception as e:
+        log(f'⚠️  数据源验证异常: {e}')
+
     return (ind_saved, con_saved)
 
 
