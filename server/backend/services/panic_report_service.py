@@ -131,20 +131,29 @@ def _format_md(holdings, p2t, emerging):
 
     if inds:
         L.append("### 行业板块\n")
-        for n, i in sorted(inds.items(), key=lambda x: x[1].get('change_pct',0))[:8]:
+        # 按涨幅升序排列，最抗跌的（跌幅最小）排在最后
+        sorted_inds = sorted(inds.items(), key=lambda x: x[1].get('change_pct', 0))
+        for n, i in sorted_inds[:8]:
             c = i.get('change_pct')
             if c is not None:
-                L.append(f'<span class="{_tc(c)}">{n}</span> **{_fmt(c)}**  ')
+                prefix = '最抗跌' if c > -1 else '跌幅较小' if c > -2 else '跟随大盘'
+                L.append(f'<span class="{_tc(c)}">{n}</span> **{_fmt(c)}** — {prefix}  ')
         L.append("")
+        # 行业总结：跌幅最小的方向
+        best_inds = [n for n, i in sorted_inds[:5] if i.get('change_pct',0) > -1.5]
+        if best_inds:
+            L.append(f"**结论：** {'/'.join(best_inds[:3])}跌幅最小，相对强势。资金没有系统性出逃。")
+            L.append("")
 
     if cons:
         L.append("### 概念板块\n")
-        L.append("| 概念 | 涨跌幅 |")
-        L.append("|:----|:-----:|")
+        L.append("| 概念 | 涨跌幅 | 强度 |")
+        L.append("|:----|:-----:|:----:|")
         for n, i in sorted(cons.items(), key=lambda x: x[1].get('change_pct',0), reverse=True)[:20]:
             c = i.get('change_pct')
             if c is not None:
-                L.append(f"| {n} | **{_fmt(c)}** |")
+                strength = '🟢最强' if c > 1.5 else '🟢较强' if c > 0 else '🟡中等' if c > -1.5 else '🔴偏弱'
+                L.append(f"| {n} | **{_fmt(c)}** | {strength} |")
         L.append("")
 
     # 底部突起
@@ -156,6 +165,42 @@ def _format_md(holdings, p2t, emerging):
             if not s.get('_is_header'):
                 L.append(f"| {s['name']} | **{_fmt(s.get('chg_1d'))}** |")
         L.append("")
+
+    # 个股逆势收红分析（从holdings里筛选）
+    if holdings:
+        up_stocks = [h for h in holdings if h.get('change_pct', 0) > 0]
+        down_stocks = [h for h in holdings if h.get('change_pct', 0) <= 0]
+        if up_stocks:
+            L.append("### 个股逆势收红\n")
+            L.append("| 股票 | 涨跌 | 方向 |")
+            L.append("|:----|:----:|:----:|")
+            for h in sorted(up_stocks, key=lambda x: x.get('change_pct', 0), reverse=True):
+                L.append(f"| {h.get('name','')} | **{_fmt(h.get('change_pct'))}** | {h.get('structure','')} |")
+            L.append("")
+            L.append(f"> **核心：** {len(up_stocks)}/{len(holdings)}只持仓逆势收红，说明精选方向依然有资金承接。")
+            L.append("")
+
+        # 反弹梯队
+        L.append("### 恐慌企稳后反弹梯队\n")
+        tier1 = [h for h in holdings if h.get('change_pct', 0) > -1.5]
+        tier2 = [h for h in holdings if -4 < h.get('change_pct', 0) <= -1.5]
+        tier3 = [h for h in holdings if h.get('change_pct', 0) <= -4]
+        if tier1:
+            t1_names = '、'.join([h.get('name','') for h in tier1[:6]])
+            L.append(f'<span class="tier-1">🟢 第一梯队</span> — 最抗跌  ')
+            L.append(f"→ {t1_names}\n")
+        if tier2:
+            t2_names = '、'.join([h.get('name','') for h in tier2[:6]])
+            L.append(f'<span class="tier-2">🟡 第二梯队</span> — 跟随反弹  ')
+            L.append(f"→ {t2_names}\n")
+        if tier3:
+            t3_names = '、'.join([h.get('name','') for h in tier3[:6]])
+            L.append(f'<span class="tier-3">🔴 第三梯队</span> — 反弹有限  ')
+            L.append(f"→ {t3_names}\n")
+        L.append("")
+        L.append("> **核心逻辑：** 恐慌企稳后，最先涨的不会是跌最惨的，而是本来就最强、结构没坏的。")
+        L.append("")
+
     L.append("---\n")
 
     # ═══ 四、持仓分析 ═══
