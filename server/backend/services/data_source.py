@@ -681,9 +681,540 @@ def verify_data_sources(verbose=True):
         print(f'\n{"="*40}')
         print(f'  数据源验证：{"✅ 全部通过" if all_pass else "❌ 存在问题"}')
         print(f'  {sum(1 for c in checks if c["pass"])}/{len(checks)} 项通过')
+
+    # ════ L0 覆盖度验证集成 ════
+    try:
+        coverage = verify_data_coverage(verbose=verbose)
+        for cc in coverage.get('checks', []):
+            checks.append(cc)
+            if not cc['pass'] and 'WARN' not in cc.get('detail', ''):
+                all_pass = False
+    except Exception as e:
+        _check('L0覆盖度验证', False, f'异常: {type(e).__name__}: {e}')
+        all_pass = False
+
     return {'status': 'pass' if all_pass else 'fail', 'checks': checks, 'now': now}
 
 
 def _is_weekend():
     """非交易日无需验证涨跌幅"""
     return datetime.now().weekday() >= 5
+
+
+# ════════════════════════════════════════════════════════════
+# L0 — 数据覆盖度验证
+# ════════════════════════════════════════════════════════════
+
+def _is_trading_day(date_str):
+    """判断 YYYYMMDD 是否为交易日（周一到周五）"""
+    if not date_str or len(date_str) != 8:
+        return False
+    from datetime import datetime as dt
+    d = dt.strptime(date_str, '%Y%m%d')
+    return d.weekday() < 5
+
+
+def _parse_date(date_str):
+    """YYYYMMDD -> datetime, 失败返回 None"""
+    try:
+        from datetime import datetime as dt
+        return dt.strptime(date_str, '%Y%m%d')
+    except (ValueError, TypeError):
+        return None
+
+
+def _days_between(d1, d2):
+    """返回两个 YYYYMMDD 之间相差的天数（含边界）"""
+    dt1 = _parse_date(d1)
+    dt2 = _parse_date(d2)
+    if dt1 is None or dt2 is None:
+        return 999
+    return abs((dt1 - dt2).days)
+
+
+def _sample_keys(d, sample_size, must_include=None):
+    """从字典中均匀采样 key
+
+    Args:
+        d: dict 或可迭代的 key 列表
+        sample_size: 采样数
+        must_include: 必须包含的 key 列表
+
+    Returns: [key, ...]
+    """
+    keys = list(d.keys()) if isinstance(d, dict) else list(d)
+    if not keys:
+        return []
+    must = [k for k in (must_include or []) if k in keys]
+    rest = [k for k in keys if k not in must]
+    # 从 rest 中均匀采样
+    remaining = max(0, sample_size - len(must))
+    sampled = []
+    if rest and remaining > 0:
+        step = max(1, len(rest) // remaining)
+        for i in range(0, len(rest), step):
+            if len(sampled) >= remaining:
+                break
+            sampled.append(rest[i])
+    return must + sampled
+
+
+def verify_data_coverage(verbose=True):
+    """L0 — data_layer 数据覆盖度验证
+
+    三种维度检查：
+      1. 结构完整性 — 全量K线日期扫描（禁止周末/未来/大面积过期）
+      2. 时效脉冲   — 按比例采样+关键概念必检
+      3. 交叉验算   — K线计算chg vs 快照change_pct
+
+    返回 {'status': 'pass'|'fail'|'warn', 'checks': [...], 'pass_count': int, 'fail_count': int}
+    """
+    import json, os
+    from datetime import datetime, timedelta
+    from backend.config import SECTOR_DAILY_PATH
+
+    now = datetime.now().strftime('%Y%m%d')
+    today = datetime.now()
+    latest_trade_day = _last_trading_day()
+    checks = []
+    pass_count = 0
+    fail_count = 0
+    warn_count = 0
+
+    def _check(name, passed, detail, data_type, dimension):
+        nonlocal pass_count, fail_count, warn_count
+        # passed=True 时按通过计；False 但 detail 含'跳过'→不计fail
+        if passed:
+            pass_count += 1
+        elif '跳过' in detail and 'WARN' not in detail:
+            # 非交易日跳过、数据不足跳过等，不报fail
+            pass_count += 1
+        else:
+            if 'WARN' in detail:
+                warn_count += 1
+            else:
+                fail_count += 1
+        if verbose:
+            tag = '✅' if passed else ('⚠️' if 'WARN' in detail else '❌')
+            print(f'  {tag} [{data_type}/{dimension}] {name}: {detail}')
+        checks.append({
+            'check': name, 'pass': passed,
+            'detail': detail,
+            'type': data_type, 'dimension': dimension,
+        })
+
+    # ── 加载数据 ──
+    if not os.path.isfile(SECTOR_DAILY_PATH):
+        _check('数据文件存在', False, f'{SECTOR_DAILY_PATH} 不存在',
+               '_file', 'structure')
+        return {
+            'status': 'fail', 'checks': checks,
+            'pass_count': pass_count, 'fail_count': fail_count,
+            'warn_count': warn_count, 'now': now,
+        }
+
+    try:
+        with open(SECTOR_DAILY_PATH, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+    except Exception as e:
+        _check('数据文件解析', False, f'JSON解析失败: {e}',
+               '_file', 'structure')
+        return {
+            'status': 'fail', 'checks': checks,
+            'pass_count': pass_count, 'fail_count': fail_count,
+            'warn_count': warn_count, 'now': now,
+        }
+
+    industries = raw.get('industries', {})
+    concepts = raw.get('concepts', {})
+    p2t = raw.get('_push2test', {})
+    last_updated = raw.get('last_updated', '')
+    p2t_updated = raw.get('_push2test_updated', '')
+
+    # ── 判断是否需要跳过严格检查 ──
+    is_ntd = _is_weekend()
+
+    # ════════════════════════════════════════════════════════════
+    # 1. 结构完整性
+    # ════════════════════════════════════════════════════════════
+
+    # 1a. 概念K线日期扫描
+    concept_dates = {}
+    for name, klines in concepts.items():
+        if isinstance(klines, list) and klines:
+            last_k = klines[-1]
+            d = last_k.get('date', '') if isinstance(last_k, dict) else ''
+            if d:
+                concept_dates[name] = d
+
+    concept_date_dist = {}
+    for name, d in concept_dates.items():
+        concept_date_dist[d] = concept_date_dist.get(d, 0) + 1
+
+    concept_date_summary = ', '.join(
+        f'{d}:{n}个' for d, n in sorted(concept_date_dist.items())
+    ) if concept_date_dist else '(无数据)'
+    _check('概念K线日期分布', bool(concept_date_dist),
+           concept_date_summary, 'concept_kline', 'structure')
+
+    # 检查周末日期（概念）
+    concept_weekend = [d for d in concept_date_dist
+                       if d and not _is_trading_day(d)]
+    if concept_weekend:
+        weekend_count = sum(concept_date_dist[d] for d in concept_weekend)
+        _check('概念K线无周末日期', False,
+               f'{weekend_count}个概念日期在非交易日: {", ".join(sorted(concept_weekend))}',
+               'concept_kline', 'structure')
+    else:
+        _check('概念K线无周末日期', True,
+               '所有概念K线日期均为交易日',
+               'concept_kline', 'structure')
+
+    # 检查大面积过期
+    stale_concepts = [
+        name for name, d in concept_dates.items()
+        if _days_between(d, latest_trade_day) > 1
+    ]
+    stale_ratio = len(stale_concepts) / max(len(concept_dates), 1) * 100
+    stale_ok = stale_ratio < 50
+    _check('概念K线大面积过期检测',
+           stale_ok,
+           f'{len(stale_concepts)}/{len(concept_dates)}个过期({stale_ratio:.0f}%), 阈值<50%'
+           + (f' 最早: {min(concept_dates.get(n,"") for n in stale_concepts[:3])}' if stale_concepts else ''),
+           'concept_kline', 'structure')
+
+    # 1b. 行业K线日期扫描
+    ind_dates = {}
+    for name, klines in industries.items():
+        if isinstance(klines, list) and klines:
+            last_k = klines[-1]
+            d = last_k.get('date', '') if isinstance(last_k, dict) else ''
+            if d:
+                ind_dates[name] = d
+
+    ind_date_dist = {}
+    for name, d in ind_dates.items():
+        ind_date_dist[d] = ind_date_dist.get(d, 0) + 1
+
+    ind_date_summary = ', '.join(
+        f'{d}:{n}个' for d, n in sorted(ind_date_dist.items())
+    ) if ind_date_dist else '(无数据)'
+    _check('行业K线日期分布', bool(ind_date_dist),
+           ind_date_summary, 'industry_kline', 'structure')
+
+    # 检查周末日期（行业）
+    ind_weekend = [d for d in ind_date_dist
+                   if d and not _is_trading_day(d)]
+    if ind_weekend:
+        weekend_count = sum(ind_date_dist[d] for d in ind_weekend)
+        _check('行业K线无周末日期', False,
+               f'{weekend_count}个行业日期在非交易日: {", ".join(sorted(ind_weekend))}',
+               'industry_kline', 'structure')
+    else:
+        _check('行业K线无周末日期', True,
+               '所有行业K线日期均为交易日',
+               'industry_kline', 'structure')
+
+    # 检查大面积过期（行业）
+    stale_ind = [
+        name for name, d in ind_dates.items()
+        if _days_between(d, latest_trade_day) > 1
+    ]
+    stale_ind_ratio = len(stale_ind) / max(len(ind_dates), 1) * 100
+    stale_ind_ok = stale_ind_ratio < 50
+    _check('行业K线大面积过期检测',
+           stale_ind_ok,
+           f'{len(stale_ind)}/{len(ind_dates)}个过期({stale_ind_ratio:.0f}%), 阈值<50%',
+           'industry_kline', 'structure')
+
+    # 1c. _push2test 快照结构
+    p2t_industries = p2t.get('industries', {})
+    p2t_concepts = p2t.get('concepts', {})
+    p2t_ind_count = len(p2t_industries)
+    p2t_con_count = len(p2t_concepts)
+
+    ind_count_ok = p2t_ind_count >= 80
+    _check('行业快照计数≥80', ind_count_ok,
+           f'{p2t_ind_count}个', 'industry_snapshot', 'structure')
+
+    con_count_ok = p2t_con_count >= 200
+    _check('概念快照计数≥200', con_count_ok,
+           f'{p2t_con_count}个', 'concept_snapshot', 'structure')
+
+    # chg 非零率
+    con_chgs = []
+    for name, entry in p2t_concepts.items():
+        if isinstance(entry, dict):
+            chg = entry.get('change_pct', 0) or 0
+            con_chgs.append(chg)
+    con_nonzero = sum(1 for c in con_chgs if abs(c) > 0.01)
+    con_nonzero_ratio = con_nonzero / max(len(con_chgs), 1) * 100
+    con_nonzero_ok = con_nonzero_ratio >= 20 or len(con_chgs) < 5 or is_ntd
+    if is_ntd and len(con_chgs) < 5:
+        _check('概念快照非零占比≥20%', True,
+               f'跳过(非交易日+数据过少)',
+               'concept_snapshot', 'structure')
+    else:
+        _check('概念快照非零占比≥20%', con_nonzero_ok,
+               f'{con_nonzero}/{len(con_chgs)}={con_nonzero_ratio:.0f}%',
+               'concept_snapshot', 'structure')
+
+    # 行业 fast的非零率
+    ind_chgs = []
+    for name, entry in p2t_industries.items():
+        if isinstance(entry, dict):
+            chg = entry.get('change_pct', 0) or 0
+            ind_chgs.append(chg)
+    ind_nonzero = sum(1 for c in ind_chgs if abs(c) > 0.01)
+    ind_nonzero_ratio = ind_nonzero / max(len(ind_chgs), 1) * 100
+    _check('行业快照非零占比≥50%',
+           ind_nonzero_ratio >= 50 or is_ntd,
+           f'{ind_nonzero}/{len(ind_chgs)}={ind_nonzero_ratio:.0f}%'
+           + (' (非交易日跳过)' if is_ntd else ''),
+           'industry_snapshot', 'structure')
+
+    # 关键概念存在性
+    key_concepts = ['培育钻石']
+    for kc in key_concepts:
+        exists = kc in p2t_concepts
+        if not exists and kc in concepts:
+            # K线中有此概念但快照中没有 → WARN
+            _check(f'关键概念「{kc}」在快照中',
+                   True,
+                   f'WARN: K线中有但快照缺失(覆盖不足)',
+                   'concept_snapshot', 'structure')
+        elif not exists:
+            _check(f'关键概念「{kc}」在快照中',
+                   True,
+                   f'跳过(K线中也没有此概念)',
+                   'concept_snapshot', 'structure')
+        else:
+            _check(f'关键概念「{kc}」在快照中',
+                   True,
+                   f'存在, chg={p2t_concepts[kc].get("change_pct","?")}',
+                   'concept_snapshot', 'structure')
+
+    # 1d. _push2test 行业快照关键行业存在性
+    for ks in ['电子化学品', '半导体', '银行']:
+        exists = ks in p2t_industries
+        _check(f'关键行业「{ks}」在快照中',
+               exists, f'存在={exists}',
+               'industry_snapshot', 'structure')
+
+    # ════════════════════════════════════════════════════════════
+    # 2. 时效脉冲（采样验证）
+    # ════════════════════════════════════════════════════════════
+
+    # 跳过条件：数据量太小没必要采样
+    skip_timeliness = (len(concept_dates) < 50 or len(ind_dates) < 50)
+
+    if skip_timeliness:
+        _check('概念K线采样时效性', True,
+               f'跳过(数据量不足: 概念{len(concept_dates)}个/行业{len(ind_dates)}个)',
+               'concept_kline', 'timeliness')
+        _check('行业K线采样时效性', True,
+               f'跳过(数据量不足: 概念{len(concept_dates)}个/行业{len(ind_dates)}个)',
+               'industry_kline', 'timeliness')
+    else:
+        # 概念K线采样
+        con_samples = _sample_keys(
+            concept_dates,
+            sample_size=30,
+            must_include=['培育钻石', '华为概念'],
+        )
+        con_miss = []
+        for name in con_samples:
+            if name not in concept_dates:
+                con_miss.append(name)
+                continue
+            kdate = concept_dates[name]
+            days = _days_between(kdate, latest_trade_day)
+            if days > 2:
+                con_miss.append(f'{name}({kdate})')
+        if con_miss:
+            _check('概念K线采样时效性', False,
+                   f'采样{len(con_samples)}个, {len(con_miss)}个过期: {", ".join(con_miss[:5])}'
+                   + (f'...({len(con_miss)-5} more)' if len(con_miss) > 5 else ''),
+                   'concept_kline', 'timeliness')
+        else:
+            _check('概念K线采样时效性', True,
+                   f'采样{len(con_samples)}个均新鲜(距T≤2)',
+                   'concept_kline', 'timeliness')
+
+        # 行业K线采样
+        ind_samples = _sample_keys(
+            ind_dates,
+            sample_size=30,
+            must_include=['电子化学品', '半导体', '银行'],
+        )
+        ind_miss = []
+        for name in ind_samples:
+            if name not in ind_dates:
+                ind_miss.append(name)
+                continue
+            kdate = ind_dates[name]
+            days = _days_between(kdate, latest_trade_day)
+            if days > 2:
+                ind_miss.append(f'{name}({kdate})')
+        if ind_miss:
+            _check('行业K线采样时效性', False,
+                   f'采样{len(ind_samples)}个, {len(ind_miss)}个过期: {", ".join(ind_miss[:5])}'
+                   + (f'...({len(ind_miss)-5} more)' if len(ind_miss) > 5 else ''),
+                   'industry_kline', 'timeliness')
+        else:
+            _check('行业K线采样时效性', True,
+                   f'采样{len(ind_samples)}个均新鲜(距T≤2)',
+                   'industry_kline', 'timeliness')
+
+    # 关键概念单独时效检查（即使 K线数量不足50也检查）
+    for kc in key_concepts:
+        if kc in concept_dates:
+            kdate = concept_dates[kc]
+            days = _days_between(kdate, latest_trade_day)
+            _check(f'关键概念「{kc}」时效性',
+                   days <= 2,
+                   f'最新K线={kdate}, T={latest_trade_day}, 差{days}天',
+                   'concept_kline', 'timeliness')
+        elif kc in concepts:
+            _check(f'关键概念「{kc}」时效性', True,
+                   f'WARN: 概念在K线中但最新日期未知',
+                   'concept_kline', 'timeliness')
+
+    # 关键行业单独时效检查
+    key_industries = ['电子化学品', '半导体']
+    for ki in key_industries:
+        if ki in ind_dates:
+            kdate = ind_dates[ki]
+            days = _days_between(kdate, latest_trade_day)
+            _check(f'关键行业「{ki}」时效性',
+                   days <= 2,
+                   f'最新K线={kdate}, T={latest_trade_day}, 差{days}天',
+                   'industry_kline', 'timeliness')
+        elif ki in industries:
+            _check(f'关键行业「{ki}」时效性', True,
+                   f'WARN: 行业在K线中但最新日期未知',
+                   'industry_kline', 'timeliness')
+
+    # ════════════════════════════════════════════════════════════
+    # 3. 交叉验算
+    # ════════════════════════════════════════════════════════════
+
+    xverify_items = []
+
+    # 行业交叉验算：K线chg vs _push2test 快照 change_pct
+    # 选电子化学品（必在K线和快照中）
+    for xs_name in ['电子化学品', '半导体']:
+        if xs_name not in industries or xs_name not in p2t_industries:
+            continue
+        klines = industries[xs_name]
+        snap = p2t_industries[xs_name]
+        if not isinstance(klines, list) or len(klines) < 2:
+            continue
+        if not isinstance(snap, dict):
+            continue
+        latest = klines[-1]
+        prev = klines[-2]
+        if not isinstance(latest, dict) or not isinstance(prev, dict):
+            continue
+        # 检查日期是否相邻（否则K线计算的chg是跨日变化，不能与快照日涨跌幅比对）
+        latest_date = latest.get('date', '')
+        prev_date = prev.get('date', '')
+        date_gap = _days_between(latest_date, prev_date)
+        if date_gap > 1:
+            xverify_items.append((xs_name, 'industry', None, snap_chg, True))
+            continue  # 跳过（K线不连续），不FAIL
+        kline_chg = round(
+            (float(latest.get('close', 0)) / max(float(prev.get('close', 1)), 0.01) - 1) * 100,
+            2,
+        )
+        snap_chg = snap.get('change_pct', None)
+        if snap_chg is None:
+            xverify_items.append((xs_name, 'industry', kline_chg, None, True))
+            continue
+        snap_chg = float(snap_chg)
+        diff = abs(kline_chg - snap_chg)
+        ok = diff < 0.5
+        xverify_items.append((xs_name, 'industry', kline_chg, snap_chg, ok))
+
+    for name, dtype, kchg, schg, ok in xverify_items:
+        if kchg is None:
+            _check(f'{dtype}交叉验算「{name}」',
+                   True,
+                   f'WARN: K线不连续, 跳过交叉验算, 快照chg={schg}%',
+                   f'{dtype}_kline', 'cross_verify')
+        else:
+            _check(f'{dtype}交叉验算「{name}」',
+                   ok,
+                   f'K线chg={kchg}% vs 快照chg={schg}%'
+                   + (f' (偏差{abs(kchg-schg):.2f}pt)' if schg is not None else ' (快照无此行业)'),
+                   f'{dtype}_kline', 'cross_verify')
+
+    # 概念交叉验算：K线chg vs _push2test 概念 change_pct
+    # 选培育钻石（K线中有，快照中可能没有）
+    cxverify_items = []
+    for xc_name in ['培育钻石', '华为概念']:
+        if xc_name not in concepts:
+            continue
+        klines = concepts[xc_name]
+        if not isinstance(klines, list) or len(klines) < 2:
+            continue
+        latest = klines[-1]
+        prev = klines[-2]
+        if not isinstance(latest, dict) or not isinstance(prev, dict):
+            continue
+        # 检查日期是否相邻
+        latest_date = latest.get('date', '')
+        prev_date = prev.get('date', '')
+        date_gap = _days_between(latest_date, prev_date)
+        if date_gap > 1:
+            snap_entry = p2t_concepts.get(xc_name)
+            snap_chg = float(snap_entry.get('change_pct', 0)) if snap_entry else None
+            cxverify_items.append((xc_name, 'concept', None, snap_chg, True))
+            continue  # 跳过（K线不连续）
+        kline_chg = round(
+            (float(latest.get('close', 0)) / max(float(prev.get('close', 1)), 0.01) - 1) * 100,
+            2,
+        )
+        snap_entry = p2t_concepts.get(xc_name)
+        if snap_entry is None or not isinstance(snap_entry, dict):
+            cxverify_items.append((xc_name, 'concept', kline_chg, None, True))
+            continue  # WARN, 不FAIL
+        snap_chg = float(snap_entry.get('change_pct', 0) or 0)
+        diff = abs(kline_chg - snap_chg)
+        ok = diff < 0.5
+        cxverify_items.append((xc_name, 'concept', kline_chg, snap_chg, ok))
+
+    for name, dtype, kchg, schg, ok in cxverify_items:
+        if kchg is None:
+            _check(f'{dtype}交叉验算「{name}」',
+                   True,
+                   f'WARN: K线不连续, 跳过交叉验算, 快照chg={schg}%',
+                   f'{dtype}_kline', 'cross_verify')
+        else:
+            _check(f'{dtype}交叉验算「{name}」',
+                   ok,
+                   f'K线chg={kchg}% vs 快照chg={schg}%'
+                   + (f' (偏差{abs(kchg-schg):.2f}pt)' if schg is not None else ' (WARN:快照无此概念)'),
+                   f'{dtype}_kline', 'cross_verify')
+
+    # ════ 汇总 ════
+    total_checks = len(checks)
+    if verbose:
+        print(f'\n{"="*40}')
+        print(f'  L0覆盖度验证：{"✅ 全部通过" if fail_count == 0 else f"❌ {fail_count}项失败"}' +
+              f' (通过{pass_count}/{total_checks}, 失败{fail_count}, 警告{warn_count})')
+
+    status = 'pass'
+    if fail_count > 0:
+        status = 'fail'
+    elif warn_count > 0:
+        status = 'warn'
+
+    return {
+        'status': status,
+        'checks': checks,
+        'pass_count': pass_count,
+        'fail_count': fail_count,
+        'warn_count': warn_count,
+        'now': now,
+    }
