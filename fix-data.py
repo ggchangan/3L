@@ -243,115 +243,74 @@ def cmd_fix_concept_snapshot():
 # ════════════════════════════════════════════════════════════
 
 def cmd_fix_concept_kline():
-    """补拉过期概念K线
+    """补拉过期概念K线 — 只从同花顺 THS 补拉
 
-    概念K线288条停在20260601（以及各日期分散）。
-    从 push2test 全量拉取最新每日数据，追加到每条概念K线中。
+    概念K线181条过期（停在20260601等）。
+    使用 stock_board_concept_index_ths() 逐个拉取已映射概念的日历K线。
+    仅拉取名称映射表中存在的概念，未映射的跳过。
 
-    重复调用是安全的（按date去重，不重复追加）。
+    重复调用安全（按date去重）。
     """
     data = load_sector_data()
     if data is None:
         return False
 
-    import requests
-    url = 'https://push2test.eastmoney.com/api/qt/clist/get'
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
-        'Referer': 'https://quote.eastmoney.com/',
-    }
-    ut = 'bd1d9ddb04089700cf9c27f6f7426281'
     today = _last_trading_day()
-
     concepts = data.get('concepts', {})
     if not concepts:
         log('⚠️  没有概念K线数据')
         return True
 
-    log(f'📡  从 push2test 全量拉取概念最新数据...')
-    params = {
-        'pn': '1', 'pz': '2000', 'po': '1', 'np': '1',
-        'ut': ut, 'fltt': '2', 'invt': '2',
-        'fs': 'm:90+t:3',
-        'fields': 'f2,f12,f14,f15,f16,f17,f18,f5,f6',
-    }
-    try:
-        r = requests.get(url, params=params, headers=headers, timeout=25)
-        items = r.json().get('data', {}).get('diff', [])
-    except Exception as e:
-        log(f'❌  push2test请求失败: {e}')
-        return False
+    # 加载名称映射
+    import json as _json
+    name_map_path = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.json')
+    if os.path.exists(name_map_path):
+        name_map = _json.load(open(name_map_path))
+    else:
+        name_map = {}
+    log(f'📋  名称映射: {len(name_map)}条（同花顺 THS）')
 
-    # 建立名称→今天数据的映射
-    today_data = {}
-    for item in items:
-        name = (item.get('f14') or '').strip()
-        if not name:
-            continue
-        clean = name.replace('Ⅱ', '').replace('Ⅲ', '').replace('D', '').strip()
-        close = float(item.get('f2', 0) or 0)
-        high = float(item.get('f15', close) or close)
-        low = float(item.get('f16', close) or close)
-        open_ = float(item.get('f17', close) or close)
-        volume = int(float(item.get('f5', 0) or 0))
-        today_data[clean] = {
-            'date': today,
-            'open': round(open_, 2),
-            'close': round(close, 2),
-            'high': round(high, 2),
-            'low': round(low, 2),
-            'volume': volume,
-        }
+    # 通过 data_layer 获取概念K线（走当前数据源：THS）
+    from backend.core.data_layer import get_concept_klines
+    today_klines = get_concept_klines(list(concepts.keys()))
 
-    log(f'📡  push2test返回 {len(today_data)} 条概念的最新数据')
-
-    # 遍历每个概念K线，追加今天的数据
     appended = 0
-    skipped_no_match = 0
     skipped_already = 0
+    skipped_unmapped = 0
 
     for name, klines in concepts.items():
-        if not isinstance(klines, list) or len(klines) == 0:
+        if not isinstance(klines, list):
             continue
 
-        # 检查是否已有今天的日期
+        # 检查是否已有今天数据
         existing_dates = set()
         for k in klines:
             if isinstance(k, dict):
                 existing_dates.add(k.get('date', ''))
-
         if today in existing_dates:
             skipped_already += 1
             continue
 
-        # 匹配 push2test 数据
-        td = today_data.get(name)
+        # 从 data_layer 获取的数据中查找
+        td = today_klines.get(name)
         if td is None:
-            # 尝试名称匹配（去掉空格、换形近词）
-            for pn, pdata in today_data.items():
-                if name.replace(' ', '') == pn.replace(' ', ''):
-                    td = pdata
-                    break
-
-        if td is None:
-            if skipped_no_match < 5:
-                log(f'  ⚠️  概念「{name}」不在 push2test 返回中，跳过')
-            skipped_no_match += 1
+            if not name_map.get(name):
+                skipped_unmapped += 1
+            else:
+                log(f'  ⚠️  概念「{name}」THS拉取失败')
             continue
 
-        # 追加今天数据到K线列表末尾
         klines.append(td)
         appended += 1
 
     save_sector_data(data)
-    log(f'🔧  已追加 {appended} 条概念K线 (已跳过{skipped_already}条已有、{skipped_no_match}条无匹配)')
+    log(f'🔧  追加 {appended}条概念K线 (跳过已有{skipped_already}条、无映射{skipped_unmapped}条)')
 
     # 验证
     log('📋  运行 L0 验证确认...')
     result = verify_data_coverage(verbose=False)
     stale_checks = [c for c in result['checks']
-                    if '过期' in c.get('check', '')
-                    and c.get('type') == 'concept_kline']
+                    if '过期' in c.get('check', '') and c.get('type') == 'concept_kline']
     if stale_checks:
         ck = stale_checks[0]
         if ck['pass']:

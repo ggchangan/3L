@@ -215,11 +215,11 @@ def get_sector_klines(sector_name, sector_type='industry'):
         return data.get(key, {}).get(sector_name, [])
 
 
-def get_ths_concept_snapshots(name_list: list = None) -> dict:
-    """获取同花顺概念板块今日快照数据
+def get_concept_snapshots(name_list: list = None) -> dict:
+    """获取概念板块今日快照数据
 
-    通过 data_source 层调用 stock_board_concept_info_ths() 批量拉取。
-    使用名称映射表将系统概念名转为 THS 概念名。
+    通过 data_source 统一入口路由到当前数据源实现（当前：同花顺 THS）。
+    使用名称映射表将系统概念名转为数据源概念名。
 
     Args:
         name_list: 系统概念名称列表，None=获取所有已映射概念
@@ -228,10 +228,31 @@ def get_ths_concept_snapshots(name_list: list = None) -> dict:
         {系统名: {date, change_pct, up_count, down_count, ...}}
     """
     try:
-        from backend.services.data_source import get_ths_concept_snapshots as _ds_ths_concept
-        return _ds_ths_concept(name_list)
+        from backend.services.data_source import get_concept_snapshots as _ds_get
+        return _ds_get(name_list)
     except Exception as e:
-        print(f'[data_layer] get_ths_concept_snapshots 失败: {e}')
+        print(f'[data_layer] get_concept_snapshots 失败: {e}')
+        return {}
+
+
+def get_concept_klines(name_list: list) -> dict:
+    """获取概念板块最新日K线数据
+
+    通过 data_source 统一入口路由到当前数据源实现（当前：同花顺 THS）。
+    仅拉取已映射的概念。
+
+    Args:
+        name_list: 系统概念名称列表
+
+    Returns:
+        {系统名: {date, open, close, high, low, volume}}
+        只返回成功拉取到的概念
+    """
+    try:
+        from backend.services.data_source import get_concept_klines as _ds_klines
+        return _ds_klines(name_list)
+    except Exception as e:
+        print(f'[data_layer] get_concept_klines 失败: {e}')
         return {}
 
 

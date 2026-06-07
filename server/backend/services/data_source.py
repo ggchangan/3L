@@ -593,6 +593,113 @@ def get_ths_concept_snapshots(name_list: list = None) -> dict:
     return _fetch_ths_concept_snapshots(name_list)
 
 
+def get_ths_concept_klines(name_list: list) -> dict:
+    """获取THS概念最新日K线（使用 stock_board_concept_index_ths）
+
+    仅拉取名称映射表中存在的概念，未映射的跳过。
+
+    Args:
+        name_list: 系统概念名称列表
+
+    Returns:
+        {系统名: {date, open, close, high, low, volume}}
+    """
+    if not name_list:
+        return {}
+    name_map = _load_concept_name_mapping()
+    if not name_map:
+        print('[data_source] ⚠️ 概念名称映射表为空')
+        return {}
+
+    today = _last_trading_day()
+    result = {}
+    os.environ['TQDM_DISABLE'] = '1'
+    import akshare as ak
+    import time
+
+    total = len(name_list)
+    for idx, sys_name in enumerate(name_list):
+        ths_name = name_map.get(sys_name)
+        if not ths_name:
+            continue
+        try:
+            df = ak.stock_board_concept_index_ths(symbol=ths_name)
+            if df is not None and not df.empty:
+                row = df.iloc[-1]
+                close_col = '收盘价' if '收盘价' in df.columns else 'close'
+                open_col = '开盘价' if '开盘价' in df.columns else 'open'
+                high_col = '最高价' if '最高价' in df.columns else 'high'
+                low_col = '最低价' if '最低价' in df.columns else 'low'
+                vol_col = '成交量' if '成交量' in df.columns else 'volume'
+                result[sys_name] = {
+                    'date': today,
+                    'open': round(float(row.get(open_col, 0) or 0), 2),
+                    'close': round(float(row.get(close_col, 0) or 0), 2),
+                    'high': round(float(row.get(high_col, 0) or 0), 2),
+                    'low': round(float(row.get(low_col, 0) or 0), 2),
+                    'volume': int(float(row.get(vol_col, 0) or 0)),
+                }
+        except Exception:
+            pass
+        if idx < total - 1:
+            time.sleep(0.3)
+
+    print(f'[data_source] THS概念K线: 成功{len(result)}/{total}个')
+    return result
+
+
+# ════════════════════════════════════════════════════════════
+# 数据源统一入口（工厂模式）
+# 根据 config.CONCEPT_DATA_SOURCE 路由到相应的实现
+# 切换数据源只改 config.py 一处
+# ════════════════════════════════════════════════════════════
+
+def get_concept_snapshots(name_list: list = None) -> dict:
+    """统一入口：获取概念板块今日快照数据
+
+    根据 config.CONCEPT_DATA_SOURCE 路由到对应的数据源实现。
+    当前主源：同花顺 THS（stock_board_concept_info_ths）
+
+    Args:
+        name_list: 系统概念名称列表，None=获取所有已映射概念
+
+    Returns:
+        {系统名: {date, change_pct, up_count, down_count, ...}}
+    """
+    from backend.config import CONCEPT_DATA_SOURCE
+
+    if name_list is None:
+        name_map = _load_concept_name_mapping()
+        name_list = list(name_map.keys())
+
+    if CONCEPT_DATA_SOURCE == 'ths':
+        return _fetch_ths_concept_snapshots(name_list)
+    else:
+        print(f'[data_source] ⚠️ 未知概念数据源: {CONCEPT_DATA_SOURCE}，回退到THS')
+        return _fetch_ths_concept_snapshots(name_list)
+
+
+def get_concept_klines(name_list: list) -> dict:
+    """统一入口：获取概念板块最新日K线数据
+
+    根据 config.CONCEPT_DATA_SOURCE 路由到对应的数据源实现。
+    当前主源：同花顺 THS（stock_board_concept_index_ths）
+
+    Args:
+        name_list: 系统概念名称列表
+
+    Returns:
+        {系统名: {date, open, close, high, low, volume}}
+    """
+    from backend.config import CONCEPT_DATA_SOURCE
+
+    if CONCEPT_DATA_SOURCE == 'ths':
+        return get_ths_concept_klines(name_list)
+    else:
+        print(f'[data_source] ⚠️ 未知概念数据源: {CONCEPT_DATA_SOURCE}，回退到THS')
+        return get_ths_concept_klines(name_list)
+
+
 # ════════════════════════════════════════════════════════════
 # 数据源验证层 — 正确性/及时性/一致性
 # ════════════════════════════════════════════════════════════
@@ -1251,8 +1358,14 @@ def verify_data_coverage(verbose=True):
         prev = klines[-2]
         if not isinstance(latest, dict) or not isinstance(prev, dict):
             continue
-        # 检查日期是否相邻（否则K线计算的chg是跨日变化，不能与快照日涨跌幅比对）
+        # 检查K线最新日期是否与快照日期一致
         latest_date = latest.get('date', '')
+        snap_date = str(snap.get('date', ''))
+        if latest_date != snap_date:
+            xverify_items.append((xs_name, 'industry', None, 
+                f'快照日期{snap_date}≠K线日期{latest_date}, 跳过', True))
+            continue
+        # 检查日期是否相邻（否则K线计算的chg是跨日变化，不能与快照日涨跌幅比对）
         prev_date = prev.get('date', '')
         date_gap = _days_between(latest_date, prev_date)
         if date_gap > 1:

@@ -110,11 +110,14 @@ class TestSectorMaxK:
         assert mod.MAX_K == 60
 
     def test_update_sectors_uses_ths_for_industry(self):
-        """update_sectors() 行业用同花顺THS，概念用push2test"""
+        """update_sectors() 行业用同花顺THS，概念也用同花顺THS"""
         import inspect
         from backend.core.update_stock_data import update_sectors
         source = inspect.getsource(update_sectors)
         # 行业走THS
         assert '_fetch_today_industries_from_ths' in source
-        # 概念走后端测试API
-        assert '_fetch_today_sectors_from_push2test' in source
+        # 概念走同花顺THS（通过 data_layer）
+        assert 'get_concept_snapshots' in source
+        # push2test的概念获取函数不应在update_sectors中出现
+        assert '_fetch_today_sectors_from_push2test' not in source
+        assert '_fetch_board_names_from_push2test' not in source

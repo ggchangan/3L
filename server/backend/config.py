@@ -111,6 +111,13 @@ SOURCES_EM_CONCEPT_MAP = os.path.join(SOURCES_EM_DIR, 'concept_map.json')
 SOURCES_THS_SECTOR_DAILY = os.path.join(SOURCES_THS_DIR, 'sector_daily.json')
 
 # =====================================================
+# 数据源切换配置（2026-06-07 新增工厂模式）
+# 概念板块当前使用的数据源，切换时只改此处
+# 可选值: 'ths'（同花顺，当前主源）| 'eastmoney'（东财push2test，备源）
+# =====================================================
+CONCEPT_DATA_SOURCE = 'ths'
+
+# =====================================================
 # 服务器配置
 # =====================================================
 SERVER_PORT = int(_env('PORT', '8080'))
