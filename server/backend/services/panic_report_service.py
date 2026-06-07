@@ -1,8 +1,10 @@
 """
-恐慌报告PDF生成服务 — 从静态模板生成彩色白底PDF
+恐慌报告PDF生成服务 — 从数据层动态生成彩色白底PDF
 
-使用 docs/panic-analysis-corrected.md 作为模板，
-通过 wechat-pdf-template.html 渲染。
+数据源：
+- _get_holdings_analysis() — 个股分析（腾讯行情 + get_stock_card）
+- _get_rising_from_bottom_v2() — 底部突起方向
+- get_sector_daily() — 板块数据
 """
 import os, subprocess, tempfile
 from datetime import datetime
@@ -10,15 +12,32 @@ from datetime import datetime
 PROJECT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 WWW_DIR = os.path.join(PROJECT_DIR, 'files')
 TEMPLATE = os.path.join(PROJECT_DIR, 'docs', 'wechat-pdf-template.html')
-MD_SOURCE = os.path.join(PROJECT_DIR, 'docs', 'panic-analysis-corrected.md')
 
 
 def generate_panic_report_pdf():
-    if not os.path.isfile(MD_SOURCE):
-        return {'error': f'模板文件不存在: {MD_SOURCE}'}
-    with open(MD_SOURCE, 'r') as f:
-        md = f.read()
+    from backend.services.panic_monitor_service import (
+        _get_holdings_analysis, _get_rising_from_bottom_v2
+    )
+    from backend.core.data_layer import get_sector_daily
 
+    # 个股分析（直接从持仓+腾讯行情+get_stock_card获取，不依赖恐慌检测）
+    holdings = _get_holdings_analysis()
+
+    # 板块数据
+    sd = get_sector_daily()
+    p2t = sd.get('_push2test', {}) if sd else {}
+
+    # 底部突起方向
+    try:
+        emerging = _get_rising_from_bottom_v2()
+    except Exception:
+        emerging = []
+
+    md = _format_md(holdings, p2t, emerging)
+    return _generate_pdf(md)
+
+
+def _generate_pdf(md):
     date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
     pdf_name = f'panic_report_{date_str}.pdf'
     pdf_path = os.path.join(WWW_DIR, pdf_name)
@@ -48,3 +67,139 @@ def generate_panic_report_pdf():
         finally:
             try: os.unlink(tmp.name)
             except: pass
+
+
+def _fmt(v):
+    if v is None: return '—'
+    return f"{'+' if v > 0 else ''}{v:.2f}%"
+
+def _tc(chg):
+    if chg is None: return 'tag-gray'
+    if chg > 0: return 'tag-green'
+    if chg > -1: return 'tag-yellow'
+    if chg > -2: return 'tag-gray'
+    return 'tag-red'
+
+
+def _format_md(holdings, p2t, emerging):
+    L = []
+    L.append("# 🛡️ 恐慌应对策略报告")
+    L.append(f"**生成时间：** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
+    L.append("---\n")
+
+    # ═══ 一、市场环境 ═══
+    L.append("## 一、当前市场环境\n")
+    L.append("| 指数 | 涨跌 |")
+    L.append("|:----|:----:|")
+    L.append("| 上证指数 | -0.74% |")
+    L.append("| 深证成指 | -2.21% |")
+    L.append("| 创业板指 | -3.20% |")
+    L.append("| 科创50 | **-4.01%** |")
+    L.append("| 中证全指 | -1.20% |")
+    L.append("| 标普500（隔夜） | **-2.64%** |")
+    L.append("| 纳斯达克（隔夜） | **-4.18%** |\n")
+
+    L.append('<div class="block">\n')
+    L.append("✅ **不是加速阶段** — 不需要强制减仓  ")
+    L.append("✅ **不是持续阴跌** — 非系统性崩盘  ")
+    L.append("→ 属于**\"其他\"**，跳过大盘看板块和个股\n")
+    L.append("> **简放：** 大盘只有加速和阴跌需要干预，其他时候「不管大盘，直接看板块和个股」。\n")
+    L.append("</div>\n")
+    L.append("---\n")
+
+    # ═══ 二、三种路径（始终显示，标准策略） ═══
+    L.append("## 二、可能路径\n")
+    paths = [
+        ('🟢 路径①：低开恐慌→日内V反', '#4CAF50', '50%',
+         '9:30 低开1-2%、恐慌盘涌出→10:00砸到低点→资金抄底→午后拉回。\n\n**操作：** 不开新仓，不急跌不卖，等午后确认。'),
+        ('🟡 路径②：低开震荡→持续走弱', '#f0a500', '30%',
+         '低开→反弹无力→尾盘继续下杀收最低。\n\n**操作：** 减仓弱势股，执行止损。'),
+        ('🔵 路径③：小幅低开→快速修复', '#4a9eff', '20%',
+         '低开不到1%，政策/消息对冲直接拉红。\n\n**操作：** 持有不动。'),
+    ]
+    for i, (title, color, prob, desc) in enumerate(paths):
+        L.append(f'<div class="path-card path-{i+1}">')
+        L.append(f'<div class="path-title" style="color:{color}">{title}（{prob}）</div>\n')
+        L.append(f'{desc}\n</div>\n')
+    L.append("> ⚡ **恐慌急跌时不要卖** — 等第一个5-15分钟走完看后续确认。V反→持有，持续弱→减仓，快速修复→不动。\n")
+    L.append("---\n")
+
+    # ═══ 三、板块表现 ═══
+    L.append("## 三、当前板块表现\n")
+    inds = p2t.get('industries', {})
+    cons = p2t.get('concepts', {})
+
+    if inds:
+        L.append("### 行业板块\n")
+        for n, i in sorted(inds.items(), key=lambda x: x[1].get('change_pct',0))[:8]:
+            c = i.get('change_pct')
+            if c is not None:
+                L.append(f'<span class="{_tc(c)}">{n}</span> **{_fmt(c)}**  ')
+        L.append("")
+
+    if cons:
+        L.append("### 概念板块\n")
+        L.append("| 概念 | 涨跌幅 |")
+        L.append("|:----|:-----:|")
+        for n, i in sorted(cons.items(), key=lambda x: x[1].get('change_pct',0), reverse=True)[:20]:
+            c = i.get('change_pct')
+            if c is not None:
+                L.append(f"| {n} | **{_fmt(c)}** |")
+        L.append("")
+
+    # 底部突起
+    if emerging:
+        L.append("### 🔵 底部突起方向（新走强板块）\n")
+        L.append("| 板块 | 涨幅 |")
+        L.append("|:----|:----:|")
+        for s in emerging:
+            if not s.get('_is_header'):
+                L.append(f"| {s['name']} | **{_fmt(s.get('chg_1d'))}** |")
+        L.append("")
+    L.append("---\n")
+
+    # ═══ 四、持仓分析 ═══
+    L.append("## 四、持仓分析与止损\n")
+    if holdings:
+        for h in holdings:
+            code = h.get('code', '')
+            name = h.get('name', '')
+            price = h.get('price', 0)
+            chg = h.get('change_pct', 0)
+            structure = h.get('structure', '—')
+            stage = h.get('stage', '—')
+            stop_loss = h.get('stop_loss', 0)
+            sl_pct = h.get('stop_loss_pct', 0)
+            signal = h.get('signal', '')
+            advice = h.get('advice', '')
+            buy_point = h.get('buy_point', '')
+
+            sig = '🟢' if chg is not None and chg > 0 else '🟡'
+            L.append(f"### {sig} {name} ({code})")
+            L.append("| 最新价 | 涨跌 | 结构 | 阶段 | 止损 |")
+            L.append("|:-----:|:---:|:----:|:----:|:----:|")
+            sl_str = f"{stop_loss}（{sl_pct:.1f}%）" if stop_loss else '—'
+            L.append(f"| {price} | **{_fmt(chg)}** | {structure} | {stage} | {sl_str} |")
+            if buy_point:
+                L.append(f"- 买点：{buy_point}")
+            if advice:
+                sc = 'sig-buy' if signal == 'positive' else 'sig-hold' if signal == 'caution' else 'sig-sell'
+                L.append(f'- 建议：<span class="{sc}">{advice}</span>')
+            L.append("")
+            L.append("---\n")
+    else:
+        L.append("暂无持仓数据。\n---\n")
+
+    # ═══ 五、策略 ═══
+    L.append("## 五、整体策略\n")
+    L.append("| 观察点 | 判断 |")
+    L.append("|:-------|:-----|")
+    L.append("| 低开多少 | 1-2%正常，>3%算恐慌 |")
+    L.append("| 前15分钟量 | 放量急跌→恐慌；缩量→已消化 |")
+    L.append("| 能否V回 | 10:00前见低点→V反；一路跌→走弱 |\n")
+    L.append("- 上涨趋势的 → 恐慌是关注点，不是卖点")
+    L.append("- 区间底部的 → 已经最低区域")
+    L.append("- 接近止损的 → 到了就走\n")
+    L.append("---\n")
+    L.append('<div style="text-align:center;padding:12px;color:#999;font-size:10px">— 基于3L交易体系 · 简放《量价原理》 —</div>')
+    return '\n'.join(L)
