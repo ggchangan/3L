@@ -1,247 +1,282 @@
-# 数据源验证 — 设计文档 v1
+# 数据源验证 — 设计文档 v2
 
-## 0. 前言
-
-### 当前状态
-
-现有 `verify_data_sources()` 存在以下问题（用户已逐一指出）：
-
-| # | 问题 | 表现 | 严重性 |
-|:-:|:----|:----|:------:|
-| 1 | 数据日期用 `datetime.now()` | 周日标成当日，实测数据是周五 | 高 |
-| 2 | 验证全是自我参照 | 只查 push2test 自洽，不跨源比对 | 高 |
-| 3 | 新鲜度用 `_is_weekend()` 放水 | 再脏的数据也标 ✅ | 高 |
-| 4 | 没有外部参考基准 | 用户说同花顺 -0.7%，系统显示 +5.67%，无法解释 | 中 |
-| 5 | 文件缓存不一致无人发现 | EM 仓 `last_updated=20260607` 但实际数据止于 20260604 | 中 |
-
-### 目标
-
-建立一套多层级的数据验证体系，每天自动运行，能回答三个问题：
-
-1. **数据新鲜吗？** — 所有源的数据日期是否指向最后一个交易日
-2. **数据正确吗？** — 同一来源内部自洽，跨来源偏差可解释
-3. **数据一致吗？** — 缓存、文件、API 三者返回同一个结果
-
-### 约束
-
-- 不做新增数据源（不引入新 API），只利用已有数据源做交叉验证
-- 不修改现有数据管线，只加验证层
-- 验证失败必须有明确报警（微信通知），不能静默放过
-
-## 1. 背景
-
-### 数据源现状
+> **核心思想：分层验证。** 数据分了层，验证也分层。
+> 每层只验证自己这层的职责，不越级。
 
 ```
-                           ┌─ push2test(实时) ── 供 get_sector_rankings()
-                           │     (东财板块 f3 字段)
-          ┌─ 实时源 ───────┤
-          │               └─ push2test(股票) ── 被墙不可用
-数据源 ───┤
-          │               ┌─ EM仓 ── sector_daily.json (迁移快照)
-          │               │         530 行业, last_updated=20260607 (错标)
-          ├─ 文件仓库 ────┼─ THS仓 ── sector_daily.json (历史快照)
-          │               │         34 行业, last_updated=20260606 (旧)
-          │               │
-          │               └─ Legacy ── sector_daily.json (主文件)
-          │                         530 行业, last_updated=20260606
-          │
-          └─ 缓存层 ────── data_layer.get_sector_daily() (TTL=60s)
-                          get_merged_sector_data() (TTL=1s 内存)
+数据源层 → 数据服务层 → 业务逻辑层 → API层 → 前端展示层
+  验证        验证          验证        验证       验证
+  原始数据    服务逻辑      计算结果    API响应    页面渲染
 ```
 
-### 核心困难：不同源不可直接数值比较
+## 0. 当前问题
 
-东财（push2test）和同花顺（THS）对"电子化学品"有不同的板块指数：
-
-| 属性 | 东财 BK1039 | 同花顺 |
-|:----|:-----------|:------|
-| 指数代码 | BK1039 | THS 自编码 |
-| 成分股 | 东财自选成分 | 同花顺自选成分 |
-| 基准日/值 | 不同 | 不同 |
-| 当日涨跌 | +5.67% | -0.7% |
-
-**这是指数差异，不是数据错误。** 因此验证层的跨源比较必须是**结构一致性**检查而非数值比对。
-
-## 2. 设计思想
-
-### 2.1 核心理念
-
-**数据验证 = 三层金字塔：**
+### 一次典型的事故（2026-06-05）
 
 ```
-         ┌─────────────┐
-         │ 端到端一致性 │  ← 缓存=文件=API
-         ├─────────────┤
-         │ 源间一致性   │  ← 同一数据不同接口对得上
-         ├─────────────┤
-         │ 源内自洽     │  ← 单源内部无矛盾 + 新鲜
-         └─────────────┘
+cron 17:00 跑 update_sectors()
+  → 调 push2test 成功，日志说"行业90只更新"  ✅（日志正确）
+  → 但没有任何代码把这90条数据存到文件    ❌（旧代码没写 _push2test）
+  → 复盘页 chg_1d 用旧的K线算：+5.63%   ❌（用户看到的是6月4日旧数据）
 ```
 
-- **底层（源内自洽）**：每个数据源自己检查自己——push2test 的 f3 和 close/prev_close 算出来的一致；文件的 last_updated 指向最后一个交易日；JSON 完整可解析。这是 **FAIL = 数据不可用** 级别。
-- **中层（源间一致性）**：同一个品牌的数据在不同接口之间比对——push2test 的 clist 接口返回的行业列表和 EM 仓文件里的行业列表基本一致；`get_sector_rankings()` 返回的 name 和 `get_sector_daily()` 的 name 可交叉检索。这是 **WARN = 需要关注** 级别。
-- **顶层（端到端一致性）**：缓存、文件、API 返回同一份数据。这是 **INFO = 系统健康** 级别。
+**每层都在做什么：**
+- 数据源层：push2test 确实返回了数据 ✅
+- 数据服务层：`load_sector_daily_uncached()` 正确读文件 ✅
+- 业务逻辑层：`get_mainline_data()` 用K线算chg_1d ✅
+- API层：返回了正确的JSON结构 ✅
+- 前端：页面正常渲染 ✅
 
-### 2.2 不做什么
+**每层看起来都对了，但数据是错的。** 因为**数据管线本身断了**（没写入），而验证只检查了各层的形式正确性，没检查"数据是否流到了下一层"。
 
-- **不做跨源涨跌幅数值比对**（东财 vs 同花顺的板块指数不同，比数值没有意义）
-- **不做回测/预测验证**（只验证数据正确性，不验证数据在策略中的表现）
-- **不做跨交易日趋势验证**（不检查板块连续 X 天上涨后是否回调）
-- **不做法定节假日识别**（只用 weekend 判断，节假日算"降级通过"并标记）
+### 分层验证要解决的问题
 
-### 2.3 方案选择
+| 问题 | 表现 | 根因 |
+|:----|:----|:-----|
+| 数据没落盘 | 日志说更新了，文件没变 | 旧代码没写 `_push2test` |
+| 日期标记错误 | 周日的数据标成当日 | 用 `datetime.now()` 而非最后一个交易日 |
+| 没有端到端验证 | 每层自检都过，但最终页面数据错误 | 各层独立验证，没走完整链路 |
 
-| 候选方案 | 优点 | 缺点 | 结论 |
-|:--------|:----|:----|:----:|
-| **A: 三层金字塔** | 覆盖面全、分层清晰、报警可分级 | 实现量稍大 | ✅ |
-| B: 只做源内自洽 | 简单快 | 不能发现跨源问题 | ❌ |
-| C: 引入新数据源做交叉 | 真正的独立验证 | 新增 API 维护成本、同花顺和东财指数不可比 | ❌ |
+## 1. 分层架构
 
-### 2.4 验证周期
+### 数据分层（现有）
 
-| 触发方式 | 时间 | 用途 |
-|:--------|:----|:----|
-| 数据更新后自动 | `update_sectors()` 末尾 | 写入后立刻验证 |
-| 定时 cron | 每个交易日 17:35 | 独立例行验证 |
-| 手动触发 | 随时 | 排障用 |
+```
+┌─────────────────────────────────────────────┐
+│  前端展示层（复盘页/盯盘页/个股分析页）        │
+├─────────────────────────────────────────────┤
+│  API层（review_service / stock_card_service） │
+├─────────────────────────────────────────────┤
+│  业务逻辑层（get_mainline_data / 主线判定等） │
+├─────────────────────────────────────────────┤
+│  数据服务层（data_source.py 抽象层）          │
+│    get_sector_rankings  → 故障切换链         │
+│    get_sector_klines    → 多源合并           │
+│    get_merged_sector_data → 缓存管理         │
+├─────────────────────────────────────────────┤
+│  数据源层（原始数据文件 + API）               │
+│    push2test(eastmoney) / EM仓 / THS仓       │
+│    legacy sector_daily.json                  │
+└─────────────────────────────────────────────┘
+```
 
-## 3. 验证分项设计
+### 验证分层（对应设计）
 
-### 3.1 源内自洽检查（Tier 1 — Critical）
+```
+┌─────────────────────────────┐
+│  L5 前端展示验证              │  页面渲染正确性
+├─────────────────────────────┤
+│  L4 API验证                  │  API响应结构 + 示例值
+├─────────────────────────────┤
+│  L3 业务逻辑验证              │  计算逻辑正确性
+├─────────────────────────────┤
+│  L2 数据服务验证              │  服务层逻辑正确性
+├─────────────────────────────┤
+│  L1 数据源验证                │  原始数据正确性
+└─────────────────────────────┘
+```
 
-| 验证项 | 验证方法 | 预期 | 失败处理 |
-|:------|:--------|:-----|:--------|
-| push2test 可达性 | HTTP GET → 200 | 返回成功 | 标记 em_sector DOWN |
-| 行业数量 | 返回 diff 数组长度 | > 400 | 标记 DEGRADED |
-| 概念数量 | 同上 | > 300 | 标记 DEGRADED |
-| f3 自洽性 | f3 vs (f2-f18)/f18*100 | 全部偏差 < 0.02% | 标记 DEGRADED |
-| **数据日期** | `last_updated` 或 `_push2test_updated` | == 最后一个交易日 | **FAIL** |
-| EM 仓 JSON 有效 | `json.load()` | 无异常 | FAIL |
-| THS 仓 JSON 有效 | `json.load()` | 无异常 | FAIL |
-| Legacy JSON 有效 | `json.load()` | 无异常 | FAIL |
-| EM 仓日期 | `last_updated` | == 最后一个交易日 | FAIL |
-| Legacy 日期 | `last_updated` | == 最后一个交易日 | FAIL |
-| THS 仓日期 | `last_updated` | == 最后一个交易日（历史数据可放宽） | WARN |
+## 2. 各层验证设计
 
-**当前状态（2026-06-07 周日）：**
-- ✅ push2test: 496行业 + 486概念, f3 自洽 0/496 偏差
-- ❌ EM仓日期: `20260607` ≠ 最后交易日 `20260605`
-- ❌ THS仓日期: `20260606` ≠ `20260605`
-- ❌ Legacy日期: `20260606` ≠ `20260605`
+### L1 — 数据源验证（原始数据）
 
-### 3.2 源间一致性检查（Tier 2 — Important）
+**职责：** 验证原始数据本身是正确的——文件可读、格式正确、值自洽、日期新鲜。
 
-**不是数值比对，是结构一致性比对：**
+**不需要知道：** 数据结构如何被使用、业务逻辑是什么。
 
-| 验证项 | 方法 | 预期 |
-|:------|:----|:-----|
-| 行业名交集 | EM 仓 vs push2test live 的行业名集合 | 交集 > 80%（东财自己的数据应一致） |
-| 行业名交集 | Legacy vs push2test live | 交集 > 75%（THS 命名有差异） |
-| 关键行业存在性 | 银行/半导体/证券在三个源都存在 | 均存在 |
-| change_pct 同向性 | EM 仓存量 vs push2test live（有重叠日期的） | 偏差 < 0.5% |
+| 验证项 | 方法 | 预期 | 失败后果 |
+|:------|:----|:-----|:--------|
+| push2test 可达 | HTTP GET → 200 | 成功 | L1 失败 |
+| 行业数量 | 返回 diff 数组 | > 400 | DEGRADED |
+| 概念数量 | 同上 | > 300 | DEGRADED |
+| f3 自洽性 | f3 vs (f2-f18)/f18*100 | 全部偏差 < 0.02% | DEGRADED |
+| 数据日期 | `last_updated` 或 `_push2test_updated` | == 最后一个交易日 | L1 失败 |
+| EM仓 JSON | `json.load()` | 无异常 | L1 失败 |
+| THS仓 JSON | 同上 | 无异常 | L1 失败 |
+| Legacy JSON | 同上 | 无异常 | L1 失败 |
+| K线日期序 | klines 按 date 升序 | 全部有序 | WARN |
+| 关键行业存在性 | 银行/半导体/证券在三个源都存在 | 均存在 | WARN |
 
-**注意：** EM 仓和 push2test live 都是东财数据，理论上同一只板块的 change_pct 应完全一致。当前不一致的原因是 EM 仓是迁移快照（止于 20260604），push2test live 是今天的数据（20260605）。等 `update_sectors()` 正确运行后，EM 仓被刷新，两者应一致。
-
-### 3.3 缓存一致性检查（Tier 3 — Info）
-
-| 验证项 | 方法 | 预期 |
-|:------|:----|:-----|
-| 内存缓存 | `get_merged_sector_data()` 连续调2次 | 同一份数据 |
-| 存储缓存 | `data_layer.get_sector_daily()` | 返回 dict 含 industries/concepts |
-| 函数一致性 | `get_sector_rankings()` 的行业名和 `get_sector_daily()` 的行业名 | 可交叉检索 |
-
-### 3.4 交易日算法
-
+**交易日算法：**
 ```python
 def _last_trading_day():
-    """从当前时间往前推，返回最近的交易日 YYYYMMDD
-    简单实现：周末回退到周五，不考虑法定节假日
-    """
+    \"\"\"返回最后一个交易日 YYYYMMDD（周末回退到周五，不计节假日）\"\"\"
     d = datetime.now()
     for _ in range(7):
-        if d.weekday() < 5:  # Mon=0..Fri=4
+        if d.weekday() < 5:
             return d.strftime('%Y%m%d')
         d -= timedelta(days=1)
-    return d.strftime('%Y%m%d')
 ```
 
-节假日处理：节假日时返回的是节前最后一个周五。验证标记为"非交易日降级通过"并注明 last_updated 日期。
+### L2 — 数据服务验证（抽象层逻辑）
 
-## 4. API 设计
+**职责：** 验证 `data_source.py` 的服务函数逻辑正确——故障切换、多源合并、缓存管理。
 
-### 4.1 验证报告结构
+**不需要知道：** 业务逻辑怎么用这些数据。
+
+| 验证项 | 方法 | 预期 |
+|:------|:----|:-----|
+| `get_sector_rankings('industry')` | 调用，检查返回值 | 返回 dict，有 400+ key |
+| `get_sector_rankings('concept')` | 同上 | 返回 dict，有 300+ key |
+| 返回值含 `change_pct` | 采样 key | 每个都有 |
+| `get_sector_klines(name)` | 对已知行业调用 | 返回 list，最后日期是交易日 |
+| `get_merged_sector_data()` | 调用 | 含 industries + concepts |
+| 故障切换 | 关掉 EM 源（临时）再调 | 自动切到 legacy/THS |
+| 缓存一致性 | 连续调2次 `get_merged_sector_data()` | 返回相同数据 |
+| EM仓 vs live 一致性 | EM仓 change_pct vs push2test live f3 | 偏差 < 0.5%（同源数据） |
+
+### L3 — 业务逻辑验证
+
+**职责：** 验证业务计算逻辑正确——主线判定、行业排行、chg_1d/chg_20d 计算。
+
+**不需要知道：** 数据从哪个源来、前端怎么展示。
+
+| 验证项 | 方法 | 预期 |
+|:------|:----|:-----|
+| `get_mainline_data()` 结构 | 调用 | 含 lines/secondary/all_ranked |
+| chg_1d 值 | 对比已知行业的预期值 | 与 `_push2test` 或实时源一致 |
+| chg_20d 值 | 对比K线计算 | (klines[-1]/klines[-20]-1)*100 |
+| 主线排序 | 按 chg_20d 降序 | 前5 = 主线 |
+| 概念主线同理 | `get_concept_mainline_data()` | 结构与行业主线一致 |
+
+### L4 — API验证
+
+**职责：** 验证 API 端点返回正确结构、正确值。
+
+**不需要知道：** 前端怎么展示这些值。
+
+| 验证项 | 方法 | 预期 |
+|:------|:----|:-----|
+| `GET /api/review` | HTTP 调用 | 200 + JSON |
+| 返回结构 | 含 lines/secondary/industries | schema 完整 |
+| 行业排行 | `GET /api/review` 中 industries | 含 chg_1d/chg_20d |
+| 关键行业值 | 电子化学品/半导体/银行 | change_pct 非零（交易日） |
+
+### L5 — 前端展示验证（可选）
+
+**职责：** 验证页面渲染正确。
+
+| 验证项 | 方法 | 预期 |
+|:------|:----|:-----|
+| 关键数字显示 | 浏览器截图分析 | 与 API 返回值一致 |
+
+## 3. 验证实现
+
+### 3.1 架构
+
+每个验证层是一个独立的函数，可单独调用：
+
+```
+verify_l1()  → 返回 L1Report
+verify_l2()  → 返回 L2Report  (可能需要 L1 先过)
+verify_l3()  → 返回 L3Report  (可能需要 L2 先过)
+verify_all() → 运行 L1→L2→L3 并汇总
+```
+
+### 3.2 L1 — 数据源验证（已有 + 补全）
+
+已有函数 `verify_data_sources()` 在 `data_source.py`，已实现：
+- push2test 可达性 ✅
+- 行业/概念数量 ✅
+- f3 自洽性 ✅
+- 文件 JSON 有效性 ✅
+- 数据日期（`_last_trading_day`）✅
+
+需补全：
+- K线日期有序性
+- 关键行业存在性
+- 非交易日跳过
+
+### 3.3 L2 — 数据服务验证（新建）
+
+新建函数 `verify_data_service()` 在 `tests/test_data_service.py`：
+
+```python
+def verify_data_service():
+    checks = []
+    # get_sector_rankings
+    r = get_sector_rankings('industry')
+    checks.append(('industry count', len(r) > 400, len(r)))
+    
+    # get_sector_klines for a known sector
+    k = get_sector_klines('银行', 'industry')
+    checks.append(('银行 klines', len(k) >= 2, len(k)))
+    
+    # get_merged_sector_data
+    m = get_merged_sector_data()
+    checks.append(('merged industries', len(m.get('industries',{})) > 400, ...))
+    
+    # 故障切换（模拟EM源失败）
+    # cache一致性
+    return checks
+```
+
+### 3.4 L3 — 业务逻辑验证（新建）
+
+新建函数 `verify_business_logic()` 在 `tests/test_business_logic.py`：
+
+```python
+def verify_business_logic(date_str=None):
+    if date_str is None:
+        date_str = _last_trading_day()
+    checks = []
+    
+    # get_mainline_data 结构
+    ml = get_mainline_data(date_str)
+    checks.append(('has lines', len(ml.get('lines',[])) > 0, ...))
+    checks.append(('has secondary', len(ml.get('secondary',[])) > 0, ...))
+    
+    # chg_1d 合理性（交易日不应当全为0）
+    non_zero = sum(1 for l in ml.get('all_ranked',[]) if abs(l.get('chg_1d',0)) > 0.01)
+    checks.append(('chg_1d non-zero', non_zero > 0, non_zero))
+    
+    return checks
+```
+
+### 3.5 验证报告格式
 
 ```python
 {
-  "status": "pass" | "fail" | "degraded",
-  "now": "20260605",
-  "last_trade_day": "20260605",
-  "checks": [
-    {
-      "check": "push2test行业数",
-      "pass": True,
-      "detail": "返回496个 (需>400)",
-      "tier": 1
+    "date": "20260605",
+    "last_trade_day": "20260605",
+    "layers": {
+        "l1_source": {"status": "pass", "checks": [...]},
+        "l2_service": {"status": "pass", "checks": [...]},
+        "l3_business": {"status": "pass", "checks": [...]},
     },
-    ...
-  ],
-  "summary": {
-    "total": 15,
-    "pass": 13,
-    "fail": 1,
-    "warn": 1
-  }
+    "summary": {
+        "total": 25,
+        "pass": 23,
+        "fail": 1,
+        "warn": 1
+    },
+    "status": "degraded"  # pass / degraded / fail
 }
 ```
 
-### 4.2 状态映射
+### 3.6 状态映射
 
-| 顶层状态 | 条件 |
-|:--------|:----|
-| pass | 所有检查通过（Tier 1 全过） |
-| degraded | Tier 1 全部通过，但 Tier 2/3 有失败 |
-| fail | Tier 1 有失败（数据不可用） |
+| 状态 | 条件 |
+|:----|:-----|
+| pass | 所有层全部通过 |
+| degraded | L1 通过，L2/L3 有失败 |
+| fail | L1 有失败（原始数据不可用） |
 
-### 4.3 健康监测联动
-
-验证失败时：
-- **Tier 1 FAIL** → 更新 `source_health` 状态为 DOWN/DEGRADED
-- **Tier 1 FAIL** → 微信通知（通过 cron 的输出触发）
-- **Tier 2/3 WARN** → 仅日志记录，不报警
-
-## 5. 日志与报警
-
-### 5.1 验证报告存储
-
-每次验证结果写入 `/home/ubuntu/data/3l/logs/data-verify/{date}_{sequence}.json`
-
-保留最近 30 天，超出自动清理。
-
-### 5.2 报警规则
-
-| 事件 | 报警方式 | 频率 |
-|:----|:--------|:----|
-| Tier 1 连续 2 次 FAIL | 微信通知 | 每次触发 |
-| Tier 1 单次 FAIL | 日志 + cron 输出 | cron 报告时 |
-| Tier 2 WARN | 仅日志 | — |
-
-### 5.3 验证报告阅读器（可选）
-
-新增 HTTP endpoint:
-
-```
-GET /api/data-source/verify-report?date=20260605
-```
-
-返回最近的验证报告详情。无日期参数时返回最新一份。
-
-## 6. 执行计划
+## 4. 执行计划
 
 详见：[数据源验证 — 执行计划](plan.md)
 
-## 7. 开放问题
+### 简要任务分解
 
-1. **节假日处理**：当前 `_last_trading_day()` 只处理周末，法定节假日（春节/国庆等）会返回上一个周五。需要吗？这取决于数据更新脚本在节假日是否运行——如果也不运行，那 last_updated 就是节前的正确日期，不需要特殊处理。
-2. **跨源数值比对的必要性**：东财和同花顺板块指数不同，比数值意义有限。但如果有需求，可以考虑**同向性检查**（两者是否同涨同跌，不要求数值一致）。
-3. **报警方式**：Tier 1 失败目前通过 cron 输出到 chat。是否需要独立的微信通知渠道？
+| # | 任务 | 文件 | 状态 |
+|:-:|:----|:----|:----:|
+| 1 | L1 完善（K线日期序、关键行业存在性） | `data_source.py` | ⏳ |
+| 2 | L2 新建（服务层验证） | `tests/test_data_service.py` | ⏳ |
+| 3 | L3 新建（业务逻辑验证） | `tests/test_business_logic.py` | ⏳ |
+| 4 | 集成到 cron + 报警 | cron job | ⏳ |
+| 5 | 一次性回测验证（跑过去30天数据确认管线正常） | 脚本 | ⏳ |
+
+## 5. 开放问题
+
+1. **L4/L5 是否需要独立验证函数？** L4 可以并入 L3（调用 API 实质是验证业务逻辑），L5 需要浏览器自动化测试，成本较高。建议 L4 作为 L3 的延伸。
+2. **一次性回测：** 需要跑过去30天每天的数据，确认管线在每段时期都正常工作。这可以作为一个独立的数据完整性检查脚本，但实施前需要确认数据保留策略。
