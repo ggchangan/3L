@@ -337,7 +337,12 @@ def get_mainline_data(date_str):
             if len(klines) < 20:
                 continue
             chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
-            chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
+            # chg_1d：优先用 EM 仓的 change_pct（含最新交易日数据）
+            # fallback：从最后2根K线计算
+            if 'change_pct' in klines[-1]:
+                chg_1d = float(klines[-1]['change_pct'])
+            else:
+                chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
             # 阶段判定
             wave = _judge_wave(klines)
             stage = wave.get('stage', '--')
