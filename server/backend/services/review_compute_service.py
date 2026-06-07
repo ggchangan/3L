@@ -27,11 +27,9 @@ def to_yyyymmdd(d):
 
 
 def is_trading_day(date_str):
-    """简单交易日判断（仅按周末，不考虑法定节假日）"""
-    if not date_str:
-        return False
-    dt = datetime.strptime(date_str[:10], '%Y-%m-%d')
-    return dt.weekday() < 5
+    """判断给定日期是否为A股交易日（委托 data_models.is_trading_day）"""
+    from backend.core.data_models import is_trading_day as _is_trading_day
+    return _is_trading_day(date_str)
 
 
 # ═══════════════════════════════════════════════════════════════

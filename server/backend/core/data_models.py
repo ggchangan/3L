@@ -139,6 +139,22 @@ def _last_trading_day() -> str:
     return d.strftime('%Y%m%d')
 
 
+def is_trading_day(date_str: str) -> bool:
+    '''判断给定日期是否为A股交易日
+
+    支持 YYYYMMDD 或 YYYY-MM-DD 格式。
+    含 fallback：先按周末判断，后续可扩展交易日历。
+    '''
+    if not date_str:
+        return False
+    try:
+        s = date_str.strip().replace('-', '')
+        dt = datetime.strptime(s[:8], '%Y%m%d')
+        return dt.weekday() < 5
+    except (ValueError, IndexError):
+        return False
+
+
 def dict_to_kline(d: dict) -> Kline:
     """dict → Kline"""
     return Kline(
