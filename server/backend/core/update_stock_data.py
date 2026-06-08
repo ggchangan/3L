@@ -590,6 +590,60 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
     return name_map
 
 
+def _append_klines_from_ths(industries, concepts, today):
+    """追加最近3天 THS K 线到 industries/concepts 字典（去重）
+
+    每次 cron 运行调用，确保顶层 K 线和 _push2test 快照数据源一致。
+    只追加已存在的 THS 板块名（全量回填后 industries/concepts 只有 THS 名）。
+    """
+    import akshare as ak
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    LOOKBACK_DAYS = 5  # 拉5天确保覆盖交易日间隔
+    start = (datetime.now() - timedelta(days=LOOKBACK_DAYS)).strftime('%Y%m%d')
+
+    # 构建需要更新的列表
+    ind_names_to_update = [n for n in industries if n]
+    con_names_to_update = [n for n in concepts if n]
+
+    def _fetch_one(name, stype):
+        try:
+            if stype == 'industry':
+                df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)
+            else:
+                df = ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=today)
+            if df is None or df.empty:
+                return name, stype, []
+            klines = _df_to_kline(df)
+            return name, stype, klines
+        except Exception:
+            return name, stype, []
+
+    # 并发拉取行业
+    if ind_names_to_update:
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            futures = {ex.submit(_fetch_one, n, 'industry'): n for n in ind_names_to_update}
+            for future in as_completed(futures):
+                name, stype, klines = future.result()
+                if klines and name in industries:
+                    existing_dates = {k['date'] for k in industries[name]}
+                    new_klines = [k for k in klines if k['date'] not in existing_dates]
+                    if new_klines:
+                        industries[name].extend(new_klines)
+
+    # 并发拉取概念
+    if con_names_to_update:
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            futures = {ex.submit(_fetch_one, n, 'concept'): n for n in con_names_to_update}
+            for future in as_completed(futures):
+                name, stype, klines = future.result()
+                if klines and name in concepts:
+                    existing_dates = {k['date'] for k in concepts[name]}
+                    new_klines = [k for k in klines if k['date'] not in existing_dates]
+                    if new_klines:
+                        concepts[name].extend(new_klines)
+
+
 def update_sectors():
     """更新行业+概念板块日K线
 
@@ -691,6 +745,17 @@ def update_sectors():
         raise RuntimeError('行业板块全源获取失败，无任何缓存数据可用')
     if con_tracked > 0 and len(con_today) == 0 and not any(name in concepts for name in tracked_concepts):
         raise RuntimeError('概念板块全源获取失败（追踪中），无任何缓存数据可用')
+
+    # ═══════════════════════════════════════════════════
+    # 【新增】追加 THS K 线到 industries/concepts 顶层字段
+    # 每次 cron 运行拉最近3天K线，去重追加
+    # 确保顶层K线和 _push2test 快照数据源一致、时效一致
+    # ═══════════════════════════════════════════════════
+    try:
+        _append_klines_from_ths(industries, concepts, today)
+        log(f'📊  THS K线追加完成: 行业{len([n for n in ind_today if n in industries])}个, 概念已更新')
+    except Exception as e:
+        log(f'⚠️  THS K线追加失败（不影响_push2test）: {type(e).__name__}: {e}')
 
     # 最新日期
     latest_date = existing.get('_push2test_updated', existing.get('last_updated', ''))
