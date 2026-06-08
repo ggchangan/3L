@@ -22,8 +22,8 @@ interface SoundConfig {
   duration: number
 }
 
-const ALARM_ICONS: Record<string, string> = { buy: '🟢', stop: '🔴', warn: '🟡', abnormal: '🔔', info: 'ℹ️', market: '🟠', market_critical: '🔴' }
-const ALARM_COLORS: Record<string, string> = { buy: '#22c55e', stop: '#e94560', warn: '#ffd700', abnormal: '#ff9800', info: '#2196f3', market: '#ff6b35', market_critical: '#e94560' }
+const ALARM_ICONS: Record<string, string> = { buy: '🟢', stop: '🔴', warn: '🟡', abnormal: '🔔', info: 'ℹ️', market: '🟠', market_critical: '🔴', panic: '🔴' }
+const ALARM_COLORS: Record<string, string> = { buy: '#22c55e', stop: '#e94560', warn: '#ffd700', abnormal: '#ff9800', info: '#2196f3', market: '#ff6b35', market_critical: '#e94560', panic: '#e94560' }
 
 const MAX_ALARMS = 20
 const MAX_VISIBLE_TOASTS = 5
@@ -36,6 +36,7 @@ const SOUND_KEY_MAP: Record<string, string> = {
   market_critical: 'market_critical',
   price: 'stop',
   deviation: 'stock',
+  panic: 'market_critical',
 }
 
 // ── 优先级（数字越小越优先）────────────────
@@ -274,6 +275,7 @@ export default function AlarmLayer() {
     info: 'linear-gradient(135deg, #0c1929, #1e3a5f)',
     market: 'linear-gradient(135deg, #2d1b00, #4a2800)',
     market_critical: 'linear-gradient(135deg, #450a0a, #7f1d1d)',
+    panic: 'linear-gradient(135deg, #450a0a, #7f1d1d)',
   }
 
   return (
@@ -338,11 +340,12 @@ export default function AlarmLayer() {
             else if (a.type === 'deviation') alarmType = 'warn'
             else if (a.type === 'market') alarmType = 'market'
             else if (a.type === 'market_critical') alarmType = 'market_critical'
+            else if (a.type === 'panic') alarmType = 'panic'
             const c = ALARM_COLORS[alarmType] || '#888'
             const ic = ALARM_ICONS[alarmType] || 'ℹ️'
             const handled = isHandledAlarm(a)
             // 构造含类型的消息：优先用后端msg，否则拼接"股票名 + 报警类型"
-            let typeLabel = {price:'止损', deviation:'异动', market:'大盘', market_critical:'系统风险'}[a.type] || ''
+            let typeLabel = {price:'止损', deviation:'异动', market:'大盘', market_critical:'系统风险', panic:'恐慌'}[a.type] || ''
             const msg = a.msg || (a.stock ? `${a.stock} ${typeLabel}` : `报警 #${i+1}`)
             return (
               <div key={a.id || i} style={{

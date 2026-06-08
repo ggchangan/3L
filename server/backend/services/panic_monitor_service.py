@@ -481,6 +481,54 @@ def get_panic_monitor(indices_dict, decline_count=0, total=5100):
     }
 
 
+def _is_panic_dismissed() -> bool:
+    """检查今天的恐慌报警是否已被用户处理（在盯盘页报警层勾选已处理）
+
+    Returns:
+        True 表示已处理，后续检测应跳过推送
+    """
+    from backend.services.alarm_service import _load
+    data = _load()
+    today = datetime.now().strftime('%Y-%m-%d')
+    for a in data.get('alarms', []):
+        if a.get('stock_code') == 'PANIC' and a.get('type') == 'panic':
+            if a.get('status') == 'handled':
+                da = a.get('dismissed_at', '')
+                if da and da[:10] == today:
+                    return True
+            return False  # 存在但未处理
+    return False  # 不存在
+
+
+def _save_panic_alarm(level: str, msg: str, triggered_ts: float):
+    """将恐慌报警写入 alarms.json，供盯盘页报警层显示和处理
+
+    使用固定的 (stock_code='PANIC', type='panic') 作为唯一键，
+    每次触发时强制设为 active 状态，让用户可以勾选已处理。
+    """
+    from backend.services.alarm_service import save_alarm, _load, _save
+    result = save_alarm({
+        'stock': 'A股恐慌',
+        'stock_code': 'PANIC',
+        'type': 'panic',
+        'enabled': False,
+        'condition': f'恐慌等级: {level}',
+        'source': 'panic_monitor',
+    })
+    if result.get('id'):
+        # 手动更新触发信息并强制 active（save_alarm 不碰 status）
+        data = _load()
+        for a in data.get('alarms', []):
+            if a.get('id') == result['id']:
+                a['triggered_at'] = datetime.now().isoformat()
+                a['msg'] = msg
+                a['level'] = level
+                a['status'] = 'active'  # 用户前一天处理的不影响当天
+                a.pop('dismissed_at', None)
+                break
+        _save(data)
+
+
 def check_panic_alerts_via_realtime(indices_api_codes: dict = None) -> list:
     """从腾讯API拉取实时指数数据，检测恐慌，返回 WxPusher 推送格式列表
 
@@ -491,6 +539,11 @@ def check_panic_alerts_via_realtime(indices_api_codes: dict = None) -> list:
     logger = logging.getLogger(__name__)
     now_ts = datetime.now().timestamp()
     triggered = []
+
+    # 用户已处理今天的恐慌 → 跳过全部推送
+    if _is_panic_dismissed():
+        logger.debug('恐慌报警已被用户处理（PANIC handled today），跳过推送')
+        return triggered
 
     if indices_api_codes is None:
         indices_api_codes = {
@@ -574,5 +627,8 @@ def check_panic_alerts_via_realtime(indices_api_codes: dict = None) -> list:
             'indices': {k: v.get('change_pct') for k, v in indices.items()},
         })
         logger.info(f"恐慌检测推送: {panic['level']} — {trigger_desc}")
+
+        # 同步到 alarms.json（让盯盘页报警层显示，用户可以勾选已处理）
+        _save_panic_alarm(panic['level'], msg, now_ts)
 
     return triggered

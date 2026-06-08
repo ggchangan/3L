@@ -66,6 +66,7 @@ const MOCK_DIR_DATA: DirData = {
 
 export default function Watchlist() {
   const [stocks, setStocks] = useState<WatchlistStock[]>([])
+  const [loading, setLoading] = useState(true)
   const [trendCodes, setTrendCodes] = useState<Set<string>>(new Set())
   const [dirData, setDirData] = useState<DirData>({ directions: {}, active: [], all: [], suggestions: {} })
   const [activeDir, setActiveDir] = useState('全部')
@@ -109,16 +110,16 @@ export default function Watchlist() {
   }, [openDirDropdown])
 
   async function loadAll() {
-    try {
-      const [r1, r2, r3] = await Promise.all([
-        fetch('/api/watchlist/analysis'),
-        fetch('/api/trend-tracked'),
-        loadDirections(),
-      ])
-      setStocks((await r1.json()).stocks || [])
-      const td = await r2.json()
-      setTrendCodes(new Set((td.candidates || []).map((c: any) => c.code)))
-    } catch { /* ignore */ }
+    // 分开请求，互不影响——一个失败不影响另一个
+    fetch('/api/watchlist/analysis').then(r => r.json()).then(d => {
+      setStocks(d.stocks || [])
+    }).catch(() => {})
+
+    fetch('/api/trend-tracked').then(r => r.json()).then(d => {
+      setTrendCodes(new Set((d.candidates || []).map((c: any) => c.code)))
+    }).catch(() => {})
+
+    loadDirections()
   }
 
   async function loadDirections(): Promise<DirData> {
