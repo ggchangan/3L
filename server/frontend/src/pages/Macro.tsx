@@ -512,6 +512,28 @@ export default function Macro() {
                         </div>
                       </div>
                     )}
+
+                    {/* 下载报告 */}
+                    <div className="panic-download" style={{marginTop: 12, textAlign: 'center'}}>
+                      <button
+                        className="btn-download-pdf"
+                        onClick={async () => {
+                          try {
+                            const r = await fetch('/api/panic-report-pdf', {method: 'POST'})
+                            const data = await r.json()
+                            if (data.download_url) {
+                              window.open(data.download_url, '_blank')
+                            } else {
+                              alert('PDF生成失败: ' + (data.error || '未知错误'))
+                            }
+                          } catch (e) {
+                            alert('PDF生成失败: ' + e.message)
+                          }
+                        }}
+                      >
+                        📥 下载恐慌应对报告（PDF）
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

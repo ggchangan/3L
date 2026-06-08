@@ -355,6 +355,23 @@
 .panic-history-date { color: #666; min-width: 80px; }
 .panic-history-trigger { color: #777; }
 
+/* 下载按钮 */
+.btn-download-pdf {
+  background: linear-gradient(135deg, #2196f3, #1565c0);
+  color: #fff; border: none; border-radius: 20px;
+  padding: 10px 24px; font-size: 13px; cursor: pointer;
+  font-weight: 600; letter-spacing: 0.5px;
+  transition: all 0.2s;
+}
+.btn-download-pdf:hover {
+  background: linear-gradient(135deg, #42a5f5, #1976d2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(33,150,243,0.3);
+}
+.btn-download-pdf:active {
+  transform: translateY(0);
+}
+
 /* ── 异动汇总区块 ───────────────────── */
 .abnormal-summary {
   background: linear-gradient(135deg, #2a1a1a, #1a1a2e);
