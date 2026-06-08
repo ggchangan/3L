@@ -8,6 +8,36 @@ def _handle_holdings(h, path):
     h.send_json(get_holdings_with_prices())
 
 
+def _handle_recommended_stop(h, path, body):
+    """POST /api/holdings/recommended-stop — 获取推荐止损价
+
+    Body: {"code": "002371"}
+    从 get_stock_card() 读取推荐止损价返回。
+    """
+    try:
+        data = json.loads(body)
+        code = data.get('code', '').strip()
+        if not code:
+            h.send_json({'success': False, 'error': '缺少 code'})
+            return
+        from backend.services.stock_card_service import get_stock_card
+        from datetime import datetime
+        today = datetime.now().strftime('%Y-%m-%d')
+        card = get_stock_card(code, today)
+        stop_loss = card.get('stop_loss')
+        if stop_loss and stop_loss > 0:
+            h.send_json({
+                'success': True,
+                'stop_loss': round(stop_loss, 2),
+                'stop_loss_pct': card.get('stop_loss_pct'),
+                'price': card.get('price'),
+            })
+        else:
+            h.send_json({'success': False, 'error': '无法获取推荐止损', 'price': card.get('price')})
+    except Exception as e:
+        h.send_json({'success': False, 'error': str(e)})
+
+
 def _handle_trades(h, path):
     """GET /api/trades — 返回交易记录"""
     h.send_json(get_trades())
@@ -27,5 +57,6 @@ def _handle_save(h, path, body):
 
 def register_routes(routes):
     routes.exact('/api/holdings', func=_handle_holdings)
+    routes.exact('/api/holdings/recommended-stop', func=_handle_recommended_stop)
     routes.exact('/api/trades', func=_handle_trades)
     return routes

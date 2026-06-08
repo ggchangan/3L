@@ -282,6 +282,7 @@ class Handler(SimpleHTTPRequestHandler):
             '/api/monitor/remove-watched-industry': ('backend.api.monitor', '_handle_remove_watched'),
             '/api/alarm-sounds/upload': ('backend.api.alarms', '_handle_upload'),
             '/api/holdings/save': ('backend.api.holdings', '_handle_save'),
+            '/api/holdings/recommended-stop': ('backend.api.holdings', '_handle_recommended_stop'),
             '/api/macro/analyze-abnormal': ('backend.api.macro', '_handle_analyze_abnormal'),
             '/api/panic-report-pdf': ('backend.api.macro', '_handle_panic_report_pdf'),
             '/api/logic-tracking/tags/add': ('backend.api.logic_tracking', '_handle_add_tag'),
