@@ -623,7 +623,8 @@ def get_ths_concept_klines(name_list: list) -> dict:
         if not ths_name:
             continue
         try:
-            df = ak.stock_board_concept_index_ths(symbol=ths_name)
+            lookback = (datetime.now() - timedelta(days=90)).strftime('%Y%m%d')
+            df = ak.stock_board_concept_index_ths(symbol=ths_name, start_date=lookback, end_date=_last_trading_day())
             if df is not None and not df.empty:
                 row = df.iloc[-1]
                 close_col = '收盘价' if '收盘价' in df.columns else 'close'
