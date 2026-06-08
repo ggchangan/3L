@@ -561,8 +561,35 @@ export default function Holdings() {
 
             <div className="form-row">
               <label>止损价 (元) — <span style={{ color: '#888' }}>不填则不设止损</span></label>
-              <input type="number" step="0.01" min="0" placeholder="0.00"
-                value={modalStopLoss} onChange={e => setModalStopLoss(e.target.value)} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="number" step="0.01" min="0" placeholder="0.00"
+                  value={modalStopLoss} onChange={e => setModalStopLoss(e.target.value)}
+                  style={{ flex: 1 }} />
+                <button className="btn-sm"
+                  onClick={async () => {
+                    if (!selectedStock) { showToast('请先选择股票', true); return }
+                    try {
+                      const r = await fetch('/api/holdings/recommended-stop', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code: selectedStock.code }),
+                      })
+                      const d = await r.json()
+                      if (d.success) {
+                        setModalStopLoss(String(d.stop_loss))
+                        if (d.price) setCachedPrice(d.price)
+                        showToast(`推荐止损 ${d.stop_loss}（${d.stop_loss_pct?.toFixed(2)}%）`)
+                      } else {
+                        showToast(d.error || '无法获取推荐止损', true)
+                      }
+                    } catch {
+                      showToast('请求失败', true)
+                    }
+                  }}
+                  style={{ padding: '6px 12px', fontSize: 12, background: '#4ecdc4', color: '#000',
+                    border: 'none', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >🔄 更新止损</button>
+              </div>
               <div className="hint" dangerouslySetInnerHTML={{ __html: calcStopLossPct() }} />
             </div>
 
