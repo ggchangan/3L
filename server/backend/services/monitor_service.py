@@ -13,7 +13,7 @@ from datetime import datetime
 import requests
 
 from backend.config import CACHE_DIR, INDUSTRY_LEADERS_PATH, WWW_DIR, atomic_json_dump
-from backend.services.logger import get_logger
+from backend.core.logger import get_logger
 
 log = get_logger(__name__)
 

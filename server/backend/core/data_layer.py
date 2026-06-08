@@ -91,7 +91,7 @@ def _clear_stock_chart_svg_cache():
                 os.remove(os.path.join(CHARTS_DIR, fname))
                 removed += 1
         if removed:
-            from backend.services.logger import get_logger
+            from backend.core.logger import get_logger
             get_logger('data_layer').info(f'已清除{removed}个SVG图表缓存')
     except Exception:
         pass

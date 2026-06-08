@@ -2,15 +2,14 @@
 3L 交易系统 — 统一日志配置
 
 用法:
-    from logger import get_logger
+    from backend.core.logger import get_logger
     log = get_logger(__name__)
     log.info("message")
     log.error("error", exc_info=True)
 
-首次导入时自动配置日志（文件 + 控制台）。
+首次导入时自动配置日志（控制台 + 文件 + 独立错误日志）。
 通过 config.LOG_LEVEL / LOG_DIR 控制级别和路径。
 """
-
 import logging
 import os
 import sys
@@ -55,6 +54,16 @@ def setup_logging():
         file_handler.setLevel(level)
         file_handler.setFormatter(logging.Formatter(_FILE_FMT, _DATE_FMT))
         root.addHandler(file_handler)
+
+        # ── 独立错误日志 ──
+        err_path = os.path.join(LOG_DIR, '3l-server.error.log')
+        err_handler = RotatingFileHandler(
+            err_path, maxBytes=10 * 1024 * 1024, backupCount=5,
+            encoding='utf-8'
+        )
+        err_handler.setLevel(logging.ERROR)
+        err_handler.setFormatter(logging.Formatter(_FILE_FMT, _DATE_FMT))
+        root.addHandler(err_handler)
     except (OSError, PermissionError) as e:
         root.warning('无法创建日志文件 %s: %s', LOG_DIR, e)
 
