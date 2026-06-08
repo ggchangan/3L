@@ -17,6 +17,10 @@
 
 from typing import List, Dict, Optional, Any
 
+from backend.core.logger import get_logger
+
+log = get_logger(__name__)
+
 from backend.core.signal_detector import (
     detect_upward_breakout,
     detect_downward_breakout,
@@ -98,6 +102,7 @@ def _get_triggered_signals(klines: List[Dict], idx: int,
         try:
             sig = detector(klines, idx)
         except Exception as e:
+            log.warning('信号检测器异常 [%s]: %s', key, e)
             continue
         if sig.get('triggered'):
             name = SIGNAL_NAMES.get(key, key)

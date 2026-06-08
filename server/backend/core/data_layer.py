@@ -94,6 +94,7 @@ def _clear_stock_chart_svg_cache():
             from backend.core.logger import get_logger
             get_logger('data_layer').info(f'已清除{removed}个SVG图表缓存')
     except Exception:
+        get_logger('data_layer').warning('SVG图表缓存清理异常')
         pass
 
 def get_stock_klines(code, direction=None, stocks=None):

@@ -277,6 +277,7 @@ def main():
                 tsize = gen_trend_svg(info['name'], code, klines, tout)
                 print(f"     趋势图 {tsize}B")
             except Exception:
+                print(f"     趋势图生成失败 {code}")
                 pass
             ok += 1
         except Exception as e:
