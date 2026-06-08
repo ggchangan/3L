@@ -63,6 +63,7 @@ export default function Monitor() {
             else if (a.type === 'deviation') { alarmType = 'warn'; typeLabel = '异动' }
             else if (a.type === 'market') { alarmType = 'market'; typeLabel = '大盘' }
             else if (a.type === 'market_critical') { alarmType = 'market_critical'; typeLabel = '系统风险' }
+            else if (a.type === 'panic') { alarmType = 'market_critical'; typeLabel = '恐慌' }
             // 优先用后端返回的消息，否则构造详细消息
             const msg = a.msg || (a.stock ? `${a.stock} ${typeLabel}`
                           : a.index_name ? `${a.index_name} ${typeLabel}`

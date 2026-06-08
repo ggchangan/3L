@@ -190,10 +190,12 @@ class TestCheckAlertsFromAlarmService:
             self, mock_empty_alarms, mock_real_time):
         """没有报警时返回空"""
         with patch('backend.services.check_alerts.mark_alarm_triggered'):
-            from backend.services.check_alerts import check_all_alerts
-            result = check_all_alerts()
-            assert result['triggered'] == []
-            assert result['count'] == 0
+            with patch('backend.services.panic_monitor_service.check_panic_alerts_via_realtime',
+                       return_value=[]):
+                from backend.services.check_alerts import check_all_alerts
+                result = check_all_alerts()
+                assert result['triggered'] == []
+                assert result['count'] == 0
 
     def test_price_alert_fields(
             self, mock_active_alarms, mock_real_time, mock_no_triggered_recently):
@@ -255,9 +257,11 @@ class TestWeChatPush:
 
     def test_push_wechat_not_called_when_no_trigger(self, mock_empty_alarms, mock_real_time):
         """没有触发报警时不调用 _push_wechat"""
-        from backend.services.check_alerts import check_all_alerts
-        result = check_all_alerts()
-        assert result['count'] == 0
+        with patch('backend.services.panic_monitor_service.check_panic_alerts_via_realtime',
+                   return_value=[]):
+            from backend.services.check_alerts import check_all_alerts
+            result = check_all_alerts()
+            assert result['count'] == 0
 
     def test_send_alert_batch_handles_triggered(self):
         """send_alert_batch 处理触发报警（验证函数可调用，不发送）"""

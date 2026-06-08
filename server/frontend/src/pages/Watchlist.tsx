@@ -66,6 +66,7 @@ const MOCK_DIR_DATA: DirData = {
 
 export default function Watchlist() {
   const [stocks, setStocks] = useState<WatchlistStock[]>([])
+  const [loading, setLoading] = useState(true)
   const [trendCodes, setTrendCodes] = useState<Set<string>>(new Set())
   const [dirData, setDirData] = useState<DirData>({ directions: {}, active: [], all: [], suggestions: {} })
   const [activeDir, setActiveDir] = useState('全部')
