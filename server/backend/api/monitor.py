@@ -1,7 +1,9 @@
 """监控/盯盘相关路由"""
-from backend.services.monitor_service import (
 from backend.core.logger import get_logger
+
 log = get_logger(__name__)
+
+from backend.services.monitor_service import (
 
     get_volume_comparison, get_buy_signals, get_stop_loss_triggered,
     get_top_sectors, get_industry_leaders, get_market_leaders,
@@ -44,6 +46,7 @@ def _handle_add_watched(h, path, body):
         else:
             h.send_json({'ok': False, 'error': '行业名不能为空'})
     except Exception as e:
+        log.error("monitor handler error: %s", e, exc_info=True)
         h.send_json({'ok': False, 'error': str(e)})
 
 
@@ -58,6 +61,7 @@ def _handle_remove_watched(h, path, body):
         else:
             h.send_json({'ok': False, 'error': '行业名不能为空'})
     except Exception as e:
+        log.error("monitor handler error: %s", e, exc_info=True)
         h.send_json({'ok': False, 'error': str(e)})
 
 

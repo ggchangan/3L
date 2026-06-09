@@ -40,6 +40,7 @@ def _fetch_hot_stocks(stock_type='a', list_type='normal', limit=100):
         stock_list = data.get('data', {}).get('stock_list', [])
         return stock_list[:limit], None
     except Exception as e:
+        log.error("hot stocks fetch error: %s", e, exc_info=True)
         return None, str(e)
 
 

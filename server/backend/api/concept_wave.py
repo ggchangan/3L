@@ -250,6 +250,7 @@ def _build_reasoning_chain(name, score, related_codes):
                 'top_mainlines': [],
             }
     except Exception:
+        log.warning('概念波趋势链构建失败')
         chain['market'] = {'position': '波中', 'position_pct': '半仓', 'volume_level': '--', 'volume_amount': '--', 'top_mainlines': []}
 
     # 主线TOP3（从服务器内存数据读）
@@ -270,6 +271,7 @@ def _build_reasoning_chain(name, score, related_codes):
                 for rank, l in enumerate(ml[:3])
             ]
     except Exception:
+        log.warning("概念波主线TOP3构建失败")
         pass
 
     # 概念分析理由
@@ -310,6 +312,7 @@ def _build_reasoning_chain(name, score, related_codes):
                     'reason': card.get('signal_text', ''),
                 })
     except Exception:
+        log.warning("概念波扫描评分失败")
         pass
 
     return chain

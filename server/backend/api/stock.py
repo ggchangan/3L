@@ -20,6 +20,7 @@ def _handle_stock_analysis(h, path):
             diag = compute_diagnosis(result.get('code', ''), result.get('name', ''), result)
             result['diagnosis'] = diag
         except Exception as e:
+            log.error("stock diagnosis error: %s", e, exc_info=True)
             result['diagnosis'] = {'error': str(e)}
     h.send_json(result)
 

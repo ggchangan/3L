@@ -23,6 +23,7 @@ def _handle_watchlist_save(h, path, body):
         result = save_watchlist(data)
         h.send_json(result)
     except Exception as e:
+        log.error("watchlist handler error: %s", e, exc_info=True)
         h.send_json({'success': False, 'error': str(e)})
 
 
@@ -57,6 +58,7 @@ def _handle_add_direction(h, path, body):
         result = add_direction(name)
         h.send_json(result)
     except Exception as e:
+        log.error("watchlist handler error: %s", e, exc_info=True)
         h.send_json({'success': False, 'error': str(e)})
 
 
@@ -71,6 +73,7 @@ def _handle_remove_direction(h, path, body):
         result = remove_direction(name)
         h.send_json(result)
     except Exception as e:
+        log.error("watchlist handler error: %s", e, exc_info=True)
         h.send_json({'success': False, 'error': str(e)})
 
 
@@ -86,6 +89,7 @@ def _handle_set_direction_enabled(h, path, body):
         result = set_direction_enabled(name, enabled)
         h.send_json(result)
     except Exception as e:
+        log.error("watchlist handler error: %s", e, exc_info=True)
         h.send_json({'success': False, 'error': str(e)})
 
 
@@ -186,6 +190,7 @@ def _handle_watchlist_add_stock(h, path, body):
         save_watchlist(wl_data)
         h.send_json({'success': True, 'msg': f'已添加 {name} 到自选股'})
     except Exception as e:
+        log.error("watchlist handler error: %s", e, exc_info=True)
         h.send_json({'success': False, 'error': str(e)})
 
 

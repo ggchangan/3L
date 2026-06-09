@@ -25,6 +25,7 @@ def _handle_health(h, path):
             'fresh': age_ok,
         }
     except Exception as e:
+        log.warning("health check field failed")
         checks['review_data'] = {'ok': False, 'error': str(e)}
 
     # 2. 缓存目录可读写
@@ -33,6 +34,7 @@ def _handle_health(h, path):
         files = os.listdir(cache_dir)
         checks['cache'] = {'ok': True, 'file_count': len(files), 'path': cache_dir}
     except Exception as e:
+        log.warning("health check field failed")
         checks['cache'] = {'ok': False, 'error': str(e)}
 
     # 3. 磁盘空间
@@ -46,6 +48,7 @@ def _handle_health(h, path):
             'used_pct': round(100 * stat.used / stat.total, 1),
         }
     except Exception as e:
+        log.warning("health check field failed")
         checks['disk'] = {'ok': False, 'error': str(e)}
 
     # 4. 服务状态
