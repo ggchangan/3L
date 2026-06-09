@@ -373,8 +373,14 @@ def _df_to_kline(df):
     return records
 
 
+def _index_symbol(code):
+    """返回 akshare 的指数symbol，创业板指(399xxx)用 sz 前缀"""
+    if code.startswith('399') or code.startswith('300'):
+        return f'sz{code}'
+    return f'sh{code}'
+
 def update_index(client):
-    """更新所有指数日K线（上证000001 + 科创50 000688 + 中证全指000985）"""
+    """更新所有指数日K线（上证/创业板/科创50/中证全指）"""
     import akshare as ak
     import warnings
     warnings.filterwarnings('ignore')
@@ -390,7 +396,7 @@ def update_index(client):
         existing_dates = {k['date'] for k in existing_klines}
 
         try:
-            df = ak.stock_zh_index_daily_tx(symbol=f'sh{code}')
+            df = ak.stock_zh_index_daily_tx(symbol=_index_symbol(code))
         except Exception as e:
             log(f'⚠️  {name}({code})拉取失败: {e}')
             continue
