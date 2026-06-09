@@ -32,6 +32,7 @@ def _handle_config(h, path, body):
         else:
             h.send_json({'success': False, 'error': '更新 .env 失败'})
     except Exception as e:
+        log.error("wxpush error: %s", e, exc_info=True)
         h.send_json({'success': False, 'error': str(e)})
 
 

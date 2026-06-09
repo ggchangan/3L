@@ -36,4 +36,5 @@ def _handle_strong_trend_candidates(h, path):
         )
         h.send_json({'success': True, **result})
     except Exception as e:
+        log.error("strong trend error: %s", e, exc_info=True)
         h.send_json({'success': False, 'error': str(e)})

@@ -13,6 +13,7 @@ def _handle_review_today(h, path):
         data = compute_review_real_time()
         h.send_json(data)
     except Exception as e:
+        log.error("review handler error: %s", e, exc_info=True)
         h.send_json({'error': str(e), 'market': {}, 'mainline': {}, 'holdings_review': [], 'buy_signals_review': []})
 
 
@@ -30,6 +31,7 @@ def _handle_review_save(h, path, body):
         result = save_review(data)
         h.send_json(result)
     except Exception as e:
+        log.error("review handler error: %s", e, exc_info=True)
         h.send_json({'status': 'error', 'msg': str(e)})
 
 

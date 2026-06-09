@@ -33,6 +33,7 @@ def _handle_save_journal(h, path, body):
         result = save_journal_entry(entry)
         h.send_json(result)
     except Exception as e:
+        log.error("tips handler error: %s", e, exc_info=True)
         h.send_json({'status': 'error', 'msg': str(e)})
 
 

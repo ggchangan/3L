@@ -17,6 +17,7 @@ def _handle_suggestions(h, path):
         review = compute_review_real_time()
         trading_plan = review.get('trading_plan', {})
     except Exception:
+        log.warning('工作台数据加载失败，返回空')
         trading_plan = {}
     h.send_json({
         'holdings_action': trading_plan.get('holdings_action', []),

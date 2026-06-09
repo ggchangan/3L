@@ -52,6 +52,7 @@ def _handle_annotate(h, path, body):
         )
         h.send_json(result)
     except Exception as e:
+        log.error("plan tracking error: %s", e, exc_info=True)
         h.send_json({'success': False, 'error': str(e)})
 
 
@@ -65,6 +66,7 @@ def _handle_refresh(h, path):
             'last_updated': data['last_updated'],
         })
     except Exception as e:
+        log.error("plan tracking error: %s", e, exc_info=True)
         h.send_json({'success': False, 'error': str(e)})
 
 
