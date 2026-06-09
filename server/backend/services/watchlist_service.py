@@ -3,8 +3,9 @@
 """
 import json
 import os
+import time
 from backend import config as cfg
-from backend.config import WATCHLIST_PATH, ALL_STOCKS_PATH, ALL_CODES_PATH, PINYIN_PATH
+from backend.config import WATCHLIST_PATH, ALL_STOCKS_PATH, ALL_CODES_PATH, PINYIN_PATH, INDUSTRY_MAP_PATH, ANALYSIS_CACHE_PATH
 from backend.config import atomic_json_dump
 
 from backend.core.logger import get_logger
@@ -222,3 +223,136 @@ def migrate_directions(path=None):
     data['directions'] = dirs
     _save_watchlist_data(data, path)
     return {'success': True, 'migrated': True, 'count': len(dirs)}
+
+
+# ════════════════════════════════════════════════════════
+# 自选股批量分析 — 逐只计算结构/阶段/偏倚/系统/信号
+# ════════════════════════════════════════════════════════
+
+def get_watchlist_analysis(stocks=None, wl=None):
+    """自选股批量分析 — 对自选股列表逐只计算结构/阶段/偏倚/系统/信号
+
+    返回 {'stocks': [...], 'count': N}，每个股票条目包含：
+      price, change, structure, stage, sector, trading_system,
+      trend_bias, signal, trend_stock, profit_model1
+
+    走磁盘缓存（ANALYSIS_CACHE_PATH），TTL=120s，
+    当 WATCHLIST_PATH 或 ALL_STOCKS_PATH 有变更时自动失效。
+    """
+    # 检查缓存是否有效
+    try:
+        if os.path.exists(ANALYSIS_CACHE_PATH):
+            cache_mtime = os.path.getmtime(ANALYSIS_CACHE_PATH)
+            wl_mtime = os.path.getmtime(WATCHLIST_PATH)
+            ks_mtime = os.path.getmtime(ALL_STOCKS_PATH)
+            now = time.time()
+            # 缓存未过期：缓存文件比数据文件新，且不超过120s
+            if cache_mtime > wl_mtime and cache_mtime > ks_mtime and (now - cache_mtime) < 120:
+                with open(ANALYSIS_CACHE_PATH, 'r', encoding='utf-8') as f:
+                    cached = json.load(f)
+                # 验证缓存股票数量与自选股一致
+                if cached.get('count') == len(_load_watchlist().get('stocks', [])):
+                    log.info('watchlist_analysis: 命中缓存')
+                    return cached
+    except Exception:
+        pass
+
+    from backend.core.data_layer import get_all_stocks, get_watchlist, _load_json
+    from backend.core.scan_buy_signals import get_main_lines
+
+    if stocks is None:
+        stocks = get_all_stocks()
+    if wl is None:
+        wl = get_watchlist()
+    imap = _load_json(INDUSTRY_MAP_PATH, {})
+    _main_lines = get_main_lines()
+
+    # 建倒排索引：code → klines，避免逐方向遍历
+    kline_index = {}
+    for sec, codes in stocks.items():
+        for code, kls in codes.items():
+            kline_index[code] = kls
+
+    results = []
+    for s in wl:
+        code = s['code']
+        kls = kline_index.get(code)
+
+        if not kls or len(kls) < 30:
+            results.append({
+                **s,
+                'price': None,
+                'change': None,
+                'structure': '数据不足',
+                'stage': '',
+                'sector': imap.get(code, {}).get('ths_industry', ''),
+                'trading_system': '3l',
+                'trend_bias': None,
+                'signal': 'hold',
+                'trend_stock': False,
+                'profit_model1': False,
+            })
+            continue
+
+        today_str = kls[-1]['date']
+        today_fmt = f'{today_str[:4]}-{today_str[4:6]}-{today_str[6:8]}'
+
+        # 通过 StockCardService 统一获取卡片数据
+        try:
+            from backend.services.stock_card_service import get_stock_card
+            card = get_stock_card(
+                code=code,
+                date_str=today_fmt,
+                market_position='波中',
+                main_lines=list(_main_lines) if _main_lines else [],
+                klines=kls,
+            )
+        except Exception as e:
+            results.append({
+                **s,
+                'price': round(kls[-1]['close'], 2),
+                'change': round((kls[-1]['close'] - kls[-2]['close']) / kls[-2]['close'] * 100, 2) if len(kls) >= 2 else 0,
+                'structure': '--',
+                'stage': '--',
+                'sector': imap.get(code, {}).get('ths_industry', ''),
+                'trading_system': '3l',
+                'trend_bias': None,
+                'signal': 'hold',
+                'trend_stock': False,
+                'profit_model1': False,
+            })
+            continue
+
+        results.append({
+            **s,
+            'price': card.get('price'),
+            'change': card.get('change'),
+            'structure': card.get('structure', '--'),
+            'stage': card.get('stage', '--'),
+            'sector': card.get('sector', ''),
+            'trading_system': card.get('trading_system', '3l'),
+            'trend_bias': card.get('trend_bias', None) or card.get('deviation_pct'),
+            'signal': card.get('signal', 'hold'),
+            'trend_stock': card.get('trend_stock', False),
+            'profit_model1': card.get('profit_model1', False),
+            # 补充卡片字段
+            'buy_point': card.get('buy_point', ''),
+            'stop_loss': card.get('stop_loss'),
+            'stop_loss_pct': card.get('stop_loss_pct'),
+            'mainline_level': card.get('mainline_level', ''),
+            'trading_reason': card.get('trading_reason', ''),
+            'vol_analysis': card.get('vol_analysis', ''),
+            'sector_chg': card.get('sector_chg'),
+        })
+
+    result = {'stocks': results, 'count': len(results)}
+
+    # 写缓存
+    try:
+        os.makedirs(os.path.dirname(ANALYSIS_CACHE_PATH), exist_ok=True)
+        atomic_json_dump(result, ANALYSIS_CACHE_PATH)
+        log.info('watchlist_analysis: 缓存已更新 (%d只)', len(results))
+    except Exception as e:
+        log.warning('watchlist_analysis: 缓存写入失败 %s', e)
+
+    return result

@@ -918,7 +918,7 @@ class TestTrendServiceWithMock:
 
     def test_watchlist_analysis_structure(self):
         """自选股批量分析返回正确结构"""
-        from backend.services.trend_service import get_watchlist_analysis
+        from backend.services.watchlist_service import get_watchlist_analysis
         result = get_watchlist_analysis(stocks=MOCK_STOCKS, wl=MOCK_WATCHLIST)
         assert 'stocks' in result
         assert 'count' in result
@@ -927,7 +927,7 @@ class TestTrendServiceWithMock:
 
     def test_watchlist_analysis_stock_fields(self):
         """每只股票包含必要字段"""
-        from backend.services.trend_service import get_watchlist_analysis
+        from backend.services.watchlist_service import get_watchlist_analysis
         result = get_watchlist_analysis(stocks=MOCK_STOCKS, wl=MOCK_WATCHLIST)
         for s in result['stocks']:
             assert 'code' in s
