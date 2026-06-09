@@ -25,6 +25,10 @@ from backend.config import (
 from backend.services.source_health import (
     report_success, report_failure, is_source_available, get_all_health
 )
+from backend.core.logger import get_logger
+from backend.core.exceptions import DataSourceError
+
+log = get_logger(__name__)
 
 
 def _last_trading_day():
@@ -39,7 +43,7 @@ def _last_trading_day():
     return d.strftime('%Y%m%d')
 
 
-class DataUnavailableError(Exception):
+class DataUnavailableError(DataSourceError):
     def __init__(self, data_type):
         self.data_type = data_type
         super().__init__(f'数据源全部不可用: {data_type}')
@@ -65,11 +69,11 @@ def _call_with_failover(data_type, args, chain, fallback=None):
             return data
         except Exception as e:
             report_failure(source_name, str(e))
-            print(f'[data_source] {data_type} -> {source_name} 失败: {e}')
+            log.warning('%s -> %s 失败: %s', data_type, source_name, e)
             continue
     if fallback:
         return fallback
-    print(f'[data_source] {data_type}: 所有数据源均不可用!')
+    log.warning('%s: 所有数据源均不可用', data_type)
     raise DataUnavailableError(data_type)
 
 # --- EM仓获取函数 ---
@@ -115,11 +119,12 @@ def _fetch_em_sector_ranking(date_str):
                     'volume': int(float(item.get('f5', 0) or 0)),
                     'prev_close': round(float(item.get('f18', 0) or 0), 2),
                 }
-            print(f'[data_source] push2test live [{sector_type}]: {len(result[sector_type])}个板块')
-        print(f'[data_source] push2test live 排行获取成功 (行业{len(result["industries"])}个, 概念{len(result["concepts"])}个)')
+            log.info('push2test live [%s]: %d个板块', sector_type, len(result[sector_type]))
+        log.info('push2test live 排行获取成功 (行业%d个, 概念%d个)',
+                 len(result['industries']), len(result['concepts']))
         return result
     except Exception as e:
-        print(f'[data_source] push2test live 失败, 回退 EM文件: {e}')
+        log.warning('push2test live 失败, 回退 EM文件: %s', e)
         return _load_json(SOURCES_EM_SECTOR_DAILY)
 
 def _fetch_em_concept_map():
@@ -151,10 +156,10 @@ def _fetch_ths_live_sector_ranking(date_str):
                     'leader': str(row.get('领涨股', '') or ''),
                     'leader_chg': round(float(row.get('领涨股-涨跌幅', 0) or 0), 2),
                 }
-        print(f'[data_source] THS live: 行业{len(industries)}个（同花顺主源）')
+        log.info('THS live: 行业%d个（同花顺主源）', len(industries))
         return {'last_updated': today, 'industries': industries, 'concepts': {}}
     except Exception as e:
-        print(f'[data_source] THS live 失败: {e}')
+        log.warning('THS live 失败: %s', e)
         return None
 
 
@@ -487,7 +492,7 @@ def _fetch_ths_concept_snapshots(name_list: list) -> dict:
         return {}
     name_map = _load_concept_name_mapping()
     if not name_map:
-        print('[data_source] ⚠️ 概念名称映射表为空，跳过 THS 概念拉取')
+        log.warning('概念名称映射表为空，跳过 THS 概念拉取')
         return {}
 
     today = _last_trading_day()
@@ -565,15 +570,15 @@ def _fetch_ths_concept_snapshots(name_list: list) -> dict:
         except Exception as e:
             fail += 1
             if fail <= 3:  # 只打前3次失败日志
-                print(f'[data_source] THS概念[{ths_name}]失败: {type(e).__name__}: {e}')
+                log.warning('THS概念[%s]失败: %s: %s', ths_name, type(e).__name__, e)
 
         # 限流：同花顺接口间隔≥0.5秒
         if idx < total - 1:
             import time
             time.sleep(0.5)
 
-    print(f'[data_source] THS概念快照: 成功{success}/{total}个, 失败{fail}个'
-          f'(映射覆盖{len(name_map)}个)')
+    log.info('THS概念快照: 成功%d/%d个, 失败%d个 (映射覆盖%d个)',
+             success, total, fail, len(name_map))
     return result
 
 
@@ -608,7 +613,7 @@ def get_ths_concept_klines(name_list: list) -> dict:
         return {}
     name_map = _load_concept_name_mapping()
     if not name_map:
-        print('[data_source] ⚠️ 概念名称映射表为空')
+        log.warning('概念名称映射表为空')
         return {}
 
     today = _last_trading_day()
@@ -645,7 +650,7 @@ def get_ths_concept_klines(name_list: list) -> dict:
         if idx < total - 1:
             time.sleep(0.3)
 
-    print(f'[data_source] THS概念K线: 成功{len(result)}/{total}个')
+    log.info('THS概念K线: 成功%d/%d个', len(result), total)
     return result
 
 
@@ -676,7 +681,7 @@ def get_concept_snapshots(name_list: list = None) -> dict:
     if CONCEPT_DATA_SOURCE == 'ths':
         return _fetch_ths_concept_snapshots(name_list)
     else:
-        print(f'[data_source] ⚠️ 未知概念数据源: {CONCEPT_DATA_SOURCE}，回退到THS')
+        log.warning('未知概念数据源: %s，回退到THS', CONCEPT_DATA_SOURCE)
         return _fetch_ths_concept_snapshots(name_list)
 
 
@@ -697,7 +702,7 @@ def get_concept_klines(name_list: list) -> dict:
     if CONCEPT_DATA_SOURCE == 'ths':
         return get_ths_concept_klines(name_list)
     else:
-        print(f'[data_source] ⚠️ 未知概念数据源: {CONCEPT_DATA_SOURCE}，回退到THS')
+        log.warning('未知概念数据源: %s，回退到THS', CONCEPT_DATA_SOURCE)
         return get_ths_concept_klines(name_list)
 
 

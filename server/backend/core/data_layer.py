@@ -6,6 +6,9 @@
 import json, os
 from datetime import datetime
 from backend.core.cache_layer import cache
+from backend.core.logger import get_logger
+
+log = get_logger(__name__)
 from backend.config import (
     DATA_DIR, WWW_DIR, CACHE_DIR, PRIVATE_DIR,
     ALL_STOCKS_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH,
@@ -28,7 +31,7 @@ def _load_json(path, default=None):
         with open(path, encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
-        print(f"[data_layer] ⚠️ 读 {path} 失败: {e}")
+        log.warning('读 %s 失败: %s', path, e)
         return default if default is not None else {}
 
 def _save_json(path, data):
@@ -91,10 +94,9 @@ def _clear_stock_chart_svg_cache():
                 os.remove(os.path.join(CHARTS_DIR, fname))
                 removed += 1
         if removed:
-            from backend.core.logger import get_logger
-            get_logger('data_layer').info(f'已清除{removed}个SVG图表缓存')
+            log.info('已清除%d个SVG图表缓存', removed)
     except Exception:
-        get_logger('data_layer').warning('SVG图表缓存清理异常')
+        log.warning('SVG图表缓存清理异常')
         pass
 
 def get_stock_klines(code, direction=None, stocks=None):
@@ -259,7 +261,7 @@ def get_concept_snapshots(name_list: list = None) -> dict:
         from backend.services.data_source import get_concept_snapshots as _ds_get
         return _ds_get(name_list)
     except Exception as e:
-        print(f'[data_layer] get_concept_snapshots 失败: {e}')
+        log.warning('get_concept_snapshots 失败: %s', e)
         return {}
 
 
@@ -280,7 +282,7 @@ def get_concept_klines(name_list: list) -> dict:
         from backend.services.data_source import get_concept_klines as _ds_klines
         return _ds_klines(name_list)
     except Exception as e:
-        print(f'[data_layer] get_concept_klines 失败: {e}')
+        log.warning('get_concept_klines 失败: %s', e)
         return {}
 
 

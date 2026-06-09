@@ -62,6 +62,15 @@ class TestExceptionHierarchy:
             raise DataSourceError("连接超时", log_when=False)
         assert isinstance(exc.value, DataSourceError)
 
+    def test_data_unavailable_inherits_data_source_error(self):
+        """data_source.DataUnavailableError 现在继承 DataSourceError"""
+        from backend.services.data_source import DataUnavailableError
+        err = DataUnavailableError("板块排行")
+        assert isinstance(err, DataSourceError)
+        assert isinstance(err, DataError)
+        assert isinstance(err, ThreeLError)
+        assert "板块排行" in str(err)
+
 
 class TestLogWhenBehavior:
     """测试 log_when 参数控制自动日志"""
