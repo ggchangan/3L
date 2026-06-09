@@ -19,6 +19,7 @@ from urllib.parse import urlparse, parse_qs
 from backend.core.logic_tracking_store import LogicTrackingStore
 from backend.services.logic_feed_service import process_feed, save_feed
 from backend.services.logic_verify_service import verify_unverified_entries
+from backend.core.exceptions import APIError
 from backend.services.logic_p1_service import (
     compute_tier_suggestions,
     generate_top_pool,
@@ -73,7 +74,7 @@ def _handle_add_tag(h, path, body):
     except ValueError as e:
         h.send_json({'success': False, 'error': str(e)})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 def _handle_update_tag(h, path, body):
@@ -90,7 +91,7 @@ def _handle_update_tag(h, path, body):
     except ValueError as e:
         h.send_json({'success': False, 'error': str(e)})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 def _handle_delete_tag(h, path, body):
@@ -107,7 +108,7 @@ def _handle_delete_tag(h, path, body):
     except ValueError as e:
         h.send_json({'success': False, 'error': str(e)})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════
@@ -130,7 +131,7 @@ def _handle_add_entry(h, path, body):
         store.add_entry(data)
         h.send_json({'success': True})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 def _handle_delete_entry(h, path, body):
@@ -147,7 +148,7 @@ def _handle_delete_entry(h, path, body):
     except ValueError as e:
         h.send_json({'success': False, 'error': str(e)})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════
@@ -177,7 +178,7 @@ def _handle_add_forecast(h, path, body):
         store.add_forecast(data)
         h.send_json({'success': True})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 def _handle_delete_forecast(h, path, body):
@@ -194,7 +195,7 @@ def _handle_delete_forecast(h, path, body):
     except ValueError as e:
         h.send_json({'success': False, 'error': str(e)})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════
@@ -217,7 +218,7 @@ def _handle_feed_process(h, path, body):
         result = process_feed(url, source_type=source_type, source_subtype=source_subtype)
         h.send_json(result)
     except Exception as e:
-        h.send_json({'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 def _handle_feed_save(h, path, body):
@@ -236,7 +237,7 @@ def _handle_feed_save(h, path, body):
                 pass
         h.send_json(result)
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════
@@ -296,7 +297,7 @@ def _handle_trigger_verify(h, path):
         count = verify_unverified_entries()
         h.send_json({'success': True, 'verified': count})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════
@@ -309,7 +310,7 @@ def _handle_tier_suggestions(h, path):
         result = compute_tier_suggestions()
         h.send_json({'suggestions': result})
     except Exception as e:
-        h.send_json({'suggestions': [], 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 def _handle_top_pool(h, path):
@@ -318,7 +319,7 @@ def _handle_top_pool(h, path):
         result = generate_top_pool()
         h.send_json({'pool': result})
     except Exception as e:
-        h.send_json({'pool': [], 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 def _handle_alarms(h, path):
@@ -327,7 +328,7 @@ def _handle_alarms(h, path):
         result = push_focused_alarms()
         h.send_json({'alarms': result})
     except Exception as e:
-        h.send_json({'alarms': [], 'error': str(e)})
+        raise APIError(f"逻辑追踪异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════

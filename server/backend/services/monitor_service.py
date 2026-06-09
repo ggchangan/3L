@@ -13,6 +13,7 @@ from datetime import datetime
 import requests
 
 from backend.config import CACHE_DIR, INDUSTRY_LEADERS_PATH, WWW_DIR, atomic_json_dump
+from backend.core.exceptions import DataError
 from backend.core.logger import get_logger
 
 log = get_logger(__name__)
@@ -66,8 +67,7 @@ def _run_scan_sync(cache_file=None):
             log.warning('买点信号扫描失败 (code=%d): %s', r.returncode, r.stderr[-200:])
             return {'error': r.stderr[-300:], 'signals': []}
     except Exception as e:
-        log.error('买点信号扫描异常: %s', e)
-        return {'error': str(e), 'signals': []}
+        raise DataError(f"监控服务异常: {e}") from e
 
 
 def get_buy_signals():

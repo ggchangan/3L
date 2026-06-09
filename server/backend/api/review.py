@@ -4,6 +4,7 @@ from backend.core.logger import get_logger
 log = get_logger(__name__)
 
 from backend.services.review_service import run_daily_review, generate_review, save_review, compute_review_real_time
+from backend.core.exceptions import APIError
 
 
 def _handle_review_today(h, path):
@@ -13,8 +14,7 @@ def _handle_review_today(h, path):
         data = compute_review_real_time()
         h.send_json(data)
     except Exception as e:
-        log.error("review handler error: %s", e, exc_info=True)
-        h.send_json({'error': str(e), 'market': {}, 'mainline': {}, 'holdings_review': [], 'buy_signals_review': []})
+        raise APIError(f"复盘模块异常: {e}") from e
 
 
 def _handle_review_generate(h, path):
@@ -31,8 +31,7 @@ def _handle_review_save(h, path, body):
         result = save_review(data)
         h.send_json(result)
     except Exception as e:
-        log.error("review handler error: %s", e, exc_info=True)
-        h.send_json({'status': 'error', 'msg': str(e)})
+        raise APIError(f"复盘模块异常: {e}") from e
 
 
 def _handle_cron_daily_review(h, path):

@@ -5,6 +5,7 @@ from backend.core.logger import get_logger
 log = get_logger(__name__)
 
 from backend.services.plan_tracking_service import get_tracking, compute_tracking, annotate_plan
+from backend.core.exceptions import APIError
 
 
 def _handle_get(h, path):
@@ -52,8 +53,7 @@ def _handle_annotate(h, path, body):
         )
         h.send_json(result)
     except Exception as e:
-        log.error("plan tracking error: %s", e, exc_info=True)
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"计划跟踪异常: {e}") from e
 
 
 def _handle_refresh(h, path):
@@ -66,8 +66,7 @@ def _handle_refresh(h, path):
             'last_updated': data['last_updated'],
         })
     except Exception as e:
-        log.error("plan tracking error: %s", e, exc_info=True)
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"计划跟踪异常: {e}") from e
 
 
 def register_routes(routes):

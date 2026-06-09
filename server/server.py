@@ -8,6 +8,7 @@ from http.server import ThreadingHTTPServer
 from urllib.parse import quote
 from backend import config
 from backend.core.logger import get_logger
+from backend.core.exceptions import ThreeLError
 
 log = get_logger('server')
 
@@ -243,7 +244,10 @@ class Handler(SimpleHTTPRequestHandler):
             super().do_GET()
         except Exception as e:
             log.exception('do_GET 未捕获异常: %s', e)
-            self.send_json({'success': False, 'error': '服务器内部错误'}, 500)
+            if isinstance(e, ThreeLError):
+                self.send_json({'success': False, 'error': str(e), 'type': type(e).__name__}, 500)
+            else:
+                self.send_json({'success': False, 'error': '服务器内部错误'}, 500)
 
     def do_POST(self):
         try:
@@ -307,7 +311,10 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json({'status': 'error'}, 404)
         except Exception as e:
             log.exception('do_POST 未捕获异常: %s', e)
-            self.send_json({'success': False, 'error': '服务器内部错误'}, 500)
+            if isinstance(e, ThreeLError):
+                self.send_json({'success': False, 'error': str(e), 'type': type(e).__name__}, 500)
+            else:
+                self.send_json({'success': False, 'error': '服务器内部错误'}, 500)
 
     def send_json(self, data, status=200):
         # 递归将 NaN 转为 None（兼容 JSON 规范）

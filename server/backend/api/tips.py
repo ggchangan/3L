@@ -8,6 +8,7 @@ from backend.services.knowledge_service import (
     get_tips_list, get_tip_content,
     get_journal_entries, save_journal_entry,
 )
+from backend.core.exceptions import APIError
 
 
 def _handle_tips_list(h, path):
@@ -33,8 +34,7 @@ def _handle_save_journal(h, path, body):
         result = save_journal_entry(entry)
         h.send_json(result)
     except Exception as e:
-        log.error("tips handler error: %s", e, exc_info=True)
-        h.send_json({'status': 'error', 'msg': str(e)})
+        raise APIError(f"交易技巧异常: {e}") from e
 
 
 def register_routes(routes):

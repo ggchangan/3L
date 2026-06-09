@@ -13,6 +13,7 @@ log = get_logger(__name__)
 
 from backend.config import WWW_DIR, DATA_DIR, CACHE_DIR, INDUSTRY_MAP_PATH, REVIEW_CHARTS_DIR
 from backend import config  # for config.atomic_json_dump
+from backend.core.exceptions import DataError
 
 # 板块缓存目录（位于 WWW_DIR/data/cache，区别于 config.CACHE_DIR）
 _BOARD_CACHE_DIR = os.path.join(WWW_DIR, 'data', 'cache')
@@ -143,7 +144,7 @@ def get_momentum_data():
         else:
             return {'error': r.stderr[-300:]}
     except Exception as e:
-        return {'error': str(e)}
+        raise DataError(f"市场服务异常: {e}") from e
 
 
 # =====================================================

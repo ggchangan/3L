@@ -1,6 +1,7 @@
 """系统管理路由（健康检查、数据更新等）"""
 import json
 from backend.core.logger import get_logger
+from backend.core.exceptions import APIError
 from . import parse_query
 
 log = get_logger(__name__)
@@ -75,7 +76,7 @@ def _handle_update(h, path, body):
         _srv.save_review_data()
         h.send_json({'status': 'ok'})
     except Exception as e:
-        h.send_json({'status': 'error', 'message': str(e)}, 400)
+        raise APIError(f"系统模块异常: {e}") from e
 
 
 def register_routes(routes):

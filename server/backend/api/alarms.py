@@ -12,6 +12,7 @@ from backend.services.alarm_service import (
     reenable_alarm,
 )
 from backend.config import DATA_DIR
+from backend.core.exceptions import APIError
 
 
 # 用户上传的报警音乐存到 public/（Vite 开发时直接服务）和 dist/（构建后）
@@ -92,8 +93,7 @@ def _handle_upload(h, path, body):
 
         h.send_json({'success': True, 'config': config[alarm_type]})
     except Exception as e:
-        log.error('upload failed: %s', str(e), exc_info=True)
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"报警模块异常: {e}") from e
 
 
 def _handle_list(h, path):
@@ -130,7 +130,7 @@ def _handle_remove(h, path, body):
         result = remove_alarm(alarm_id)
         h.send_json(result)
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"报警模块异常: {e}") from e
 
 
 def _handle_dismiss(h, path, body):
@@ -148,7 +148,7 @@ def _handle_dismiss(h, path, body):
         result = dismiss_alarm(alarm_id)
         h.send_json(result)
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"报警模块异常: {e}") from e
 
 
 def _handle_reenable(h, path, body):
@@ -165,7 +165,7 @@ def _handle_reenable(h, path, body):
         result = reenable_alarm(alarm_id)
         h.send_json(result)
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"报警模块异常: {e}") from e
 
 
 def register_routes(routes):

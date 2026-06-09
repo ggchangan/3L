@@ -5,6 +5,7 @@ import sys
 import requests
 from urllib.parse import urlparse, parse_qs
 from backend.core.logger import get_logger
+from backend.core.exceptions import APIError
 from backend.config import DATA_DIR
 
 log = get_logger(__name__)
@@ -342,8 +343,7 @@ def _handle_category_add(h, path, body):
         r = add_category(name)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_category_remove(h, path, body):
@@ -356,8 +356,7 @@ def _handle_category_remove(h, path, body):
         r = remove_category(name)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_category_toggle(h, path, body):
@@ -371,8 +370,7 @@ def _handle_category_toggle(h, path, body):
         r = set_category_enabled(name, enabled)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_category_reorder(h, path, body):
@@ -385,8 +383,7 @@ def _handle_category_reorder(h, path, body):
         r = reorder_categories(names)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_category_rename(h, path, body):
@@ -404,8 +401,7 @@ def _handle_category_rename(h, path, body):
         r = rename_category(old_name, new_name)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════════════
@@ -427,8 +423,7 @@ def _handle_sub_add(h, path, body):
         r = add_sub_direction(category, name)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_sub_remove(h, path, body):
@@ -446,8 +441,7 @@ def _handle_sub_remove(h, path, body):
         r = remove_sub_direction(cat, sub)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_sub_toggle(h, path, body):
@@ -465,8 +459,7 @@ def _handle_sub_toggle(h, path, body):
         r = set_sub_direction_enabled(cat, sub, enabled)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_sub_reorder(h, path, body):
@@ -484,8 +477,7 @@ def _handle_sub_reorder(h, path, body):
         r = reorder_sub_directions(cat, names)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_sub_move(h, path, body):
@@ -509,8 +501,7 @@ def _handle_sub_move(h, path, body):
         else:
             h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_sub_rename(h, path, body):
@@ -531,8 +522,7 @@ def _handle_sub_rename(h, path, body):
         r = rename_sub_direction(cat, sub, new_name)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════════════
@@ -557,8 +547,7 @@ def _handle_bind(h, path, body):
         r = bind_concept(cat, sub, concept_code)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_unbind(h, path, body):
@@ -579,8 +568,7 @@ def _handle_unbind(h, path, body):
         r = unbind_concept(cat, sub, concept_code)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════════════
@@ -601,8 +589,7 @@ def _handle_concepts_search(h, path):
                 items.append({'code': code, 'name': info})
         h.send_json({'results': items})
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════════════
@@ -614,8 +601,7 @@ def _handle_migrate(h, path, body):
         r = migrate_v1_to_v2()
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════════════
@@ -639,8 +625,7 @@ def _handle_add(h, path, body):
         r = add(name)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_remove(h, path, body):
@@ -673,8 +658,7 @@ def _handle_remove(h, path, body):
                 cache.invalidate('watchlist')
         h.send_json({'success': True, 'removed_stocks': removed})
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_set_active(h, path, body):
@@ -688,8 +672,7 @@ def _handle_set_active(h, path, body):
         r = set_active(name, active)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 def _handle_reorder(h, path, body):
@@ -702,8 +685,7 @@ def _handle_reorder(h, path, body):
         r = reorder(names)
         h.send_json(r)
     except Exception as e:
-            log.error('方向管理操作异常: %s', e, exc_info=True)
-            h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"方向管理操作异常: {e}") from e
 
 
 # ═══════════════════════════════════════════════════════════

@@ -8,6 +8,7 @@ from datetime import date, timedelta
 
 from backend.services.workbench_service import get_log, save_log, list_logs
 from backend.services.alarm_service import sync_alarms_from_plan
+from backend.core.exceptions import APIError
 
 
 def _handle_suggestions(h, path):
@@ -56,7 +57,7 @@ def _handle_save(h, path, body):
 
         h.send_json(result)
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"工作台异常: {e}") from e
 
 
 def _handle_list(h, path):
@@ -75,7 +76,7 @@ def _handle_check_alerts(h, path):
         result = check_all_alerts()
         h.send_json(result)
     except Exception as e:
-        h.send_json({'triggered': [], 'count': 0, 'error': str(e)})
+        raise APIError(f"工作台异常: {e}") from e
 
 
 def register_routes(routes):

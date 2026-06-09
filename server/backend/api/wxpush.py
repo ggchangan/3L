@@ -4,6 +4,7 @@ from backend.core.logger import get_logger
 log = get_logger(__name__)
 
 
+from backend.core.exceptions import APIError
 from backend.services.wxpush_sender import is_configured, update_config
 
 
@@ -33,7 +34,7 @@ def _handle_config(h, path, body):
             h.send_json({'success': False, 'error': '更新 .env 失败'})
     except Exception as e:
         log.error("wxpush error: %s", e, exc_info=True)
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"推送模块异常: {e}") from e
 
 
 def _handle_test(h, path):
