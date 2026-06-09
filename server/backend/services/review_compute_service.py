@@ -436,13 +436,25 @@ def get_concept_mainline_data(date_str):
     if not concepts_data:
         return {'lines': [], 'secondary': [], 'all_ranked': [], 'persistence': []}
 
+    # 从 _push2test 获取当日涨跌幅（同 get_mainline_data 一致）
+    from backend.core.data_layer import get_sector_push2test
+    push2test_data = get_sector_push2test()
+    push2test_cons = push2test_data.concepts if hasattr(push2test_data, 'concepts') else {}
+
     scores = []
     for name, klines in concepts_data.items():
         try:
             if len(klines) < 20:
                 continue
             chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
-            chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
+            # chg_1d：优先 _push2test，次选K线计算
+            snap = push2test_cons.get(name)
+            if snap is not None:
+                chg_1d = float(snap.change_pct)
+            elif len(klines) >= 2:
+                chg_1d = (klines[-1]['close'] / klines[-2]['close'] - 1) * 100
+            else:
+                chg_1d = 0
             # 阶段判定
             wave = _judge_wave(klines)
             stage = wave.get('stage', '--')
