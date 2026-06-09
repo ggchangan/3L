@@ -3,7 +3,6 @@
 """
 import json
 import os
-import time
 from backend import config as cfg
 from backend.config import WATCHLIST_PATH, ALL_STOCKS_PATH, ALL_CODES_PATH, PINYIN_PATH, INDUSTRY_MAP_PATH, ANALYSIS_CACHE_PATH
 from backend.config import atomic_json_dump
@@ -236,26 +235,27 @@ def get_watchlist_analysis(stocks=None, wl=None):
       price, change, structure, stage, sector, trading_system,
       trend_bias, signal, trend_stock, profit_model1
 
-    走磁盘缓存（ANALYSIS_CACHE_PATH），TTL=120s，
+    走磁盘缓存（ANALYSIS_CACHE_PATH），
     当 WATCHLIST_PATH 或 ALL_STOCKS_PATH 有变更时自动失效。
+    传入 stocks/wl 参数时跳过缓存（用于测试注入）。
     """
-    # 检查缓存是否有效
-    try:
-        if os.path.exists(ANALYSIS_CACHE_PATH):
-            cache_mtime = os.path.getmtime(ANALYSIS_CACHE_PATH)
-            wl_mtime = os.path.getmtime(WATCHLIST_PATH)
-            ks_mtime = os.path.getmtime(ALL_STOCKS_PATH)
-            now = time.time()
-            # 缓存未过期：缓存文件比数据文件新，且不超过120s
-            if cache_mtime > wl_mtime and cache_mtime > ks_mtime and (now - cache_mtime) < 120:
-                with open(ANALYSIS_CACHE_PATH, 'r', encoding='utf-8') as f:
-                    cached = json.load(f)
-                # 验证缓存股票数量与自选股一致
-                if cached.get('count') == len(_load_watchlist().get('stocks', [])):
-                    log.info('watchlist_analysis: 命中缓存')
-                    return cached
-    except Exception:
-        pass
+    # 未传测试参数 → 尝试缓存
+    if stocks is None and wl is None:
+        try:
+            if os.path.exists(ANALYSIS_CACHE_PATH):
+                cache_mtime = os.path.getmtime(ANALYSIS_CACHE_PATH)
+                wl_mtime = os.path.getmtime(WATCHLIST_PATH)
+                ks_mtime = os.path.getmtime(ALL_STOCKS_PATH)
+                # 缓存比数据文件新 → 有效
+                if cache_mtime > wl_mtime and cache_mtime > ks_mtime:
+                    with open(ANALYSIS_CACHE_PATH, 'r', encoding='utf-8') as f:
+                        cached = json.load(f)
+                    # 验证缓存股票数量与自选股一致
+                    if cached.get('count') == len(_load_watchlist().get('stocks', [])):
+                        log.info('watchlist_analysis: 命中缓存')
+                        return cached
+        except Exception:
+            pass
 
     from backend.core.data_layer import get_all_stocks, get_watchlist, _load_json
     from backend.core.scan_buy_signals import get_main_lines
@@ -285,7 +285,7 @@ def get_watchlist_analysis(stocks=None, wl=None):
                 'change': None,
                 'structure': '数据不足',
                 'stage': '',
-                'sector': imap.get(code, {}).get('ths_industry', ''),
+                'sector': imap.get(code, {}).get('ths_industry', '') or s.get('industry', ''),
                 'trading_system': '3l',
                 'trend_bias': None,
                 'signal': 'hold',
@@ -314,7 +314,7 @@ def get_watchlist_analysis(stocks=None, wl=None):
                 'change': round((kls[-1]['close'] - kls[-2]['close']) / kls[-2]['close'] * 100, 2) if len(kls) >= 2 else 0,
                 'structure': '--',
                 'stage': '--',
-                'sector': imap.get(code, {}).get('ths_industry', ''),
+                'sector': imap.get(code, {}).get('ths_industry', '') or s.get('industry', ''),
                 'trading_system': '3l',
                 'trend_bias': None,
                 'signal': 'hold',
@@ -329,7 +329,7 @@ def get_watchlist_analysis(stocks=None, wl=None):
             'change': card.get('change'),
             'structure': card.get('structure', '--'),
             'stage': card.get('stage', '--'),
-            'sector': card.get('sector', ''),
+            'sector': card.get('sector', '') or s.get('industry', ''),
             'trading_system': card.get('trading_system', '3l'),
             'trend_bias': card.get('trend_bias', None) or card.get('deviation_pct'),
             'signal': card.get('signal', 'hold'),
