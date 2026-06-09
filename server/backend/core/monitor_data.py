@@ -10,6 +10,9 @@ from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
+from backend.core.logger import get_logger
+log = get_logger(__name__)
+
 from mootdx.quotes import Quotes
 
 sys.path.insert(0, '/home/ubuntu/3l-server')
@@ -45,6 +48,7 @@ def _mootdx_quote():
                 return df, close
         return None, None
     except Exception as e:
+        log.warning('mootdx指数行情获取失败: %s', e)
         return None, None
 
 def _tencent_quote_raw():
@@ -101,6 +105,7 @@ def get_index_quote():
                     'source': 'mootdx',
                 }
     except Exception as e:
+        log.warning('mootdx编制数据解析失败，回退腾讯源: %s', e)
         pass  # fall through to腾讯
 
     # --- 源2: 腾讯财经 ---

@@ -2,7 +2,10 @@
 import requests
 import json
 from datetime import datetime
+from backend.core.logger import get_logger
 from . import parse_query, get_server
+
+log = get_logger(__name__)
 
 
 # 同花顺热点API配置
@@ -37,6 +40,7 @@ def _fetch_hot_stocks(stock_type='a', list_type='normal', limit=100):
         stock_list = data.get('data', {}).get('stock_list', [])
         return stock_list[:limit], None
     except Exception as e:
+        log.error("hot stocks fetch error: %s", e, exc_info=True)
         return None, str(e)
 
 

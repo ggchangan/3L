@@ -15,6 +15,10 @@ from backend.config import (
     CHARTS_DIR, ALL_STOCKS_PATH, DATA_DIR, INDUSTRY_MAP_PATH, MAINLINES_CACHE_PATH,
 )
 from backend import config
+from backend.core.exceptions import DataError
+from backend.core.logger import get_logger
+
+log = get_logger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
 # 存储层
@@ -128,6 +132,7 @@ def load_review_data(date_str, existing, ww_dir):
                 hdata = json.load(f)
             live_holdings = hdata.get('holdings', [])
         except Exception:
+            log.warning('review: silent skip')
             pass
     holdings = live_holdings or existing.get('holdings', []) or existing.get('stocks', {}).get('stocks', [])
 
@@ -609,6 +614,7 @@ def compute_review_real_time(date_str=None):
                 hdata = json.load(f)
             holdings = hdata.get('holdings', [])
         except Exception:
+            log.warning('review: silent skip')
             pass
 
     buy_signals, all_stocks_60d = scan_buy_signals_if_needed(
@@ -950,4 +956,4 @@ def generate_review(date_arg=None):
             return {'status': 'skipped', 'msg': f'{date_arg or "today"} 非交易日'}
         return {'status': 'ok', 'date': result.get('date', '')}
     except Exception as e:
-        return {'status': 'error', 'msg': str(e)}
+        raise DataError(f"复盘服务异常: {e}") from e

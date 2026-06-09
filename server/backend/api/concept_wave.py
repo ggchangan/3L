@@ -2,6 +2,9 @@
 import json, os, sys, statistics
 from datetime import datetime
 
+from backend.core.logger import get_logger
+log = get_logger(__name__)
+
 from backend.services.concept_wave_service import judge_concept_wave, compute_chart_annotations
 from backend.core.data_layer import (
     get_sector_daily, get_concept_list, get_stock_concept_map,
@@ -247,6 +250,7 @@ def _build_reasoning_chain(name, score, related_codes):
                 'top_mainlines': [],
             }
     except Exception:
+        log.warning('概念波趋势链构建失败')
         chain['market'] = {'position': '波中', 'position_pct': '半仓', 'volume_level': '--', 'volume_amount': '--', 'top_mainlines': []}
 
     # 主线TOP3（从服务器内存数据读）
@@ -267,6 +271,7 @@ def _build_reasoning_chain(name, score, related_codes):
                 for rank, l in enumerate(ml[:3])
             ]
     except Exception:
+        log.warning("概念波主线TOP3构建失败")
         pass
 
     # 概念分析理由
@@ -307,6 +312,7 @@ def _build_reasoning_chain(name, score, related_codes):
                     'reason': card.get('signal_text', ''),
                 })
     except Exception:
+        log.warning("概念波扫描评分失败")
         pass
 
     return chain

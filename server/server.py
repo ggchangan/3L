@@ -7,7 +7,8 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from urllib.parse import quote
 from backend import config
-from backend.services.logger import get_logger
+from backend.core.logger import get_logger
+from backend.core.exceptions import ThreeLError
 
 log = get_logger('server')
 
@@ -152,159 +153,168 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.flush()
 
     def do_GET(self):
-        load_review_data()
-        path = self.path.split('?')[0]  # strip query string
+        try:
+            load_review_data()
+            path = self.path.split('?')[0]  # strip query string
 
-        # --- Download endpoint (force attachment) ---
-        if path.startswith('/download/'):
-            rel = os.path.basename(urllib.parse.unquote(path[len('/download/'):]))
-            fp = os.path.join(WWW_DIR, 'files', rel)
-            if not os.path.isfile(fp):
+            # --- Download endpoint (force attachment) ---
+            if path.startswith('/download/'):
+                rel = os.path.basename(urllib.parse.unquote(path[len('/download/'):]))
+                fp = os.path.join(WWW_DIR, 'files', rel)
+                if not os.path.isfile(fp):
+                    self.send_error(404)
+                    return
+                self._serve_file(fp, as_attachment=True)
+                return
+
+            # --- API 路由表分发 ---
+            if ROUTES.dispatch(self, path):
+                return
+
+            # --- 旧 .html 路由（302 跳转到短路径） ---
+            html_redirects = {
+                '/monitor.html': '/monitor', '/review.html': '/review',
+                '/stock_analysis.html': '/stock_analysis',
+                '/holdings.html': '/holdings', '/industry.html': '/industry',
+                '/macro.html': '/macro', '/top_gainers.html': '/top_gainers',
+                '/tips.html': '/tips', '/simulation.html': '/simulation',
+                '/skills.html': '/skills', '/journal.html': '/workbench',
+                '/watchlist.html': '/watchlist',
+                '/trend_candidates.html': '/trend_candidates',
+                '/workbench.html': '/workbench',
+                '/plan-tracking.html': '/plan-tracking',
+                '/hot-stocks.html': '/hot-stocks',
+            }
+            if path in html_redirects:
+                self.send_response(302)
+                self.send_header('Location', html_redirects[path])
+                self.end_headers()
+                return
+
+            # --- SPA 内部别名（直接返回 react.html，让 BrowserRouter 处理路由）---
+            spa_routes = {
+                '/monitor', '/review', '/stock_analysis',
+                '/holdings', '/industry', '/macro',
+                '/top_gainers', '/tips', '/simulation',
+                '/skills', '/journal', '/workbench',
+                '/watchlist', '/trend_candidates',
+                '/logic-tracking', '/alarm-sounds',
+                '/plan-tracking',
+                '/concept-wave',
+                '/strong-trend-candidates',
+                '/hot-stocks',
+            }
+            if path in spa_routes:
+                self.path = '/react.html'
+                path = self.path
+
+            # --- 首页别名 ---
+            if path == '/':
+                self.path = '/react.html'
+                path = self.path
+
+            # --- 静态文件（HTML/JS 不缓存）---
+            if path.endswith('.sh') or path.endswith('.html') or path.endswith('.js'):
+                fp = os.path.join(FE_DIR, path.lstrip('/'))
+                if not os.path.isfile(fp) and FE_DIR != WWW_DIR:
+                    fp = os.path.join(WWW_DIR, path.lstrip('/'))
+                if os.path.isfile(fp):
+                    ct, _ = mimetypes.guess_type(fp)
+                    self._serve_file(fp, ct, no_cache=True)
+                    return
+
+            # --- 后端生成的公开文件（/pub/ → data/public/）---
+            if path.startswith('/pub/'):
+                rel = urllib.parse.unquote(path[len('/pub/'):]).lstrip('/')
+                fp = os.path.join(config.PUBLIC_DIR, rel)
+                if os.path.isdir(fp):
+                    try:
+                        files = sorted(f for f in os.listdir(fp) if not f.startswith('.'))
+                        self.send_json({'files': files})
+                    except Exception as e:
+                        self.send_json({'files': [], 'error': str(e)})
+                    return
+                if os.path.isfile(fp):
+                    ct, _ = mimetypes.guess_type(fp)
+                    self._serve_file(fp, ct)
+                    return
                 self.send_error(404)
                 return
-            self._serve_file(fp, as_attachment=True)
-            return
 
-        # --- API 路由表分发 ---
-        if ROUTES.dispatch(self, path):
-            return
-
-        # --- 旧 .html 路由（302 跳转到短路径） ---
-        html_redirects = {
-            '/monitor.html': '/monitor', '/review.html': '/review',
-            '/stock_analysis.html': '/stock_analysis',
-            '/holdings.html': '/holdings', '/industry.html': '/industry',
-            '/macro.html': '/macro', '/top_gainers.html': '/top_gainers',
-            '/tips.html': '/tips', '/simulation.html': '/simulation',
-            '/skills.html': '/skills', '/journal.html': '/workbench',
-            '/watchlist.html': '/watchlist',
-            '/trend_candidates.html': '/trend_candidates',
-            '/workbench.html': '/workbench',
-            '/plan-tracking.html': '/plan-tracking',
-            '/hot-stocks.html': '/hot-stocks',
-        }
-        if path in html_redirects:
-            self.send_response(302)
-            self.send_header('Location', html_redirects[path])
-            self.end_headers()
-            return
-
-        # --- SPA 内部别名（直接返回 react.html，让 BrowserRouter 处理路由）---
-        spa_routes = {
-            '/monitor', '/review', '/stock_analysis',
-            '/holdings', '/industry', '/macro',
-            '/top_gainers', '/tips', '/simulation',
-            '/skills', '/journal', '/workbench',
-            '/watchlist', '/trend_candidates',
-            '/logic-tracking', '/alarm-sounds',
-            '/plan-tracking',
-            '/concept-wave',
-            '/strong-trend-candidates',
-            '/hot-stocks',
-        }
-        if path in spa_routes:
-            self.path = '/react.html'
-            path = self.path
-
-        # --- 首页别名 ---
-        if path == '/':
-            self.path = '/react.html'
-            path = self.path
-
-        # --- 静态文件（HTML/JS 不缓存）---
-        if path.endswith('.sh') or path.endswith('.html') or path.endswith('.js'):
-            # 优先 FE_DIR（构建输出），不存在则回退 WWW_DIR（项目根）
-            fp = os.path.join(FE_DIR, path.lstrip('/'))
-            if not os.path.isfile(fp) and FE_DIR != WWW_DIR:
-                fp = os.path.join(WWW_DIR, path.lstrip('/'))
-            if os.path.isfile(fp):
-                ct, _ = mimetypes.guess_type(fp)
-                self._serve_file(fp, ct, no_cache=True)
-                return
-
-        # --- 后端生成的公开文件（/pub/ → data/public/）---
-        if path.startswith('/pub/'):
-            rel = urllib.parse.unquote(path[len('/pub/'):]).lstrip('/')
-            fp = os.path.join(config.PUBLIC_DIR, rel)
-            if os.path.isdir(fp):
-                # 目录 → 返回 JSON 文件列表
-                try:
-                    files = sorted(f for f in os.listdir(fp) if not f.startswith('.'))
-                    self.send_json({'files': files})
-                except Exception as e:
-                    self.send_json({'files': [], 'error': str(e)})
-                return
-            if os.path.isfile(fp):
-                ct, _ = mimetypes.guess_type(fp)
-                self._serve_file(fp, ct)
-                return
-            self.send_error(404)
-            return
-
-        super().do_GET()
+            super().do_GET()
+        except Exception as e:
+            log.exception('do_GET 未捕获异常: %s', e)
+            if isinstance(e, ThreeLError):
+                self.send_json({'success': False, 'error': str(e), 'type': type(e).__name__}, 500)
+            else:
+                self.send_json({'success': False, 'error': '服务器内部错误'}, 500)
 
     def do_POST(self):
-        cl = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(cl).decode() if cl > 0 else '{}'
-        import importlib
-        post_routes = {
-            '/api/review/save': ('backend.api.review', '_handle_review_save'),
-            '/api/watchlist/save': ('backend.api.watchlist', '_handle_watchlist_save'),
-            '/api/watchlist/add-stock': ('backend.api.watchlist', '_handle_watchlist_add_stock'),
-            '/api/tips/save-journal': ('backend.api.tips', '_handle_save_journal'),
-            '/api/update': ('backend.api.system', '_handle_update'),
-            # 方向管理（独立模块）
-            # 方向管理（V1 兼容）
-            '/api/directions/add': ('backend.api.directions', '_handle_add'),
-            '/api/directions/remove': ('backend.api.directions', '_handle_remove'),
-            '/api/directions/toggle': ('backend.api.directions', '_handle_set_active'),
-            '/api/directions/reorder': ('backend.api.directions', '_handle_reorder'),
-            # 方向管理（V2 分层）
-            '/api/directions/category/add': ('backend.api.directions', '_handle_category_add'),
-            '/api/directions/category/remove': ('backend.api.directions', '_handle_category_remove'),
-            '/api/directions/category/toggle': ('backend.api.directions', '_handle_category_toggle'),
-            '/api/directions/category/reorder': ('backend.api.directions', '_handle_category_reorder'),
-            '/api/directions/category/rename': ('backend.api.directions', '_handle_category_rename'),
-            '/api/directions/sub/add': ('backend.api.directions', '_handle_sub_add'),
-            '/api/directions/sub/remove': ('backend.api.directions', '_handle_sub_remove'),
-            '/api/directions/sub/toggle': ('backend.api.directions', '_handle_sub_toggle'),
-            '/api/directions/sub/reorder': ('backend.api.directions', '_handle_sub_reorder'),
-            '/api/directions/sub/move': ('backend.api.directions', '_handle_sub_move'),
-            '/api/directions/sub/rename': ('backend.api.directions', '_handle_sub_rename'),
-            '/api/directions/bind': ('backend.api.directions', '_handle_bind'),
-            '/api/directions/unbind': ('backend.api.directions', '_handle_unbind'),
-            '/api/directions/migrate': ('backend.api.directions', '_handle_migrate'),
-            '/api/workbench/save': ('backend.api.workbench', '_handle_save'),
-            '/api/alarms/remove': ('backend.api.alarms', '_handle_remove'),
-            '/api/alarms/dismiss': ('backend.api.alarms', '_handle_dismiss'),
-            '/api/alarms/reenable': ('backend.api.alarms', '_handle_reenable'),
-            '/api/monitor/add-watched-industry': ('backend.api.monitor', '_handle_add_watched'),
-            '/api/monitor/remove-watched-industry': ('backend.api.monitor', '_handle_remove_watched'),
-            '/api/alarm-sounds/upload': ('backend.api.alarms', '_handle_upload'),
-            '/api/holdings/save': ('backend.api.holdings', '_handle_save'),
-            '/api/holdings/recommended-stop': ('backend.api.holdings', '_handle_recommended_stop'),
-            '/api/macro/analyze-abnormal': ('backend.api.macro', '_handle_analyze_abnormal'),
-            '/api/panic-report-pdf': ('backend.api.macro', '_handle_panic_report_pdf'),
-            '/api/logic-tracking/tags/add': ('backend.api.logic_tracking', '_handle_add_tag'),
-            '/api/logic-tracking/tags/update': ('backend.api.logic_tracking', '_handle_update_tag'),
-            '/api/logic-tracking/tags/delete': ('backend.api.logic_tracking', '_handle_delete_tag'),
-            '/api/logic-tracking/entries/add': ('backend.api.logic_tracking', '_handle_add_entry'),
-            '/api/logic-tracking/entries/delete': ('backend.api.logic_tracking', '_handle_delete_entry'),
-            '/api/logic-tracking/forecasts/add': ('backend.api.logic_tracking', '_handle_add_forecast'),
-            '/api/logic-tracking/forecasts/delete': ('backend.api.logic_tracking', '_handle_delete_forecast'),
-            '/api/logic-tracking/feed/process': ('backend.api.logic_tracking', '_handle_feed_process'),
-            '/api/logic-tracking/feed/save': ('backend.api.logic_tracking', '_handle_feed_save'),
-            '/api/logic-tracking/verify/run': ('backend.api.logic_tracking', '_handle_trigger_verify'),
-            '/api/wxpush/config': ('backend.api.wxpush', '_handle_config'),
-            '/api/plan-tracking/annotate': ('backend.api.plan_tracking', '_handle_annotate'),
-            '/api/plan-tracking/refresh': ('backend.api.plan_tracking', '_handle_refresh'),
-        }
-        if self.path in post_routes:
-            mod_name, func_name = post_routes[self.path]
-            mod = importlib.import_module(mod_name)
-            getattr(mod, func_name)(self, self.path, body)
-        else:
-            self.send_json({'status': 'error'}, 404)
+        try:
+            cl = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(cl).decode() if cl > 0 else '{}'
+            import importlib
+            post_routes = {
+                '/api/review/save': ('backend.api.review', '_handle_review_save'),
+                '/api/watchlist/save': ('backend.api.watchlist', '_handle_watchlist_save'),
+                '/api/watchlist/add-stock': ('backend.api.watchlist', '_handle_watchlist_add_stock'),
+                '/api/tips/save-journal': ('backend.api.tips', '_handle_save_journal'),
+                '/api/update': ('backend.api.system', '_handle_update'),
+                '/api/directions/add': ('backend.api.directions', '_handle_add'),
+                '/api/directions/remove': ('backend.api.directions', '_handle_remove'),
+                '/api/directions/toggle': ('backend.api.directions', '_handle_set_active'),
+                '/api/directions/reorder': ('backend.api.directions', '_handle_reorder'),
+                '/api/directions/category/add': ('backend.api.directions', '_handle_category_add'),
+                '/api/directions/category/remove': ('backend.api.directions', '_handle_category_remove'),
+                '/api/directions/category/toggle': ('backend.api.directions', '_handle_category_toggle'),
+                '/api/directions/category/reorder': ('backend.api.directions', '_handle_category_reorder'),
+                '/api/directions/category/rename': ('backend.api.directions', '_handle_category_rename'),
+                '/api/directions/sub/add': ('backend.api.directions', '_handle_sub_add'),
+                '/api/directions/sub/remove': ('backend.api.directions', '_handle_sub_remove'),
+                '/api/directions/sub/toggle': ('backend.api.directions', '_handle_sub_toggle'),
+                '/api/directions/sub/reorder': ('backend.api.directions', '_handle_sub_reorder'),
+                '/api/directions/sub/move': ('backend.api.directions', '_handle_sub_move'),
+                '/api/directions/sub/rename': ('backend.api.directions', '_handle_sub_rename'),
+                '/api/directions/bind': ('backend.api.directions', '_handle_bind'),
+                '/api/directions/unbind': ('backend.api.directions', '_handle_unbind'),
+                '/api/directions/migrate': ('backend.api.directions', '_handle_migrate'),
+                '/api/workbench/save': ('backend.api.workbench', '_handle_save'),
+                '/api/alarms/remove': ('backend.api.alarms', '_handle_remove'),
+                '/api/alarms/dismiss': ('backend.api.alarms', '_handle_dismiss'),
+                '/api/alarms/reenable': ('backend.api.alarms', '_handle_reenable'),
+                '/api/monitor/add-watched-industry': ('backend.api.monitor', '_handle_add_watched'),
+                '/api/monitor/remove-watched-industry': ('backend.api.monitor', '_handle_remove_watched'),
+                '/api/alarm-sounds/upload': ('backend.api.alarms', '_handle_upload'),
+                '/api/holdings/save': ('backend.api.holdings', '_handle_save'),
+                '/api/holdings/recommended-stop': ('backend.api.holdings', '_handle_recommended_stop'),
+                '/api/macro/analyze-abnormal': ('backend.api.macro', '_handle_analyze_abnormal'),
+                '/api/panic-report-pdf': ('backend.api.macro', '_handle_panic_report_pdf'),
+                '/api/logic-tracking/tags/add': ('backend.api.logic_tracking', '_handle_add_tag'),
+                '/api/logic-tracking/tags/update': ('backend.api.logic_tracking', '_handle_update_tag'),
+                '/api/logic-tracking/tags/delete': ('backend.api.logic_tracking', '_handle_delete_tag'),
+                '/api/logic-tracking/entries/add': ('backend.api.logic_tracking', '_handle_add_entry'),
+                '/api/logic-tracking/entries/delete': ('backend.api.logic_tracking', '_handle_delete_entry'),
+                '/api/logic-tracking/forecasts/add': ('backend.api.logic_tracking', '_handle_add_forecast'),
+                '/api/logic-tracking/forecasts/delete': ('backend.api.logic_tracking', '_handle_delete_forecast'),
+                '/api/logic-tracking/feed/process': ('backend.api.logic_tracking', '_handle_feed_process'),
+                '/api/logic-tracking/feed/save': ('backend.api.logic_tracking', '_handle_feed_save'),
+                '/api/logic-tracking/verify/run': ('backend.api.logic_tracking', '_handle_trigger_verify'),
+                '/api/wxpush/config': ('backend.api.wxpush', '_handle_config'),
+                '/api/plan-tracking/annotate': ('backend.api.plan_tracking', '_handle_annotate'),
+                '/api/plan-tracking/refresh': ('backend.api.plan_tracking', '_handle_refresh'),
+            }
+            if self.path in post_routes:
+                mod_name, func_name = post_routes[self.path]
+                mod = importlib.import_module(mod_name)
+                getattr(mod, func_name)(self, self.path, body)
+            else:
+                self.send_json({'status': 'error'}, 404)
+        except Exception as e:
+            log.exception('do_POST 未捕获异常: %s', e)
+            if isinstance(e, ThreeLError):
+                self.send_json({'success': False, 'error': str(e), 'type': type(e).__name__}, 500)
+            else:
+                self.send_json({'success': False, 'error': '服务器内部错误'}, 500)
 
     def send_json(self, data, status=200):
         # 递归将 NaN 转为 None（兼容 JSON 规范）

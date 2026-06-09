@@ -1,5 +1,6 @@
 """持仓/交易记录路由"""
 import json
+from backend.core.exceptions import APIError
 from backend.services.holdings_service import get_holdings_with_prices, get_trades, save_holdings
 
 
@@ -35,7 +36,7 @@ def _handle_recommended_stop(h, path, body):
         else:
             h.send_json({'success': False, 'error': '无法获取推荐止损', 'price': card.get('price')})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"持仓操作异常: {e}") from e
 
 
 def _handle_trades(h, path):

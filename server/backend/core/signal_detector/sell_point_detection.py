@@ -12,6 +12,7 @@
 """
 
 from typing import List, Dict, Optional
+from backend.core.logger import get_logger
 from backend.core.signal_detector import (
     detect_downward_breakout,
     detect_downward_reversal,
@@ -19,6 +20,8 @@ from backend.core.signal_detector import (
     SIGNAL_NAMES,
 )
 from backend.core.ema_utils import get_structure, get_stage
+
+log = get_logger(__name__)
 
 
 def detect_sell_point(klines: List[Dict], idx: int,
@@ -52,7 +55,7 @@ def detect_sell_point(klines: List[Dict], idx: int,
                 'score': min(90, int(dd.get('confidence', 60))),
             }
     except Exception:
-        pass
+        log.warning('向下突破检测异常（跳过规则1）', exc_info=True)
 
     # ── 规则2: 向下反转（上涨趋势末端）──
     try:
@@ -67,7 +70,7 @@ def detect_sell_point(klines: List[Dict], idx: int,
                 'score': min(80, int(dr.get('confidence', 65))),
             }
     except Exception:
-        pass
+        log.warning('向下反转检测异常（跳过规则2）', exc_info=True)
 
     # ── 规则3: 需求衰竭（波峰预警）──
     try:

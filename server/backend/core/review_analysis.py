@@ -7,6 +7,10 @@ review_analysis.py — 复盘数据分析模块
 
 import sys
 
+from backend.core.logger import get_logger
+
+log = get_logger(__name__)
+
 
 def _get_actual_date(code, stocks, date_str):
     """用该股K线实际最新日期"""
@@ -72,6 +76,7 @@ def generate_holdings_review(holdings, stocks, buy_signals,
                 klines=kls_for_card,
             )
         except Exception:
+            log.warning('个股卡片生成失败（持仓分析）: %s', d.get('code', '?'))
             card = None
 
         if not card:
@@ -176,6 +181,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
                 klines=kls_for_card,
             )
         except Exception:
+            log.warning('个股卡片生成失败（趋势候选）: %s', code)
             card = None
 
         if not card:

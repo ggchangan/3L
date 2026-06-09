@@ -1,9 +1,14 @@
 """监控/盯盘相关路由"""
+from backend.core.logger import get_logger
+
+log = get_logger(__name__)
+
 from backend.services.monitor_service import (
     get_volume_comparison, get_buy_signals, get_stop_loss_triggered,
     get_top_sectors, get_industry_leaders, get_market_leaders,
     get_leader_dashboard,
 )
+from backend.core.exceptions import APIError
 
 
 def _handle_volume(h, path):
@@ -41,7 +46,7 @@ def _handle_add_watched(h, path, body):
         else:
             h.send_json({'ok': False, 'error': '行业名不能为空'})
     except Exception as e:
-        h.send_json({'ok': False, 'error': str(e)})
+        raise APIError(f"监控模块异常: {e}") from e
 
 
 def _handle_remove_watched(h, path, body):
@@ -55,7 +60,7 @@ def _handle_remove_watched(h, path, body):
         else:
             h.send_json({'ok': False, 'error': '行业名不能为空'})
     except Exception as e:
-        h.send_json({'ok': False, 'error': str(e)})
+        raise APIError(f"监控模块异常: {e}") from e
 
 
 def _handle_market_leaders(h, path):

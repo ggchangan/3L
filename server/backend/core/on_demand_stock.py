@@ -1,5 +1,4 @@
-"""
-按需个股数据拉取 — 为个股分析页面提供未缓存股票的K线数据。
+"""按需个股数据拉取 — 为个股分析页面提供未缓存股票的K线数据。
 
 缓存策略：独立文件 stock_on_demand_cache.json，TTL=1天，最多保留30只。
 cron 17:00 不碰此文件，不污染 all_stocks_60d.json。
@@ -8,6 +7,10 @@ import json
 import os
 import warnings
 from datetime import datetime, timedelta
+
+from backend.core.logger import get_logger
+
+log = get_logger(__name__)
 
 from backend.config import ON_DEMAND_CACHE_PATH, DATA_DIR
 
@@ -109,6 +112,7 @@ def _fetch_via_akshare(code):
             })
         return klines
     except Exception:
+        log.warning('百度K线解析失败: %s', code)
         return None
 
 
@@ -139,6 +143,7 @@ def _fetch_via_mootdx(code):
             })
         return records
     except Exception:
+        log.warning('mootdx拉取K线失败: %s', code)
         return None
 
 
@@ -193,6 +198,7 @@ def _get_name(code):
             name_map = json.load(f)
             return name_map.get(code)
     except Exception:
+        log.warning('股票名称映射加载失败')
         return None
 
 
@@ -207,6 +213,7 @@ def _load_cache():
         with open(ON_DEMAND_CACHE_PATH) as f:
             return json.load(f)
     except Exception:
+        log.warning('按需缓存加载失败，返回空缓存')
         return {}
 
 
@@ -229,6 +236,7 @@ def _save_cache(cache):
             json.dump(cache, f, ensure_ascii=False, indent=2)
         os.replace(tmp, ON_DEMAND_CACHE_PATH)
     except Exception:
+        log.warning('按需缓存写入失败')
         if os.path.exists(tmp):
             os.remove(tmp)
 

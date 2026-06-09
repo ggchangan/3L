@@ -4,7 +4,10 @@
 使用 buy_point_detection.py（统一算法），但用腾讯实时行情替代缓存数据
 扫描完成后自动更新买点股票的SVG图表（含当天数据）
 """
-import json, os, sys
+import json, os, sys, warnings
+from backend.core.logger import get_logger
+
+log = get_logger(__name__)
 from datetime import datetime
 
 # 导入统一算法和数据获取函数

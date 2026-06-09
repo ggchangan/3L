@@ -1,5 +1,9 @@
 """强势趋势追踪 — API端点"""
 from backend.services.strong_trend_service import get_strong_trend_candidates
+from backend.core.logger import get_logger
+from backend.core.exceptions import APIError
+log = get_logger(__name__)
+
 
 
 def register_routes(routes):
@@ -33,4 +37,4 @@ def _handle_strong_trend_candidates(h, path):
         )
         h.send_json({'success': True, **result})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"强势股异常: {e}") from e

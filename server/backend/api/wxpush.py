@@ -1,6 +1,10 @@
 """WxPusher 微信推送配置 API 路由"""
 import json
+from backend.core.logger import get_logger
+log = get_logger(__name__)
 
+
+from backend.core.exceptions import APIError
 from backend.services.wxpush_sender import is_configured, update_config
 
 
@@ -29,7 +33,8 @@ def _handle_config(h, path, body):
         else:
             h.send_json({'success': False, 'error': '更新 .env 失败'})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        log.error("wxpush error: %s", e, exc_info=True)
+        raise APIError(f"推送模块异常: {e}") from e
 
 
 def _handle_test(h, path):

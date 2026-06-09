@@ -7,7 +7,7 @@ from backend import config as cfg
 from backend.config import WATCHLIST_PATH, ALL_STOCKS_PATH, ALL_CODES_PATH, PINYIN_PATH
 from backend.config import atomic_json_dump
 
-from backend.services.logger import get_logger
+from backend.core.logger import get_logger
 
 log = get_logger(__name__)
 

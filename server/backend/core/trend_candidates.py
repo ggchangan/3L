@@ -5,6 +5,7 @@
 """
 import json, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+from backend.core.logger import get_logger
 from backend.config import DATA_DIR
 from backend.core.data_layer import _load_json
 from backend.core.ema_utils import ema_list, get_structure, get_stage
@@ -18,6 +19,8 @@ ALL_STOCKS_PATH = config.ALL_STOCKS_PATH
 MANUAL_TREND_PATH = config.MANUAL_TREND_PATH
 WATCHLIST_PATH = config.WATCHLIST_PATH
 REVIEW_CHARTS_DIR = config.REVIEW_CHARTS_DIR
+
+log = get_logger(__name__)
 
 
 def scan_trend_candidates(main_line_names, sub_main_names):
@@ -92,6 +95,7 @@ def _scan_industries(industry_names, imap, all_s, manual):
                 _card = get_stock_card(code, _today_fmt, klines=_kls)
                 signal = _card.get('signal', 'hold')
             except Exception:
+                log.warning('个股信号获取失败（趋势候选扫描）: %s', code)
                 pass
 
             in_manual = code in manual
@@ -175,6 +179,7 @@ def _set_watchlist_trading_system(code, system):
                     json.dump(wl, f, ensure_ascii=False, indent=2)
                 return
     except Exception:
+        log.warning('趋势标记写入失败（自选股）')
         pass
 
 
@@ -205,6 +210,7 @@ def _ensure_in_watchlist(code):
         with open(WATCHLIST_PATH, 'w') as f:
             json.dump(wl, f, ensure_ascii=False, indent=2)
     except Exception:
+        log.warning('自选股自动添加失败: %s', code)
         pass
 
 
@@ -259,6 +265,7 @@ def get_tracked_stocks():
             _card = get_stock_card(code, _today_fmt, klines=kls)
             signal = _card.get('signal', 'hold')
         except Exception:
+            log.warning('个股信号获取失败（跟踪趋势）: %s', code)
             pass
 
         # 更新SVG

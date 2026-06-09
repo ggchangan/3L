@@ -1,6 +1,10 @@
 """自选股相关路由"""
 import json
+from backend.core.exceptions import APIError
+from backend.core.logger import get_logger
 from . import parse_query
+
+log = get_logger(__name__)
 from backend.services.watchlist_service import (
     get_watchlist, search_stocks, save_watchlist,
     get_all_directions, add_direction, remove_direction,
@@ -20,7 +24,7 @@ def _handle_watchlist_save(h, path, body):
         result = save_watchlist(data)
         h.send_json(result)
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"自选股异常: {e}") from e
 
 
 def _handle_watchlist_search(h, path):
@@ -54,7 +58,7 @@ def _handle_add_direction(h, path, body):
         result = add_direction(name)
         h.send_json(result)
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"自选股异常: {e}") from e
 
 
 def _handle_remove_direction(h, path, body):
@@ -68,7 +72,7 @@ def _handle_remove_direction(h, path, body):
         result = remove_direction(name)
         h.send_json(result)
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"自选股异常: {e}") from e
 
 
 def _handle_set_direction_enabled(h, path, body):
@@ -83,7 +87,7 @@ def _handle_set_direction_enabled(h, path, body):
         result = set_direction_enabled(name, enabled)
         h.send_json(result)
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"自选股异常: {e}") from e
 
 
 def _handle_watchlist_boards(h, path):
@@ -183,7 +187,7 @@ def _handle_watchlist_add_stock(h, path, body):
         save_watchlist(wl_data)
         h.send_json({'success': True, 'msg': f'已添加 {name} 到自选股'})
     except Exception as e:
-        h.send_json({'success': False, 'error': str(e)})
+        raise APIError(f"自选股异常: {e}") from e
 
 
 def register_routes(routes):

@@ -60,6 +60,7 @@ def _get_stock_name(code):
         if len(parts) > 1:
             return parts[1]
     except Exception:
+        log('获取股票名称失败')
         pass
     return None
 

@@ -6,6 +6,8 @@
 """
 import json
 import os
+from backend.core.logger import get_logger
+log = get_logger(__name__)
 import re
 import requests
 from datetime import date, datetime, timedelta
@@ -66,6 +68,7 @@ def _get_realtime_data(code: str) -> tuple:
             return (price, change_pct)
         return (0, 0)
     except Exception:
+        log.warning('check_alerts: trading hour check failed')
         return (0, 0)
 
 
@@ -78,6 +81,7 @@ def _has_recently_triggered(alarm: dict, minutes: int = 0.5) -> bool:
         t = datetime.fromisoformat(triggered_at)
         return (datetime.now() - t).total_seconds() < minutes * 60
     except Exception:
+        log.warning('check_alerts: is_trading_day check failed')
         return False
 
 
@@ -163,6 +167,7 @@ def _read_index_data() -> dict:
         with open(INDEX_DATA_PATH) as f:
             return json.load(f)
     except Exception:
+        log.warning('check_alerts: data load failed')
         return {}
 
 
@@ -182,6 +187,7 @@ def _get_index_realtime(qcode: str) -> tuple:
             return (price, change_pct)
         return (0, 0)
     except Exception:
+        log.warning('check_alerts: trading hour check failed')
         return (0, 0)
 
 

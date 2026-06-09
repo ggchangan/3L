@@ -2,7 +2,7 @@
 from . import parse_query, get_server
 from backend.services.market_service import get_momentum_data
 from backend.services.stock_chart_service import generate_index_chart
-from backend.services.logger import get_logger
+from backend.core.logger import get_logger
 
 log = get_logger('api.market')
 
