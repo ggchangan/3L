@@ -58,6 +58,7 @@ SCRIPTS_DIR = os.path.join(WWW_DIR, 'scripts')
 # 缓存目录/文件
 # =====================================================
 CACHE_DIR = os.path.join(DATA_DIR, 'cache')
+ANALYSIS_CACHE_PATH = os.path.join(CACHE_DIR, 'watchlist_analysis_cache.json')
 KEY_POINTS_DIR = os.path.join(DATA_DIR, 'key_points')
 
 # =====================================================
