@@ -622,27 +622,64 @@ def _append_klines_from_ths(industries, concepts, today):
 
     # 并发拉取行业
     if ind_names_to_update:
+        _t0i = time.time()
+        ind_ok = 0
+        ind_empty = 0
+        ind_got_today = 0
+        ind_no_today = 0
         with ThreadPoolExecutor(max_workers=5) as ex:
             futures = {ex.submit(_fetch_one, n, 'industry'): n for n in ind_names_to_update}
             for future in as_completed(futures):
                 name, stype, klines = future.result()
-                if klines and name in industries:
-                    existing_dates = {k['date'] for k in industries[name]}
-                    new_klines = [k for k in klines if k['date'] not in existing_dates]
-                    if new_klines:
-                        industries[name].extend(new_klines)
+                if not klines:
+                    ind_empty += 1
+                    continue
+                if name not in industries:
+                    continue
+                existing_dates = {k['date'] for k in industries[name]}
+                has_today = today in existing_dates
+                new_klines = [k for k in klines if k['date'] not in existing_dates]
+                if new_klines:
+                    industries[name].extend(new_klines)
+                ind_ok += 1
+                if has_today or any(k['date'] == today for k in klines):
+                    ind_got_today += 1
+                else:
+                    ind_no_today += 1
+        log(f'📊  行业K线: 成功{ind_ok}个, 有空{ind_empty}个, '
+            f'含今日({today[-2:]}): {ind_got_today}, 无今日: {ind_no_today}, '
+            f'耗时{time.time()-_t0i:.0f}s')
 
     # 并发拉取概念
     if con_names_to_update:
+        _t0 = time.time()
+        con_ok = 0
+        con_empty = 0
+        con_err = 0
+        con_got_today = 0
+        con_no_today = 0
         with ThreadPoolExecutor(max_workers=5) as ex:
             futures = {ex.submit(_fetch_one, n, 'concept'): n for n in con_names_to_update}
             for future in as_completed(futures):
                 name, stype, klines = future.result()
-                if klines and name in concepts:
-                    existing_dates = {k['date'] for k in concepts[name]}
-                    new_klines = [k for k in klines if k['date'] not in existing_dates]
-                    if new_klines:
-                        concepts[name].extend(new_klines)
+                if not klines:
+                    con_empty += 1
+                    continue
+                if name not in concepts:
+                    continue
+                existing_dates = {k['date'] for k in concepts[name]}
+                has_today = today in existing_dates
+                new_klines = [k for k in klines if k['date'] not in existing_dates]
+                if new_klines:
+                    concepts[name].extend(new_klines)
+                con_ok += 1
+                if has_today or any(k['date'] == today for k in klines):
+                    con_got_today += 1
+                else:
+                    con_no_today += 1
+        log(f'📊  概念K线: 成功{con_ok}个, 有空{con_empty}个, '
+            f'含今日({today[-2:]}): {con_got_today}, 无今日: {con_no_today}, '
+            f'耗时{time.time()-_t0:.0f}s')
 
 
 def update_sectors():
@@ -754,7 +791,6 @@ def update_sectors():
     # ═══════════════════════════════════════════════════
     try:
         _append_klines_from_ths(industries, concepts, today)
-        log(f'📊  THS K线追加完成: 行业{len([n for n in ind_today if n in industries])}个, 概念已更新')
     except Exception as e:
         log(f'⚠️  THS K线追加失败（不影响_push2test）: {type(e).__name__}: {e}')
 
