@@ -48,6 +48,43 @@ table td {
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
+/* 多指数 Tab */
+.index-tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #2a2a4e;
+  padding-bottom: 0;
+}
+.index-tab {
+  background: transparent;
+  border: none;
+  color: #666;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.index-tab:hover {
+  color: #aaa;
+}
+.index-tab.active {
+  color: #22c55e;
+  border-bottom-color: #22c55e;
+}
+
+/* 多指对比表 */
+.comparison-table th,
+.comparison-table td {
+  padding: 8px 6px;
+}
+.comparison-table tr:hover td {
+  background: #1a1a30;
+}
+
 /* 响应式覆盖（通用部分已在 index.css） */
 @media (max-width: 600px) {
   .grid-4 { grid-template-columns: repeat(2, 1fr); }
