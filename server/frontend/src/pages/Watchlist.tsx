@@ -89,6 +89,7 @@ export default function Watchlist() {
   const dragSubSource = useRef<string | null>(null)
   const [conceptModal, setConceptModal] = useState<{ subDir: string; concepts: Array<{ code: string; name: string }> } | null>(null)
   const [openDirDropdown, setOpenDirDropdown] = useState<string | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
 
   // 派生数据：兼容新旧格式
   const activeDirs = dirData.active || []
@@ -110,10 +111,24 @@ export default function Watchlist() {
   }, [openDirDropdown])
 
   async function loadAll() {
-    // 分开请求，互不影响——一个失败不影响另一个
-    fetch('/api/watchlist/analysis').then(r => r.json()).then(d => {
-      setStocks(d.stocks || [])
+    // 第一步：快速加载基础列表（代码/名称/方向），秒出
+    fetch('/api/watchlist').then(r => r.json()).then(d => {
+      const raw = d.stocks || d
+      if (Array.isArray(raw) && raw.length > 0) {
+        setStocks(raw)
+      }
     }).catch(() => {})
+
+    // 第二步：异步加载分析数据（结构/阶段/信号等），完成后覆盖更新
+    setAnalyzing(true)
+    fetch('/api/watchlist/analysis').then(r => r.json()).then(d => {
+      if (d.stocks && d.stocks.length > 0) {
+        setStocks(d.stocks)
+      }
+    }).catch(() => {}).finally(() => {
+      setAnalyzing(false)
+      setLoading(false)
+    })
 
     fetch('/api/trend-tracked').then(r => r.json()).then(d => {
       setTrendCodes(new Set((d.candidates || []).map((c: any) => c.code)))
@@ -605,6 +620,11 @@ export default function Watchlist() {
         </div>
 
         {/* 卡片区 */}
+        {analyzing && (
+          <div style={{ padding: '10px 16px', margin: '0 10px', background: '#1a1a3e', border: '1px solid #22c55e33', borderRadius: 8, fontSize: 13, color: '#22c55e', textAlign: 'center' }}>
+            ⏳ 正在加载个股分析数据（结构/阶段/信号），首次需要60-90秒，之后秒回…
+          </div>
+        )}
         <div className="cards-area">
           {filtered.length === 0 ? (
             <div className="empty">无匹配股票</div>
