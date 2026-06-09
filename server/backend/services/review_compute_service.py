@@ -307,14 +307,21 @@ def classify_opportunity(is_mainline, is_secondary, stage, vl_score):
 
 def get_mainline_data(date_str):
     """三梯队：前5=主线，6~10=次级主线，其余=非主线（当天文件缓存）"""
-    # 检查当天缓存
+    # 检查当天缓存（同时检查底层 sector_daily.json 是否已被 cron 更新）
     if os.path.isfile(MAINLINE_FULL_CACHE):
         try:
             with open(MAINLINE_FULL_CACHE) as _f:
                 cached = json.load(_f)
             if cached.get('date') == date_str:
-                print(f"[3L复盘] 主线数据读缓存 {date_str}")
-                return cached
+                # 缓存中的 sector_mtime 比文件 mtime 新才有效
+                sector_path = config.SECTOR_DAILY_PATH
+                sector_mtime = os.path.getmtime(sector_path) if os.path.isfile(sector_path) else 0
+                cache_mtime = os.path.getmtime(MAINLINE_FULL_CACHE)
+                if cache_mtime >= sector_mtime:
+                    print(f"[3L复盘] 主线数据读缓存 {date_str}")
+                    return cached
+                else:
+                    print(f"[3L复盘] 底层板块数据已更新（cache={cache_mtime:.0f} < sector={sector_mtime:.0f}），重算")
         except Exception:
             pass
 
@@ -429,13 +436,25 @@ def get_concept_mainline_data(date_str):
     if not concepts_data:
         return {'lines': [], 'secondary': [], 'all_ranked': [], 'persistence': []}
 
+    # 从 _push2test 获取当日涨跌幅（同 get_mainline_data 一致）
+    from backend.core.data_layer import get_sector_push2test
+    push2test_data = get_sector_push2test()
+    push2test_cons = push2test_data.concepts if hasattr(push2test_data, 'concepts') else {}
+
     scores = []
     for name, klines in concepts_data.items():
         try:
             if len(klines) < 20:
                 continue
             chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
-            chg_1d = ((klines[-1]['close'] / klines[-2]['close'] - 1) * 100) if len(klines) >= 2 else 0
+            # chg_1d：优先 _push2test，次选K线计算
+            snap = push2test_cons.get(name)
+            if snap is not None:
+                chg_1d = float(snap.change_pct)
+            elif len(klines) >= 2:
+                chg_1d = (klines[-1]['close'] / klines[-2]['close'] - 1) * 100
+            else:
+                chg_1d = 0
             # 阶段判定
             wave = _judge_wave(klines)
             stage = wave.get('stage', '--')
