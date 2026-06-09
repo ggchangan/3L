@@ -487,19 +487,18 @@ def get_panic_monitor(indices_dict, decline_count=0, total=5100):
     }
 
 
-def _is_panic_dismissed() -> bool:
-    """检查恐慌报警是否已被用户处理
+def _is_panic_dismissed_for(trading_day: str) -> bool:
+    """检查同交易日的恐慌报警是否已被用户处理
 
-    用户勾选"已处理"后，12小时内不再推送。
-    超过12小时或跨越了交易日，允许重新触发新恐慌。
+    用户勾选"已处理"后，同交易日不再推送。
+    跨越交易日后重置，允许重新触发。
 
     Returns:
-        True 表示已处理且在有效期内，后续检测应跳过推送
+        True 表示已处理，后续检测应跳过推送
     """
     from backend.services.alarm_service import _load
     data = _load()
-    now = datetime.now()
-    current_hour = now.hour
+    dismissed_date = None
     for a in data.get('alarms', []):
         if a.get('stock_code') == 'PANIC' and a.get('type') == 'panic':
             if a.get('status') == 'handled':
@@ -507,11 +506,16 @@ def _is_panic_dismissed() -> bool:
                 if da_raw:
                     try:
                         da_dt = datetime.fromisoformat(da_raw)
-                        hours_since = (now - da_dt).total_seconds() / 3600
-                        if hours_since < 12:
-                            return True
+                        dismissed_date = da_dt.strftime('%Y-%m-%d')
                     except Exception:
                         pass
+                else:
+                    # 无时间戳的老记录，按交易日判断
+                    dismissed_date = a.get('date', '')
+                    if not dismissed_date:
+                        dismissed_date = trading_day
+    if dismissed_date == trading_day:
+        return True
     return False
 
 
@@ -550,24 +554,22 @@ def check_panic_alerts_via_realtime(indices_api_codes: dict = None) -> list:
     供 check_alerts.py 的 check_all_alerts() 调用。
     使用与 check_alerts.py 相同的腾讯API拉取模式。
     """
+    from backend.core.data_models import _last_trading_day
     import logging
     logger = logging.getLogger(__name__)
     now_ts = datetime.now().timestamp()
     triggered = []
 
-    # ── 非交易时段跳过 ──
-    # 00:00-08:00 和周末（QQ API 返回的是旧数据，不应触发恐慌）
+    # ── 非交易日跳过 ──
     now = datetime.now()
+    trading_day = _last_trading_day()
     if now.weekday() >= 5:
         logger.debug('非交易日，跳过恐慌检测')
         return triggered
-    if now.hour < 8 or now.hour >= 22:
-        logger.debug('非交易时段 (%d:00)，跳过恐慌检测', now.hour)
-        return triggered
 
-    # 用户已处理今天的恐慌 → 跳过全部推送
-    if _is_panic_dismissed():
-        logger.debug('恐慌报警已被用户处理（PANIC handled today），跳过推送')
+    # 用户已处理同交易日同级别恐慌 → 跳过推送
+    if _is_panic_dismissed_for(trading_day):
+        logger.debug('恐慌报警已被用户处理（今日已处理），跳过推送')
         return triggered
 
     if indices_api_codes is None:
@@ -603,9 +605,9 @@ def check_panic_alerts_via_realtime(indices_api_codes: dict = None) -> list:
     if not indices:
         return triggered
 
-    # 检查今天是否已经推送过同级别恐慌
+    # 检查同交易日是否已经推送过同级别恐慌
     last_panic_level = None
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = trading_day
     if os.path.isfile(HISTORY_PATH):
         try:
             with open(HISTORY_PATH) as f:
