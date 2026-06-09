@@ -8,6 +8,9 @@ import sys
 import threading
 from datetime import datetime, timedelta
 
+from backend.core.logger import get_logger
+log = get_logger(__name__)
+
 from backend.config import WWW_DIR, DATA_DIR, CACHE_DIR, INDUSTRY_MAP_PATH, REVIEW_CHARTS_DIR
 from backend import config  # for config.atomic_json_dump
 
@@ -653,6 +656,7 @@ def get_sector_chart(name, board_type='industry'):
             pass
 
     except Exception as e:
+        log.warning("market service error: %s", e)
         return None, str(e)
 
     return svg_file, None

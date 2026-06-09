@@ -225,6 +225,7 @@ def _get_holdings_analysis() -> list:
         from backend.services.stock_card_service import get_stock_card
         holdings = get_holdings()
     except Exception:
+        log.warning('panic monitor: data fetch failed')
         return result
 
     if not holdings or not isinstance(holdings, dict):
@@ -252,6 +253,7 @@ def _get_holdings_analysis() -> list:
             if isinstance(card, dict):
                 stock_card = card
         except Exception:
+            log.warning('panic monitor: silent skip')
             pass
 
         price = stock_card.get('price', 0)
@@ -337,6 +339,7 @@ def _get_rising_from_bottom() -> list:
                 try:
                     chg_1d = round((last['close'] - prev['close']) / prev['close'] * 100, 2)
                 except Exception:
+                    log.warning('panic monitor: stock scan failed')
                     continue
                 prev20 = klines[-21]
                 try:
@@ -352,6 +355,7 @@ def _get_rising_from_bottom() -> list:
         })
         return result[:10]
     except Exception:
+        log.warning('panic monitor: data fetch failed')
         return result
 
 
@@ -386,6 +390,7 @@ def _get_rising_from_bottom_v2() -> list:
             })
         return result[:10]
     except Exception:
+        log.warning('panic monitor: data fetch failed')
         return result
 
 
@@ -452,6 +457,7 @@ def get_panic_monitor(indices_dict, decline_count=0, total=5100):
             if _rising_sectors:
                 strategy['emerging_sectors'] = _rising_sectors
         except Exception:
+            log.warning('panic monitor: silent skip')
             pass
 
         # 整体策略总结
@@ -610,6 +616,7 @@ def check_panic_alerts_via_realtime(indices_api_codes: dict = None) -> list:
                     last_panic_level = rec.get('level')
                     break
         except Exception:
+            log.warning('panic monitor: silent skip')
             pass
 
     # 检测恐慌

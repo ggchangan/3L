@@ -128,6 +128,7 @@ def load_review_data(date_str, existing, ww_dir):
                 hdata = json.load(f)
             live_holdings = hdata.get('holdings', [])
         except Exception:
+            log.warning('review: silent skip')
             pass
     holdings = live_holdings or existing.get('holdings', []) or existing.get('stocks', {}).get('stocks', [])
 
@@ -609,6 +610,7 @@ def compute_review_real_time(date_str=None):
                 hdata = json.load(f)
             holdings = hdata.get('holdings', [])
         except Exception:
+            log.warning('review: silent skip')
             pass
 
     buy_signals, all_stocks_60d = scan_buy_signals_if_needed(

@@ -2,6 +2,8 @@
 持仓/交易服务 — 持仓、交易数据读写
 """
 import json, os, requests, tempfile
+from backend.core.logger import get_logger
+log = get_logger(__name__)
 from datetime import datetime
 from backend.config import HOLDINGS_PATH, TRADES_PATH
 
@@ -138,6 +140,7 @@ def get_holdings_with_prices():
             if s.get('direction'):
                 wl_dirs[s['code']] = s['direction']
     except Exception:
+        log.warning('holdings: silent skip')
         pass
     for h in holdings:
         item = dict(h)
@@ -256,6 +259,7 @@ def save_holdings(data):
         if changed:
             save_watchlist({'stocks': wl['stocks'], 'count': len(wl['stocks'])})
     except Exception:
+        log.warning('holdings: silent skip')
         pass
 
     return {'success': True, 'count': len(holdings)}
