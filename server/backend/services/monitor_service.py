@@ -98,9 +98,19 @@ def get_buy_signals():
                 data = json.load(f)
             sigs = data.get('signals', [])
             if len(sigs) >= 1 and sigs[0].get('name') is not None:
+                m = re.match(r'buy_signals_(\d{4}-\d{2}-\d{2})_(\d{2})\.json', os.path.basename(latest))
+                if m:
+                    cache_date = m.group(1)
+                    cache_hour = int(m.group(2))
+                    now = datetime.now()
+                    # 交易时段（工作日09-15点），非交易时段缓存直接跳过 → 同步扫描
+                    if now.weekday() < 5 and 9 <= now.hour < 15 and \
+                       (cache_date < now.strftime('%Y-%m-%d') or cache_hour < 9):
+                        log.info('非交易时段缓存 (%s)，强制同步扫描', os.path.basename(latest))
+                        return _run_scan_sync(current_cache)
+
                 log.info('买点信号返回最近缓存 (%s)', os.path.basename(latest))
                 # 过期(>1小时)则后台启动新扫描，不阻塞
-                m = re.match(r'buy_signals_(\d{4}-\d{2}-\d{2})_(\d{2})\.json', os.path.basename(latest))
                 if m:
                     cache_time = datetime.strptime(m.group(1) + ' ' + m.group(2) + ':00', '%Y-%m-%d %H:%M')
                     hours_old = (datetime.now() - cache_time).total_seconds() / 3600
