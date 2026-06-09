@@ -1,6 +1,9 @@
 """操作计划追踪 API 路由 — v2（SQLite + review数据源）"""
 
 import json
+from backend.core.logger import get_logger
+log = get_logger(__name__)
+
 from backend.services.plan_tracking_service import get_tracking, compute_tracking, annotate_plan
 
 

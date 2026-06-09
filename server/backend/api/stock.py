@@ -1,5 +1,8 @@
 """个股分析/回测/图表路由"""
+from backend.core.logger import get_logger
 from . import parse_query
+
+log = get_logger(__name__)
 from backend.services.analysis_service import search_and_analyze
 from backend.services.backtest_service import run_backtest
 from backend.services.stock_chart_service import generate_stock_chart, generate_trend_stock_chart

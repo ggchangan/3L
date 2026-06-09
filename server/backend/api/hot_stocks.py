@@ -2,7 +2,10 @@
 import requests
 import json
 from datetime import datetime
+from backend.core.logger import get_logger
 from . import parse_query, get_server
+
+log = get_logger(__name__)
 
 
 # 同花顺热点API配置

@@ -1,5 +1,8 @@
 """WxPusher 微信推送配置 API 路由"""
 import json
+from backend.core.logger import get_logger
+log = get_logger(__name__)
+
 
 from backend.services.wxpush_sender import is_configured, update_config
 

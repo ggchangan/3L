@@ -1,5 +1,8 @@
 """监控/盯盘相关路由"""
 from backend.services.monitor_service import (
+from backend.core.logger import get_logger
+log = get_logger(__name__)
+
     get_volume_comparison, get_buy_signals, get_stop_loss_triggered,
     get_top_sectors, get_industry_leaders, get_market_leaders,
     get_leader_dashboard,

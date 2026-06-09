@@ -2,6 +2,9 @@
 import json, os, sys, statistics
 from datetime import datetime
 
+from backend.core.logger import get_logger
+log = get_logger(__name__)
+
 from backend.services.concept_wave_service import judge_concept_wave, compute_chart_annotations
 from backend.core.data_layer import (
     get_sector_daily, get_concept_list, get_stock_concept_map,

@@ -1,6 +1,9 @@
 """系统管理路由（健康检查、数据更新等）"""
 import json
+from backend.core.logger import get_logger
 from . import parse_query
+
+log = get_logger(__name__)
 
 
 def _handle_health(h, path):

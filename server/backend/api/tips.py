@@ -1,5 +1,8 @@
 """交易技巧/知识库路由"""
 import json
+from backend.core.logger import get_logger
+log = get_logger(__name__)
+
 from . import parse_query
 from backend.services.knowledge_service import (
     get_tips_list, get_tip_content,

@@ -1,5 +1,8 @@
 """强势趋势追踪 — API端点"""
 from backend.services.strong_trend_service import get_strong_trend_candidates
+from backend.core.logger import get_logger
+log = get_logger(__name__)
+
 
 
 def register_routes(routes):

@@ -1,5 +1,8 @@
 """复盘相关路由（生成、保存、日期列表）"""
 from . import parse_query
+from backend.core.logger import get_logger
+log = get_logger(__name__)
+
 from backend.services.review_service import run_daily_review, generate_review, save_review, compute_review_real_time
 
 
