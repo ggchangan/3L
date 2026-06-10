@@ -492,9 +492,8 @@ def _fetch_today_industries_from_ths():
         import akshare as ak
 
         df = ak.stock_board_industry_summary_ths()
-        today = datetime.now().strftime('%Y%m%d')
-        # 非交易日回退到上一个交易日
-        d = datetime.now()
+        # 该cron在交易日6:00运行，目标日期是上一个已完成交易日
+        d = datetime.now() - timedelta(days=1)
         for _ in range(7):
             if d.weekday() < 5:
                 today = d.strftime('%Y%m%d')
@@ -714,9 +713,9 @@ def update_sectors():
     log(f'📋  行业{len(industries)}个, 概念{len(concepts)}个, 上次更新{last_updated}')
 
     # ── 确定追踪中的概念 ──
-    today = datetime.now().strftime('%Y%m%d')
-    # 非交易日回退到上一个交易日
-    __d = datetime.now()
+    # 该cron在交易日6:00运行，此时当日交易未开始
+    # 目标日期是上一个已完成交易日
+    __d = datetime.now() - timedelta(days=1)
     for _ in range(7):
         if __d.weekday() < 5:
             today = __d.strftime('%Y%m%d')
