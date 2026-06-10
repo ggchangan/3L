@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 # ⚠️ 注意: file 在 server/backend/core/ 下
 # dirname×1=core/  ×2=backend/  ×3=server/（backend 包所在位置）
-from backend.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH, SOURCES_EM_SECTOR_DAILY
+from backend.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH
 from backend.core.data_layer import (
     get_watchlist,
     load_all_stocks_uncached,
@@ -811,20 +811,23 @@ def update_sectors():
         '_push2test_updated': existing.get('_push2test_updated', ''),
     })
 
-    # 同步刷新 EM 仓（供 get_sector_rankings 使用，确保 chg_1d 为当日数据）
+    # 同步刷新快照源文件（路径由 CONCEPT_DATA_SOURCE 配置驱动，供 failover 回退使用）
     try:
-        em_dir = os.path.dirname(SOURCES_EM_SECTOR_DAILY)
-        os.makedirs(em_dir, exist_ok=True)
-        em_data = {
+        from backend.services.data_source import _get_snapshot_source_path, _get_snapshot_source_label
+        snap_path = _get_snapshot_source_path()
+        snap_label = _get_snapshot_source_label()
+        snap_dir = os.path.dirname(snap_path)
+        os.makedirs(snap_dir, exist_ok=True)
+        snap_data = {
             'last_updated': latest_date,
             'industries': {k: v for k, v in ind_today.items()},
             'concepts': {k: v for k, v in con_today.items()},
         }
-        with open(SOURCES_EM_SECTOR_DAILY, 'w', encoding='utf-8') as f:
-            json.dump(em_data, f, ensure_ascii=False, indent=2)
-        log(f'📤  EM仓同步完成: 行业{len(ind_today)}条, 概念{len(con_today)}条')
+        with open(snap_path, 'w', encoding='utf-8') as f:
+            json.dump(snap_data, f, ensure_ascii=False, indent=2)
+        log(f'📤  {snap_label}同步完成: 行业{len(ind_today)}条, 概念{len(con_today)}条')
     except Exception as e:
-        log(f'⚠️  EM仓同步失败: {e}')
+        log(f'⚠️  快照源文件同步失败: {e}')
 
     stats = f'push2test: 行业{ind_saved}条, 概念{con_saved}条 (THS旧数据保留不变)'
     log(f'📈  板块: {stats}')
