@@ -109,6 +109,31 @@ export function fetchMarket(): Promise<Record<string, unknown>> {
   return fetchJson('/api/market')
 }
 
+export function fetchIndexData(code: string): Promise<Record<string, unknown>> {
+  return fetchJson(`/api/market?code=${code}`)
+}
+
+export const INDEX_CODES_LIST = ['000985', '000001', '399006', '000688'] as const
+export type IndexCode = typeof INDEX_CODES_LIST[number]
+export const INDEX_CODE_NAMES: Record<string, string> = {
+  '000985': '中证全指',
+  '000001': '上证指数',
+  '399006': '创业板指',
+  '000688': '科创50',
+}
+
+export function fetchAllIndexData(): Promise<Record<string, Record<string, unknown>>> {
+  return Promise.all(
+    INDEX_CODES_LIST.map(code =>
+      fetchIndexData(code).then(data => ({ code, data }))
+    )
+  ).then(results => {
+    const map: Record<string, Record<string, unknown>> = {}
+    results.forEach(r => { map[r.code] = r.data })
+    return map
+  })
+}
+
 /** 格式化成交额 */
 export function fmtAmountYuan(v?: number): string {
   if (!v) return '0'

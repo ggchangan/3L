@@ -8,11 +8,15 @@ log = get_logger('api.market')
 
 
 def _handle_market(h, path):
-    """实时计算大盘周期数据（读本地K线）"""
-    from backend.core.data_layer import get_index_klines
+    """实时计算大盘周期数据（读本地K线）
+    支持 ?code=000001 参数指定指数，默认中证全指(000985)
+    """
+    from backend.core.data_layer import get_index_klines, INDEX_CODE
     from backend.services.review_compute_service import judge_peak_valley, fetch_market_quote
     try:
-        index_klines = get_index_klines()
+        params = parse_query(path)
+        code = (params.get('code') or [INDEX_CODE])[0]
+        index_klines = get_index_klines(code)
         if isinstance(index_klines, list):
             index_klines = [k for k in index_klines if k.get('date', '') <= '99999999']
         today_quote = fetch_market_quote()
@@ -54,14 +58,16 @@ def _handle_review_full(h, path):
 
 
 def _handle_index_chart(h, path):
-    """返回中证全指K线SVG
+    """返回指数K线SVG
+    ?code=000001 — 指数代码，默认000985（中证全指）
     ?mode=monitor → 总是最新数据（含实时）
     ?mode=review → 按时间控制（18:00前不包含今天）
     """
     from urllib.parse import parse_qs, urlparse
     qs = parse_qs(urlparse(path).query)
     mode = (qs.get('mode') or ['review'])[0]
-    svg_path, err = generate_index_chart(mode=mode)
+    code = (qs.get('code') or ['000985'])[0]
+    svg_path, err = generate_index_chart(mode=mode, code=code)
     if err:
         h.send_json({'error': err})
         return

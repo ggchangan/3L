@@ -1,5 +1,32 @@
 # Changelog
 
+## [v3.10.0] — 2026-06-10
+
+### 新增：复盘页多指数支持
+
+**大盘 STEP 1 改为 4指数 Tab 切换 + 多指对比表**
+
+**数据层：**
+- INDEX_CODES 新增 `399006: 创业板指`，数据管线支持 sz 前缀拉取
+- 新增 `_index_symbol()` 工具函数
+- 新增 `test_index_data.py`（7个测试）
+
+**后端 API：**
+- `/api/market?code=000001` 支持指定指数，无参数默认中证全指
+- `/api/index-chart?code=000001&mode=review` 支持指定指数图表
+- `generate_index_chart(code)` 参数化，缓存文件名改为 `index_chart_{code}_{date}.svg`
+- 新增 `INDEX_SYMBOLS` 常量映射4指数→akshare symbol
+- 新增 `test_market_api.py`（3个测试）+ `test_index_chart.py`（6个测试）
+
+**前端：**
+- MarketCycle 组件重写为 Tab 切换（中证全指/上证/创业板/科创50）
+- 每个 Tab 独立展开评分明细和关键点图（懒加载，code 参数）
+- 删除资金流向图
+- 新增 IndexComparison 对比表（涨跌/位置/BIAS20/峰分/谷分）
+- 自动生成对比结论（判断分化/协同 + 最强/最弱指数）
+- 新增 index-tab-bar / comparison-table CSS 样式
+- 前端 API 新增 fetchIndexData / fetchAllIndexData / INDEX_CODES_LIST 常量
+
 ## [v3.9.1] — 2026-06-07
 
 ### 修复：行业板块数据源切回同花顺 THS

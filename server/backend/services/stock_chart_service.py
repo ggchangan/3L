@@ -22,6 +22,15 @@ from backend.core.data_layer import get_all_stocks, get_stock_klines
 # 中证全指K线图输出目录
 REVIEW_CHARTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'public', 'charts')
 
+# 指数代码 → akshare symbol 映射
+INDEX_SYMBOLS = {
+    '000001': 'sh000001',   # 上证指数
+    '000688': 'sh000688',   # 科创50
+    '000985': 'sh000985',   # 中证全指
+    '399006': 'sz399006',   # 创业板指
+}
+INDEX_CODE_CHART = '000985'  # 默认指数
+
 
 def _fetch_realtime_quote(code):
     """从腾讯接口获取实时行情，返回 dict 或 None"""
@@ -845,13 +854,21 @@ def _find_index_keypoints(data):
     return kps
 
 
-def generate_index_chart(mode='review'):
-    """生成中证全指K线SVG
+def generate_index_chart(mode='review', code=None):
+    """生成指数K线SVG
+    code: 指数代码，默认 INDEX_CODE_CHART (000985 中证全指)
     mode=monitor: 总是最新数据（含实时）；mode=review: 18:00前不包含当天数据。
-    缓存: 文件名带最后一个K线日期(zzqz_index_chart_YYYYMMDD.svg)。
+    缓存: 文件名带 code 和最后一个K线日期(index_chart_{code}_{YYYYMMDD}.svg)。
     Returns: (svg_absolute_path, error_or_none)
     """
-    today = datetime.now().date()
+    if code is None:
+        code = INDEX_CODE_CHART
+    symbol = INDEX_SYMBOLS.get(code)
+    if not symbol:
+        return None, f'unknown index code: {code}'
+    qt_symbol = symbol  # sh000985 → 腾讯接口 q=sh000985
+
+    cache_prefix = f'index_chart_{code}'
     now = datetime.now()
     today_str = now.strftime('%Y%m%d')
     is_weekday = now.weekday() < 5
@@ -859,7 +876,7 @@ def generate_index_chart(mode='review'):
 
     # ── 快速缓存检查（避免每次调 akshare） ──
     if mode == 'monitor':
-        cache_file = os.path.join(REVIEW_CHARTS_DIR, 'zzqz_index_chart_monitor.svg')
+        cache_file = os.path.join(REVIEW_CHARTS_DIR, f'{cache_prefix}_monitor.svg')
         if os.path.isfile(cache_file):
             age = now.timestamp() - os.path.getmtime(cache_file)
             if age < 300:  # 5分钟缓存
@@ -869,24 +886,24 @@ def generate_index_chart(mode='review'):
         if use_today:
             cache_date = today_str
         else:
-            if today.weekday() == 0:    # 周一→上周五
-                cache_date = (today - timedelta(days=3)).strftime('%Y%m%d')
-            elif today.weekday() == 6:   # 周日→上周五
-                cache_date = (today - timedelta(days=2)).strftime('%Y%m%d')
+            if now.weekday() == 0:    # 周一→上周五
+                cache_date = (now - timedelta(days=3)).strftime('%Y%m%d')
+            elif now.weekday() == 6:   # 周日→上周五
+                cache_date = (now - timedelta(days=2)).strftime('%Y%m%d')
             else:
-                cache_date = (today - timedelta(days=1)).strftime('%Y%m%d')
-        cache_file = os.path.join(REVIEW_CHARTS_DIR, f'zzqz_index_chart_{cache_date}.svg')
+                cache_date = (now - timedelta(days=1)).strftime('%Y%m%d')
+        cache_file = os.path.join(REVIEW_CHARTS_DIR, f'{cache_prefix}_{cache_date}.svg')
         if os.path.isfile(cache_file):
             return cache_file, None
 
     # ── Fetch 60-day kline data ──────────────────────────
     try:
-        ak_data = ak.stock_zh_index_daily_tx(symbol='sh000985')
+        ak_data = ak.stock_zh_index_daily_tx(symbol=symbol)
         ak_data = ak_data.tail(60).reset_index(drop=True)
     except Exception as e:
         # fallback: check any cached file
         for fname in sorted(os.listdir(REVIEW_CHARTS_DIR), reverse=True):
-            if fname.startswith('zzqz_index_chart_') and fname.endswith('.svg'):
+            if fname.startswith(f'index_chart_{code}_') and fname.endswith('.svg'):
                 fp = os.path.join(REVIEW_CHARTS_DIR, fname)
                 if os.path.isfile(fp):
                     return fp, None
@@ -906,7 +923,7 @@ def generate_index_chart(mode='review'):
     # ── 确定缓存日期 ──
     if not use_today:
         # 过滤掉今天的K线（如有）
-        data = [d for d in data if d['day'] != today.isoformat()]
+        data = [d for d in data if d['day'] != now.date().isoformat()]
         if not data:
             # 全被过滤了（数据只有今天），回退到全量
             data = [{'day': str(row['date']), 'open': float(row['open']),
@@ -918,14 +935,14 @@ def generate_index_chart(mode='review'):
 
     # ── 缓存文件名：review=日期缓存，monitor=独立缓存（实时刷新） ──
     if mode == 'monitor':
-        cache_file = os.path.join(REVIEW_CHARTS_DIR, 'zzqz_index_chart_monitor.svg')
+        cache_file = os.path.join(REVIEW_CHARTS_DIR, f'{cache_prefix}_monitor.svg')
         # monitor 缓存有效期5分钟
         if os.path.isfile(cache_file):
             age = now.timestamp() - os.path.getmtime(cache_file)
             if age < 300:  # 5分钟
                 return cache_file, None
     else:
-        cache_file = os.path.join(REVIEW_CHARTS_DIR, f'zzqz_index_chart_{last_date}.svg')
+        cache_file = os.path.join(REVIEW_CHARTS_DIR, f'{cache_prefix}_{last_date}.svg')
         if os.path.isfile(cache_file):
             return cache_file, None
 
@@ -938,7 +955,7 @@ def generate_index_chart(mode='review'):
     if use_today:
         try:
             r = requests.get(
-                'https://qt.gtimg.cn/q=sh000985',
+                f'https://qt.gtimg.cn/q={qt_symbol}',
                 headers={
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                     'Referer': 'https://finance.qq.com',
