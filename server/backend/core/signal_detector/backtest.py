@@ -43,7 +43,8 @@ DETECTORS = {
     'supply_exhaustion': detect_supply_exhaustion,
 }
 
-DATA_DIR = '/home/ubuntu/data/3l'
+os.environ.setdefault('DATA_DIR', '/home/ubuntu/data/3l')
+DATA_DIR = os.environ['DATA_DIR']
 
 
 def load_json(path):
