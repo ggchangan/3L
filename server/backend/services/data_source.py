@@ -76,14 +76,13 @@ def _call_with_failover(data_type, args, chain, fallback=None):
     log.warning('%s: 所有数据源均不可用', data_type)
     raise DataUnavailableError(data_type)
 
-# --- EM仓获取函数 ---
-def _fetch_em_sector_ranking(date_str):
+# --- 实时排行获取函数（push2test API + 文件回退） ---
+def _fetch_live_sector_ranking(date_str):
     """从 push2test 实时获取板块排行（chg_1d 取自 f3 字段）
     
-    直接调东财实时接口，不依赖静态文件。失败时回退读 EM 仓文件。
+    直接调东财实时接口，不依赖静态文件。失败时回退读当前快照源文件（由 CONCEPT_DATA_SOURCE 配置驱动）。
     返回 {last_updated, industries: {name: {date, change_pct, close, ...}},
-           concepts: {...}}
-    """
+           concepts: {...}}"""
     today = _last_trading_day()
     try:
         import requests
@@ -124,8 +123,8 @@ def _fetch_em_sector_ranking(date_str):
                  len(result['industries']), len(result['concepts']))
         return result
     except Exception as e:
-        log.warning('push2test live 失败, 回退 EM文件: %s', e)
-        return _load_json(SOURCES_EM_SECTOR_DAILY)
+        log.warning('push2test live 失败, 回退 %s: %s', _get_snapshot_source_label(), e)
+        return _load_json(_get_snapshot_source_path())
 
 def _fetch_em_concept_map():
     return _load_json(SOURCES_EM_CONCEPT_MAP)
@@ -163,10 +162,10 @@ def _fetch_ths_live_sector_ranking(date_str):
         return None
 
 
-# --- THS仓获取函数 ---
-def _fetch_em_sector_klines(sector_name, sector_type):
-    """从 EM 仓获取单日K线（只有今日数据）"""
-    data = _load_json(SOURCES_EM_SECTOR_DAILY)
+# --- 快照源文件获取函数（路径由 CONCEPT_DATA_SOURCE 配置驱动） ---
+def _fetch_snapshot_sector_klines(sector_name, sector_type):
+    """从当前快照源文件获取单日K线（只有今日数据）"""
+    data = _load_json(_get_snapshot_source_path())
     key = 'industries' if sector_type == 'industry' else 'concepts'
     container = data.get(key, {})
     entry = container.get(sector_name)
@@ -222,17 +221,45 @@ def _fetch_legacy_sector_klines(sector_name, sector_type):
         return None
     return result
 
+# ════════════════════════════════════════════════════════════
+# 配置驱动的数据源选择
+# 根据 CONCEPT_DATA_SOURCE 路由到对应的源文件
+# 切换数据源只改 config.py 一处
+# ════════════════════════════════════════════════════════════
+
+def _get_snapshot_source_path():
+    """根据 CONCEPT_DATA_SOURCE 返回当前快照源文件路径
+    
+    Returns:
+        SOURCES_THS_SECTOR_DAILY (ths 模式) 或 SOURCES_EM_SECTOR_DAILY (eastmoney 模式)
+    """
+    from backend.config import CONCEPT_DATA_SOURCE
+    if CONCEPT_DATA_SOURCE == 'ths':
+        return SOURCES_THS_SECTOR_DAILY
+    elif CONCEPT_DATA_SOURCE == 'eastmoney':
+        return SOURCES_EM_SECTOR_DAILY
+    log.warning('未知数据源: %s，回退到THS', CONCEPT_DATA_SOURCE)
+    return SOURCES_THS_SECTOR_DAILY
+
+
+def _get_snapshot_source_label():
+    """返回当前数据源显示名称（用于日志/验证）"""
+    from backend.config import CONCEPT_DATA_SOURCE
+    labels = {'ths': 'THS仓', 'eastmoney': 'EM仓'}
+    return labels.get(CONCEPT_DATA_SOURCE, 'THS仓')
+
+
 # ====== 调用链定义 ======
 DATA_SOURCE_CHAINS = {
     'sector_ranking': [
         ('ths_live', lambda date: _fetch_ths_live_sector_ranking(date)),
-        ('em_sector', lambda date: _fetch_em_sector_ranking(date)),
+        ('live', lambda date: _fetch_live_sector_ranking(date)),
         ('legacy_sector', lambda date: _fetch_legacy_sector_ranking(date)),
-        ('ths_sector', lambda date: _fetch_ths_sector_ranking(date)),
+        ('snapshot_sector', lambda date: _fetch_ths_sector_ranking(date)),
     ],
     'sector_klines': [
         ('ths_sector', lambda name, type_: _fetch_ths_sector_klines(name, type_)),
-        ('em_sector', lambda name, type_: _fetch_em_sector_klines(name, type_)),
+        ('snapshot_sector', lambda name, type_: _fetch_snapshot_sector_klines(name, type_)),
         ('legacy_sector', lambda name, type_: _fetch_legacy_sector_klines(name, type_)),
     ],
     'concept_map': [
@@ -324,12 +351,12 @@ def get_merged_sector_data():
                 if name not in result[key] and klines:
                     result[key][name] = klines
     
-    # 3. EM仓补充今日数据（含change_pct）
-    em = _load_json(SOURCES_EM_SECTOR_DAILY)
-    if em:
-        for key, em_key in [('industries', 'industries'), ('concepts', 'concepts')]:
-            em_container = em.get(em_key, {})
-            for name, entry in em_container.items():
+    # 3. 当前快照源补充今日数据（含change_pct，路径由 CONCEPT_DATA_SOURCE 配置驱动）
+    snap = _load_json(_get_snapshot_source_path())
+    if snap:
+        for key, snap_key in [('industries', 'industries'), ('concepts', 'concepts')]:
+            snap_container = snap.get(snap_key, {})
+            for name, entry in snap_container.items():
                 if isinstance(entry, dict) and entry.get('date'):
                     if name not in result[key] or not result[key][name]:
                         # 新板块，创建单日K线
@@ -798,8 +825,13 @@ def verify_data_sources(verbose=True):
         con_cnt = len(con_items)
         _check('push2test概念数', con_cnt > 300, f'返回{con_cnt}个 (需>300)')
 
-        # change_pct 合理性：至少有些非零
-        non_zero = sum(1 for it in ind_items for _ in [0] if abs(float(it.get('f3', 0) or 0)) > 0.01)
+        # change_pct 合理性：至少有些非零（跳过 f3='-' 等无效值）
+        def _safe_f3(it):
+            v = it.get('f3')
+            if v is None or v == '' or v == '-':
+                return 0.0
+            return float(v)
+        non_zero = sum(1 for it in ind_items if abs(_safe_f3(it)) > 0.01)
         _check('行业涨跌幅合理性', non_zero > 0 or _is_weekend(), f'{non_zero}/{ind_cnt}个非零')
 
         # 采样几个关键板块验证
@@ -807,7 +839,7 @@ def verify_data_sources(verbose=True):
         for it in ind_items:
             name = (it.get('f14') or '').strip().replace('Ⅱ','').replace('Ⅲ','').replace('D','').strip()
             if name:
-                ind_data[name] = float(it.get('f3', 0) or 0)
+                ind_data[name] = _safe_f3(it)
         for key_sector in ['银行', '半导体', '证券']:
             val = ind_data.get(key_sector)
             _check(f'关键板块[{key_sector}]存在且合理', val is not None and -15 < val < 15,
@@ -817,8 +849,17 @@ def verify_data_sources(verbose=True):
         _check('push2test HTTP调用', False, f'异常: {e}')
 
     # ════ 2. 文件源验证 ════
-    for fname, fpath in [('EM仓', SOURCES_EM_SECTOR_DAILY), ('THS仓', SOURCES_THS_SECTOR_DAILY),
+    source_label = _get_snapshot_source_label()
+    source_path = _get_snapshot_source_path()
+    seen_paths = set()
+    for fname, fpath in [(source_label, source_path),
+                         ('THS仓', SOURCES_THS_SECTOR_DAILY),
+                         ('EM仓', SOURCES_EM_SECTOR_DAILY),
                          ('legacy', SECTOR_DAILY_PATH)]:
+        # 去重：同一文件不重复检查
+        if fpath in seen_paths:
+            continue
+        seen_paths.add(fpath)
         if not os.path.isfile(fpath):
             _check(f'{fname}[{os.path.basename(fpath)}] 文件存在', False, '文件不存在')
             continue
@@ -1185,9 +1226,19 @@ def verify_data_coverage(verbose=True):
     _check('行业快照计数≥80', ind_count_ok,
            f'{p2t_ind_count}个', 'industry_snapshot', 'structure')
 
-    con_count_ok = p2t_con_count >= 200
-    _check('概念快照计数≥200', con_count_ok,
-           f'{p2t_con_count}个', 'concept_snapshot', 'structure')
+    # 概念快照数：检查当前快照源文件的总覆盖
+    try:
+        snap_data = _load_json(_get_snapshot_source_path())
+        if isinstance(snap_data, dict):
+            snap_con_num = len(snap_data.get('concepts', {}))
+        else:
+            snap_con_num = 0
+        con_ok = snap_con_num >= 200
+        _check(f'{_get_snapshot_source_label()}概念覆盖≥200', con_ok,
+               f'{snap_con_num}个', 'concept_snapshot', 'structure')
+    except Exception:
+        _check(f'{_get_snapshot_source_label()}概念覆盖≥200', False,
+               f'无法读取源文件', 'concept_snapshot', 'structure')
 
     # chg 非零率
     con_chgs = []
@@ -1425,6 +1476,14 @@ def verify_data_coverage(verbose=True):
             snap_chg = float(snap_entry.get('change_pct', 0)) if snap_entry else None
             cxverify_items.append((xc_name, 'concept', None, snap_chg, True))
             continue  # 跳过（K线不连续）
+        # 检查K线日期与快照日期是否一致
+        snap_entry = p2t_concepts.get(xc_name)
+        if snap_entry and isinstance(snap_entry, dict):
+            snap_date = str(snap_entry.get('date', ''))
+            if latest_date != snap_date:
+                snap_chg = float(snap_entry.get('change_pct', 0) or 0) if snap_entry else None
+                cxverify_items.append((xc_name, 'concept', None, snap_chg, True))
+                continue  # 跳过（日期不一致）
         kline_chg = round(
             (float(latest.get('close', 0)) / max(float(prev.get('close', 1)), 0.01) - 1) * 100,
             2,
