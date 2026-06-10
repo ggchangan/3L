@@ -492,13 +492,9 @@ def _fetch_today_industries_from_ths():
         import akshare as ak
 
         df = ak.stock_board_industry_summary_ths()
-        # 该cron在交易日6:00运行，目标日期是上一个已完成交易日
-        d = datetime.now() - timedelta(days=1)
-        for _ in range(7):
-            if d.weekday() < 5:
-                today = d.strftime('%Y%m%d')
-                break
-            d -= timedelta(days=1)
+        # 目标日期是上一个已完成交易日（交易日历含节假日）
+        from backend.services.data_source import get_last_completed_trading_day
+        today = get_last_completed_trading_day()
 
         result = {}
         for _, row in df.iterrows():
@@ -713,14 +709,9 @@ def update_sectors():
     log(f'📋  行业{len(industries)}个, 概念{len(concepts)}个, 上次更新{last_updated}')
 
     # ── 确定追踪中的概念 ──
-    # 该cron在交易日6:00运行，此时当日交易未开始
-    # 目标日期是上一个已完成交易日
-    __d = datetime.now() - timedelta(days=1)
-    for _ in range(7):
-        if __d.weekday() < 5:
-            today = __d.strftime('%Y%m%d')
-            break
-        __d -= timedelta(days=1)
+    # 目标日期是上一个已完成交易日（交易日历含节假日）
+    from backend.services.data_source import get_last_completed_trading_day
+    today = get_last_completed_trading_day()
     try:
         _concept_list = get_concept_list()
         _stock_concept_map = get_stock_concept_map()

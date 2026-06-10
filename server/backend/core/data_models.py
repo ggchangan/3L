@@ -130,13 +130,17 @@ class SectorRankingItem:
 # ════════════════════════════════════════════════════════════
 
 def _last_trading_day() -> str:
-    """返回最后一个交易日 YYYYMMDD（周末回退到周五，不计节假日）"""
-    d = datetime.now()
-    for _ in range(7):
-        if d.weekday() < 5:
-            return d.strftime('%Y%m%d')
-        d -= timedelta(days=1)
-    return d.strftime('%Y%m%d')
+    """返回最后一个交易日 YYYYMMDD（含节假日，实质调用 data_source 的交易日历）"""
+    try:
+        from backend.services.data_source import get_last_completed_trading_day
+        return get_last_completed_trading_day()
+    except Exception:
+        d = datetime.now()
+        for _ in range(7):
+            if d.weekday() < 5:
+                return d.strftime('%Y%m%d')
+            d -= timedelta(days=1)
+        return d.strftime('%Y%m%d')
 
 
 def is_trading_day(date_str: str) -> bool:

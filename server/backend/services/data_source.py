@@ -31,16 +31,59 @@ from backend.core.exceptions import DataSourceError
 log = get_logger(__name__)
 
 
-def _last_trading_day():
-    """返回最后一个交易日字符串 YYYYMMDD
-    周末回退到周五，简单实现不考虑法定节假日
+# 交易日历缓存（akshare tool_trade_date_hist_sina，含节假日）
+_trade_date_cache = None
+
+
+def _get_trade_date_cache():
+    """获取交易日历缓存，按需加载"""
+    global _trade_date_cache
+    if _trade_date_cache is not None:
+        return _trade_date_cache
+    try:
+        import akshare as ak
+        df = ak.tool_trade_date_hist_sina()
+        _trade_date_cache = set(str(d) for d in df['trade_date'].tolist())
+    except Exception:
+        _trade_date_cache = set()
+    return _trade_date_cache
+
+
+def get_last_completed_trading_day():
+    """获取上一个已完成交易日 YYYYMMDD（考虑春节/国庆等节假日）
+
+    使用同花顺交易日历精确判断，适用于cron在交易日6:00运行的场景。
+    此时当日交易未开始，目标日期是上一个已完成交易日。
     """
-    d = datetime.now()
-    for _ in range(7):
-        if d.weekday() < 5:  # Mon=0..Fri=4
+    cache = _get_trade_date_cache()
+    d = datetime.now() - timedelta(days=1)
+    for _ in range(21):
+        ds = d.strftime('%Y-%m-%d')
+        if ds in cache:
             return d.strftime('%Y%m%d')
         d -= timedelta(days=1)
-    return d.strftime('%Y%m%d')
+    # fallback: 周末判断
+    d = datetime.now() - timedelta(days=1)
+    for _ in range(14):
+        if d.weekday() < 5:
+            return d.strftime('%Y%m%d')
+        d -= timedelta(days=1)
+    return datetime.now().strftime('%Y%m%d')
+
+
+def _last_trading_day():
+    """返回最后一个交易日字符串 YYYYMMDD
+    优先使用交易日历（含节假日），fallback到周末判断
+    """
+    try:
+        return get_last_completed_trading_day()
+    except Exception:
+        d = datetime.now()
+        for _ in range(7):
+            if d.weekday() < 5:
+                return d.strftime('%Y%m%d')
+            d -= timedelta(days=1)
+        return d.strftime('%Y%m%d')
 
 
 class DataUnavailableError(DataSourceError):
