@@ -1497,62 +1497,23 @@ def verify_data_coverage(verbose=True):
                    + (f' (偏差{abs(kchg-schg):.2f}pt)' if schg is not None else ' (快照无此行业)'),
                    f'{dtype}_kline', 'cross_verify')
 
-    # 概念交叉验算：K线chg vs _push2test 概念 change_pct
-    # 选培育钻石（K线中有，快照中可能没有）
+    # 概念交叉验算提醒：概念指数（K线收盘价）和快照（成分股平均涨跌幅）
+    # 来自同花顺两个不同接口，算法不同，不做交叉对比。
+    # 只验证快照自身的 change_pct 在合理范围内。
     cxverify_items = []
     for xc_name in ['培育钻石', '华为概念']:
-        if xc_name not in concepts:
-            continue
-        klines = concepts[xc_name]
-        if not isinstance(klines, list) or len(klines) < 2:
-            continue
-        latest = klines[-1]
-        prev = klines[-2]
-        if not isinstance(latest, dict) or not isinstance(prev, dict):
-            continue
-        # 检查日期是否相邻
-        latest_date = latest.get('date', '')
-        prev_date = prev.get('date', '')
-        date_gap = _days_between(latest_date, prev_date)
-        if date_gap > 1:
-            snap_entry = p2t_concepts.get(xc_name)
-            snap_chg = float(snap_entry.get('change_pct', 0)) if snap_entry else None
-            cxverify_items.append((xc_name, 'concept', None, snap_chg, True))
-            continue  # 跳过（K线不连续）
-        # 检查K线日期与快照日期是否一致
         snap_entry = p2t_concepts.get(xc_name)
         if snap_entry and isinstance(snap_entry, dict):
-            snap_date = str(snap_entry.get('date', ''))
-            if latest_date != snap_date:
-                snap_chg = float(snap_entry.get('change_pct', 0) or 0) if snap_entry else None
-                cxverify_items.append((xc_name, 'concept', None, snap_chg, True))
-                continue  # 跳过（日期不一致）
-        kline_chg = round(
-            (float(latest.get('close', 0)) / max(float(prev.get('close', 1)), 0.01) - 1) * 100,
-            2,
-        )
-        snap_entry = p2t_concepts.get(xc_name)
-        if snap_entry is None or not isinstance(snap_entry, dict):
-            cxverify_items.append((xc_name, 'concept', kline_chg, None, True))
-            continue  # WARN, 不FAIL
-        snap_chg = float(snap_entry.get('change_pct', 0) or 0)
-        diff = abs(kline_chg - snap_chg)
-        # 概念：THS K线指数与快照成分股统计算法不同，放宽阈值至2pt
-        ok = diff < 2.0
-        cxverify_items.append((xc_name, 'concept', kline_chg, snap_chg, ok))
+            schg = snap_entry.get('change_pct')
+            if schg is not None:
+                ok = -20 < float(schg) < 20
+                cxverify_items.append((xc_name, schg, ok))
 
-    for name, dtype, kchg, schg, ok in cxverify_items:
-        if kchg is None:
-            _check(f'{dtype}交叉验算「{name}」',
-                   True,
-                   f'WARN: K线不连续, 跳过交叉验算, 快照chg={schg}%',
-                   f'{dtype}_kline', 'cross_verify')
-        else:
-            _check(f'{dtype}交叉验算「{name}」',
-                   ok,
-                   f'K线chg={kchg}% vs 快照chg={schg}%'
-                   + (f' (偏差{abs(kchg-schg):.2f}pt)' if schg is not None else ' (WARN:快照无此概念)'),
-                   f'{dtype}_kline', 'cross_verify')
+    for name, schg, ok in cxverify_items:
+        _check(f'概念快照「{name}」change_pct合理性',
+               ok,
+               f'快照change_pct={schg}%',
+               f'concept_snapshot', 'verify')
 
     # ════ 汇总 ════
     total_checks = len(checks)
