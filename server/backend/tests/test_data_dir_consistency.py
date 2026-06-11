@@ -28,12 +28,17 @@ SENTINEL = '/tmp/_SENTINEL_3L_DATA_DIR'
 
 
 def _clean_reimport(mod_name: str):
-    mods_to_del = [k for k in list(sys.modules)
-                   if k.startswith('backend.') and k != 'backend.config']
+    """只删除目标模块本身，保留其他 backend.* 模块的引用一致性
+    
+    其他测试文件已在 module-level 通过 from X import Y 保存了函数引用，
+    若删除所有 backend.* 模块，这些函数引用的旧模块对象被保留在 __globals__
+    中，而 string-path 打补丁（如 patch('backend.core.on_demand_stock.fn')）
+    查的是 sys.modules 里的新模块对象——两者不一致导致 mock 失效。
+    
+    只删目标模块不影响其他测试的引用。
+    """
     if mod_name in sys.modules:
-        mods_to_del.append(mod_name)
-    for k in mods_to_del:
-        del sys.modules[k]
+        del sys.modules[mod_name]
     return importlib.import_module(mod_name)
 
 
