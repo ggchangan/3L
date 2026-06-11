@@ -787,22 +787,6 @@ def update_sectors():
     # ═══════════════════════════════════════════════════
     try:
         _append_klines_from_ths(industries, concepts, today)
-        # K线追加后，用K线数据重算 _push2test 快照的 change_pct
-        # 确保交叉验算时两边数据源一致（都是概念指数收盘价）
-        for sys_name in list(con_today.keys()):
-            klines = concepts.get(sys_name, [])
-            if isinstance(klines, list) and len(klines) >= 2:
-                latest = klines[-1]
-                prev = klines[-2]
-                if isinstance(latest, dict) and isinstance(prev, dict):
-                    lc = float(latest.get('close', 0))
-                    pc = float(prev.get('close', 1))
-                    if pc > 0:
-                        kline_chg = round((lc / pc - 1) * 100, 2)
-                        con_today[sys_name]['change_pct'] = kline_chg
-        # 更新 existing 中的 _push2test（含修正后的 change_pct）
-        push2test_data['concepts'] = con_today
-        existing['_push2test'] = push2test_data
     except Exception as e:
         log(f'⚠️  THS K线追加失败（不影响_push2test）: {type(e).__name__}: {e}')
 
