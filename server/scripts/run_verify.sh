@@ -6,8 +6,14 @@ sys.path.insert(0, '.')
 os.environ['DATA_DIR'] = '/home/ubuntu/data/3l'
 from backend.services.data_source import verify_data_sources
 r = verify_data_sources(verbose=False)
-total = r['pass_count'] + r['fail_count'] + r['warn_count']
-print(f'数据源验证: {r[\"pass_count\"]}/{total}, 失败{r[\"fail_count\"]}, 警告{r[\"warn_count\"]}')
-if r['fail_count'] > 0:
-    print('❌ 有失败项，请检查日志')
+checks = r.get('checks', [])
+pass_count = sum(1 for c in checks if c['pass'])
+fail_count = sum(1 for c in checks if not c['pass'])
+total = len(checks)
+status = '✅' if r.get('status') == 'pass' else '❌'
+print(f'{status} 数据源验证: {pass_count}/{total}, 失败{fail_count}')
+if fail_count > 0:
+    for c in checks:
+        if not c['pass']:
+            print(f'  ❌ {c[\"check\"]}: {c[\"detail\"]}')
 "
