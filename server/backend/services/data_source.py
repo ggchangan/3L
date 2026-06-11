@@ -875,7 +875,7 @@ def verify_data_sources(verbose=True):
                 return 0.0
             return float(v)
         non_zero = sum(1 for it in ind_items if abs(_safe_f3(it)) > 0.01)
-        _check('行业涨跌幅合理性', non_zero > 0 or _is_weekend(), f'{non_zero}/{ind_cnt}个非零')
+        _check('行业涨跌幅合理性', non_zero > 0 or _is_trading_time() == False, f'{non_zero}/{ind_cnt}个非零')
 
         # 采样几个关键板块验证
         ind_data = {}
@@ -943,7 +943,8 @@ def verify_data_sources(verbose=True):
                     if abs(snap.change_pct - live_chg) < 0.5:
                         matched += 1
             _check('THS实时vs_push2test change_pct一致性(采样前30)',
-                   matched >= 20, '%d/30采样偏差<0.5%%' % matched)
+                   matched >= 20 or _is_trading_time() == False,
+                   '%d/30采样偏差<0.5%%' % matched)
         else:
             _check('THS实时vs_push2test一致性', True, '跳过(数据不可比)')
     except Exception as e:
@@ -1031,6 +1032,15 @@ def verify_data_sources(verbose=True):
 def _is_weekend():
     """非交易日无需验证涨跌幅"""
     return datetime.now().weekday() >= 5
+
+
+def _is_trading_time():
+    """当前是否在A股交易时段（09:30-15:00），盘前/盘后实时源返回全零"""
+    now = datetime.now()
+    if now.weekday() >= 5:
+        return False
+    t = now.hour * 100 + now.minute
+    return 930 <= t <= 1500
 
 
 # ════════════════════════════════════════════════════════════
