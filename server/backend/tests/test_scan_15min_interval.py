@@ -282,10 +282,10 @@ class TestShouldTriggerScanIntegration:
     """用真实 _is_trading_time 判定的集成场景"""
 
     def test_mocked_trading_time_trigger(self):
-        """模拟交易时段10:00，真实 is_trading_day 走 mock，触发扫描"""
+        """模拟交易时段10:00，真实 is_trading_session 走 mock，触发扫描"""
         from backend.services.monitor_service import _should_trigger_scan
         with tempfile.TemporaryDirectory() as td:
-            with patch('backend.services.monitor_service._is_in_session', return_value=True):
+            with patch('backend.core.data_models.is_trading_session', return_value=True):
                 result = _should_trigger_scan(
                     datetime(2026, 6, 12, 10, 0, 0),
                     current_cache_path=os.path.join(td, 'buy_signals_2026-06-12_10-00.json'),

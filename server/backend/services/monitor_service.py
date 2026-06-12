@@ -13,7 +13,7 @@ from datetime import datetime
 import requests
 
 from backend.config import CACHE_DIR, INDUSTRY_LEADERS_PATH, WWW_DIR, atomic_json_dump
-from backend.core.data_models import is_trading_day
+from backend.core.data_models import is_trading_day, is_trading_session
 from backend.core.exceptions import DataError
 from backend.core.logger import get_logger
 
@@ -48,28 +48,15 @@ def _get_timeslot_key(dt=None):
     return dt.strftime('%Y-%m-%d_%H') + f'-{slot_min:02d}'
 
 
-def _is_in_session(dt):
-    """判断给定时间是否为A股交易时段（交易日 + 09:30-11:30 / 13:00-15:00）
-
-    午休 11:30-13:00 不算在内。
-    """
-    date_str = dt.strftime('%Y-%m-%d')
-    if not is_trading_day(date_str):
-        return False
-    t = dt.hour * 60 + dt.minute
-    # 09:30-11:30 (含)  或  13:00-15:00 (不含15:00，收盘)
-    return (9 * 60 + 30 <= t < 11 * 60 + 30) or (13 * 60 <= t < 15 * 60)
-
-
 def _should_trigger_scan(dt, current_cache_path):
     """是否应该触发一次后台扫描
 
     条件链：
-    1. 必须是交易日 + 交易时段（_is_in_session）
+    1. 必须是交易时段（is_trading_session）
     2. 当前15分钟时段没有有效缓存文件（有则跳过）
     """
     # 非交易时段 → 永不触发
-    if not _is_in_session(dt):
+    if not is_trading_session(dt):
         return False
     # 当前时段已有缓存 → 不重复扫
     if os.path.isfile(current_cache_path):

@@ -155,6 +155,24 @@ def is_trading_day(date_str: str) -> bool:
         return False
 
 
+def is_trading_session(dt=None):
+    """判断给定时间是否为A股交易时段
+
+    条件：交易日 + 盘中时段 (09:30-11:30 或 13:00-15:00)
+    午休 11:30-13:00、盘前、盘后、非交易日均返回 False。
+
+    Args:
+        dt: datetime 对象，默认当前时间
+    """
+    if dt is None:
+        dt = datetime.now()
+    date_str = dt.strftime('%Y-%m-%d')
+    if not is_trading_day(date_str):
+        return False
+    t = dt.hour * 60 + dt.minute
+    return (9 * 60 + 30 <= t < 11 * 60 + 30) or (13 * 60 <= t < 15 * 60)
+
+
 def dict_to_kline(d: dict) -> Kline:
     """dict → Kline"""
     return Kline(
