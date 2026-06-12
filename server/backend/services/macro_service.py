@@ -7,7 +7,7 @@ from datetime import datetime
 
 import requests
 
-from backend.config import CACHE_DIR
+from backend.config import DATA_DIR, CACHE_DIR
 
 
 # ── 美股代码对照表（与 external_mapping.json 的 23 只对齐） ──
@@ -198,7 +198,7 @@ def get_macro_data():
 
     # ── 外围供应链映射数据 ────────────────────────────
     external_mapping = {}
-    ext_path = os.path.join(os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'public', 'external_mapping.json')
+    ext_path = os.path.join(DATA_DIR, 'public', 'external_mapping.json')
     if os.path.isfile(ext_path):
         try:
             external_mapping = json.load(open(ext_path, encoding='utf-8'))

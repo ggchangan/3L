@@ -2,7 +2,7 @@
 import os, json
 from typing import List, Tuple, Optional
 
-DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
+from backend.config import DATA_DIR
 
 # ── 数据加载 ──
 

@@ -1,7 +1,7 @@
 """概念板块波谷追踪 — 服务层（V5评分 + 回测）"""
 import json, os, math, statistics
 
-DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
+from backend.config import DATA_DIR
 
 
 def _calc_ema(values, period):

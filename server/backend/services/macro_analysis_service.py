@@ -4,8 +4,11 @@
 - 返回原因摘要
 """
 import json
+import os
 import re
 import requests
+
+from backend.config import DATA_DIR
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
@@ -84,9 +87,8 @@ def analyze_us_stock_abnormal(code, name, change_pct):
 def _find_related_a_shares(code):
     """从映射表查找关联A股"""
     try:
-        import os
         ext_path = os.path.join(
-            os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'),
+            DATA_DIR,
             'public', 'external_mapping.json'
         )
         if not os.path.isfile(ext_path):
