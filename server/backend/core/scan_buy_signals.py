@@ -224,6 +224,42 @@ def get_main_lines():
     return []
 
 
+def get_full_mainlines():
+    """从主线缓存读取全量主线数据（行业+概念），返回完整字典
+    
+    返回结构:
+    {
+        'lines': ['电子化学品', ...],
+        'secondary': ['半导体', ...],
+        'concept_mainline': {
+            'lines': ['先进封装', ...],
+            'secondary': ['存储芯片', ...],
+        },
+    }
+    """
+    try:
+        if os.path.isfile(MAINLINES_CACHE_PATH):
+            with open(MAINLINES_CACHE_PATH) as f:
+                data = json.load(f)
+            # 兼容旧缓存格式：lines/secondary 可能是字符串列表或 dict 列表
+            # -> 统一转为 dict 列表 [{'name': '...'}] 供 get_stock_card 消费
+            for _key in ('lines', 'secondary'):
+                _raw = data.get(_key, [])
+                data[_key] = [{'name': n} if isinstance(n, str) else n for n in _raw]
+            # 确保 concept_mainline 存在（兼容旧缓存文件）
+            if 'concept_mainline' not in data:
+                data['concept_mainline'] = {'lines': [], 'secondary': []}
+            else:
+                _cm = data['concept_mainline']
+                for _key in ('lines', 'secondary'):
+                    _raw = _cm.get(_key, [])
+                    _cm[_key] = [{'name': n} if isinstance(n, str) else n for n in _raw]
+            return data
+    except:
+        pass
+    return {'lines': [], 'secondary': [], 'concept_mainline': {'lines': [], 'secondary': []}}
+
+
 def get_sub_main_lines():
     """从主线缓存读取次级主线列表"""
     try:
