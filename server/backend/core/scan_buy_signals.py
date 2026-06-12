@@ -309,7 +309,7 @@ def _parallel_fetch_klines(stocks, fetch_fn=None, max_workers=10):
     """线程池并行获取所有股票的K线
 
     瓶颈是腾讯行情 API（每个请求~0.3-0.5s），269只串行约2min，
-    并行后约20-30s。
+    并行后约20-30s。单只股票抓取失败只跳过不影响整体。
 
     Args:
         stocks: [{code, direction, name}, ...]
@@ -324,23 +324,38 @@ def _parallel_fetch_klines(stocks, fetch_fn=None, max_workers=10):
         from backend.core.buy_point_detection import get_realtime_kline
         fetch_fn = get_realtime_kline
 
-    results = [None] * len(stocks)
+    total = len(stocks)
+    results = [None] * total
     completed = 0
+    errors = 0
 
     def _fetch(i, s):
-        klines = fetch_fn(s['code'], s['direction'])
-        return i, s, klines
+        try:
+            klines = fetch_fn(s['code'], s['direction'])
+            return i, s, klines, None
+        except Exception as e:
+            return i, s, None, e
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [pool.submit(_fetch, i, s) for i, s in enumerate(stocks)]
         for future in as_completed(futures):
-            i, s, klines = future.result()
+            completed += 1
+            try:
+                i, s, klines, err = future.result()
+            except Exception as e:
+                log.error('并行抓取线程异常 (进度 %d/%d): %s', completed, total, e)
+                errors += 1
+                continue
+            if err:
+                log.warning('抓取失败 %s %s: %s', s.get('code', '?'), s.get('name', '?'), err)
+                errors += 1
+                continue
             if len(klines) >= 30:
                 results[i] = {**s, 'klines': klines}
-            completed += 1
-            if completed % 50 == 0:
-                print(f"  并行抓取进度: {completed}/{len(stocks)}", file=sys.stderr)
+            if completed % 50 == 0 or completed == total:
+                log.info('并行抓取进度: %d/%d (失败%d)', completed, total, errors)
 
+    log.info('并行抓取完成: %d只可用, %d只跳过/失败', len([r for r in results if r]), errors)
     return [r for r in results if r is not None]
 
 

@@ -442,3 +442,23 @@ class TestParallelKlineFetch:
         assert len(result) == 5
         for i in range(5):
             assert result[i]['code'] == f'{300+i}'
+
+    def test_parallel_handles_exception(self):
+        """某只股票抓取抛出异常应跳过不影响整体"""
+        from backend.core.scan_buy_signals import _parallel_fetch_klines
+        mock_stocks = [
+            {'code': '000001', 'direction': '半导体', 'name': '平安银行'},
+            {'code': '000002', 'direction': '房地产', 'name': '万科A'},
+        ]
+        call_count = [0]
+
+        def fake_klines(code, direction):
+            call_count[0] += 1
+            if code == '000002':
+                raise ConnectionError('模拟网络超时')
+            return [{'date': '2026-06-12', 'close': 10.0, 'volume': 1000}] * 35
+
+        result = _parallel_fetch_klines(mock_stocks, fetch_fn=fake_klines, max_workers=2)
+        assert len(result) == 1
+        assert result[0]['code'] == '000001'
+        assert call_count[0] == 2  # 两个都调了，一个失败
