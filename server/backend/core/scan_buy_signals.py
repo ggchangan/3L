@@ -5,6 +5,7 @@
 扫描完成后自动更新买点股票的SVG图表（含当天数据）
 """
 import json, os, sys, warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from backend.core.logger import get_logger
 
 log = get_logger(__name__)
@@ -302,6 +303,62 @@ def _estimate_full_day_volume(current_vol, now=None):
     return int(current_vol * total_min / elapsed)
 
 
+# ── 并行抓取 ──────────────────────────────────────
+
+def _parallel_fetch_klines(stocks, fetch_fn=None, max_workers=10):
+    """线程池并行获取所有股票的K线
+
+    瓶颈是腾讯行情 API（每个请求~0.3-0.5s），269只串行约2min，
+    并行后约20-30s。单只股票抓取失败只跳过不影响整体。
+
+    Args:
+        stocks: [{code, direction, name}, ...]
+        fetch_fn: 可注入 mock 用于测试，默认 get_realtime_kline
+        max_workers: 并行数（默认10）
+
+    Returns:
+        [{code, direction, name, klines}, ...]
+        只返回 klines 长度 >= 30 的股票，保持输入顺序。
+    """
+    if fetch_fn is None:
+        from backend.core.buy_point_detection import get_realtime_kline
+        fetch_fn = get_realtime_kline
+
+    total = len(stocks)
+    results = [None] * total
+    completed = 0
+    errors = 0
+
+    def _fetch(i, s):
+        try:
+            klines = fetch_fn(s['code'], s['direction'])
+            return i, s, klines, None
+        except Exception as e:
+            return i, s, None, e
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(_fetch, i, s) for i, s in enumerate(stocks)]
+        for future in as_completed(futures):
+            completed += 1
+            try:
+                i, s, klines, err = future.result()
+            except Exception as e:
+                log.error('并行抓取线程异常 (进度 %d/%d): %s', completed, total, e)
+                errors += 1
+                continue
+            if err:
+                log.warning('抓取失败 %s %s: %s', s.get('code', '?'), s.get('name', '?'), err)
+                errors += 1
+                continue
+            if len(klines) >= 30:
+                results[i] = {**s, 'klines': klines}
+            if completed % 50 == 0 or completed == total:
+                log.info('并行抓取进度: %d/%d (失败%d)', completed, total, errors)
+
+    log.info('并行抓取完成: %d只可用, %d只跳过/失败', len([r for r in results if r]), errors)
+    return [r for r in results if r is not None]
+
+
 def main():
     stocks = load_stock_list()
     print(f"加载自选股: {len(stocks)}只", file=sys.stderr)
@@ -317,15 +374,16 @@ def main():
     now = datetime.now()
     is_trading_hours = (9 <= now.hour < 15)  # 盘中
     
-    for s in stocks:
-        code = s['code']
-        direction = s['direction']
-        name = s['name']
-        
-        # 获取实时K线数据（缓存59天+今日实时）
-        klines = get_realtime_kline(code, direction)
-        if len(klines) < 30:
-            continue
+    # 并行抓取所有股票的K线（瓶颈：腾讯API调用）
+    print("并行抓取K线数据...", file=sys.stderr)
+    stocks_with_klines = _parallel_fetch_klines(stocks)
+    print(f"K线抓取完成: {len(stocks_with_klines)}只可用", file=sys.stderr)
+    
+    for entry in stocks_with_klines:
+        code = entry['code']
+        direction = entry['direction']
+        name = entry['name']
+        klines = entry['klines']
         
         # 盘中：用预估全天成交量替代今日真实成交量
         vol_estimated = False
