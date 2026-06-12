@@ -490,10 +490,15 @@ def generate_daily_review(date_str=None):
     save_json(REVIEW_DATA_PATH, review)
     print(f"[3L复盘] ✅ 已保存 {date_str} 复盘数据")
 
-    # 写入主线缓存
+    # 写入主线缓存（含行业+概念主线）
+    _cm = mainline_data.get('concept_mainline', {})
     _mainlines_cache = {
         'lines': [l['name'] for l in mainline_data.get('lines', [])],
         'secondary': [l['name'] for l in mainline_data.get('secondary', [])],
+        'concept_mainline': {
+            'lines': [l['name'] for l in _cm.get('lines', [])],
+            'secondary': [l['name'] for l in _cm.get('secondary', [])],
+        },
     }
     save_json(MAINLINES_CACHE_PATH, _mainlines_cache)
 
@@ -674,10 +679,15 @@ def compute_review_real_time(date_str=None):
                                          holdings_review=holdings_review, buy_signals_review=buy_signals_review,
                                          opportunity_map=opp_map)
 
-    # 写入主线缓存（供趋势候选页读）
+    # 写入主线缓存（供趋势候选页读，含行业+概念主线）
+    _cm = mainline_data.get('concept_mainline', {})
     _mainlines_cache = {
         'lines': [l['name'] for l in mainline_data.get('lines', [])],
         'secondary': [l['name'] for l in mainline_data.get('secondary', [])],
+        'concept_mainline': {
+            'lines': [l['name'] for l in _cm.get('lines', [])],
+            'secondary': [l['name'] for l in _cm.get('secondary', [])],
+        },
     }
     save_json(MAINLINES_CACHE_PATH, _mainlines_cache)
 

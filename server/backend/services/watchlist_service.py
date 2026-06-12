@@ -258,14 +258,14 @@ def get_watchlist_analysis(stocks=None, wl=None):
             pass
 
     from backend.core.data_layer import get_all_stocks, get_watchlist, _load_json
-    from backend.core.scan_buy_signals import get_main_lines
+    from backend.core.scan_buy_signals import get_full_mainlines
 
     if stocks is None:
         stocks = get_all_stocks()
     if wl is None:
         wl = get_watchlist()
     imap = _load_json(INDUSTRY_MAP_PATH, {})
-    _main_lines = get_main_lines()
+    _mainlines = get_full_mainlines()
 
     # 建倒排索引：code → klines，避免逐方向遍历
     kline_index = {}
@@ -304,7 +304,7 @@ def get_watchlist_analysis(stocks=None, wl=None):
                 code=code,
                 date_str=today_fmt,
                 market_position='波中',
-                main_lines=list(_main_lines) if _main_lines else [],
+                main_lines=_mainlines,
                 klines=kls,
             )
         except Exception as e:

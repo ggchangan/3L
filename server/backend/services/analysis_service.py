@@ -10,7 +10,7 @@ from backend.core.buy_point_detection import (
     _find_support_levels,
 )
 from backend.core.trend_trading import detect_trend_buy
-from backend.core.scan_buy_signals import get_main_lines
+from backend.core.scan_buy_signals import get_full_mainlines
 
 
 def search_and_analyze(query, stocks=None, wl=None):
@@ -80,7 +80,7 @@ def _analyze(code, direction, name, stocks, wl_codes):
         detect_huicai_buy_point, find_idx, _find_support_levels,
     )
     from backend.core.trend_trading import detect_trend_buy
-    from backend.core.scan_buy_signals import get_main_lines
+    from backend.core.scan_buy_signals import get_full_mainlines
     from backend.core.ema_utils import ema_list
 
     kls = stocks[direction][code]
@@ -91,14 +91,14 @@ def _analyze(code, direction, name, stocks, wl_codes):
     today_fmt = f'{today_str[:4]}-{today_str[4:6]}-{today_str[6:8]}'
     is_watchlist = code in wl_codes
 
-    # 通过 StockCardService 获取核心数据
-    _main_lines = get_main_lines()
+    # 通过 StockCardService 获取核心数据（含行业+概念主线）
+    _mainlines = get_full_mainlines()
     try:
         card = get_stock_card(
             code=code,
             date_str=today_fmt,
             market_position='波中',
-            main_lines=list(_main_lines) if _main_lines else [],
+            main_lines=_mainlines,
             direction=direction,
             klines=kls,
         )
