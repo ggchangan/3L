@@ -23,50 +23,52 @@ export default function BuySignalsArea() {
   // 提取扫描时间中的 HH:MM 部分
   const scanTimeShort = scanMeta.scan_time
     ? scanMeta.scan_time.length >= 16
-      ? scanMeta.scan_time.slice(11, 16)  // "2026-06-04 10:19:57" → "10:19"
+      ? scanMeta.scan_time.slice(11, 16)
       : scanMeta.scan_time
     : ''
-  // 下一次扫描 ≈ 当前整点 +1h（简化：只显示下一整点）
-  const nextScan = scanMeta.scan_time
-    ? (parseInt(scanMeta.scan_time.slice(11, 13)) + 1) % 24 + ':00'
-    : ''
 
+  // 初始加载 + 30s轮询（API秒回，后台缓存更新后自动刷新）
   useEffect(() => {
-    Promise.all([
-      fetchBuySignals(),
-      fetchIndustryBoards(),
-      fetchIndustryMap(),
-      fetch('/api/directions/get').then(r => r.json()),
-    ]).then(([signalsData, boardsData, mapData, dirData]) => {
-      setDirOrder(dirData.all || [])
-      const boards: IndustryBoardItem[] = boardsData.data || []
-      const sectorChg: Record<string, number> = {}
-      boards.forEach(b => {
-        const name = b['板块'] || b['名称'] || ''
-        sectorChg[name] = parseFloat(String(b['涨跌幅'] || 0))
-      })
+    const fetchData = () => {
+      Promise.all([
+        fetchBuySignals(),
+        fetchIndustryBoards(),
+        fetchIndustryMap(),
+        fetch('/api/directions/get').then(r => r.json()),
+      ]).then(([signalsData, boardsData, mapData, dirData]) => {
+        setDirOrder(dirData.all || [])
+        const boards: IndustryBoardItem[] = boardsData.data || []
+        const sectorChg: Record<string, number> = {}
+        boards.forEach(b => {
+          const name = b['板块'] || b['名称'] || ''
+          sectorChg[name] = parseFloat(String(b['涨跌幅'] || 0))
+        })
 
-      const enriched: BuySignalItem[] = (signalsData.signals || []).map(s => {
-        const code = s.code.replace(/^sh|^sz|^SH|^SZ/, '')
-        const mapEntry = (mapData as IndustryMap)[code] || (mapData as IndustryMap)[s.code] || {}
-        const sectorName = mapEntry.ths_industry || ''
-        return { ...s, sector: sectorName, sector_chg: sectorChg[sectorName] || 0 }
-      })
+        const enriched: BuySignalItem[] = (signalsData.signals || []).map(s => {
+          const code = s.code.replace(/^sh|^sz|^SH|^SZ/, '')
+          const mapEntry = (mapData as IndustryMap)[code] || (mapData as IndustryMap)[s.code] || {}
+          const sectorName = mapEntry.ths_industry || ''
+          return { ...s, sector: sectorName, sector_chg: sectorChg[sectorName] || 0 }
+        })
 
-      const g: Record<string, BuySignalItem[]> = {}
-      enriched.forEach(s => {
-        const dir = s.direction || '其他'
-        if (!g[dir]) g[dir] = []
-        g[dir].push(s)
-      })
-      setGroups(g)
-      setScanMeta({ scan_time: signalsData.scan_time, stocks_scanned: signalsData.stocks_scanned })
+        const g: Record<string, BuySignalItem[]> = {}
+        enriched.forEach(s => {
+          const dir = s.direction || '其他'
+          if (!g[dir]) g[dir] = []
+          g[dir].push(s)
+        })
+        setGroups(g)
+        setScanMeta({ scan_time: signalsData.scan_time, stocks_scanned: signalsData.stocks_scanned })
 
-      const dirs = Object.keys(g)
-      if (dirs.length > 0 && !g[activeDir]) {
-        setActiveDir(dirs[0])
-      }
-    })
+        const dirs = Object.keys(g)
+        if (dirs.length > 0 && !g[activeDir]) {
+          setActiveDir(dirs[0])
+        }
+      })
+    }
+    fetchData()
+    const timer = setInterval(fetchData, 30000)
+    return () => clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -105,8 +107,7 @@ export default function BuySignalsArea() {
           border: '1px solid rgba(78, 205, 196, 0.15)',
         }}>
           <span style={{ fontSize: 12, color: '#4ecdc4' }}>
-            ⏱ 上次扫描: <strong>{scanTimeShort}</strong>
-            {nextScan ? <span style={{ color: '#888', marginLeft: 12, fontSize: 11 }}>下次: ~{nextScan}</span> : ''}
+            ⏱ 缓存时间: <strong>{scanTimeShort}</strong>
           </span>
           <span style={{ fontSize: 11, color: '#888' }}>
             {scanMeta.stocks_scanned || 0}只扫描 · {Object.values(groups).flat().length}个信号
