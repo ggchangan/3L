@@ -17,8 +17,11 @@ export default function BuySignalsArea() {
   const [page, setPage] = useState(1)
   const [scanMeta, setScanMeta] = useState<{ scan_time?: string; stocks_scanned?: number }>({})
   const [searchQ, setSearchQ] = useState('')
-  const [prevActiveDir, setPrevActiveDir] = useState('')
   const [dirOrder, setDirOrder] = useState<string[]>([])
+
+  // 用 ref 保持最新 activeDir 引用，避免轮询闭包捕获旧值
+  const activeDirRef = useRef(activeDir)
+  activeDirRef.current = activeDir
 
   // 提取扫描时间中的 HH:MM 部分
   const scanTimeShort = scanMeta.scan_time
@@ -61,7 +64,7 @@ export default function BuySignalsArea() {
         setScanMeta({ scan_time: signalsData.scan_time, stocks_scanned: signalsData.stocks_scanned })
 
         const dirs = Object.keys(g)
-        if (dirs.length > 0 && !g[activeDir]) {
+        if (dirs.length > 0 && !g[activeDirRef.current]) {
           setActiveDir(dirs[0])
         }
       })
