@@ -626,13 +626,19 @@ def get_stock_card(code, date_str, market_position='波中',
         if sector_chg_5d is not None:
             vs_sector_5d = round(stock_chg_5d - sector_chg_5d, 2)
 
-    # 7c. 操作建议（由卡片统一推导，外部不重复计算）
-    action_type = _calc_action_type(signal, struct_info.get('stage', '--'), fusion_type)
-    action_signal = _calc_action_signal(signal, struct_info.get('stage', '--'),
-                                         fusion_type, triggered_signals)
-    action_priority = _calc_action_priority(signal, struct_info.get('stage', '--'), fusion_type)
+    # 7c. 阶段显示修复：突破买点与区间顶部的显示矛盾
+    _raw_stage = struct_info.get('stage', '--')
+    if buy_point == '突破买点' and _raw_stage == '区间顶部':
+        _display_stage = '突破位'
+    else:
+        _display_stage = _raw_stage
+
+    # 7d. 操作建议（由卡片统一推导，外部不重复计算）
+    action_type = _calc_action_type(signal, _raw_stage, fusion_type)
+    action_signal = _calc_action_signal(signal, _raw_stage, fusion_type, triggered_signals)
+    action_priority = _calc_action_priority(signal, _raw_stage, fusion_type)
     action_reason = _calc_action_reason(signal, struct_info.get('structure', '--'),
-                                         struct_info.get('stage', '--'),
+                                         _raw_stage,
                                          fusion_reason, triggered_signals, buy_point)
 
     # 8. 构建卡片
@@ -645,7 +651,7 @@ def get_stock_card(code, date_str, market_position='波中',
         'change': change,
         'date': date_clean,
         'structure': struct_info.get('structure', '--'),
-        'stage': struct_info.get('stage', '--'),
+        'stage': _display_stage,
         'ema': struct_info.get('ema', '--'),
         'ema5': ema5_val,
         'ema10': ema10_val,
