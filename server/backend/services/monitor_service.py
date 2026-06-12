@@ -101,8 +101,18 @@ def _run_scan_sync(cache_file=None):
             [sys.executable, scan_file],
             capture_output=True, text=True, timeout=120
         )
-        if r.returncode == 0:
-            data = json.loads(r.stdout)
+        # stdout 可能混有日志行，提取最后一行JSON
+        data = None
+        if r.returncode == 0 or r.stdout:
+            for line in reversed(r.stdout.strip().split('\n')):
+                line = line.strip()
+                if line.startswith('{'):
+                    try:
+                        data = json.loads(line)
+                        break
+                    except json.JSONDecodeError:
+                        continue
+        if data and isinstance(data, dict):
             if cache_file:
                 atomic_json_dump(data, cache_file)
             log.info('买点信号扫描完成 (%d条)', len(data.get('signals', [])))
