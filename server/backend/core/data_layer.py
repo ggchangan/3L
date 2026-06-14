@@ -48,27 +48,18 @@ def _atomic_save_json(path, data):
     os.rename(tmp, path)
 
 # ====== K线数据 ======
-def _load_all_stocks_from_disk():
-    raw = _load_json(ALL_STOCKS_PATH, {})
-    return raw.get('stocks', raw)
-
 def get_all_stocks():
-    """返回 {方向: {code: [klines]}} 格式的K线数据（优先JSON缓存，无JSON时从DB读取）"""
-    # 优先 JSON（快速，测试环境大量调用）
-    json_path = ALL_STOCKS_PATH
-    if os.path.isfile(json_path):
-        return cache.get('all_stocks', _load_all_stocks_from_disk, ttl=30)
-    # JSON 不存在 → 从 DB 读
+    """主入口：从MySQL读取K线数据，按方向分组（缓存30s）"""
     try:
-        return cache.get('all_stocks_db', lambda: get_all_stocks_db(), ttl=30)
+        return cache.get('all_stocks', lambda: get_all_stocks_db(), ttl=30)
     except Exception as e:
         log.warning('DB获取K线失败(%s)，返回空', e)
         return {'last_updated': ''}
 
+
 def get_all_stocks_db(limit: int = 60):
     """从 TushareDB 读取K线数据，按方向分组
 
-    替代 get_all_stocks() 的 JSON 路径。
     方向分组从 watchlist 的方向标签推导，不在自选股中的股票归入"其他"。
 
     Returns:
@@ -176,12 +167,6 @@ def save_all_stocks(stocks, last_updated=None):
     if total:
         log.info('save_all_stocks: %d条写入DB', total)
 
-def load_all_stocks_uncached():
-    """强制从磁盘读取K线数据（不走缓存），供更新脚本使用"""
-    raw = _load_json(ALL_STOCKS_PATH, {})
-    return raw.get('stocks', raw)
-
-
 def _clear_stock_chart_svg_cache():
     """清除所有个股SVG图表缓存
 
@@ -237,9 +222,7 @@ INDEX_CODES = {
 }
 
 def get_index_data():
-    """返回完整指数数据 {last_updated, indices: {code: {name, klines}}}（优先JSON，无JSON时从DB读取）"""
-    if os.path.isfile(INDEX_DATA_PATH):
-        return cache.get('index_data', lambda: _load_json(INDEX_DATA_PATH, {}), ttl=60)
+    """主入口：从MySQL读取指数数据（缓存60s）"""
     try:
         from backend.services.tushare_db import TushareDB
         db = TushareDB()
@@ -288,39 +271,6 @@ def save_index_data(data):
             log.info('save_index_data: %d条写入DB', total)
     except Exception as e:
         log.warning('save_index_data写入DB失败: %s', e)
-
-def load_index_data_uncached():
-    """强制从磁盘读取指数数据（不走缓存），供更新脚本使用
-    兼容旧格式：
-      - 纯 [{date, ...}] → 自动转换为多指数格式 {indices: {000985: {klines: ...}}}
-      - {last_updated, klines} → 自动转换为多指数格式
-    """
-    raw = _load_json(INDEX_DATA_PATH, {})
-    if isinstance(raw, list):
-        # 旧格式迁移：纯K线列表
-        klines = raw
-        latest = klines[-1]['date'] if klines else ''
-        data = {
-            'last_updated': latest,
-            'indices': {
-                '000985': {'name': '中证全指', 'klines': klines},
-            }
-        }
-        _atomic_save_json(INDEX_DATA_PATH, data)
-        return data
-    if 'klines' in raw and 'indices' not in raw:
-        # 旧格式迁移：{last_updated, klines}
-        latest = raw.get('last_updated', '')
-        klines = raw.get('klines', [])
-        data = {
-            'last_updated': latest,
-            'indices': {
-                '000985': {'name': '中证全指', 'klines': klines},
-            }
-        }
-        _atomic_save_json(INDEX_DATA_PATH, data)
-        return data
-    return raw
 
 def get_index_klines(code=INDEX_CODE):
     """返回指定指数代码的K线列表，默认中证全指"""
@@ -866,3 +816,9 @@ def build_industry_stock_map(industry_map_data=None):
         if _ind:
             mapping.setdefault(_ind, []).append(_code)
     return mapping
+
+
+# 别名，保持向后兼容（update_stock_data.py 等仍 import 这些名字）
+# 必须放最后，确保 get_all_stocks_db / get_index_data 已定义
+load_all_stocks_uncached = get_all_stocks_db
+load_index_data_uncached = get_index_data
