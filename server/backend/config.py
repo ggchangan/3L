@@ -119,6 +119,13 @@ SOURCES_THS_SECTOR_DAILY = os.path.join(SOURCES_THS_DIR, 'sector_daily.json')
 CONCEPT_DATA_SOURCE = 'ths'
 
 # =====================================================
+# Tushare Pro 配置（2026-06-14 新增）
+# 从 .env 读取，不硬编码
+# =====================================================
+TUSHARE_TOKEN = _env('TUSHARE_TOKEN', '')
+TUSHARE_TOKEN_HIGH = _env('TUSHARE_TOKEN_HIGH', '') or TUSHARE_TOKEN
+
+# =====================================================
 # 服务器配置
 # =====================================================
 SERVER_PORT = int(_env('PORT', '8080'))
