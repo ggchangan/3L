@@ -226,11 +226,269 @@ CREATE TABLE trade_cal (
 
 ---
 
-## 3. 数据存储架构重整
+## 3. 数据拉取计划
+
+### 3.1 Tushare 接口调用总表
+
+| API | 说明 | 最低积分 | 回填方式 | 增量方式 | 写入表 |
+|-----|------|---------|---------|---------|-------|
+| `stock_basic` | A股列表+行业 | 免费 | 1次全量,5000+只 | 每月1次增量 | `stock_basic` |
+| `trade_cal` | 交易日历 | 免费 | 1次全量,10年 | 每年1次 | `trade_cal` |
+| `ths_index` | 同花顺板块列表 | 免费 | 1次全量(行业+概念) | 每月1次 | `ths_index` |
+| `ths_member` | 板块成分股 | 免费 | ~500板块逐次 | 每月1次 | `ths_member` |
+| `daily` | 个股日线 | 2000 | 全量5000只×2年 | 每日自选股~50只 | `stock_daily` |
+| `daily_basic` | 每日指标(PE/PB) | 2000 | 全量5000只×2年 | 每日自选股~50只 | `daily_basic` |
+| `adj_factor` | 复权因子 | 2000 | 全量5000只×2年 | 每日自选股 | `adj_factor` |
+| `index_daily` | 指数日线 | 免费 | 4个指数×2年 | 每日追加 | `index_daily` |
+| `ths_daily` | 板块日线 | 免费 | ~500板块×2年 | 每日追加 | `ths_daily` |
+
+### 3.2 一次性回填（15000积分账号）
+
+按依赖顺序依次执行，每张表完成后打印进度。
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  回填顺序（从上到下，并行无依赖的可以并发）                │
+│                                                          │
+│  Step 1: stock_basic + trade_cal + ths_index (3个免费)   │
+│              │  (可并发, 互不依赖)                        │
+│  Step 2: ths_member (依赖 ths_index 的板块ts_code)         │
+│              │                                            │
+│  Step 3: index_daily + adj_factor (可并发)                │
+│              │                                            │
+│  Step 4: ths_daily (依赖 ths_index 的板块ts_code)          │
+│              │                                            │
+│  Step 5: stock_daily (分批, 500只/批, 每批1次调用)         │
+│              │                                            │
+│  Step 6: daily_basic (分批, 500只/批, 每批1次调用)         │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Step 1 — stock_basic（免费，1次调用）
+
+```python
+pro = ts.pro_api(token_high)
+df = pro.stock_basic(
+    fields='ts_code,symbol,name,area,industry,market,list_date,delist_date,is_hs'
+)
+# → stock_basic 表，全量~5300只A股
+```
+
+**Tushare 返回字段：**
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| ts_code | str | 股票代码(600519.SH) |
+| symbol | str | 6位代码 |
+| name | str | 股票名称 |
+| area | str | 地域 |
+| industry | str | 申万行业 |
+| market | str | 主板/创业板/科创板 |
+| list_date | str | 上市日期 |
+| delist_date | str | 退市日期 |
+| is_hs | str | 沪深港通标 |
+
+#### Step 1 — trade_cal（免费，1次调用）
+
+```python
+df = pro.trade_cal(exchange='SSE', start_date='20200101', end_date='20271231',
+                   fields='exchange,cal_date,is_open,pretrade_date')
+# → trade_cal 表
+```
+
+#### Step 1 — ths_index（免费，2次调用）
+
+```python
+df_i = pro.ths_index(type='I')  # 行业板块, ~90个
+df_n = pro.ths_index(type='N')  # 概念板块, ~400个
+# → ths_index 表
+```
+
+**Tushare 返回字段：**
+| 字段 | 说明 |
+|------|------|
+| ts_code | 板块代码(881121.TI) |
+| name | 板块名(电子) |
+| count | 成分股数量 |
+| list_date | 上市日 |
+| type | I=行业, N=概念 |
+
+#### Step 2 — ths_member（免费，~490次调用）
+
+```python
+# 遍历 ths_index 的每个板块，逐次拉取
+for _, row in ths_index.iterrows():
+    df = pro.ths_member(ts_code=row['ts_code'],
+                        fields='ts_code,con_code,con_name,weight')
+    # → ths_member 表
+```
+
+**Tushare 返回字段：**
+| 字段 | 说明 |
+|------|------|
+| ts_code | 板块代码 |
+| con_code | 成分股代码 |
+| con_name | 成分股名称 |
+| weight | 权重% |
+
+**限流：** 每次间隔≥0.4秒。490次 ≈ 3.5分钟。
+
+#### Step 3 — index_daily（免费，4次调用）
+
+```python
+for code in ['000001.SH', '000688.SH', '000985.SH', '399006.SZ']:
+    df = pro.index_daily(ts_code=code, start_date='20240101', end_date=today,
+                         fields='ts_code,trade_date,open,high,low,close,pre_close,change,pct_chg,vol,amount')
+    # → index_daily 表
+```
+
+**Tushare 返回字段：** 与 stock_daily 结构相同。
+
+#### Step 3 — adj_factor（2000积分，分批调用）
+
+```python
+# 同 stock_daily 分批逻辑，500只/批
+for batch in chunks(all_codes, 500):
+    df = pro.adj_factor(ts_code=','.join(batch),
+                        start_date='20240101', end_date=today,
+                        fields='ts_code,trade_date,adj_factor')
+    # → adj_factor 表
+```
+
+#### Step 4 — ths_daily（免费，分批调用）
+
+```python
+# 遍历 ths_index 中的 ~490个板块，按50个/批拉取
+ths_codes = ths_index['ts_code'].tolist()
+for batch in chunks(ths_codes, 50):
+    df = pro.ths_daily(ts_code=','.join(batch),
+                       start_date='20240101', end_date=today,
+                       fields='ts_code,trade_date,open,high,low,close,pre_close,change,pct_chg,vol,amount')
+    # → ths_daily 表
+```
+
+**注意：** `ths_daily` 的 ts_code 参数不能传过多代码，实测50个/批较安全。~490板块 ÷ 50 = 10批。
+
+#### Step 5 — stock_daily（2000积分，分批，500只/批）
+
+```python
+codes = stock_basic['ts_code'].tolist()  # ~5300只
+for batch in chunks(codes, 500):
+    df = pro.daily(ts_code=','.join(batch),
+                   start_date='20240101', end_date=today,
+                   fields='ts_code,trade_date,open,high,low,close,pre_close,change,pct_chg,vol,amount')
+    # → stock_daily 表
+```
+
+**Tushare 返回字段：**
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| ts_code | str | 股票代码 |
+| trade_date | str | 交易日期(20260613) |
+| open | float | 开盘价 |
+| high | float | 最高价 |
+| low | float | 最低价 |
+| close | float | 收盘价 |
+| pre_close | float | 昨收价 |
+| change | float | 涨跌额 |
+| pct_chg | float | 涨跌幅% |
+| vol | float | 成交量(股) |
+| amount | float | 成交额(元) |
+
+#### Step 6 — daily_basic（2000积分，分批，500只/批）
+
+```python
+for batch in chunks(codes, 500):
+    df = pro.daily_basic(ts_code=','.join(batch),
+                         start_date='20240101', end_date=today,
+                         fields='ts_code,trade_date,close,turnover_rate,turnover_rate_f,volume_ratio,pe,pe_ttm,pb,ps,pcf,total_mv,circ_mv,total_share,float_share,free_share')
+    # → daily_basic 表
+```
+
+**Tushare 返回字段：**
+| 字段 | 说明 |
+|------|------|
+| ts_code | 股票代码 |
+| trade_date | 交易日期 |
+| close | 收盘价 |
+| turnover_rate | 换手率% |
+| turnover_rate_f | 自由流通换手率% |
+| volume_ratio | 量比 |
+| pe | 动态市盈率 |
+| pe_ttm | 滚动市盈率 |
+| pb | 市净率 |
+| ps | 市销率 |
+| pcf | 市现率 |
+| total_mv | 总市值(万元) |
+| circ_mv | 流通市值(万元) |
+| total_share | 总股本(万股) |
+| float_share | 流通股本(万股) |
+| free_share | 自由流通股本(万股) |
+
+### 3.3 每日增量（2000积分账号）
+
+```python
+def daily_incremental_update(pro, db, trade_date):
+    """每日增量更新"""
+    # 1. 自选股列表（从 config/watchlist.json 读取）
+    watchlist_codes = get_watchlist_codes()
+    ts_codes = [code_to_ts(c) for c in watchlist_codes]
+    ts_codes_str = ','.join(ts_codes)
+    
+    # 2. 个股日线（仅自选股）
+    df = pro.daily(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
+    db.upsert_many('stock_daily', df)
+    
+    # 3. 每日指标
+    df = pro.daily_basic(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
+    db.upsert_many('daily_basic', df)
+    
+    # 4. 复权因子（仅自选股）
+    df = pro.adj_factor(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
+    db.upsert_many('adj_factor', df)
+    
+    # 5. 指数（免费）
+    for code in ['000001.SH', '000688.SH', '000985.SH', '399006.SZ']:
+        df = pro.index_daily(ts_code=code, start_date=trade_date, end_date=trade_date)
+        db.upsert_many('index_daily', df)
+    
+    # 6. 板块日线（免费，全量板块）
+    ths_codes = db.get_all_ths_codes()
+    for batch in chunks(ths_codes, 50):
+        df = pro.ths_daily(ts_code=','.join(batch), start_date=trade_date, end_date=trade_date)
+        db.upsert_many('ths_daily', df)
+```
+
+**各API每日调用次数：**
+| API | 调用次数 | 说明 |
+|-----|---------|------|
+| `daily` | 1次 | 50只自选股一次传 |
+| `daily_basic` | 1次 | 同上 |
+| `adj_factor` | 1次 | 同上 |
+| `index_daily` | 4次 | 4个指数各1次 |
+| `ths_daily` | 10次 | ~490板块÷50/批 |
+| **合计** | **17次** | 远低于200次/分钟限流 |
+
+### 3.4 表结构一览（全部9张表）
+
+| 表名 | Tushare API | PRIMARY KEY | 行数预估(2年) | 核心字段 |
+|------|------------|-------------|-------------|---------|
+| `stock_daily` | `daily` | (ts_code, trade_date) | 250万 | open,close,high,low,vol,amount,pct_chg |
+| `daily_basic` | `daily_basic` | (ts_code, trade_date) | 250万 | pe_ttm,pb,total_mv,circ_mv,turnover_rate |
+| `index_daily` | `index_daily` | (ts_code, trade_date) | 2000 | open,close,high,low,vol,pct_chg |
+| `ths_daily` | `ths_daily` | (ts_code, trade_date) | 25万 | open,close,high,low,vol,pct_chg |
+| `ths_index` | `ths_index` | (ts_code) | 490 | name,count,type |
+| `ths_member` | `ths_member` | (ts_code, con_code) | 5万 | con_name,weight |
+| `stock_basic` | `stock_basic` | (ts_code) | 5300 | name,industry,market |
+| `adj_factor` | `adj_factor` | (ts_code, trade_date) | 250万 | adj_factor |
+| `trade_cal` | `trade_cal` | (exchange, cal_date) | 2000 | is_open |
+
+完整的 CREATE TABLE SQL 见 **§2.1**。
+
+## 4. 数据存储架构重整
 
 趁这次改成表格存储，把整个数据目录重新设计一遍。
 
-### 3.1 新目录结构
+### 4.1 新目录结构
 
 ```
 data/
@@ -285,7 +543,7 @@ data/
 └── ...（其他根目录散落的原始数据文件）
 ```
 
-### 3.2 全量文件迁移清单（逐个文件列全）
+### 4.2 全量文件迁移清单（逐个文件列全）
 
 #### 🔴 01 — 删除（被 DB 替代）
 
@@ -389,7 +647,7 @@ data/
 | `private/.wechat_*` | 159K | 微信偏移量/去重缓存，保留原处 |
 | `private/alarm_music_design.md` | 2.5K | 文档，移到 knowledge_base/ |
 
-### 3.3 各文件用途与结构示例
+### 4.3 各文件用途与结构示例
 
 #### tushare.db — SQLite 主库
 
@@ -724,7 +982,7 @@ data/
 
 所有cache文件格式由各自写入模块决定，无统一Schema约束。
 
-### 3.4 计算方式优化
+### 4.4 计算方式优化
 
 有了 Tushare DB 全量数据后，一些计算结果可以从"定时缓存"改为"按需计算"：
 
@@ -736,7 +994,7 @@ data/
 | `sub_sector_clusters.json` (44K) | 定时计算子行业 | 改为按需计算（从 ths_index + ths_member 聚合） |
 | `mainlines_cache.json` (4K) | 复盘时写入一次 | 保持（每日计算一次，供趋势候选模块读取） |
 
-### 3.4 文件路径更新
+### 4.5 文件路径更新
 
 `config.py` 中的路径常量全部对应更新：
 
@@ -780,16 +1038,16 @@ COMPUTED_DIR      = os.path.join(DATA_DIR, 'computed')
 CACHE_DIR         = os.path.join(DATA_DIR, 'cache')    # 已有，不变
 ```
 
-## 4. 双账号策略
+## 5. 双账号策略
 
-### 4.1 账号分工
+### 5.1 账号分工
 
 | 阶段 | 使用账号 | 工作内容 | 需解锁的接口 |
 |------|---------|---------|------------|
 | **一次性回填** | 15000积分账号 | 全量回填6年以上历史数据。高积分解锁全部接口，部分接口有最低积分门槛（如 `adj_factor` 等）。 | `daily`, `daily_basic`, `adj_factor`, `index_daily`, `ths_daily`, `ths_index`, `ths_member`, `stock_basic`, `trade_cal` |
 | **每日增量** | 2000积分账号 | 每日追加最新数据+日常查询。2000积分已可调用核心接口 `daily` / `daily_basic` / `ths_daily` 等。 | `daily`, `daily_basic`, `index_daily`, `ths_daily`, `ths_index`, `stock_basic`, `trade_cal` |
 
-### 4.2 回填策略（15000积分账号 → 一次性）
+### 5.2 回填策略（15000积分账号 → 一次性）
 
 **步骤:** 全量数据回填，分批执行确保不超200次/分钟限制。
 
@@ -820,7 +1078,7 @@ BATCH_SIZE = 200      # 最大每批股票数
 
 **历史深度：** 回填最近 **2年**（2024-01 ~ 2026，约500个交易日）的日线数据。覆盖完整牛熊周期，足够EMA分析、波谷判定、买点回测使用。后续增量更新自动累积。
 
-### 4.3 每日增量（2000积分账号 → 日常）
+### 5.3 每日增量（2000积分账号 → 日常）
 
 ```python
 # 每日cron运行:
@@ -863,9 +1121,9 @@ trade_cal:     1次
 
 ---
 
-## 5. 与现有系统集成
+## 6. 与现有系统集成
 
-### 5.1 数据流变化
+### 6.1 数据流变化
 
 ```
 当前:
@@ -879,7 +1137,7 @@ trade_cal:     1次
   查询:   data_layer.py → SQLite DB → 返回现有合约(Kline等)
 ```
 
-### 4.2 data_layer.py 改造
+### 6.2 data_layer.py 改造
 
 现有 `data_layer.py` 的功能接口**完全保留不动**，只在底层增加 SQLite 读取路径：
 
@@ -907,7 +1165,7 @@ Phase 2: DB验证OK后，业务代码默认读DB
 Phase 3: 确认稳定后，删除JSON路径
 ```
 
-### 4.3 板块数据改造
+### 6.3 板块数据改造
 
 当前板块K线和快照存储在 `sector_daily.json` 中，迁移后：
 
@@ -926,7 +1184,7 @@ Phase 3: 确认稳定后，删除JSON路径
 
 ---
 
-## 6. 实施步骤
+## 7. 实施步骤
 
 ### Phase 0: 基建（0.5天）
 - [ ] 安装 Tushare
@@ -964,9 +1222,9 @@ Phase 3: 确认稳定后，删除JSON路径
 
 ---
 
-## 7. 风险与注意事项
+## 8. 风险与注意事项
 
-### 7.1 板块代码映射（已识别）
+### 8.1 板块代码映射（已识别）
 
 当前系统用中文板块名称作为key，Tushare 用 `ts_code`（如 `881121.TI`）。
 
@@ -978,7 +1236,7 @@ ts_code = db.get_ths_code_by_name('人工智能')
 # 覆盖当前 get_sector_klines('人工智能', 'concept') 的调用
 ```
 
-### 7.2 前复权价格差异
+### 8.2 前复权价格差异
 
 Tushare 前复权 vs 当前 mootdx 手动矫正：
 - Tushare：统一用 `adj='qfq'` 参数获取前复权数据
@@ -990,13 +1248,13 @@ Tushare 前复权 vs 当前 mootdx 手动矫正：
 
 **验证：** A/B对比脚本比较DB复权价格与当前mootdx价格差异阈值（价差<1%即通过）。
 
-### 7.3 当前JSON文件的过渡期
+### 8.3 当前JSON文件的过渡期
 
 已有用户持仓/自选股的判断逻辑依赖 `all_stocks_60d.json` 中的K线数据。
 
 **方案：** 过渡期 JSON 和 DB 双写，`data_layer` 优先读 DB，DB 无数据时回退 JSON。过渡期结束后删除 JSON 路径。
 
-### 7.4 各接口权限门槛
+### 8.4 各接口权限门槛
 
 Tushare 积分是权限等级，每个接口有最低积分要求。以下是我们需要的接口及其门槛：
 
@@ -1015,13 +1273,13 @@ Tushare 积分是权限等级，每个接口有最低积分要求。以下是我
 **结论：** 2000积分账号即可调用我们需要的全部接口。
 15000积分账号的优势在于**一次性回填**时更高的调用频率容忍度，以及日后可能需要的**高级接口**（如资金流向、财务数据等）。
 
-### 7.5 数据库备份
+### 8.5 数据库备份
 
 SQLite 单文件，每天cron `cp tushare.db backup/tushare_$(date +%Y%m%d).db` 即可。
 
 ---
 
-## 8. 与现有数据源的关系
+## 9. 与现有数据源的关系
 
 | 数据类型 | 迁移后主源 | 保留源 | 何时用保留源 |
 |---------|-----------|-------|------------|
@@ -1039,7 +1297,7 @@ SQLite 单文件，每天cron `cp tushare.db backup/tushare_$(date +%Y%m%d).db` 
 
 ---
 
-## 9. 代码结构
+## 10. 代码结构
 
 ```
 server/backend/
