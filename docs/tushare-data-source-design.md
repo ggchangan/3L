@@ -264,7 +264,7 @@ BATCH_INTERVAL = 0.4  # 秒
 BATCH_SIZE = 200      # 最大每批股票数
 ```
 
-**历史深度：** 回填最近 **6年**（约1500个交易日）的日线数据。足够EMA分析、波谷判定、买点回测使用。
+**历史深度：** 回填最近 **2年**（2024-01 ~ 2026，约500个交易日）的日线数据。覆盖完整牛熊周期，足够EMA分析、波谷判定、买点回测使用。后续增量更新自动累积。
 
 ### 3.3 每日增量（2000积分账号 → 日常）
 
@@ -582,13 +582,13 @@ def backfill_all():
     codes = get_all_ts_codes()
     for batch in chunks(codes, 500):
         df = pro.daily(ts_code=','.join(batch), 
-                       start_date='20200101', 
+                       start_date='20240101', 
                        end_date=today)
         db.upsert_many('stock_daily', df)
     
     # 5. index_daily - 免费
     for index_code in ['000985.SH', '000001.SH', '000688.SH', '399006.SZ']:
-        df = pro.index_daily(ts_code=index_code, start_date='20200101')
+        df = pro.index_daily(ts_code=index_code, start_date='20240101')
         db.upsert_many('index_daily', df)
     
     # ... 后续表类似
