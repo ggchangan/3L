@@ -285,75 +285,109 @@ data/
 └── ...（其他根目录散落的原始数据文件）
 ```
 
-### 3.2 文件迁移清单（详细）
+### 3.2 全量文件迁移清单（逐个文件列全）
 
-#### 🔴 删除（被 DB 替代，不再需要）
+#### 🔴 01 — 删除（被 DB 替代）
 
-| 文件 | 大小 | 替代方 |
-|------|------|--------|
-| `all_stocks_60d.json` | 2.1M | → `stock_daily` 表 |
-| `sector_daily.json` | 15M | → `ths_daily` + `ths_index` 表 |
-| `sector_daily.ths.backup*` | 2.5M | → 同上 |
-| `index_sh_data.json` | 88K | → `index_daily` 表 |
-| `stock_industry_map.json` | 376K | → `stock_basic.industry` |
-| `all_stock_codes.json` | 152K | → `stock_basic` 表 |
-| `all_a_stocks.json` | 136K | → `stock_basic` 表 |
-| `board_constituents.json` | 180K | → `ths_member` 表 |
-| `board_names_cache.json` | 40K | → `ths_index` 表 |
-| `stock_on_demand_cache.json` | 4K | 不再需要（DB有全量） |
-| `sources/` 目录 | 1.9M | → `ths_daily` + `ths_index` 表 |
-| `map/` 目录 | 1.6M | → `ths_index` + `ths_member` 表 |
-| `private/trading_days_cache.json` | 124K | → `trade_cal` 表 |
-| **合计** | **~24MB** | |
+| 文件 | 大小 | 替代方 | 说明 |
+|------|------|--------|------|
+| `all_stocks_60d.json` | 2.1M | `stock_daily` 表 | 个股K线 |
+| `all_stocks_60d.json.bak*` | 2.5M | — | 备份，清掉 |
+| `sector_daily.json` | 15M | `ths_daily` + `ths_index` 表 | 板块K线 |
+| `sector_daily.*.bak*` | ~30M | — | 各种备份，清掉 |
+| `index_sh_data.json` | 85K | `index_daily` 表 | 指数K线 |
+| `index_sh_data.json.bak` | 22K | — | 备份，清掉 |
+| `stock_industry_map.json` | 373K | `stock_basic.industry` | 行业归属 |
+| `all_stock_codes.json` | 149K | `stock_basic` 表 | 全量A股代码 |
+| `all_a_stocks.json` | 133K | `stock_basic` 表 | 全量A股名 |
+| `board_constituents.json` | 178K | `ths_member` 表 | 板块成分股 |
+| `board_names_cache.json` | 37K | `ths_index` 表 | 板块中文名↔代码 |
+| `financial_data_cache.json` | 128K | → 删除，从 `daily_basic` 按需查 | 财务缓存不再需要 |
+| `stock_on_demand_cache.json` | 4K | → 删除，DB有全量 | 按需缓存废弃 |
+| `sources/` (3个文件) | 1.9M | `ths_daily` + `ths_index` 表 | EM/THS数据源 |
+| `map/` (4个文件) | 1.6M | `ths_index` + `ths_member` 表 | 概念列表+成分股 |
+| `private/trading_days_cache.json` | 121K | `trade_cal` 表 | 交易日历 |
+| `sector_daily.ths.backup*` | 2.5M | — | 备份，清掉 |
+| **合计删除** | **~57MB** | | 含各种bak |
 
-#### 🟡 移入 config/（用户配置，JSON保持可读）
+#### 🟡 02 — 移入 config/（用户配置）
 
-| 当前位置 | 新位置 | 说明 |
-|---------|--------|------|
-| `watchlist.json` | `config/watchlist.json` | 自选股 |
-| `private/holdings.json` | `config/holdings.json` | 持仓 |
-| `private/trades.json` | `config/trades.json` | 交易记录 |
-| `private/alarms.json` | `config/alarms.json` | 报警 |
-| `private/plan_tracking.json` | `config/plan_tracking.json` | 计划跟踪 |
-| `private/plan_tracking.db` | `config/plan_tracking.db` | 计划跟踪SQLite |
-| `private/manual_trend_stocks.json` | `config/manual_trend.json` | 手动趋势股 |
-| `private/watchlist.json` | → 合并到 config/watchlist.json | 冗余文件 |
-| `private/journal_entries.json` | `config/journals.json` | 日志 |
-| `directions.json` | `config/directions.json` | 方向配置 |
-| `watched_industries.json` | `config/watched_industries.json` | 关注的行业 |
+| 当前位置 | 新位置 | 大小 | 说明 |
+|---------|--------|------|------|
+| `watchlist.json` | `config/watchlist.json` | 42K | 自选股 |
+| `private/holdings.json` | `config/holdings.json` | 8.3K | 持仓 |
+| `private/trades.json` | `config/trades.json` | 1.1K | 交易记录 |
+| `private/alarms.json` | `config/alarms.json` | 17K | 报警配置 |
+| `private/plan_tracking.json` | `config/plan_tracking.json` | 6.0K | 计划跟踪 |
+| `private/plan_tracking.db` | `config/plan_tracking.db` | 344K | 计划跟踪SQLite |
+| `private/manual_trend_stocks.json` | `config/manual_trend.json` | 180B | 手动趋势股 |
+| `private/journal_entries.json` | `config/journals.json` | 496B | 日志 |
+| `private/watchlist.json` | → 合并到 config/watchlist.json | 3B | 冗余，清掉 |
+| `directions.json` | `config/directions.json` | 6.4K | 方向配置 |
+| `watched_industries.json` | `config/watched_industries.json` | 18B | 关注的行业 |
+| **合计移入 config/** | | **~425K** | |
 
-#### 🟡 移入 public/（前端静态数据，由 /pub/ 路由服务）
+#### 🟡 03 — 移入 public/（前端静态数据）
 
-| 当前位置 | 新位置 | 说明 |
-|---------|--------|------|
-| `pinyin_initials.json` | `WWW_DIR/data/public/pinyin.json` | 拼音首字母，前端搜索用 |
-| `board_names_cache.json` | (删除，由DB生成) | 板块名称列表，后端API查询DB替代 |
+| 当前位置 | 新位置 | 大小 | 说明 |
+|---------|--------|------|------|
+| `pinyin_initials.json` | `WWW_DIR/data/public/pinyin.json` | 108K | 拼音首字母，前端搜索用 |
+| `public/external_mapping.json` | `WWW_DIR/data/public/`（已有） | 12K | 不变 |
+| `public/index_data.json` | `WWW_DIR/data/public/`（已有） | 109K | 不变 |
+| `public/panic_history.json` | `WWW_DIR/data/public/`（已有） | 2.1K | 不变 |
+| `public/sounds/alarm_sounds.json` | `WWW_DIR/data/public/`（已有） | 554B | 不变 |
 
-#### 🟡 移入 computed/（计算结果，可重算）
+#### 🟡 04 — 移入 computed/（计算结果）
 
-| 当前位置 | 新位置 | 说明 |
-|---------|--------|------|
-| `latest_scan_result.json` | `computed/scan_result.json` | 最近扫描 |
-| `industry_leaders.json` | `computed/industry_leaders.json` | 领涨股 |
-| `candidates_data.json` | `computed/candidates_data.json` | 候选股 |
-| `analysis_results.json` | `computed/analysis_results.json` | 分析结果 |
-| `mainline_history.json` | `computed/mainline_history.json` | 主线历史 |
-| `logic_tracking.json` | `computed/logic_tracking.json` | 逻辑追踪 |
-| `sub_sector_clusters.json` | `computed/sub_sector_clusters.json` | 子行业聚类 |
-| `profit_quality_results.json` | `computed/profit_quality.json` | 盈利质量 |
-| `private/mainlines_cache.json` | `computed/mainlines_cache.json` | 主线缓存 |
-| `key_points/` | `computed/key_points/` | 关键点 |
-| **合计** | **~600K** | |
+| 当前位置 | 新位置 | 大小 | 说明 |
+|---------|--------|------|------|
+| `latest_scan_result.json` | `computed/scan_result.json` | 13K | 最新扫描 |
+| `industry_leaders.json` | `computed/industry_leaders.json` | 102K | 领涨股（可改为按需计算） |
+| `candidates_data.json` | `computed/candidates_data.json` | 133K | 候选股 |
+| `analysis_results.json` | `computed/analysis_results.json` | 56K | 分析结果 |
+| `mainline_history.json` | `computed/mainline_history.json` | 2.9K | 主线历史 |
+| `logic_tracking.json` | `computed/logic_tracking.json` | 5.2K | 逻辑追踪 |
+| `sub_sector_clusters.json` | `computed/sub_sector_clusters.json` | 43K | 子行业聚类 |
+| `profit_quality_results.json` | `computed/profit_quality.json` | 615B | 盈利质量 |
+| `private/mainlines_cache.json` | `computed/mainlines_cache.json` | 537B | 主线缓存 |
+| `key_points/` (10个文件) | `computed/key_points/` | 44K | 关键点 |
+| `private/workbench/` (7个文件) | `computed/workbench/` | 2.2K | 工作台 |
+| `source_health.json` | `computed/source_health.json` | 1.1K | 数据源健康状态 |
+| **合计移入 computed/** | | **~400K** | |
 
-#### 🟢 保留不动
+#### 🟢 05 — 保留不动
 
-| 目录 | 大小 | 说明 |
+| 路径 | 大小 | 说明 |
 |------|------|------|
-| `cache/` | 12M | 运行时缓存（按TTL清理） |
-| `charts/` | 1.1M | SVG图表 |
-| `public/` | 140K | 前端公开数据 |
-| `simulation/` | 19M | 模拟交易 |
+| `cache/buy_signals_*.json` (30+个) | 3.5M | 扫描结果缓存，按日期 |
+| `cache/volume_snapshots_*.json` (20+个) | 750K | 成交量快照，按日期 |
+| `cache/industry_boards_*.json` (20+个) | 480K | 行业板块缓存，按日期 |
+| `cache/market_leaders_*.json` | 8K | 市场领涨缓存 |
+| `cache/market_leaders_daily/*` (300+个) | 300K | 个股每日领涨数据 |
+| `cache/backtest_*.json` (3个) | 1.3M | 回测缓存 |
+| `cache/manual_scan_*.json` | 135B | 手动扫描缓存 |
+| `cache/macro_cpi.json` | 915B | CPI数据 |
+| `cache/sector_structure.json` | 357B | 板块结构 |
+| `cache/watchlist_analysis_cache.json` | 142K | 自选分析缓存 |
+| **cache/ 合计** | **~6.5M** | 运行时缓存，按TTL清理 |
+| `charts/*.png` (30+个) | 1.1M | SVG/PNG图表 |
+| `simulation/` | 19M | 模拟交易（v2/v3/pdf/报告） |
 | `knowledge_base/` | 11M | 知识库文档 |
+| `public/charts/` | (charts已有) | 前端图表不碰 |
+
+#### 🟣 06 — 需确认/清理的
+
+| 文件 | 大小 | 处理方式 |
+|------|------|---------|
+| `fill_stock_names.py` | 2.7K | 脚本，移到 scripts/ |
+| `update_cache_and_scan.py` | 9.3K | 脚本，移到 scripts/ |
+| `stock_knowledge_base.md` | 6.8K | 文档，移到 knowledge_base/ |
+| `中继买点精选报告_*.pdf` | 1.4M | 移入 simulation/ 或删掉 |
+| `盈利模式1_*.txt` | 3.9K | 移入 knowledge_base/ 或删掉 |
+| `private/review_archive/` | 324K | 复盘存档，移到 computed/review/ |
+| `private/review_data.json.bak` | 324K | 备份，清掉 |
+| `private/.wechat_*` | 159K | 微信偏移量/去重缓存，保留原处 |
+| `private/alarm_music_design.md` | 2.5K | 文档，移到 knowledge_base/ |
 
 ### 3.3 计算方式优化
 
