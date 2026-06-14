@@ -56,6 +56,64 @@ def get_all_stocks():
     """返回 {方向: {code: [klines]}} 格式的K线数据（走缓存，TTL=30s）"""
     return cache.get('all_stocks', _load_all_stocks_from_disk, ttl=30)
 
+def get_all_stocks_db(limit: int = 60):
+    """从 TushareDB 读取K线数据，按方向分组
+
+    替代 get_all_stocks() 的 JSON 路径。
+    方向分组从 watchlist 的方向标签推导，不在自选股中的股票归入"其他"。
+
+    Returns:
+        {方向: {code: [{date, open, close, high, low, volume}, ...]}, ...}
+        同时包含 last_updated 字段（最新交易日）
+    """
+    from backend.services.tushare_db import TushareDB
+    db = TushareDB()
+
+    # 获取自选股列表（含方向）
+    wl = get_watchlist()
+
+    # 收集所有需要查询的股票代码
+    all_codes = set()
+    code_info = {}  # {code: direction}
+    for s in wl:
+        code = s.get('code', '')
+        if code:
+            all_codes.add(code)
+            code_info[code] = s.get('direction', '其他')
+
+    if not all_codes:
+        return {'last_updated': ''}
+
+    # 批量从 DB 查 K线
+    codes_list = list(all_codes)
+    klines_map = db.query_stock_klines_batch(codes_list, limit=limit, adj='qfq')
+
+    # 查股票名称（兼容 JSON 格式中的 name 字段）
+    code_name_map = {}
+    for code in codes_list:
+        ts = db.code_to_ts_code(code)
+        row = db.query_one('stock_basic', ts_code=ts)
+        if row:
+            code_name_map[code] = row.get('name', '')
+
+    # 按方向分组，补 name
+    result = {}
+    for code, klines in klines_map.items():
+        direction = code_info.get(code, '其他')
+        if direction not in result:
+            result[direction] = {}
+        name = code_name_map.get(code, '')
+        if name:
+            for k in klines:
+                k['name'] = name
+        result[direction][code] = klines
+
+    # last_updated
+    last_date = db.get_last_stock_date()
+    result['last_updated'] = last_date or ''
+
+    return result
+
 def get_last_updated():
     """返回缓存最新交易日 YYYYMMDD"""
     raw = _load_json(ALL_STOCKS_PATH, {})

@@ -197,64 +197,69 @@ class TushareDB:
     # 表字段缓存: {table: set(column_names)}
     _COLUMN_CACHE: Dict[str, set] = {}
 
-    def _ensure_columns(self, table: str, cols: List[str]):
-        """动态加列：数据中有表中没有的列时 ALTER TABLE ADD COLUMN"""
+    def get_table_columns(self, table: str) -> set:
+        """获取表的所有字段名（带缓存）"""
         if table not in self._COLUMN_CACHE:
             cur = self.conn.execute(f"PRAGMA table_info({table})")
             self._COLUMN_CACHE[table] = {r[1] for r in cur.fetchall()}
+        return self._COLUMN_CACHE[table]
 
-        existing = self._COLUMN_CACHE[table]
-        missing = [c for c in cols if c not in existing]
-        if not missing:
-            return
+    def _ensure_columns(self, table: str, record: dict):
+        """动态添加列：如果 record 包含表中不存在的字段，ALTER TABLE ADD COLUMN
 
-        for col in missing:
-            # TEXT 类型最通用，兼容所有 Tushare 返回类型
-            self.conn.execute(f"ALTER TABLE {table} ADD COLUMN \"{col}\" TEXT")
-        self._COLUMN_CACHE[table].update(missing)
-        self.conn.commit()
+        全量保留 API 返回字段，不丢数据。
+        """
+        existing = self.get_table_columns(table)
+        new_cols = set(record.keys()) - existing
+        for col in new_cols:
+            # 跳过主键列（已经在CREATE TABLE中定义）
+            if col in ('ts_code', 'trade_date', 'symbol', 'con_code', 'name',
+                       'exchange', 'cal_date'):
+                continue
+            try:
+                # TEXT 兼容各种类型
+                self.conn.execute(f"ALTER TABLE {table} ADD COLUMN \"{col}\" TEXT")
+            except sqlite3.OperationalError:
+                pass  # 可能并发添加，忽略重复列错误
+        if new_cols:
+            # 刷新缓存
+            self._COLUMN_CACHE[table] = existing | new_cols
 
     def upsert_many_from_dicts(self, table: str, records: List[dict]) -> int:
-        """从 dict 列表批量写入
+        """从 dict 列表批量写入（INSERT OR REPLACE），支持动态列
 
         Args:
             table: 表名
-            records: [{col: val}, ...]
+            records: dict 列表
 
         Returns:
             写入行数
         """
         if not records:
             return 0
-        if table not in CREATE_TABLES:
-            raise ValueError(f"未知表名: {table}")
 
-        # 全量保留：动态加列，不丢任何字段
-        cols = list(records[0].keys())
-        self._ensure_columns(table, cols)
-        placeholders = ','.join(['?' for _ in cols])
-        col_names = ','.join(cols)
-
-        sql = f"INSERT OR REPLACE INTO {table} ({col_names}) VALUES ({placeholders})"
-
-        # 组织数据
-        rows_data = []
+        # 确保所有列已存在
         for rec in records:
-            row = []
-            for col in cols:
-                val = rec.get(col)
-                # 处理 NaN / None
-                if val is None or (isinstance(val, float) and (val != val)):  # NaN 检测
-                    row.append(None)
-                elif isinstance(val, (int, float)):
-                    row.append(float(val) if isinstance(val, float) else val)
-                else:
-                    row.append(str(val) if val is not None else None)
-            rows_data.append(tuple(row))
+            self._ensure_columns(table, rec)
 
-        self.conn.executemany(sql, rows_data)
+        # 获取当前表的列集
+        cols = self.get_table_columns(table)
+        # 只保留表中存在的列，并按列名排序保证一致性
+        col_names = sorted(cols & set(records[0].keys()))
+        if not col_names:
+            return 0
+
+        placeholders = ','.join(['?'] * len(col_names))
+        quoted_cols = ','.join([f'"{c}"' for c in col_names])
+        sql = f"INSERT OR REPLACE INTO {table} ({quoted_cols}) VALUES ({placeholders})"
+
+        batch = []
+        for rec in records:
+            batch.append(tuple(rec.get(c) for c in col_names))
+
+        self.conn.executemany(sql, batch)
         self.conn.commit()
-        return len(rows_data)
+        return len(batch)
 
     # ════════════════════════════════════════════════════════════
     # 基础查询
@@ -291,18 +296,29 @@ class TushareDB:
             where: WHERE 子句（不含 WHERE 关键字）
             params: 参数列表
             order_by: ORDER BY 子句
-            limit: LIMIT
+            limit: 返回行数上限
 
         Returns:
-            [{col: val}, ...]
+            dict 列表
         """
-        sql = f"SELECT * FROM {table}"
+        columns = '*'
+        if isinstance(order_by, dict):
+            # 兼容旧调用：columns 通过 dict 传入
+            columns = order_by.get('columns', '*')
+            order_by = order_by.get('order_by')
+
+        sql = f"SELECT {columns} FROM {table}"
         if where:
             sql += f" WHERE {where}"
         if order_by:
             sql += f" ORDER BY {order_by}"
         if limit:
             sql += f" LIMIT {limit}"
+        cur = self.conn.execute(sql, params or [])
+        return [dict(r) for r in cur.fetchall()]
+
+    def execute_raw(self, sql: str, params: list = None) -> List[dict]:
+        """执行原始 SQL 查询，返回 dict 列表"""
         cur = self.conn.execute(sql, params or [])
         return [dict(r) for r in cur.fetchall()]
 
@@ -403,6 +419,95 @@ class TushareDB:
         return self.query_one('daily_basic', ts_code=ts_code, trade_date=trade_date)
 
     # ════════════════════════════════════════════════════════════
+    # 个股代码转换
+    # ════════════════════════════════════════════════════════════
+
+    def code_to_ts_code(self, code: str) -> Optional[str]:
+        """6位纯代码 → ts_code (600519.SH)
+
+        先查 stock_basic 表（精确匹配），再尝试按规则拼接。
+        """
+        # 直接查表
+        row = self.query_one('stock_basic', symbol=code)
+        if row:
+            return row['ts_code']
+
+        # 按市场规则拼接（回退）
+        if code.startswith('6') or code.startswith('9'):
+            return f"{code}.SH"
+        elif code.startswith('0') or code.startswith('3') or code.startswith('2'):
+            return f"{code}.SZ"
+        elif code.startswith('4') or code.startswith('8'):
+            return f"{code}.BJ"
+        return f"{code}.SH"
+
+    # ════════════════════════════════════════════════════════════
+    # 批量个股K线查询（方向分组用）
+    # ════════════════════════════════════════════════════════════
+
+    def query_stock_klines_batch(self, codes: List[str], limit: int = 60,
+                                  adj: str = 'qfq') -> Dict[str, List[dict]]:
+        """批量查询多只股票K线
+
+        替代 get_all_stocks() 中逐个从 JSON 取 K线的逻辑。
+        内部按 code 分组，结果 {code: [{date, open, ...}, ...]，按日期倒序。
+
+        Args:
+            codes: 6位纯代码列表 ['000062', '000066', ...]
+            limit: 每只股票返回的K线数
+            adj: 复权类型
+
+        Returns:
+            {code: [{date, open, close, high, low, volume}, ...], ...}
+        """
+        if not codes:
+            return {}
+
+        # 批量转 ts_code
+        code_map = {}  # {ts_code: code}
+        for code in codes:
+            ts = self.code_to_ts_code(code)
+            code_map[ts] = code
+
+        # 去重后查重复的 ts_code
+        ts_codes = list(code_map.keys())
+        placeholders = ','.join(['?'] * len(ts_codes))
+        sql = (f"SELECT ts_code, trade_date, open, high, low, close, vol "
+               f"FROM stock_daily WHERE ts_code IN ({placeholders}) "
+               f"ORDER BY ts_code, trade_date DESC")
+        rows = self.execute_raw(sql, ts_codes)
+
+        # 按 ts_code 分组
+        raw_groups: Dict[str, list] = {}
+        for r in rows:
+            ts = r['ts_code']
+            if ts not in raw_groups:
+                raw_groups[ts] = []
+            raw_groups[ts].append(r)
+
+        # 格式化 + 限制条数 + 前复权
+        result = {}
+        for ts, group in raw_groups.items():
+            code = code_map.get(ts, ts)
+            klines = group[:limit]
+            if adj == 'qfq':
+                klines = self._apply_qfq(klines, ts)
+            else:
+                klines = self._to_kline_format(klines)
+            result[code] = klines
+
+        return result
+
+    # ════════════════════════════════════════════════════════════
+    # 最新交易日查询
+    # ════════════════════════════════════════════════════════════
+
+    def get_last_stock_date(self) -> Optional[str]:
+        """获取 stock_daily 表中最大 trade_date"""
+        rows = self.execute_raw("SELECT max(trade_date) as last_date FROM stock_daily")
+        return rows[0]['last_date'] if rows else None
+
+    # ════════════════════════════════════════════════════════════
     # 指数查询
     # ════════════════════════════════════════════════════════════
 
@@ -497,47 +602,5 @@ class TushareDB:
 
     def get_last_trade_date(self, table: str) -> Optional[str]:
         """获取指定表的最大交易日期"""
-        row = self.query_many(
-            table,
-            order_by='trade_date DESC',
-            limit=1,
-        )
-        if row:
-            return row[0].get('trade_date')
-        return None
-
-    # ════════════════════════════════════════════════════════════
-    # Token 管理
-    # ════════════════════════════════════════════════════════════
-
-    @property
-    def token_low(self) -> str:
-        """2000积分账号（日常用）"""
-        return TUSHARE_TOKEN
-
-    @property
-    def token_high(self) -> str:
-        """15000积分账号（回填用，没有则回退到 low）"""
-        return TUSHARE_TOKEN_HIGH or TUSHARE_TOKEN
-
-    @staticmethod
-    def create_pro_api(token: str = None, use_proxy: bool = False) -> 'ts.pro_api':
-        """创建 Tushare Pro API 客户端
-
-        Args:
-            token: Tushare token，默认用 TUSHARE_TOKEN
-            use_proxy: 是否设置代理 endpoint（15000账号需要，2000不需要）
-
-        Returns:
-            ts.pro_api 实例
-        """
-        import tushare as ts
-
-        if use_proxy and TUSHARE_PROXY_URL:
-            from tushare.pro import client as _ts_client
-            _ts_client.DataApi._DataApi__http_url = TUSHARE_PROXY_URL
-
-        return ts.pro_api(token or TUSHARE_TOKEN)
-
-    def close(self):
-        self.conn.close()
+        rows = self.query_many(table, order_by='trade_date DESC', limit=1)
+        return rows[0]['trade_date'] if rows else None
