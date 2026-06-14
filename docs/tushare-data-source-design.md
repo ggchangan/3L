@@ -230,17 +230,19 @@ CREATE TABLE trade_cal (
 
 ### 3.1 Tushare 接口调用总表
 
-| API | 说明 | 最低积分 | 回填方式 | 增量方式 | 写入表 |
-|-----|------|---------|---------|---------|-------|
-| `stock_basic` | A股列表+行业 | 免费 | 1次全量,5000+只 | 每月1次增量 | `stock_basic` |
-| `trade_cal` | 交易日历 | 免费 | 1次全量,10年 | 每年1次 | `trade_cal` |
-| `ths_index` | 同花顺板块列表 | 免费 | 1次全量(行业+概念) | 每月1次 | `ths_index` |
-| `ths_member` | 板块成分股 | 免费 | ~500板块逐次 | 每月1次 | `ths_member` |
-| `daily` | 个股日线 | 2000 | 全量5000只×2年 | 每日自选股~50只 | `stock_daily` |
-| `daily_basic` | 每日指标(PE/PB) | 2000 | 全量5000只×2年 | 每日自选股~50只 | `daily_basic` |
-| `adj_factor` | 复权因子 | 2000 | 全量5000只×2年 | 每日自选股 | `adj_factor` |
-| `index_daily` | 指数日线 | 免费 | 4个指数×2年 | 每日追加 | `index_daily` |
-| `ths_daily` | 板块日线 | 免费 | ~500板块×2年 | 每日追加 | `ths_daily` |
+| API | 说明 | 最低积分 | 回填方式 | 增量方式(账号) | 写入表 |
+|-----|------|---------|---------|---------------|-------|
+| `stock_basic` | A股列表+行业 | 免费 | 1次全量,5000+只 | 月/15000或2000 | `stock_basic` |
+| `trade_cal` | 交易日历 | 免费 | 1次全量,10年 | 年/15000或2000 | `trade_cal` |
+| `ths_index` | 同花顺板块列表 | 免费 | 1次全量(行业+概念) | 月/15000或2000 | `ths_index` |
+| `ths_member` | 板块成分股 | 免费 | ~500板块逐次 | 月/15000或2000 | `ths_member` |
+| `daily` | 个股日线 | 2000 | 全量5000只×2年 | 每日/2000 | `stock_daily` |
+| `daily_basic` | 每日指标(PE/PB) | 2000 | 全量5000只×2年 | 每日/2000 | `daily_basic` |
+| `adj_factor` | 复权因子 | 2000 | 全量5000只×2年 | 每日/2000 | `adj_factor` |
+| `index_daily` | 指数日线 | 免费 | 4个指数×2年 | 每日/2000 | `index_daily` |
+| `ths_daily` | 板块日线 | **6000** | ~500板块×2年 | 每日/**15000** | `ths_daily` |
+
+> ⚠️ `ths_daily` 需要6000积分，2000账号调不了。每日增量用15000账号跑（仅10次调用/天，量极小）。
 
 ### 3.2 一次性回填（15000积分账号）
 
@@ -424,49 +426,54 @@ for batch in chunks(codes, 500):
 | float_share | 流通股本(万股) |
 | free_share | 自由流通股本(万股) |
 
-### 3.3 每日增量（2000积分账号）
+### 3.3 每日增量（混合账号）
 
 ```python
-def daily_incremental_update(pro, db, trade_date):
-    """每日增量更新"""
-    # 1. 自选股列表（从 config/watchlist.json 读取）
+def daily_incremental_update(pro_low, pro_high, db, trade_date):
+    """每日增量更新
+    pro_low:  2000积分账号（调用 daily / daily_basic / adj_factor / index_daily）
+    pro_high: 15000积分账号（仅调用 ths_daily，需要6000积分权限）
+    """
+    # 1. 自选股列表
     watchlist_codes = get_watchlist_codes()
     ts_codes = [code_to_ts(c) for c in watchlist_codes]
     ts_codes_str = ','.join(ts_codes)
     
+    # ---------- 2000账号 ----------
     # 2. 个股日线（仅自选股）
-    df = pro.daily(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
+    df = pro_low.daily(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
     db.upsert_many('stock_daily', df)
     
     # 3. 每日指标
-    df = pro.daily_basic(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
+    df = pro_low.daily_basic(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
     db.upsert_many('daily_basic', df)
     
-    # 4. 复权因子（仅自选股）
-    df = pro.adj_factor(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
+    # 4. 复权因子
+    df = pro_low.adj_factor(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
     db.upsert_many('adj_factor', df)
     
     # 5. 指数（免费）
     for code in ['000001.SH', '000688.SH', '000985.SH', '399006.SZ']:
-        df = pro.index_daily(ts_code=code, start_date=trade_date, end_date=trade_date)
+        df = pro_low.index_daily(ts_code=code, start_date=trade_date, end_date=trade_date)
         db.upsert_many('index_daily', df)
     
-    # 6. 板块日线（免费，全量板块）
+    # ---------- 15000账号（ths_daily 需要6000积分）----------
+    # 6. 板块日线（全量板块）
     ths_codes = db.get_all_ths_codes()
     for batch in chunks(ths_codes, 50):
-        df = pro.ths_daily(ts_code=','.join(batch), start_date=trade_date, end_date=trade_date)
+        df = pro_high.ths_daily(ts_code=','.join(batch), start_date=trade_date, end_date=trade_date)
         db.upsert_many('ths_daily', df)
 ```
 
 **各API每日调用次数：**
-| API | 调用次数 | 说明 |
-|-----|---------|------|
-| `daily` | 1次 | 50只自选股一次传 |
-| `daily_basic` | 1次 | 同上 |
-| `adj_factor` | 1次 | 同上 |
-| `index_daily` | 4次 | 4个指数各1次 |
-| `ths_daily` | 10次 | ~490板块÷50/批 |
-| **合计** | **17次** | 远低于200次/分钟限流 |
+| API | 调用次数 | 使用账号 | 说明 |
+|-----|---------|---------|------|
+| `daily` | 1次 | 2000 | 50只自选股一次传 |
+| `daily_basic` | 1次 | 2000 | 同上 |
+| `adj_factor` | 1次 | 2000 | 同上 |
+| `index_daily` | 4次 | 2000 | 4个指数各1次 |
+| `ths_daily` | 10次 | **15000** | ~490板块÷50/批，需6000积分 |
+| **合计** | **17次** | 双账号 | 远低于200次/分钟限流 |
 
 ### 3.4 表结构一览（全部9张表）
 
@@ -1044,8 +1051,8 @@ CACHE_DIR         = os.path.join(DATA_DIR, 'cache')    # 已有，不变
 
 | 阶段 | 使用账号 | 工作内容 | 需解锁的接口 |
 |------|---------|---------|------------|
-| **一次性回填** | 15000积分账号 | 全量回填6年以上历史数据。高积分解锁全部接口，部分接口有最低积分门槛（如 `adj_factor` 等）。 | `daily`, `daily_basic`, `adj_factor`, `index_daily`, `ths_daily`, `ths_index`, `ths_member`, `stock_basic`, `trade_cal` |
-| **每日增量** | 2000积分账号 | 每日追加最新数据+日常查询。2000积分已可调用核心接口 `daily` / `daily_basic` / `ths_daily` 等。 | `daily`, `daily_basic`, `index_daily`, `ths_daily`, `ths_index`, `stock_basic`, `trade_cal` |
+| **一次性回填** | 15000积分账号 | 全量回填2年历史数据。高积分解锁全部接口，包括 ths_daily（需6000分）。 | `daily`, `daily_basic`, `adj_factor`, `index_daily`, `ths_daily`, `ths_index`, `ths_member`, `stock_basic`, `trade_cal` |
+| **每日增量** | 2000 + 15000 | 2000账号调日常接口（daily/daily_basic/index_daily等），ths_daily 切15000账号跑（仅10次调用/天）。 | 2000: `daily`, `daily_basic`, `index_daily` … 15000: `ths_daily` |
 
 ### 5.2 回填策略（15000积分账号 → 一次性）
 
@@ -1263,15 +1270,15 @@ Tushare 积分是权限等级，每个接口有最低积分要求。以下是我
 | `stock_basic` | 免费 | ✅ | ✅ |
 | `trade_cal` | 免费 | ✅ | ✅ |
 | `index_daily` | 免费 | ✅ | ✅ |
-| `ths_daily` | 免费 | ✅ | ✅ |
+| `ths_daily` | **6000** | ✅ | ❌ |
 | `ths_index` | 免费 | ✅ | ✅ |
 | `ths_member` | 免费 | ✅ | ✅ |
 | `daily` | 2000 | ✅ | ✅ |
 | `daily_basic` | 2000 | ✅ | ✅ |
 | `adj_factor` | 2000 | ✅ | ✅ |
 
-**结论：** 2000积分账号即可调用我们需要的全部接口。
-15000积分账号的优势在于**一次性回填**时更高的调用频率容忍度，以及日后可能需要的**高级接口**（如资金流向、财务数据等）。
+**结论：** 2000积分账号可调用大部分接口，但 `ths_daily` 需要6000分，需用15000账号。
+日常增量中，2000账号跑 daily/daily_basic/index_daily，ths_daily 切15000账号。
 
 ### 8.5 数据库备份
 
