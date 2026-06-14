@@ -12,8 +12,8 @@ from datetime import datetime
 
 import requests
 
-from backend.config import CACHE_DIR, INDUSTRY_LEADERS_PATH, WWW_DIR, atomic_json_dump
-from backend.core.data_models import is_trading_day, is_trading_session
+from backend.core.config import CACHE_DIR, INDUSTRY_LEADERS_PATH, WWW_DIR, atomic_json_dump
+from backend.models.data_models import is_trading_day, is_trading_session
 from backend.core.exceptions import DataError
 from backend.core.logger import get_logger
 
@@ -301,7 +301,7 @@ def get_leader_dashboard():
     上区：关注的行业（持仓sector+涨幅前3+手动）
     下区：龙头异动（领涨领跌+龙头切换）
     '''
-    from backend.config import (
+    from backend.core.config import (
         WATCHED_INDUSTRIES_PATH, INDUSTRY_LEADERS_PATH,
         CACHE_DIR, HOLDINGS_PATH
     )
@@ -618,7 +618,7 @@ def get_leader_dashboard():
         tracked_codes = {c for c, cnt in concept_counts.items() if cnt >= 6}
         tracked_names = {concept_list.get(c, {}).get('name', c) for c in tracked_codes}
         # 读取手动添加的追踪概念
-        from backend.config import WATCHED_INDUSTRIES_PATH
+        from backend.core.config import WATCHED_INDUSTRIES_PATH
         watched_concepts_path = os.path.join(os.path.dirname(WATCHED_INDUSTRIES_PATH), 'watched_concepts.json')
         if os.path.isfile(watched_concepts_path):
             with open(watched_concepts_path) as f:
@@ -674,7 +674,7 @@ def get_leader_dashboard():
 
 def add_watched_industry(industry_name):
     '''手动添加关注行业'''
-    from backend.config import WATCHED_INDUSTRIES_PATH
+    from backend.core.config import WATCHED_INDUSTRIES_PATH
     import os
     industries = []
     if os.path.isfile(WATCHED_INDUSTRIES_PATH):
@@ -693,7 +693,7 @@ def add_watched_industry(industry_name):
 
 def remove_watched_industry(industry_name):
     '''移除手动关注行业'''
-    from backend.config import WATCHED_INDUSTRIES_PATH
+    from backend.core.config import WATCHED_INDUSTRIES_PATH
     import os
     if not os.path.isfile(WATCHED_INDUSTRIES_PATH):
         return False

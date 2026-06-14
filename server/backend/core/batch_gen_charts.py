@@ -8,7 +8,7 @@ from collections import OrderedDict
 from datetime import datetime
 
 # 从 config 读取路径（支持环境变量覆盖）
-from backend import config
+from backend.core import config
 
 WWW_DIR = config.WWW_DIR
 # DB读取（不再走 JSON）

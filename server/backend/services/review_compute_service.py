@@ -6,8 +6,8 @@ review_compute_service.py — 复盘计算层
 import json, os, sys, requests, math
 from datetime import datetime
 
-from backend import config
-from backend.config import DATA_DIR, ALL_STOCKS_PATH, WWW_DIR, MAINLINES_CACHE_PATH
+from backend.core import config
+from backend.core.config import DATA_DIR, ALL_STOCKS_PATH, WWW_DIR, MAINLINES_CACHE_PATH
 
 MAINLINE_FULL_CACHE = os.path.join(DATA_DIR, '.cache', 'mainline_full.json')
 MAINLINE_HISTORY_PATH = os.path.join(DATA_DIR, 'mainline_history.json')
@@ -28,7 +28,7 @@ def to_yyyymmdd(d):
 
 def is_trading_day(date_str):
     """判断给定日期是否为A股交易日（委托 data_models.is_trading_day）"""
-    from backend.core.data_models import is_trading_day as _is_trading_day
+    from backend.models.data_models import is_trading_day as _is_trading_day
     return _is_trading_day(date_str)
 
 

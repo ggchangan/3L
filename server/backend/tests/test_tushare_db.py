@@ -11,7 +11,7 @@ import pytest
 @pytest.fixture
 def db():
     """使用 MySQL tushare 数据库"""
-    from backend.services.tushare_db import TushareDB
+    from backend.data_access.tushare_db import TushareDB
     _db = TushareDB()
     yield _db
 

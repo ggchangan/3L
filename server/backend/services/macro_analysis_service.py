@@ -8,7 +8,7 @@ import os
 import re
 import requests
 
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 

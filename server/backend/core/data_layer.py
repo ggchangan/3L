@@ -5,11 +5,11 @@
 """
 import json, os
 from datetime import datetime
-from backend.core.cache_layer import cache
+from backend.data_access.cache_layer import cache
 from backend.core.logger import get_logger
 
 log = get_logger(__name__)
-from backend.config import (
+from backend.core.config import (
     DATA_DIR, WWW_DIR, CACHE_DIR, PRIVATE_DIR,
     ALL_STOCKS_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH,
     SUB_SECTOR_CLUSTERS_PATH, FINANCIAL_CACHE_PATH,
@@ -66,7 +66,7 @@ def get_all_stocks_db(limit: int = 60):
         {方向: {code: [{date, open, close, high, low, volume}, ...]}, ...}
         同时包含 last_updated 字段（最新交易日）
     """
-    from backend.services.data_source import get_all_stocks_from_db, _get_tushare_db
+    from backend.data_access.data_source import get_all_stocks_from_db, _get_tushare_db
 
     # 获取自选股列表（含方向）
     wl = get_watchlist()
@@ -110,7 +110,7 @@ def get_all_stocks_db(limit: int = 60):
 
 def get_last_updated():
     """返回缓存最新交易日 YYYYMMDD"""
-    from backend.services.data_source import _get_tushare_db
+    from backend.data_access.data_source import _get_tushare_db
     db = _get_tushare_db()
     if db:
         date = db.get_last_stock_date()
@@ -120,7 +120,7 @@ def get_last_updated():
 
 def save_all_stocks(stocks, last_updated=None):
     """保存K线数据到DB（通过 data_source）。stocks格式: {方向: {code: [klines]}}"""
-    from backend.services.data_source import save_stock_klines_to_db
+    from backend.data_access.data_source import save_stock_klines_to_db
 
     # 将方向分组格式转为 data_source 接受的 {code: {klines, name}} 格式
     stock_data = {}
@@ -144,7 +144,7 @@ def _clear_stock_chart_svg_cache():
     直接删除磁盘上的缓存文件，下次页面访问时自动基于新数据重新生成。
     """
     try:
-        from backend.config import CHARTS_DIR
+        from backend.core.config import CHARTS_DIR
         if not os.path.isdir(CHARTS_DIR):
             return
         removed = 0
@@ -171,7 +171,7 @@ def get_stock_klines(code, direction=None, stocks=None):
         if code in codes:
             return codes[code]
     # DB回退（通过 data_source）
-    from backend.services.data_source import get_all_stocks_from_db
+    from backend.data_access.data_source import get_all_stocks_from_db
     stock_data = get_all_stocks_from_db([code], limit=60)
     if stock_data and code in stock_data:
         return stock_data[code].get('klines', [])
@@ -198,7 +198,7 @@ def get_index_data():
         '399006': '创业板指',
     }
     try:
-        from backend.services.data_source import get_index_data_from_db
+        from backend.data_access.data_source import get_index_data_from_db
         indices = get_index_data_from_db(INDEX_CODES)
         if indices:
             latest = max((v['klines'][0]['date'] for v in indices.values() if v['klines']), default='')
@@ -209,7 +209,7 @@ def get_index_data():
 
 def save_index_data(data):
     """保存指数数据到DB（通过 data_source）"""
-    from backend.services.data_source import save_index_klines_to_db
+    from backend.data_access.data_source import save_index_klines_to_db
     cache.invalidate('index_data')
     indices = data.get('indices', {})
     total = save_index_klines_to_db(indices)
@@ -232,7 +232,7 @@ def get_sector_daily():
     """
     def _load_from_data_source():
         try:
-            from backend.services.data_source import get_merged_sector_data
+            from backend.data_access.data_source import get_merged_sector_data
             return get_merged_sector_data()
         except Exception:
             return _load_json(SECTOR_DAILY_PATH, {})
@@ -258,7 +258,7 @@ def get_sector_push2test():
     这是业务代码读取 _push2test 的唯一入口。
     不得直接调 load_sector_daily_uncached() 读原始文件。
     """
-    from backend.core.data_models import SectorPush2Test, ths_dict_to_snapshot, push2test_dict_to_snapshot
+    from backend.models.data_models import SectorPush2Test, ths_dict_to_snapshot, push2test_dict_to_snapshot
     data = _load_json(SECTOR_DAILY_PATH, {})
     raw = data.get('_push2test', {})
     if not isinstance(raw, dict):
@@ -289,7 +289,7 @@ def get_sector_klines(sector_name, sector_type='industry'):
     Returns: [{date, open, close, high, low, volume}, ...] 或 []
     """
     try:
-        from backend.services.data_source import get_sector_klines as _ds_klines
+        from backend.data_access.data_source import get_sector_klines as _ds_klines
         return _ds_klines(sector_name, sector_type)
     except Exception:
         data = _load_json(SECTOR_DAILY_PATH, {})
@@ -310,7 +310,7 @@ def get_concept_snapshots(name_list: list = None) -> dict:
         {系统名: {date, change_pct, up_count, down_count, ...}}
     """
     try:
-        from backend.services.data_source import get_concept_snapshots as _ds_get
+        from backend.data_access.data_source import get_concept_snapshots as _ds_get
         return _ds_get(name_list)
     except Exception as e:
         log.warning('get_concept_snapshots 失败: %s', e)
@@ -331,7 +331,7 @@ def get_concept_klines(name_list: list) -> dict:
         只返回成功拉取到的概念
     """
     try:
-        from backend.services.data_source import get_concept_klines as _ds_klines
+        from backend.data_access.data_source import get_concept_klines as _ds_klines
         return _ds_klines(name_list)
     except Exception as e:
         log.warning('get_concept_klines 失败: %s', e)
@@ -345,7 +345,7 @@ def verify_data_sources(verbose=False):
     update_stock_data.py 等更新脚本通过此函数验证数据完整性。
     """
     try:
-        from backend.services.data_source import verify_data_sources as _ds_verify
+        from backend.data_access.data_source import verify_data_sources as _ds_verify
         return _ds_verify(verbose=verbose)
     except Exception as e:
         return {'status': 'fail', 'error': str(e), 'checks': [], 'pass_count': 0, 'fail_count': 1}
@@ -722,7 +722,7 @@ def build_kline_index(all_stocks_data=None):
         all_stocks_data: get_all_stocks() 返回值（可选，不传则自动加载）
     Returns: {code: [kline,...]}
     """
-    from backend.config import ALL_STOCKS_PATH
+    from backend.core.config import ALL_STOCKS_PATH
     import os, json
     if all_stocks_data is None:
         if os.path.isfile(ALL_STOCKS_PATH):
@@ -746,7 +746,7 @@ def build_industry_stock_map(industry_map_data=None):
         industry_map_data: get_industry_map() 返回值（可选）
     Returns: {industry_name: [code, ...]}
     """
-    from backend.config import INDUSTRY_MAP_PATH
+    from backend.core.config import INDUSTRY_MAP_PATH
     import os, json
     if industry_map_data is None:
         if os.path.isfile(INDUSTRY_MAP_PATH):

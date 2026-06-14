@@ -8,7 +8,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from backend.config import PUBLIC_DIR
+from backend.core.config import PUBLIC_DIR
 os.environ['TQDM_DISABLE'] = '1'
 import akshare as ak
 import pandas as pd

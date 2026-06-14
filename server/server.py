@@ -6,7 +6,7 @@ import os, json, signal, sys, mimetypes, urllib.parse, time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from urllib.parse import quote
-from backend import config
+from backend.core import config
 from backend.core.logger import get_logger
 from backend.core.exceptions import ThreeLError
 

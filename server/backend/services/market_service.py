@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 from backend.core.logger import get_logger
 log = get_logger(__name__)
 
-from backend.config import WWW_DIR, DATA_DIR, CACHE_DIR, INDUSTRY_MAP_PATH, REVIEW_CHARTS_DIR
-from backend import config  # for config.atomic_json_dump
+from backend.core.config import WWW_DIR, DATA_DIR, CACHE_DIR, INDUSTRY_MAP_PATH, REVIEW_CHARTS_DIR
+from backend.core import config  # for config.atomic_json_dump
 from backend.core.exceptions import DataError
 
 # 板块缓存目录（位于 WWW_DIR/data/cache，区别于 config.CACHE_DIR）

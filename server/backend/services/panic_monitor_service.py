@@ -5,9 +5,9 @@ import json
 import os
 from datetime import datetime
 
-from backend.config import DATA_DIR, atomic_json_dump
+from backend.core.config import DATA_DIR, atomic_json_dump
 
-from backend import config
+from backend.core import config
 
 # ── 恐慌阈值（基于历史回测：上证指数最近6个月） ──
 # 回测结论（2026-06-06，94个交易日）：
@@ -554,7 +554,7 @@ def check_panic_alerts_via_realtime(indices_api_codes: dict = None) -> list:
     供 check_alerts.py 的 check_all_alerts() 调用。
     使用与 check_alerts.py 相同的腾讯API拉取模式。
     """
-    from backend.core.data_models import _last_trading_day
+    from backend.models.data_models import _last_trading_day
     import logging
     logger = logging.getLogger(__name__)
     now_ts = datetime.now().timestamp()

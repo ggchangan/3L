@@ -132,7 +132,7 @@ class SectorRankingItem:
 def _last_trading_day() -> str:
     """返回最后一个交易日 YYYYMMDD（含节假日，实质调用 data_source 的交易日历）"""
     try:
-        from backend.services.data_source import get_last_completed_trading_day
+        from backend.data_access.data_source import get_last_completed_trading_day
         return get_last_completed_trading_day()
     except Exception:
         d = datetime.now()

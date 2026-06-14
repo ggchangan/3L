@@ -3,9 +3,9 @@
 """
 import json
 import os
-from backend import config as cfg
-from backend.config import WATCHLIST_PATH, ALL_STOCKS_PATH, ALL_CODES_PATH, PINYIN_PATH, INDUSTRY_MAP_PATH, ANALYSIS_CACHE_PATH
-from backend.config import atomic_json_dump
+from backend.core import config as cfg
+from backend.core.config import WATCHLIST_PATH, ALL_STOCKS_PATH, ALL_CODES_PATH, PINYIN_PATH, INDUSTRY_MAP_PATH, ANALYSIS_CACHE_PATH
+from backend.core.config import atomic_json_dump
 
 from backend.core.logger import get_logger
 
@@ -22,7 +22,7 @@ def get_watchlist():
 
 def save_watchlist(data, wl_path=None):
     """保存自选股列表（数据由 update_stock_data.py 统一更新）"""
-    from backend.core.cache_layer import cache
+    from backend.data_access.cache_layer import cache
     p = wl_path or WATCHLIST_PATH
     new_stocks = data.get('stocks', [])
     # 安全保护：禁止用少量股票覆盖大量自选股

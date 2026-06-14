@@ -12,7 +12,7 @@ from datetime import datetime
 import pymysql
 from pymysql.cursors import DictCursor
 
-from backend.config import (
+from backend.core.config import (
     MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE,
     TUSHARE_TOKEN, TUSHARE_TOKEN_HIGH, TUSHARE_PROXY_URL, DATA_DIR
 )

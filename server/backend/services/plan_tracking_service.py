@@ -6,7 +6,7 @@
 """
 import json, os, re, sqlite3
 from datetime import datetime, timedelta
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 
 DB_PATH = os.path.join(DATA_DIR, 'private', 'plan_tracking.db')
 
@@ -798,7 +798,7 @@ def _get_review_dates() -> list:
 
     这里用 workbench 目录的存在日期作为候选，避免依赖 review_archive
     """
-    from backend.config import PRIVATE_DIR
+    from backend.core.config import PRIVATE_DIR
     wb_dir = os.path.join(PRIVATE_DIR, 'workbench')
     if os.path.isdir(wb_dir):
         return sorted(

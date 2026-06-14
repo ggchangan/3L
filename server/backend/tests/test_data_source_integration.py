@@ -8,7 +8,7 @@ for p in [_server_root]:
 
 import pytest
 from unittest.mock import patch
-from backend.services.tushare_db import TushareDB
+from backend.data_access.tushare_db import TushareDB
 
 
 @pytest.fixture
@@ -65,10 +65,10 @@ class TestFetchFromTushareDB:
 
     def _patch_db(self, _db):
         """patch _get_tushare_db 返回指定的DB实例"""
-        return patch('backend.services.data_source._get_tushare_db', return_value=_db)
+        return patch('backend.data_access.data_source._get_tushare_db', return_value=_db)
 
     def test_fetch_sector_klines_via_tushare(self, db):
-        from backend.services.data_source import _fetch_tushare_sector_klines
+        from backend.data_access.data_source import _fetch_tushare_sector_klines
         with self._patch_db(db):
             klines = _fetch_tushare_sector_klines('测试半导体', 'industry')
         assert klines is not None
@@ -77,13 +77,13 @@ class TestFetchFromTushareDB:
 
     def test_fetch_sector_klines_wrong_type(self, db):
         """行业板块用概念类型查返回空"""
-        from backend.services.data_source import _fetch_tushare_sector_klines
+        from backend.data_access.data_source import _fetch_tushare_sector_klines
         with self._patch_db(db):
             klines = _fetch_tushare_sector_klines('测试半导体', 'concept')
         assert klines is None
 
     def test_fetch_sector_klines_concept(self, db):
-        from backend.services.data_source import _fetch_tushare_sector_klines
+        from backend.data_access.data_source import _fetch_tushare_sector_klines
         with self._patch_db(db):
             klines = _fetch_tushare_sector_klines('测试人工智能', 'concept')
         assert len(klines) == 2
@@ -92,7 +92,7 @@ class TestFetchFromTushareDB:
     def test_fetch_stock_klines_via_tushare(self, db):
         """验证从 Tushare DB 读取个股日线"""
         # 直接用 TushareDB 验证，不走 data_source 的间接调用
-        from backend.services.tushare_db import TushareDB
+        from backend.data_access.tushare_db import TushareDB
         result = TushareDB().query_stock_daily('600519.SH', limit=3)
         assert len(result) > 0
         assert 'date' in result[0]
@@ -100,7 +100,7 @@ class TestFetchFromTushareDB:
 
     def test_fetch_daily_basic_via_tushare(self, db):
         """验证从 Tushare DB 读取每日指标"""
-        from backend.services.data_source import _fetch_tushare_daily_basic
+        from backend.data_access.data_source import _fetch_tushare_daily_basic
         with self._patch_db(db):
             result = _fetch_tushare_daily_basic('999999.TEST', '20260613')
         assert result is not None
@@ -111,11 +111,11 @@ class TestDataSourceFailover:
     """验证故障切换链"""
 
     def _patch_db(self, _db):
-        return patch('backend.services.data_source._get_tushare_db', return_value=_db)
+        return patch('backend.data_access.data_source._get_tushare_db', return_value=_db)
 
     def test_failover_to_akshare_when_db_empty(self, empty_db):
         """TushareDB 返回空时，回退到 akshare 读取（验证不崩溃）"""
-        from backend.services.data_source import get_sector_klines
+        from backend.data_access.data_source import get_sector_klines
         with self._patch_db(empty_db):
             # 用不存在的板块触发完整 failover 链
             klines = get_sector_klines('NONEXISTENT_SECTOR_XYZ', 'industry')

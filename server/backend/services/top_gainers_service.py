@@ -2,7 +2,7 @@
 涨幅榜服务 — 计算全市场指定区间涨幅排名 + 板块饼图 + 个股操作信息
 """
 import json, os
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 from backend.core.data_layer import get_all_stocks
 from backend.core.ema_utils import get_structure, get_stage
 

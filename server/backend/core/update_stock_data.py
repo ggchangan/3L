@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 # ⚠️ 注意: file 在 server/backend/core/ 下
 # dirname×1=core/  ×2=backend/  ×3=server/（backend 包所在位置）
-from backend.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH
+from backend.core.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH
 from backend.core.data_layer import (
     get_watchlist,
     load_all_stocks_uncached,
@@ -493,7 +493,7 @@ def _fetch_today_industries_from_ths():
 
         df = ak.stock_board_industry_summary_ths()
         # 目标日期是上一个已完成交易日（交易日历含节假日）
-        from backend.services.data_source import get_last_completed_trading_day
+        from backend.data_access.data_source import get_last_completed_trading_day
         today = get_last_completed_trading_day()
 
         result = {}
@@ -710,7 +710,7 @@ def update_sectors():
 
     # ── 确定追踪中的概念 ──
     # 目标日期是上一个已完成交易日（交易日历含节假日）
-    from backend.services.data_source import get_last_completed_trading_day
+    from backend.data_access.data_source import get_last_completed_trading_day
     today = get_last_completed_trading_day()
     try:
         _concept_list = get_concept_list()
@@ -803,7 +803,7 @@ def update_sectors():
 
     # 同步刷新快照源文件（路径由 CONCEPT_DATA_SOURCE 配置驱动，供 failover 回退使用）
     try:
-        from backend.services.data_source import _get_snapshot_source_path, _get_snapshot_source_label
+        from backend.data_access.data_source import _get_snapshot_source_path, _get_snapshot_source_label
         snap_path = _get_snapshot_source_path()
         snap_label = _get_snapshot_source_label()
         snap_dir = os.path.dirname(snap_path)

@@ -14,7 +14,7 @@
 import json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.config import (
+from backend.core.config import (
     DATA_DIR, SECTOR_DAILY_PATH,
     SOURCES_EM_SECTOR_DAILY, SOURCES_THS_SECTOR_DAILY,
 )
@@ -109,7 +109,7 @@ def main():
         print(f'✅ EM 概念映射写入: {SOURCES_EM_CONCEPT_MAP} ({len(concept_data)} 条)')
     
     # --- 初始化 source_health.json ---
-    from backend.config import SOURCE_HEALTH_PATH
+    from backend.core.config import SOURCE_HEALTH_PATH
     health_path = SOURCE_HEALTH_PATH
     if not os.path.isfile(health_path):
         initial_health = {

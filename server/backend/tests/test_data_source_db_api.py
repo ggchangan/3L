@@ -9,13 +9,13 @@ import os
 os.environ.setdefault('DATA_DIR', '/home/ubuntu/data/3l')
 import pytest
 from unittest.mock import patch, MagicMock
-from backend.services import data_source as ds
+from backend.data_access import data_source as ds
 
 
 class TestGetAllStocksFromDB:
     """data_source.get_all_stocks_from_db() — 批量K线+名称"""
 
-    @patch('backend.services.data_source._get_tushare_db')
+    @patch('backend.data_access.data_source._get_tushare_db')
     def test_returns_code_to_klines_map(self, mock_get_db):
         """返回 {code: [klines]} 格式"""
         mock_db = MagicMock()
@@ -31,14 +31,14 @@ class TestGetAllStocksFromDB:
         assert len(result['600519']['klines']) == 1
         assert result['600519']['name'] == '贵州茅台'
 
-    @patch('backend.services.data_source._get_tushare_db')
+    @patch('backend.data_access.data_source._get_tushare_db')
     def test_handles_empty_codes_list(self, mock_get_db):
         """空列表返回空字典"""
         mock_get_db.return_value = MagicMock()
         result = ds.get_all_stocks_from_db([], limit=5)
         assert result == {}
 
-    @patch('backend.services.data_source._get_tushare_db')
+    @patch('backend.data_access.data_source._get_tushare_db')
     def test_fills_name_from_stock_basic(self, mock_get_db):
         """名称从 stock_basic 表查询"""
         mock_db = MagicMock()
@@ -57,7 +57,7 @@ class TestGetAllStocksFromDB:
         assert result['600519']['name'] == '贵州茅台'
         assert result['000001']['name'] == '平安银行'
 
-    @patch('backend.services.data_source._get_tushare_db')
+    @patch('backend.data_access.data_source._get_tushare_db')
     def test_handles_missing_name_gracefully(self, mock_get_db):
         """stock_basic 查不到的code，name 置空"""
         mock_db = MagicMock()
@@ -82,7 +82,7 @@ class TestGetIndexDataFromDB:
         '399006': '创业板指',
     }
 
-    @patch('backend.services.data_source._get_tushare_db')
+    @patch('backend.data_access.data_source._get_tushare_db')
     def test_returns_multi_index_structure(self, mock_get_db):
         """返回 {code: {name, klines}} 格式"""
         mock_db = MagicMock()
@@ -96,7 +96,7 @@ class TestGetIndexDataFromDB:
         assert result['000985']['name'] == '中证全指'
         assert len(result['000985']['klines']) == 1
 
-    @patch('backend.services.data_source._get_tushare_db')
+    @patch('backend.data_access.data_source._get_tushare_db')
     def test_empty_db_returns_empty(self, mock_get_db):
         """DB无数据时返回空字典"""
         mock_db = MagicMock()
@@ -110,7 +110,7 @@ class TestGetIndexDataFromDB:
 class TestSaveStockKlines:
     """data_source.save_stock_klines_to_db()"""
 
-    @patch('backend.services.data_source._get_tushare_db')
+    @patch('backend.data_access.data_source._get_tushare_db')
     def test_saves_klines_as_rows(self, mock_get_db):
         """将 {code: {klines, name}} 写入 stock_daily"""
         mock_db = MagicMock()
@@ -135,7 +135,7 @@ class TestSaveStockKlines:
 class TestSaveIndexKlines:
     """data_source.save_index_klines_to_db()"""
 
-    @patch('backend.services.data_source._get_tushare_db')
+    @patch('backend.data_access.data_source._get_tushare_db')
     def test_saves_index_rows(self, mock_get_db):
         """将 {code: {name, klines}} 写入 index_daily"""
         mock_db = MagicMock()

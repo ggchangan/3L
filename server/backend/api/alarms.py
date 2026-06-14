@@ -11,7 +11,7 @@ from backend.services.alarm_service import (
     dismiss_alarm,
     reenable_alarm,
 )
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 from backend.core.exceptions import APIError
 
 

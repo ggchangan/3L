@@ -12,7 +12,7 @@ import re
 import requests
 from datetime import date, datetime, timedelta
 
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 from backend.services.alarm_service import (
     get_active_alarms,
     mark_alarm_triggered,
@@ -129,7 +129,7 @@ def _auto_dismiss_index_alarm(code: str):
 
 def _is_non_trading_day() -> bool:
     """判断当前是否为非交易日（复用 data_models.is_trading_day）"""
-    from backend.core.data_models import is_trading_day
+    from backend.models.data_models import is_trading_day
     today_str = datetime.now().strftime('%Y-%m-%d')
     return not is_trading_day(today_str)
 

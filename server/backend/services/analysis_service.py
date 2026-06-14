@@ -2,7 +2,7 @@
 个股分析服务 — 股票搜索、技术分析、系统判定
 """
 import json, os
-from backend.config import REVIEW_CHARTS_DIR, BT_RESULTS_PATH
+from backend.core.config import REVIEW_CHARTS_DIR, BT_RESULTS_PATH
 from backend.core.data_layer import get_all_stocks, get_watchlist, resolve_stock, search_stock_full_market
 from backend.core.buy_point_detection import (
     detect_buy_point,

@@ -23,8 +23,8 @@ from datetime import datetime, timedelta
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(PROJECT_DIR, 'server'))
 
-from backend.config import SECTOR_DAILY_PATH
-from backend.services.data_source import (
+from backend.core.config import SECTOR_DAILY_PATH
+from backend.data_access.data_source import (
     verify_data_coverage, _last_trading_day, _is_trading_day,
     _days_between,
 )

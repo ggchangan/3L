@@ -6,7 +6,7 @@ import requests
 from urllib.parse import urlparse, parse_qs
 from backend.core.logger import get_logger
 from backend.core.exceptions import APIError
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 
 log = get_logger(__name__)
 from backend.services.direction_service import (
@@ -654,7 +654,7 @@ def _handle_remove(h, path, body):
             if removed > 0:
                 from backend.services.watchlist_service import save_watchlist
                 save_watchlist(wl)
-                from backend.core.cache_layer import cache
+                from backend.data_access.cache_layer import cache
                 cache.invalidate('watchlist')
         h.send_json({'success': True, 'removed_stocks': removed})
     except Exception as e:

@@ -9,12 +9,12 @@
 """
 import json, os, sys, shutil, subprocess
 from datetime import datetime
-from backend.config import (
+from backend.core.config import (
     REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
     WWW_DIR, PRIVATE_DIR, SCRIPTS_DIR, MOMENTUM_CACHE_PREFIX,
     CHARTS_DIR, ALL_STOCKS_PATH, DATA_DIR, INDUSTRY_MAP_PATH, MAINLINES_CACHE_PATH,
 )
-from backend import config
+from backend.core import config
 from backend.core.exceptions import DataError
 from backend.core.logger import get_logger
 
@@ -242,7 +242,7 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
     try:
         from backend.core.trend_trading import detect_trend_buy
         from backend.core.data_layer import _load_json
-        from backend.config import MANUAL_TREND_PATH
+        from backend.core.config import MANUAL_TREND_PATH
         manual = _load_json(MANUAL_TREND_PATH, [])
         trend_codes = set(manual)
         if trend_codes and wl_codes:

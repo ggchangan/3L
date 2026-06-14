@@ -12,7 +12,7 @@ import re
 import time
 from datetime import date, datetime, timedelta
 
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 
 ALARMS_DIR = os.path.join(DATA_DIR, 'private')
 ALARMS_PATH = os.path.join(ALARMS_DIR, 'alarms.json')

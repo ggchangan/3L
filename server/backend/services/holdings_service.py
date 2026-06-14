@@ -5,7 +5,7 @@ import json, os, requests, tempfile
 from backend.core.logger import get_logger
 log = get_logger(__name__)
 from datetime import datetime
-from backend.config import HOLDINGS_PATH, TRADES_PATH
+from backend.core.config import HOLDINGS_PATH, TRADES_PATH
 
 # ── 腾讯行情接口格式 ────────────────────────────────────
 # 请求: http://qt.gtimg.cn/q=sh603259,sz301200

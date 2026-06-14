@@ -13,7 +13,7 @@
 import json, os, sys, math
 from datetime import date
 
-from backend import config
+from backend.core import config
 
 DATA_PATH = config.ALL_STOCKS_PATH
 OUT_DIR = config.CHARTS_DIR

@@ -31,7 +31,7 @@ def setup_logging():
         return
 
     # 延迟导入 config（避免循环依赖）
-    from backend.config import LOG_LEVEL, LOG_DIR
+    from backend.core.config import LOG_LEVEL, LOG_DIR
 
     level = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
     root = logging.getLogger()

@@ -123,7 +123,7 @@ class TestL1DataSourceFailover:
     @pytest.mark.network
     def test_get_sector_rankings_ths_live_first(self):
         """get_sector_rankings: THS live排在首位"""
-        from backend.services.data_source import DATA_SOURCE_CHAINS
+        from backend.data_access.data_source import DATA_SOURCE_CHAINS
         chain = DATA_SOURCE_CHAINS['sector_ranking']
         names = [name for name, _ in chain]
         assert 'ths_live' in names, "链中缺少ths_live"
@@ -133,7 +133,7 @@ class TestL1DataSourceFailover:
     @pytest.mark.network
     def test_get_sector_rankings_returns_industry_data(self):
         """get_sector_rankings: 返回行业数据"""
-        from backend.services.data_source import get_sector_rankings
+        from backend.data_access.data_source import get_sector_rankings
         rankings = get_sector_rankings('industry')
         assert isinstance(rankings, dict), f"返回类型={type(rankings)}"
         assert '电子化学品' in rankings or len(rankings) > 0, \
@@ -208,7 +208,7 @@ class TestL2DataSourceService:
 
     def test_get_sector_klines_ths_path(self):
         """get_sector_klines: THS仓能返回K线"""
-        from backend.services.data_source import get_sector_klines
+        from backend.data_access.data_source import get_sector_klines
         klines = get_sector_klines('电子化学品', 'industry')
         assert klines is not None, "电子化学品K线返回None"
         assert isinstance(klines, list), f"返回类型={type(klines)}"
@@ -216,7 +216,7 @@ class TestL2DataSourceService:
 
     def test_sector_daily_file_paths_configured(self):
         """配置文件路径存在"""
-        from backend.config import SECTOR_DAILY_PATH, SOURCES_EM_SECTOR_DAILY, SOURCES_THS_SECTOR_DAILY
+        from backend.core.config import SECTOR_DAILY_PATH, SOURCES_EM_SECTOR_DAILY, SOURCES_THS_SECTOR_DAILY
         assert SECTOR_DAILY_PATH, "SECTOR_DAILY_PATH 未配置"
         assert SOURCES_EM_SECTOR_DAILY, "SOURCES_EM_SECTOR_DAILY 未配置"
         assert SOURCES_THS_SECTOR_DAILY, "SOURCES_THS_SECTOR_DAILY 未配置"
@@ -388,7 +388,7 @@ class TestDataModels:
 
     def test_sector_daily_push2test_model(self):
         """SectorPush2Test + ThsIndustrySnapshot 可实例化"""
-        from backend.core.data_models import SectorPush2Test, ThsIndustrySnapshot, Push2TestConceptSnapshot
+        from backend.models.data_models import SectorPush2Test, ThsIndustrySnapshot, Push2TestConceptSnapshot
         model = SectorPush2Test(
             industries={'电子化学品': ThsIndustrySnapshot(
                 date='20260605', change_pct=-0.7,
@@ -408,7 +408,7 @@ class TestDataModels:
 
     def test_sector_daily_get_change_pct(self):
         """SectorPush2Test.get_change_pct() 正确"""
-        from backend.core.data_models import SectorPush2Test, ThsIndustrySnapshot, Push2TestConceptSnapshot
+        from backend.models.data_models import SectorPush2Test, ThsIndustrySnapshot, Push2TestConceptSnapshot
         model = SectorPush2Test(
             industries={'电子化学品': ThsIndustrySnapshot(date='20260605', change_pct=-0.7)},
             concepts={'AI手机': Push2TestConceptSnapshot(
@@ -423,7 +423,7 @@ class TestDataModels:
 
     def test_sector_daily_dict_to_ths_snapshot(self):
         """ths_dict_to_snapshot 正确转换"""
-        from backend.core.data_models import ths_dict_to_snapshot
+        from backend.models.data_models import ths_dict_to_snapshot
         d = {'date': '20260605', 'change_pct': -0.7, 'up_count': 18, 'down_count': 24,
              'leader': '江化微', 'leader_chg': 10.01, 'net_flow': 5.7}
         snap = ths_dict_to_snapshot(d)

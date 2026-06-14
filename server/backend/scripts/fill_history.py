@@ -31,8 +31,8 @@ for p in [_server_root]:
 
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
-from backend.config import TUSHARE_TOKEN, TUSHARE_TOKEN_HIGH, TUSHARE_PROXY_URL, DATA_DIR
-from backend.services.tushare_db import TushareDB
+from backend.core.config import TUSHARE_TOKEN, TUSHARE_TOKEN_HIGH, TUSHARE_PROXY_URL, DATA_DIR
+from backend.data_access.tushare_db import TushareDB
 from backend.core.logger import get_logger
 
 log = get_logger(__name__)

@@ -1,6 +1,6 @@
 """数据层 — 供 shared package 使用
 
-从 DATA_DIR 环境变量读取数据，不依赖 backend.config。
+从 DATA_DIR 环境变量读取数据，不依赖 backend.core.config。
 包含 buy_point_detection 和 stock_card 需要的函数。
 """
 

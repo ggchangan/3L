@@ -24,7 +24,7 @@ class TestVerifyDataSources:
     @pytest.mark.network
     def test_verify_all_passes(self):
         """verify_data_sources() 可正常调用并返回结果"""
-        from backend.services.data_source import verify_data_sources
+        from backend.data_access.data_source import verify_data_sources
         result = verify_data_sources(verbose=False)
         assert 'status' in result, "应返回status字段"
         assert 'checks' in result, "应返回checks字段"
@@ -36,7 +36,7 @@ class TestVerifyDataSources:
     @pytest.mark.network
     def test_verify_has_ths_checks(self):
         """verify_data_sources() 包含THS验证项"""
-        from backend.services.data_source import verify_data_sources
+        from backend.data_access.data_source import verify_data_sources
         result = verify_data_sources(verbose=False)
         ths_checks = [c for c in result['checks'] if 'THS' in c['check']]
         assert len(ths_checks) >= 4, f"THS检查项={len(ths_checks)}，应≥4"
@@ -44,7 +44,7 @@ class TestVerifyDataSources:
     @pytest.mark.network
     def test_verify_has_datalayer_checks(self):
         """verify_data_sources() 包含data_layer合约验证"""
-        from backend.services.data_source import verify_data_sources
+        from backend.data_access.data_source import verify_data_sources
         result = verify_data_sources(verbose=False)
         dl_checks = [c for c in result['checks'] if 'data_layer' in c['check']]
         assert len(dl_checks) >= 4, f"data_layer检查项={len(dl_checks)}，应≥4"
@@ -52,7 +52,7 @@ class TestVerifyDataSources:
     @pytest.mark.network
     def test_verify_includes_l0_coverage(self):
         """verify_data_sources() 包含L0覆盖度验证"""
-        from backend.services.data_source import verify_data_sources
+        from backend.data_access.data_source import verify_data_sources
         result = verify_data_sources(verbose=False)
         l0_types = set(c.get('type', '') for c in result['checks'] if c.get('dimension'))
         for t in ['concept_kline', 'industry_kline', 'concept_snapshot', 'industry_snapshot']:
@@ -238,7 +238,7 @@ class TestDataSourceEdgeCases:
     @pytest.mark.network
     def test_verify_data_sources_on_weekend(self):
         """verify_data_sources() 在非交易日正常工作"""
-        from backend.services.data_source import verify_data_sources
+        from backend.data_access.data_source import verify_data_sources
         result = verify_data_sources(verbose=False)
         # 非交易日不应返回 fail（已加跳过逻辑）
         assert result['status'] in ('pass', 'fail'), \

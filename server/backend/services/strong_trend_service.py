@@ -2,7 +2,7 @@
 import os, json
 from typing import List, Tuple, Optional
 
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 
 # ── 数据加载 ──
 

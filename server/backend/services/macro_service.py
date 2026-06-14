@@ -7,7 +7,7 @@ from datetime import datetime
 
 import requests
 
-from backend.config import DATA_DIR, CACHE_DIR
+from backend.core.config import DATA_DIR, CACHE_DIR
 
 
 # ── 美股代码对照表（与 external_mapping.json 的 23 只对齐） ──

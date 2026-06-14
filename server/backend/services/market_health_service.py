@@ -8,7 +8,7 @@ import os
 import statistics
 from datetime import datetime
 
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 
 
 def _load_index_data():

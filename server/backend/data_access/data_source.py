@@ -3,7 +3,7 @@
 抽象数据层 — 统一数据获取入口，内置故障切换+健康监测
 
 用法：
-    from backend.services.data_source import (
+    from backend.data_access.data_source import (
         get_sector_rankings, get_sector_klines, get_concept_map, get_data_source_status
     )
 """
@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from backend.config import (
+from backend.core.config import (
     SECTOR_DAILY_PATH,
     SOURCES_EM_SECTOR_DAILY,
     SOURCES_THS_SECTOR_DAILY,
@@ -37,7 +37,7 @@ def _get_tushare_db():
     global _TUSHARE_DB
     if _TUSHARE_DB is None:
         try:
-            from backend.services.tushare_db import TushareDB
+            from backend.data_access.tushare_db import TushareDB
             _TUSHARE_DB = TushareDB()
         except Exception as e:
             log.warning('TushareDB 初始化失败: %s', e)
@@ -409,7 +409,7 @@ def _get_snapshot_source_path():
     Returns:
         SOURCES_THS_SECTOR_DAILY (ths 模式) 或 SOURCES_EM_SECTOR_DAILY (eastmoney 模式)
     """
-    from backend.config import CONCEPT_DATA_SOURCE
+    from backend.core.config import CONCEPT_DATA_SOURCE
     if CONCEPT_DATA_SOURCE == 'ths':
         return SOURCES_THS_SECTOR_DAILY
     elif CONCEPT_DATA_SOURCE == 'eastmoney':
@@ -420,7 +420,7 @@ def _get_snapshot_source_path():
 
 def _get_snapshot_source_label():
     """返回当前数据源显示名称（用于日志/验证）"""
-    from backend.config import CONCEPT_DATA_SOURCE
+    from backend.core.config import CONCEPT_DATA_SOURCE
     labels = {'ths': 'THS仓', 'eastmoney': 'EM仓'}
     return labels.get(CONCEPT_DATA_SOURCE, 'THS仓')
 
@@ -782,7 +782,7 @@ def get_sector_constituents(sector_code: str) -> List[tuple]:
 
 def _load_concept_name_mapping():
     """加载系统概念名 → THS概念名的映射表"""
-    from backend.config import CONCEPT_NAME_MAPPING_PATH
+    from backend.core.config import CONCEPT_NAME_MAPPING_PATH
     try:
         return _load_json(CONCEPT_NAME_MAPPING_PATH, {})
     except Exception:
@@ -984,7 +984,7 @@ def get_concept_snapshots(name_list: list = None) -> dict:
     Returns:
         {系统名: {date, change_pct, up_count, down_count, ...}}
     """
-    from backend.config import CONCEPT_DATA_SOURCE
+    from backend.core.config import CONCEPT_DATA_SOURCE
 
     if name_list is None:
         name_map = _load_concept_name_mapping()
@@ -1009,7 +1009,7 @@ def get_concept_klines(name_list: list) -> dict:
     Returns:
         {系统名: {date, open, close, high, low, volume}}
     """
-    from backend.config import CONCEPT_DATA_SOURCE
+    from backend.core.config import CONCEPT_DATA_SOURCE
 
     if CONCEPT_DATA_SOURCE == 'ths':
         return get_ths_concept_klines(name_list)
@@ -1355,7 +1355,7 @@ def verify_data_coverage(verbose=True):
     """
     import json, os
     from datetime import datetime, timedelta
-    from backend.config import SECTOR_DAILY_PATH
+    from backend.core.config import SECTOR_DAILY_PATH
 
     now = datetime.now().strftime('%Y%m%d')
     today = datetime.now()

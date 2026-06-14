@@ -8,7 +8,7 @@ for p in [_server_root]:
 
 import pytest
 from backend.core.data_layer import get_all_stocks, get_all_stocks_db
-from backend.services.tushare_db import TushareDB
+from backend.data_access.tushare_db import TushareDB
 
 
 class TestTushareDBIntegration:

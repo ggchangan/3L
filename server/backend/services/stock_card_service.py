@@ -14,7 +14,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from backend.config import MANUAL_TREND_PATH as _MANUAL_TREND_PATH, DATA_DIR
+from backend.core.config import MANUAL_TREND_PATH as _MANUAL_TREND_PATH, DATA_DIR
 from backend.core.data_layer import (
     get_stock_klines,
     get_industry_map,

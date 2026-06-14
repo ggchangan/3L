@@ -46,7 +46,7 @@ def _clean_reimport(mod_name: str):
 
 def test_a_concept_wave_uses_config():
     """concept_wave_service 应从 config 导入 DATA_DIR"""
-    import backend.config as cfg
+    import backend.core.config as cfg
     old_env = os.environ.pop('DATA_DIR', None)
     old_cfg = cfg.DATA_DIR
     cfg.DATA_DIR = SENTINEL
@@ -54,7 +54,7 @@ def test_a_concept_wave_uses_config():
         svc = _clean_reimport('backend.services.concept_wave_service')
         assert svc.DATA_DIR == SENTINEL, (
             f'concept_wave_service.DATA_DIR={svc.DATA_DIR!r} != {SENTINEL!r}\n'
-            '仍用自己的 fallback，未取 backend.config.DATA_DIR'
+            '仍用自己的 fallback，未取 backend.core.config.DATA_DIR'
         )
     finally:
         cfg.DATA_DIR = old_cfg
@@ -64,7 +64,7 @@ def test_a_concept_wave_uses_config():
 
 def test_a_strong_trend_uses_config():
     """strong_trend_service 应从 config 导入 DATA_DIR"""
-    import backend.config as cfg
+    import backend.core.config as cfg
     old_env = os.environ.pop('DATA_DIR', None)
     old_cfg = cfg.DATA_DIR
     cfg.DATA_DIR = SENTINEL
@@ -97,7 +97,7 @@ def test_a_backtest_reads_env():
 
 def test_b_check_alerts_index_data_path():
     """check_alerts.INDEX_DATA_PATH 应与 config.DATA_DIR 一致"""
-    import backend.config as cfg
+    import backend.core.config as cfg
     old = cfg.DATA_DIR
     test_val = '/tmp/_test_alerts'
     cfg.DATA_DIR = test_val

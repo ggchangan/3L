@@ -24,7 +24,7 @@ class TestHoldingsPath(unittest.TestCase):
 
     def test_fix_should_use_DATA_DIR(self):
         """config.HOLDINGS_PATH 使用 DATA_DIR 拼接"""
-        from backend.config import HOLDINGS_PATH, DATA_DIR
+        from backend.core.config import HOLDINGS_PATH, DATA_DIR
         expected = os.path.join(DATA_DIR, 'private', 'holdings.json')
         self.assertEqual(expected, HOLDINGS_PATH)
 

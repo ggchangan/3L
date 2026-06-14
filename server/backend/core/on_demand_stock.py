@@ -12,7 +12,7 @@ from backend.core.logger import get_logger
 
 log = get_logger(__name__)
 
-from backend.config import ON_DEMAND_CACHE_PATH, DATA_DIR
+from backend.core.config import ON_DEMAND_CACHE_PATH, DATA_DIR
 
 # 缓存限制
 MAX_CACHED_STOCKS = 30
