@@ -9,7 +9,7 @@ import os, sqlite3, json
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from backend.config import TUSHARE_TOKEN, TUSHARE_TOKEN_HIGH, DATA_DIR
+from backend.config import TUSHARE_TOKEN, TUSHARE_TOKEN_HIGH, TUSHARE_PROXY_URL, DATA_DIR
 
 
 # ════════════════════════════════════════════════════════════
@@ -448,6 +448,25 @@ class TushareDB:
     def token_high(self) -> str:
         """15000积分账号（回填用，没有则回退到 low）"""
         return TUSHARE_TOKEN_HIGH or TUSHARE_TOKEN
+
+    @staticmethod
+    def create_pro_api(token: str = None, use_proxy: bool = False) -> 'ts.pro_api':
+        """创建 Tushare Pro API 客户端
+
+        Args:
+            token: Tushare token，默认用 TUSHARE_TOKEN
+            use_proxy: 是否设置代理 endpoint（15000账号需要，2000不需要）
+
+        Returns:
+            ts.pro_api 实例
+        """
+        import tushare as ts
+
+        if use_proxy and TUSHARE_PROXY_URL:
+            from tushare.pro import client as _ts_client
+            _ts_client.DataApi._DataApi__http_url = TUSHARE_PROXY_URL
+
+        return ts.pro_api(token or TUSHARE_TOKEN)
 
     def close(self):
         self.conn.close()

@@ -124,6 +124,7 @@ CONCEPT_DATA_SOURCE = 'ths'
 # =====================================================
 TUSHARE_TOKEN = _env('TUSHARE_TOKEN', '')
 TUSHARE_TOKEN_HIGH = _env('TUSHARE_TOKEN_HIGH', '') or TUSHARE_TOKEN
+TUSHARE_PROXY_URL = _env('TUSHARE_PROXY_URL', '')
 
 # =====================================================
 # 服务器配置
