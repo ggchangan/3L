@@ -30,6 +30,20 @@ from backend.core.exceptions import DataSourceError
 
 log = get_logger(__name__)
 
+# TushareDB 全局实例（懒加载）
+_TUSHARE_DB = None
+
+def _get_tushare_db():
+    global _TUSHARE_DB
+    if _TUSHARE_DB is None:
+        try:
+            from backend.services.tushare_db import TushareDB
+            _TUSHARE_DB = TushareDB()
+        except Exception as e:
+            log.warning('TushareDB 初始化失败: %s', e)
+            _TUSHARE_DB = None
+    return _TUSHARE_DB
+
 
 # 交易日历缓存（akshare tool_trade_date_hist_sina，含节假日）
 _trade_date_cache = None
@@ -292,15 +306,124 @@ def _get_snapshot_source_label():
     return labels.get(CONCEPT_DATA_SOURCE, 'THS仓')
 
 
+# ════════════════════════════════════════════════════════════
+# Tushare 数据源获取函数（从 DB 读取）
+# ════════════════════════════════════════════════════════════
+
+def _fetch_tushare_sector_klines(sector_name, sector_type='industry'):
+    """从 TushareDB 读取板块K线（优先源）
+
+    Args:
+        sector_name: 板块中文名
+        sector_type: 'industry' 或 'concept'
+
+    Returns:
+        [{date, open, close, high, low, volume}, ...] 或 None
+    """
+    db = _get_tushare_db()
+    if db is None:
+        return None
+    try:
+        klines = db.get_sector_klines(sector_name, sector_type, limit=120)
+        if klines:
+            report_success('tushare_sector_klines')
+            return klines
+        # 空数据 -> None 触发 failover 链回退
+        return None
+    except Exception as e:
+        report_failure('tushare_sector_klines', str(e))
+        return None
+
+
+def _fetch_tushare_sector_ranking(date_str):
+    """从 TushareDB 读取板块当日涨跌幅排行
+
+    Args:
+        date_str: YYYYMMDD
+
+    Returns:
+        {last_updated, industries: {name: {change_pct, date, ...}},
+         concepts: {name: {change_pct, date, ...}}}
+        或 None
+    """
+    db = _get_tushare_db()
+    if db is None:
+        return None
+    try:
+        # 从 ths_daily 表获取当日的板块数据
+        all_codes = db.get_all_ths_codes()
+        if not all_codes:
+            return None
+
+        industries = {}
+        concepts = {}
+        has_data = False
+
+        for ts_code, name, stype in all_codes:
+            rows = db.query_many(
+                'ths_daily',
+                where='ts_code=? AND trade_date=?',
+                params=[ts_code, date_str],
+                limit=1,
+            )
+            if rows:
+                has_data = True
+                row = rows[0]
+                entry = {
+                    'date': date_str,
+                    'change_pct': row.get('pct_chg', 0),
+                    'close': row.get('close', 0),
+                    'open': row.get('open', 0),
+                    'high': row.get('high', 0),
+                    'low': row.get('low', 0),
+                    'volume': row.get('vol', 0),
+                }
+                target = industries if stype == 'I' else concepts
+                target[name] = entry
+
+        if has_data:
+            report_success('tushare_sector_ranking')
+            return {
+                'last_updated': date_str,
+                'industries': industries,
+                'concepts': concepts,
+            }
+        return None
+    except Exception as e:
+        report_failure('tushare_sector_ranking', str(e))
+        return None
+
+
+def _fetch_tushare_daily_basic(ts_code, trade_date):
+    """从 TushareDB 读取个股每日指标（PE/PB/市值）
+
+    Args:
+        ts_code: 股票代码含后缀 (600519.SH)
+        trade_date: YYYYMMDD
+
+    Returns:
+        {pe_ttm, pb, total_mv, ...} 或 None
+    """
+    db = _get_tushare_db()
+    if db is None:
+        return None
+    try:
+        return db.query_daily_basic(ts_code, trade_date)
+    except Exception:
+        return None
+
+
 # ====== 调用链定义 ======
 DATA_SOURCE_CHAINS = {
     'sector_ranking': [
+        ('tushare', lambda date: _fetch_tushare_sector_ranking(date)),
         ('ths_live', lambda date: _fetch_ths_live_sector_ranking(date)),
         ('live', lambda date: _fetch_live_sector_ranking(date)),
         ('legacy_sector', lambda date: _fetch_legacy_sector_ranking(date)),
         ('snapshot_sector', lambda date: _fetch_ths_sector_ranking(date)),
     ],
     'sector_klines': [
+        ('tushare', lambda name, type_: _fetch_tushare_sector_klines(name, type_)),
         ('ths_sector', lambda name, type_: _fetch_ths_sector_klines(name, type_)),
         ('snapshot_sector', lambda name, type_: _fetch_snapshot_sector_klines(name, type_)),
         ('legacy_sector', lambda name, type_: _fetch_legacy_sector_klines(name, type_)),

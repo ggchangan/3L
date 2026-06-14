@@ -194,6 +194,26 @@ class TushareDB:
             return 0
         return self.upsert_many_from_dicts(table, records)
 
+    # 表字段缓存: {table: set(column_names)}
+    _COLUMN_CACHE: Dict[str, set] = {}
+
+    def _ensure_columns(self, table: str, cols: List[str]):
+        """动态加列：数据中有表中没有的列时 ALTER TABLE ADD COLUMN"""
+        if table not in self._COLUMN_CACHE:
+            cur = self.conn.execute(f"PRAGMA table_info({table})")
+            self._COLUMN_CACHE[table] = {r[1] for r in cur.fetchall()}
+
+        existing = self._COLUMN_CACHE[table]
+        missing = [c for c in cols if c not in existing]
+        if not missing:
+            return
+
+        for col in missing:
+            # TEXT 类型最通用，兼容所有 Tushare 返回类型
+            self.conn.execute(f"ALTER TABLE {table} ADD COLUMN \"{col}\" TEXT")
+        self._COLUMN_CACHE[table].update(missing)
+        self.conn.commit()
+
     def upsert_many_from_dicts(self, table: str, records: List[dict]) -> int:
         """从 dict 列表批量写入
 
@@ -209,8 +229,9 @@ class TushareDB:
         if table not in CREATE_TABLES:
             raise ValueError(f"未知表名: {table}")
 
-        # 获取列名（取第一个记录的 keys）
+        # 全量保留：动态加列，不丢任何字段
         cols = list(records[0].keys())
+        self._ensure_columns(table, cols)
         placeholders = ','.join(['?' for _ in cols])
         col_names = ','.join(cols)
 
@@ -303,8 +324,14 @@ class TushareDB:
     # 个股日线查询
     # ════════════════════════════════════════════════════════════
 
-    def query_stock_daily(self, ts_code: str, limit: int = 60) -> List[dict]:
+    def query_stock_daily(self, ts_code: str, limit: int = 60,
+                          adj: str = 'qfq') -> List[dict]:
         """查询个股日线（按日期倒序），返回兼容现有 Kline 合约
+
+        Args:
+            ts_code: 股票代码含后缀 (600519.SH)
+            limit: 最多返回条数
+            adj: 复权类型，None=不复权，'qfq'=前复权（默认）
 
         输出格式: [{date, open, close, high, low, volume}, ...]
         """
@@ -315,6 +342,15 @@ class TushareDB:
             order_by='trade_date DESC',
             limit=limit,
         )
+        if not rows:
+            return []
+
+        if adj == 'qfq':
+            return self._apply_qfq(rows, ts_code)
+        return self._to_kline_format(rows)
+
+    def _to_kline_format(self, rows: List[dict]) -> List[dict]:
+        """原始行 → Kline 合约格式"""
         return [
             {
                 'date': r['trade_date'],
@@ -326,6 +362,41 @@ class TushareDB:
             }
             for r in rows
         ]
+
+    def _apply_qfq(self, rows: List[dict], ts_code: str) -> List[dict]:
+        """对原始K线数据应用前复权
+
+        前复权价 = 原始价 × latest_adj / adj_factor[t]
+        latest_adj = 最近日期的复权因子（归一化基准）
+        """
+        dates = [r['trade_date'] for r in rows]
+        placeholders = ','.join(['?'] * len(dates))
+        adj_rows = self.query_many(
+            'adj_factor',
+            where=f'ts_code=? AND trade_date IN ({placeholders})',
+            params=[ts_code] + dates,
+        )
+        adj_map = {r['trade_date']: r['adj_factor'] for r in adj_rows}
+
+        latest = self.query_one('adj_factor', ts_code=ts_code,
+                                trade_date=rows[0]['trade_date'])
+        if not latest or not latest.get('adj_factor'):
+            return self._to_kline_format(rows)
+        latest_adj = float(latest['adj_factor'])
+
+        result = []
+        for r in rows:
+            adj_factor = adj_map.get(r['trade_date'])
+            ratio = latest_adj / float(adj_factor) if (adj_factor and float(adj_factor) > 0) else 1.0
+            result.append({
+                'date': r['trade_date'],
+                'open': round(float(r['open']) * ratio, 2) if r['open'] else None,
+                'close': round(float(r['close']) * ratio, 2) if r['close'] else None,
+                'high': round(float(r['high']) * ratio, 2) if r['high'] else None,
+                'low': round(float(r['low']) * ratio, 2) if r['low'] else None,
+                'volume': int(r['vol']) if r['vol'] else 0,
+            })
+        return result
 
     def query_daily_basic(self, ts_code: str, trade_date: str) -> Optional[dict]:
         """查询每日指标（PE/PB/市值等）"""

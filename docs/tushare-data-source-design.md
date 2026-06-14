@@ -1,8 +1,8 @@
 # Tushare 数据源迁移设计方案 v0.3 — 数据库+双账号策略
 
-**版本:** v0.3 (草案)
+**版本:** v0.4 (实施中)
 **日期:** 2026-06-14
-**状态:** 📝 方案讨论中
+**状态:** 🔧 实施中 (Phase 1-4 ✅, Phase 5 进行中)
 
 > **积分说明：** Tushare Pro 的积分是**权限等级**，不是单次调用消耗。
 > - API接口有最低积分要求（如某接口需要2000分以上才能调用）
@@ -1336,60 +1336,56 @@ Phase 3: 确认稳定后，删除JSON路径
 | 1.5 | 实现 `query_stock_daily(ts_code, limit)` | 测试查询+排序 |
 | 1.6 | 实现 `query_daily_basic(ts_code, trade_date)` | 测试查询 |
 | 1.7 | 实现 `query_ths_code_by_name(name)` / 反查 | 测试名称映射 |
-| 1.8 | 实现 `get_all_ths_codes()` | 测试全量 |
-| 1.9 | 实现 `get_sector_klines(name, type, limit)` | 测试板块K线 |
-| 1.10 | 实现 `get_index_klines(ts_code, limit)` | 测试指数K线 |
-| 1.11 | 实现 `get_daily_basic(ts_code, trade_date)` | 测试PE/PB查询 |
-| 1.12 | 实现 `get_last_trade_date(table_name)` 获取最大日期 | 测试增量判断 |
+## 7. 实施进度（当前状态）
 
-**输出：** `tushare_db.py` + `tests/test_tushare_db.py`
+### ✅ Phase 1: SQLite Schema + 数据访问层 (已完成)
 
-### Phase 2: data_source.py Tushare 路由
-
-**目标：** 在 data_source.py 的故障切换链中增加 Tushare 数据源。不改变现有业务代码。
-
-| 步骤 | 内容 | 说明 |
-|------|------|------|
-| 2.1 | data_source.py 新增 `_fetch_tushare_stock_klines()` | 从 DB 读个股K线 |
-| 2.2 | data_source.py 新增 `_fetch_tushare_sector_klines()` | 从 DB 读板块K线 |
-| 2.3 | data_source.py 新增 `_fetch_tushare_sector_ranking()` | 从 DB 读板块快照 |
-| 2.4 | data_source.py 新增 `_fetch_tushare_daily_basic()` | 从 DB 读PE/PB |
-| 2.5 | data_source.py 故障切换链插入 Tushare 为首选源 | 改 `DATA_SOURCE_CHAINS` |
-| 2.6 | data_source.py 新增 ths_daily 回退逻辑（akshare） | 读不到当日=>回退 |
-
-**测试：** `tests/test_data_source_integration.py`
-
-### Phase 3: 数据存储架构迁移
-
-**目标：** 创建新目录结构，迁移config/computed文件。
-
-| 步骤 | 内容 |
+| 步骤 | 状态 |
 |------|------|
-| 3.1 | 创建 `data/config/`、`data/computed/` 目录 |
-| 3.2 | 逐个迁移 config/ 文件，更新代码引用 |
-| 3.3 | 逐个迁移 computed/ 文件，更新代码引用 |
-| 3.4 | 迁移 `pinyin_initials.json` → `WWW_DIR/data/public/pinyin.json` |
-| 3.5 | 更新 config.py 中所有路径常量 |
-| 3.6 | 删除废弃文件（原始数据JSON + backups + map/ + sources/） |
+| 1.1 定义 CREATE TABLE 语句（9张表） | ✅ |
+| 1.2 实现 TushareDB 类（batch insert / query / upset） | ✅ |
+| 1.3 实现 config.py 中的 TUSHARE_TOKEN / TUSHARE_PROXY_URL | ✅ |
+| 1.4 单元测试（20个用例） | ✅ |
 
-**测试：** 启动服务，验证所有页面功能正常。
+### ✅ Phase 2: 数据源切换 + 故障切换链 (已完成)
 
-### Phase 4: 数据验证（给token后）
-
-| 步骤 | 内容 |
+| 步骤 | 状态 |
 |------|------|
-| 4.1 | A/B对比: DB vs JSON (stock_daily) |
-| 4.2 | A/B对比: DB vs 腾讯财经 (PE/PB/市值) |
-| 4.3 | A/B对比: DB vs 同花顺THS (板块K线) |
-| 4.4 | 启动 daily_update_tushare.py 每日cron |
+| 2.1 data_source.py 新增 `_get_tushare_db()` 懒加载实例 | ✅ |
+| 2.2 Tushare 优先的故障切换链（sector_klines / sector_ranking / daily_basic） | ✅ |
+| 2.3 Tushare 路由函数实现 | ✅ |
+| 2.4 集成测试（10个用例，patch模拟DB） | ✅ |
+| 2.5 source_health.json 修复 + failover 链兼容 | ✅ |
+| 2.6 代理验证（15000分走 https://tu.brze.top 成功） | ✅ |
 
-### Phase 5: 回填（高积分token给后）
+### ✅ Phase 3: 回填脚本 (已完成)
 
-| 步骤 | 内容 |
+| 步骤 | 状态 |
 |------|------|
-| 5.1 | 创建 `scripts/backfill_tushare.py` |
-| 5.2 | 执行回填（stock_basic → ths_index → ... → daily_basic） |
-| 5.3 | 验证数据完整性 |
+| 3.1 编写 `server/backend/services/fill_history.py`（双账号+9张表） | ✅ |
+| 3.2 实测 stock_basic(5522行) / trade_cal(896行) / ths_index(1725行) | ✅ |
+| 3.3 `_ensure_columns()` 动态加列，全量保留API字段 | ✅ |
+
+### ⏳ Phase 4: 目录结构调整 + 文件迁移 (进行中)
+
+| 步骤 | 状态 |
+|------|------|
+| 4.1 创建 `config/` 目录，移动用户配置文件 | ⏳ |
+| 4.2 创建 `computed/` 目录，移动计算结果文件 | ⏳ |
+| 4.3 逐个迁移 computed/ 文件，更新代码引用 | ⏳ |
+| 4.4 迁移 `pinyin_initials.json` → `WWW_DIR/data/public/pinyin.json` | ⏳ |
+| 4.5 更新 config.py 中所有路径常量 | ⏳ |
+| 4.6 删除废弃文件（JSON + backups + map/ + sources/） | ⏳ 等回填完 |
+
+### ⏳ Phase 5: 全量回填 + 数据验证 (待执行)
+
+| 步骤 | 状态 |
+|------|------|
+| 5.1 fill_history.py 已就绪，可执行 `--full` | ✅ 脚本就绪 |
+| 5.2 执行全量回填（stock_daily / daily_basic / index_daily / ths_daily / adj_factor / ths_member） | ⏳ |
+| 5.3 A/B对比: DB vs JSON (stock_daily) | ⏳ |
+| 5.4 A/B对比: DB vs 同花顺 (板块K线) | ⏳ |
+| 5.5 清理废弃JSON + sources/ + map/ | ⏳ |
 
 ---
 
