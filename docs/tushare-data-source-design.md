@@ -389,7 +389,342 @@ data/
 | `private/.wechat_*` | 159K | 微信偏移量/去重缓存，保留原处 |
 | `private/alarm_music_design.md` | 2.5K | 文档，移到 knowledge_base/ |
 
-### 3.3 计算方式优化
+### 3.3 各文件用途与结构示例
+
+#### tushare.db — SQLite 主库
+
+**用途：** 全量原始行情数据的唯一存储。所有业务代码通过 data_layer → data_source → TushareDB 读取，不直接操作文件。
+
+**包含8张表，详见 §2.1（Schema 定义）：**
+- `stock_daily` — 个股日线（含涨跌幅）
+- `daily_basic` — 每日指标（PE/PB/市值/换手率）
+- `index_daily` — 指数日线
+- `ths_daily` — 同花顺板块日线
+- `ths_index` — 同花顺板块列表
+- `ths_member` — 板块成分股
+- `stock_basic` — A股基本信息
+- `adj_factor` — 复权因子
+- `trade_cal` — 交易日历
+
+---
+
+#### config/watchlist.json — 自选股
+
+**用途：** 用户关注的股票列表，包含代码、名称、方向分类、行业归属。由页面自助添加/删除。
+
+```json
+{
+  "stocks": [
+    {"code": "000062", "name": "深圳华强", "direction": "算力硬件.算力", "industry": "其他电子"},
+    {"code": "300308", "name": "中际旭创", "direction": "算力硬件.光模块", "industry": "通信设备"}
+  ],
+  "count": 296
+}
+```
+
+#### config/holdings.json — 持仓
+
+**用途：** 当前持仓记录（不含历史已清仓）。直接影响复盘页视图、止损检查、收益计算。
+
+```json
+{
+  "update_date": "2026-06-14",
+  "holdings": [
+    {"code": "300308", "name": "中际旭创", "ratio": "0.15", "cost": 128.50, "price": 142.30, "pct": 10.74}
+  ],
+  "cash_ratio": 0.35
+}
+```
+
+#### config/trades.json — 交易记录
+
+**用途：** 买卖历史记录，供复盘查看交易流水。
+
+```json
+{
+  "trades": [
+    {"date": "2026-05-21", "type": "卖出", "name": "大族数控", "code": "301200",
+     "ratio": "1/3", "reason": "减仓", "note": "卖出1/3仓位，15.76%→10.51%"}
+  ]
+}
+```
+
+#### config/alarms.json — 报警
+
+**用途：** 价格/涨跌幅/成交量条件报警配置，由 alarm_service 读取检查。
+
+```json
+{
+  "alarms": [
+    {"id": "alarm_002409_xxx", "stock": "雅克科技(002409)", "stock_code": "002409",
+     "type": "price", "enabled": true,
+     "stop_loss": 91.38, "stop_loss_pct": -25.43, "condition": ""}
+  ]
+}
+```
+
+#### config/plan_tracking.json — 计划跟踪
+
+**用途：** 记录预设的买卖计划（买点条件、止损价、追踪执行情况）。
+
+```json
+{
+  "plans": [
+    {"plan_date": "2026-05-26", "type": "buy", "stock": "广钢气体", "code": "688548",
+     "condition": "中继买点", "condition_category": "中继买点", "stop_loss": null}
+  ],
+  "summary": {}
+}
+```
+
+#### config/manual_trend.json — 手动趋势股
+
+**用途：** 用户手动指定的趋势交易股票列表（独立于3L体系的辅助决策）。
+
+```json
+["300308", "002916", "688017"]
+```
+
+#### config/directions.json — 方向配置
+
+**用途：** 方向分类体系（如"算力硬件.光模块"），包含子方向和核心推荐。
+
+```json
+{
+  "version": "3.0",
+  "categories": ["算力硬件", "半导体", "AI应用"],
+  "sub_directions": {"算力硬件": ["光模块", "PCB", "算力"]},
+  "core": ["AI应用"],
+  "suggestions": {}
+}
+```
+
+#### config/watched_industries.json — 关注的行业
+
+**用途：** 用户在页面上标记关注的行业板块列表。
+
+```json
+{"industries": ["电子化学品", "半导体", "通信设备"]}
+```
+
+#### config/journals.json — 日志
+
+**用途：** 交易心理/操作思考记录。
+
+```json
+{
+  "entries": [
+    {"date": "2026-05-21", "stock": "大族数控",
+     "reason": "上升趋势，突破买点...", "stop_loss": "220",
+     "point": "回踩买点", "emotion": "冷静"}
+  ]
+}
+```
+
+---
+
+#### computed/scan_result.json — 扫描结果
+
+**用途：** 最新一批买点扫描的完整结果（按方向分组展示）。由 scan_buy_signals.py 或 manual_scan 生成。
+
+```json
+{
+  "scan_date": "2026-06-14 15:00",
+  "data_source": "mootdx",
+  "total_signals": 23,
+  "results": {
+    "算力硬件": [
+      {"code": "300308", "name": "中际旭创", "score": 85, "buy_type": "突破买点",
+       "price": 142.30, "change_pct": 3.2}
+    ]
+  }
+}
+```
+
+#### computed/industry_leaders.json — 领涨股
+
+**用途：** 各行业板块的领涨股（涨幅最高）。用于监控页面展示板块龙头。
+
+```json
+{
+  "count": 86,
+  "by_industry": {
+    "半导体": [{"code": "688041", "name": "海光信息", "change_pct": 5.2}]
+  },
+  "all_stocks": [...]
+}
+```
+
+#### computed/candidates_data.json — 候选股
+
+**用途：** 候选股的完整K线数据（含多只股票的日线），用于指标计算和回测。
+
+```json
+{
+  "三花智控": {
+    "code": "002050",
+    "klines": [
+      {"date": "20260401", "open": 43.34, "close": 43.59, "high": 44.0, "low": 43.05, "volume": 77985760}
+    ]
+  }
+}
+```
+
+#### computed/analysis_results.json — 分析结果
+
+**用途：** 对候选股的逐只技术面分析结果（关键点、买卖信号、波浪结构等）。
+
+```json
+{
+  "三花智控": {
+    "code": "002050", "closing": 52.92, "change_pct": 1.65,
+    "key_points": [
+      {"idx": 0, "date": "20260401", "price": 43.59, "type": "前低", "significance": "强"}
+    ],
+    "buy_signal": {"type": "突破买点", "date": "20260415", "price": 46.20}
+  }
+}
+```
+
+#### computed/mainlines_cache.json — 主线缓存
+
+**用途：** 每日复盘时写入一次的主线判定结果（含行业主线和概念主线）。供趋势候选模块读取。
+
+```json
+{
+  "lines": ["电子化学品", "半导体", "AI应用"],
+  "secondary": ["元件", "非金属材料"],
+  "concept_mainline": ["人形机器人", "AI智能体"]
+}
+```
+
+#### computed/mainline_history.json — 主线历史
+
+**用途：** 每日主线TOP10的归档历史，用于回溯主线演变。
+
+```json
+{
+  "2026-05-26": {"top10": ["电子化学品", "元件", "非金属材料", "煤炭开采加工", ...]},
+  "2026-05-27": {"top10": [...]}
+}
+```
+
+#### computed/logic_tracking.json — 逻辑追踪
+
+**用途：** AI自动跟踪的信息源归类结果（聚焦分层+前置预判）。
+
+```json
+{
+  "tags": {"AI应用": {...}, "半导体": {...}},
+  "entries": [],
+  "forecasts": [],
+  "updated_at": "2026-06-14"
+}
+```
+
+#### computed/sub_sector_clusters.json — 子行业聚类
+
+**用途：** 将同行业个股进一步细分为子集群（用于精细化的板块对比）。
+
+```json
+{
+  "sub_sector_map": {"688126": "半导体_c0", "688234": "半导体_c1"},
+  "clusters": {"半导体": {"c0": {"name": "设备", "stocks": [...]}}}
+}
+```
+
+#### computed/profit_quality.json — 盈利质量
+
+**用途：** 盈利质量检查结果（ROE/毛利率/现金流等因子过滤）。
+
+```json
+{
+  "scan_date": "2026-06-14",
+  "total": 50, "pass_count": 23, "fail_count": 27
+}
+```
+
+#### computed/source_health.json — 数据源健康
+
+**用途：** 各数据源的健康状态（UP/DOWN/DEGRADED）和故障转移记录。
+
+```json
+{
+  "sources": {
+    "tushare": {"status": "UP", "last_success": "2026-06-14 07:00"},
+    "tencent": {"status": "UP", "last_success": "2026-06-14 07:00"}
+  },
+  "transitions": [...]
+}
+```
+
+#### computed/key_points/ — 关键点
+
+**用途：** 按个股存储的关键点标记（支撑/阻力/突破位），每只股票一个文件。
+
+```json
+// computed/key_points/中际旭创_300308.json
+{"code": "300308", "name": "中际旭创", "points": [
+  {"date": "20260401", "price": 42.50, "type": "支撑", "strength": "强"}
+]}
+```
+
+#### computed/workbench/ — 工作台
+
+**用途：** 每日工作台记录（思考/重点方向/待办事项），按日期分文件。
+
+```json
+// computed/workbench/2026-06-14.json
+{"date": "2026-06-14", "focus": ["AI应用"], "todos": ["检查xxx买点"]}
+```
+
+---
+
+#### public/pinyin.json — 拼音首字母
+
+**用途：** 前端股票搜索时按拼音首字母快速定位。原 `pinyin_initials.json` 移植，`/pub/pinyin.json` 直接服务。
+
+```json
+{
+  "000001": "PAH", "000002": "WKA", "000004": "GNKJ",
+  "000005": "ZXYS", "000006": "SZY"
+}
+```
+
+#### public/external_mapping.json — 外部数据映射
+
+**用途：** 前端展示外部链接时的代码→名称映射。
+
+#### public/index_data.json — 指数展示数据
+
+**用途：** 前端大盘走势图所需的指数数据（由后端定时生成）。
+
+#### public/panic_history.json — 恐慌历史
+
+**用途：** 历史恐慌事件记录，前端恐慌图展示。
+
+#### public/sounds/alarm_sounds.json — 报警音效
+
+**用途：** 前端报警触发时的音效配置（用户自定义上传）。
+
+---
+
+#### cache/ — 运行时缓存
+
+**用途：** 各模块运行时产生的缓存文件，按TTL自动清理。无需手动维护。
+
+| 缓存文件 | 用途 | 清理策略 |
+|---------|------|---------|
+| `buy_signals_YYYY-MM-DD_HHMM.json` | 15分钟扫描的买点信号结果 | 保留最近30天 |
+| `volume_snapshots_YYYY-MM-DD.json` | 成交额分布快照 | 保留最近30天 |
+| `industry_boards_YYYY-MM-DD.json` | 行业板块日数据 | 保留最近30天 |
+| `market_leaders_daily/` | 个股每日领涨排名 | 保留最近30天 |
+| `backtest_*.json` | 回测缓存结果 | 手动清理 |
+| `watchlist_analysis_cache.json` | 自选股分析缓存 | 自动失效(TTL) |
+
+所有cache文件格式由各自写入模块决定，无统一Schema约束。
+
+### 3.4 计算方式优化
 
 有了 Tushare DB 全量数据后，一些计算结果可以从"定时缓存"改为"按需计算"：
 
