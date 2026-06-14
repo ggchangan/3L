@@ -245,8 +245,7 @@ data/
 │   ├── manual_trend.json   # 手动趋势股 ← 从 private/ 移入
 │   ├── directions.json     # 方向配置 ← 从根目录移入
 │   ├── watched_industries.json  # 关注的行业 ← 从根目录移入
-│   ├── journals.json       # 日志 ← 从 private/ 移入
-│   └── pinyin.json         # 拼音映射（前端用）← 从根目录移入
+│   └── journals.json       # 日志 ← 从 private/ 移入
 │
 ├── computed/               # 【新增】计算结果（可删除，可重算）
 │   ├── scan_result.json    # 最新扫描结果 ← 从根目录移入
@@ -270,6 +269,10 @@ data/
 ├── public/                 # 前端公开数据（不变）
 ├── simulation/             # 模拟交易（不变）
 ├── knowledge_base/         # 知识库（不变）
+│
+# 前端静态数据（在 WWW_DIR 下，不在 data/ 下）
+# WWW_DIR/data/public/pinyin.json    ← 拼音首字母，/pub/pinyin.json 直接服务
+# WWW_DIR/data/public/...             ← 其他前端用JSON
 │
 ├── private/                # 【废弃】所有文件移到 config/ 或 computed/
 │
@@ -318,7 +321,13 @@ data/
 | `private/journal_entries.json` | `config/journals.json` | 日志 |
 | `directions.json` | `config/directions.json` | 方向配置 |
 | `watched_industries.json` | `config/watched_industries.json` | 关注的行业 |
-| `pinyin_initials.json` | `config/pinyin.json` | 拼音（前端用） |
+
+#### 🟡 移入 public/（前端静态数据，由 /pub/ 路由服务）
+
+| 当前位置 | 新位置 | 说明 |
+|---------|--------|------|
+| `pinyin_initials.json` | `WWW_DIR/data/public/pinyin.json` | 拼音首字母，前端搜索用 |
+| `board_names_cache.json` | (删除，由DB生成) | 板块名称列表，后端API查询DB替代 |
 
 #### 🟡 移入 computed/（计算结果，可重算）
 
