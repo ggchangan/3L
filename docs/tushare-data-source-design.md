@@ -240,9 +240,9 @@ CREATE TABLE trade_cal (
 | `daily_basic` | 每日指标(PE/PB) | 2000 | 全量5000只×2年 | 每日/2000 | `daily_basic` |
 | `adj_factor` | 复权因子 | 2000 | 全量5000只×2年 | 每日/2000 | `adj_factor` |
 | `index_daily` | 指数日线 | 免费 | 4个指数×2年 | 每日/2000 | `index_daily` |
-| `ths_daily` | 板块日线 | **6000** | ~500板块×2年 | 每日/**15000** | `ths_daily` |
+| `ths_daily` | 板块日线 | **6000** | ~500板块×2年 | 2000过期后**走回退方案** | `ths_daily` |
 
-> ⚠️ `ths_daily` 需要6000积分，2000账号调不了。每日增量用15000账号跑（仅10次调用/天，量极小）。
+> ⚠️ `ths_daily` 需要6000积分，15000账号只在回填期有（1周~1月）。回填后日常更新走回退方案：同花顺THS(akshare)或东财push2test拉当日板块K线，计算涨跌幅写入。详见 §3.5。
 
 ### 3.2 一次性回填（15000积分账号）
 
@@ -426,54 +426,47 @@ for batch in chunks(codes, 500):
 | float_share | 流通股本(万股) |
 | free_share | 自由流通股本(万股) |
 
-### 3.3 每日增量（混合账号）
+### 3.3 每日增量（仅2000积分账号）
 
 ```python
-def daily_incremental_update(pro_low, pro_high, db, trade_date):
-    """每日增量更新
-    pro_low:  2000积分账号（调用 daily / daily_basic / adj_factor / index_daily）
-    pro_high: 15000积分账号（仅调用 ths_daily，需要6000积分权限）
+def daily_incremental_update(pro, db, trade_date):
+    """每日增量更新 — 只用2000积分账号
+    ths_daily 走回退方案（见 §3.5），不依赖高积分账号
     """
-    # 1. 自选股列表
     watchlist_codes = get_watchlist_codes()
     ts_codes = [code_to_ts(c) for c in watchlist_codes]
     ts_codes_str = ','.join(ts_codes)
     
-    # ---------- 2000账号 ----------
-    # 2. 个股日线（仅自选股）
-    df = pro_low.daily(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
+    # 1. 个股日线
+    df = pro.daily(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
     db.upsert_many('stock_daily', df)
     
-    # 3. 每日指标
-    df = pro_low.daily_basic(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
+    # 2. 每日指标
+    df = pro.daily_basic(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
     db.upsert_many('daily_basic', df)
     
-    # 4. 复权因子
-    df = pro_low.adj_factor(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
+    # 3. 复权因子
+    df = pro.adj_factor(ts_code=ts_codes_str, start_date=trade_date, end_date=trade_date)
     db.upsert_many('adj_factor', df)
     
-    # 5. 指数（免费）
+    # 4. 指数
     for code in ['000001.SH', '000688.SH', '000985.SH', '399006.SZ']:
-        df = pro_low.index_daily(ts_code=code, start_date=trade_date, end_date=trade_date)
+        df = pro.index_daily(ts_code=code, start_date=trade_date, end_date=trade_date)
         db.upsert_many('index_daily', df)
     
-    # ---------- 15000账号（ths_daily 需要6000积分）----------
-    # 6. 板块日线（全量板块）
-    ths_codes = db.get_all_ths_codes()
-    for batch in chunks(ths_codes, 50):
-        df = pro_high.ths_daily(ts_code=','.join(batch), start_date=trade_date, end_date=trade_date)
-        db.upsert_many('ths_daily', df)
+    # 5. 板块日线 → 走回退方案（见 §3.5）
+    fallback_update_ths_daily(db, trade_date)
 ```
 
 **各API每日调用次数：**
-| API | 调用次数 | 使用账号 | 说明 |
-|-----|---------|---------|------|
-| `daily` | 1次 | 2000 | 50只自选股一次传 |
-| `daily_basic` | 1次 | 2000 | 同上 |
-| `adj_factor` | 1次 | 2000 | 同上 |
-| `index_daily` | 4次 | 2000 | 4个指数各1次 |
-| `ths_daily` | 10次 | **15000** | ~490板块÷50/批，需6000积分 |
-| **合计** | **17次** | 双账号 | 远低于200次/分钟限流 |
+| API | 调用次数 | 说明 |
+|-----|---------|------|
+| `daily` | 1次 | 50只自选股一次传 |
+| `daily_basic` | 1次 | 同上 |
+| `adj_factor` | 1次 | 同上 |
+| `index_daily` | 4次 | 4个指数各1次 |
+| `ths_daily` | — | 走回退方案 |
+| **Tushare调用合计** | **7次** | 极低频率 |
 
 ### 3.4 表结构一览（全部9张表）
 
@@ -490,6 +483,64 @@ def daily_incremental_update(pro_low, pro_high, db, trade_date):
 | `trade_cal` | `trade_cal` | (exchange, cal_date) | 2000 | is_open |
 
 完整的 CREATE TABLE SQL 见 **§2.1**。
+
+### 3.5 ths_daily 回退方案（15000过期后）
+
+`ths_daily` 需要6000积分，15000过期后无法直接调用。**回填时已灌入全部2年历史**，日常增量用现有数据源回退。
+
+#### 方案A：同花顺 THS akshare（推荐）
+
+```python
+def fallback_update_ths_daily(db, trade_date):
+    """用 akshare 同花顺接口更新板块日线（当前系统就在用）"""
+    import akshare as ak
+    
+    # 获取板块列表
+    ths_codes = db.get_all_ths_codes()  # [(ts_code, name, type)]
+    
+    for ts_code, name, stype in ths_codes:
+        try:
+            start = (datetime.strptime(trade_date, '%Y%m%d') - timedelta(days=5)).strftime('%Y%m%d')
+            if stype == 'I':
+                df = ak.stock_board_industry_index_ths(name, start_date=start)
+            else:
+                df = ak.stock_board_concept_index_ths(name, start_date=start)
+            # 取最新一行写入 ths_daily 表
+            if df is not None and not df.empty:
+                row = df.iloc[-1]
+                db.upsert_many('ths_daily', format_ths_row(ts_code, row))
+        except Exception:
+            continue
+```
+
+**优点：** 当前系统已经在用，稳定可靠。**缺点：** ~0.3秒/板块，490板块≈2.5分钟。
+
+#### 方案B：东财 push2test（备选）
+
+```python
+def fallback_update_ths_daily_v2(db, trade_date):
+    """从 push2test 拉取板块涨跌幅，反推日K线"""
+    # 现有 _fetch_live_sector_ranking() 逻辑 → 得到当日 change_pct
+    # 用前一日收盘价 × (1 + chg_pct) 反算当日 close
+    # 写入 ths_daily 表
+```
+
+**优点：** 1次HTTP调用拿全量，1秒内。**缺点：** 只能拿到当日涨跌幅，拿不到开/高/低/成交量。
+
+#### 执行策略
+
+```
+15000账号有效期内:
+  └─ 回填 ths_daily 全量2年历史
+
+15000账号过期后:
+  └─ 每日增量用方案A（同花顺 akshare）补齐
+  └─ 如果方案A失败 → 切方案B（push2test）兜底
+  └─ 如果都失败 → 跳过当日，隔天自动补（ths_daily 本来就是T+1延迟数据）
+```
+
+> **实际上 `ths_daily` 的数据主要是板块K线图 + 波谷判定用，T+1延迟完全可接受。**
+> 当前系统用的同花顺THS本来就有T+1延迟（次日6:00才能拉全），所以回退方案没有任何退化。
 
 ## 4. 数据存储架构重整
 
@@ -1051,8 +1102,8 @@ CACHE_DIR         = os.path.join(DATA_DIR, 'cache')    # 已有，不变
 
 | 阶段 | 使用账号 | 工作内容 | 需解锁的接口 |
 |------|---------|---------|------------|
-| **一次性回填** | 15000积分账号 | 全量回填2年历史数据。高积分解锁全部接口，包括 ths_daily（需6000分）。 | `daily`, `daily_basic`, `adj_factor`, `index_daily`, `ths_daily`, `ths_index`, `ths_member`, `stock_basic`, `trade_cal` |
-| **每日增量** | 2000 + 15000 | 2000账号调日常接口（daily/daily_basic/index_daily等），ths_daily 切15000账号跑（仅10次调用/天）。 | 2000: `daily`, `daily_basic`, `index_daily` … 15000: `ths_daily` |
+| **一次性回填** | 15000积分账号 | 全量回填2年历史数据。hs_daily（需6000分）趁此期间一并回填。 | `daily`, `daily_basic`, `adj_factor`, `index_daily`, `ths_daily`, `ths_index`, `ths_member`, `stock_basic`, `trade_cal` |
+| **每日增量** | 2000积分账号 | 2000账号调日常接口。ths_daily 15000过期后走akshare回退。 | `daily`, `daily_basic`, `index_daily`, `adj_factor` + akshare回退 |
 
 ### 5.2 回填策略（15000积分账号 → 一次性）
 
