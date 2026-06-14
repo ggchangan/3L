@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from datetime import datetime
 from backend.core.config import SECTOR_DAILY_PATH
-from backend.core.data_layer import get_concept_snapshots, load_sector_daily_uncached
+from backend.data_access.data_layer import get_concept_snapshots, load_sector_daily_uncached
 
 today = datetime.now().strftime('%Y%m%d')
 

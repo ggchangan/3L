@@ -26,7 +26,7 @@ def get_or_fetch_stock_data(code):
         (klines_list, direction_str, name_str) 或 (None, None, None)
     """
     # 1. 检查主数据文件是否已有（cron拉过的）
-    from backend.core.data_layer import get_all_stocks
+    from backend.data_access.data_layer import get_all_stocks
     stocks = get_all_stocks()
     for sec, ss in stocks.items():
         if code in ss:
@@ -152,7 +152,7 @@ def _get_direction(code):
 
     优先匹配 watchlist 中的方向名称。
     """
-    from backend.core.data_layer import get_industry_map
+    from backend.data_access.data_layer import get_industry_map
     imap = get_industry_map()
     info = imap.get(code, {})
     if not isinstance(info, dict):

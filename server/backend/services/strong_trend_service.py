@@ -9,7 +9,7 @@ from backend.core.config import DATA_DIR
 def load_sector_daily() -> dict:
     """读取板块K线数据（通过 data_layer 统一接口）"""
     try:
-        from backend.core.data_layer import get_sector_daily
+        from backend.data_access.data_layer import get_sector_daily
         return get_sector_daily()
     except Exception:
         import json

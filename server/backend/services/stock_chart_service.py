@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 import requests
 import akshare as ak
 
-from backend.core.data_layer import get_all_stocks, get_stock_klines
+from backend.data_access.data_layer import get_all_stocks, get_stock_klines
 
 # 中证全指K线图输出目录
 REVIEW_CHARTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'public', 'charts')

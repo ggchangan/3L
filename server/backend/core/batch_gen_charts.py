@@ -12,7 +12,7 @@ from backend.core import config
 
 WWW_DIR = config.WWW_DIR
 # DB读取（不再走 JSON）
-from backend.core.data_layer import get_all_stocks_db as _get_stocks_db
+from backend.data_access.data_layer import get_all_stocks_db as _get_stocks_db
 DATA_PATH = None
 SCAN_PATH = config.LATEST_SCAN_PATH
 HOLDINGS_PATH = config.HOLDINGS_PATH

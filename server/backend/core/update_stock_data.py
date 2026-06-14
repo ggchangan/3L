@@ -2,7 +2,7 @@
 """
 唯一数据更新脚本 — 17:00 cron 运行
 范围 = 个股K线 + 中证全指 + 行业/概念板块日K线
-所有文件I/O通过 backend.core.data_layer 完成
+所有文件I/O通过 backend.data_access.data_layer 完成
 
 用法:
     python3 scripts/update_stock_data.py
@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 # ⚠️ 注意: file 在 server/backend/core/ 下
 # dirname×1=core/  ×2=backend/  ×3=server/（backend 包所在位置）
 from backend.core.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH
-from backend.core.data_layer import (
+from backend.data_access.data_layer import (
     get_watchlist,
     load_all_stocks_uncached,
     get_last_updated,
@@ -28,7 +28,7 @@ from backend.core.data_layer import (
     load_sector_daily_uncached,
     save_sector_daily,
 )
-from backend.core.data_layer import (
+from backend.data_access.data_layer import (
     get_concept_list,
     get_stock_concept_map,
     save_concept_list,
@@ -747,7 +747,7 @@ def update_sectors():
     # 未映射到同花顺的概念不拉取（用户说"对不上的回头再看"）
     # 数据准确（用户已验证培育钻石 -3.30% vs push2test +5.69%）
     # ═══════════════════════════════════════════════════
-    from backend.core.data_layer import get_concept_snapshots
+    from backend.data_access.data_layer import get_concept_snapshots
     con_today = get_concept_snapshots(list(tracked_concepts))
 
     # ── 保存今日快照到独立字段 ──
@@ -824,7 +824,7 @@ def update_sectors():
 
     # ── 板块数据验证 ──
     try:
-        from backend.core.data_layer import verify_data_sources
+        from backend.data_access.data_layer import verify_data_sources
         vresult = verify_data_sources(verbose=False)
         vpass = vresult['pass_count'] if 'pass_count' in vresult else sum(1 for c in vresult['checks'] if c['pass'])
         vtotal = len(vresult['checks'])

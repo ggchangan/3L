@@ -1172,7 +1172,7 @@ def verify_data_sources(verbose=True):
     # ════ 3. 一致性验证（THS live vs _push2test）════
     try:
         # 实时源是THS，比对 _push2test 字段（其中存的是THS数据）
-        from backend.core.data_layer import get_sector_push2test
+        from backend.data_access.data_layer import get_sector_push2test
         p2_data = get_sector_push2test()
         if (hasattr(p2_data, 'industries') and p2_data.industries
                 and 'ths_real_chg' in dir() and ths_real_chg):
@@ -1194,7 +1194,7 @@ def verify_data_sources(verbose=True):
 
     # ════ 4. data_layer 合约验证 ════
     try:
-        from backend.core.data_layer import (
+        from backend.data_access.data_layer import (
             get_sector_push2test, get_sector_daily, get_sector_klines,
         )
 

@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 """测试指数数据相关功能"""
 import pytest
-from backend.core.data_layer import INDEX_CODES, INDEX_CODE
+from backend.data_access.data_layer import INDEX_CODES, INDEX_CODE
 
 
 class TestIndexCodes:

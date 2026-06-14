@@ -837,7 +837,7 @@ class TestAnalysisServiceWithMock:
 
     def test_search_by_pinyin_initials(self):
         """拼音首字母搜索"""
-        from backend.core.data_layer import resolve_stock
+        from backend.data_access.data_layer import resolve_stock
         # 用已有的测试数据 mock stocks
         mock_stocks = {'半导体': {'688999': [{'name': '测试A', 'date': '20250103', 'close': 10}]}}
         result = resolve_stock('csa', stocks=mock_stocks)

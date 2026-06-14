@@ -257,7 +257,7 @@ def get_watchlist_analysis(stocks=None, wl=None):
         except Exception:
             pass
 
-    from backend.core.data_layer import get_all_stocks, get_watchlist, _load_json
+    from backend.data_access.data_layer import get_all_stocks, get_watchlist, _load_json
     from backend.core.scan_buy_signals import get_full_mainlines
 
     if stocks is None:

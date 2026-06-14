@@ -36,7 +36,7 @@ from backend.models.data_models import (
 )
 
 # 测试概念数据通过合约正确读取
-from backend.core.data_layer import get_sector_push2test
+from backend.data_access.data_layer import get_sector_push2test
 spt = get_sector_push2test()
 print(f'  SectorPush2Test 类型: {type(spt).__name__}')
 print(f'  industries 类型: {type(spt.industries).__name__}, 条目: {len(spt.industries)}')

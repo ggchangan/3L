@@ -43,7 +43,7 @@ if l0_fails:
 print('\n' + "=" * 60)
 print("3. 测试 THS 概念快照批量拉取效果")
 print("=" * 60)
-from backend.core.data_layer import get_ths_concept_snapshots
+from backend.data_access.data_layer import get_ths_concept_snapshots
 
 # 测试一批概念
 test_concepts = ['培育钻石', 'AI手机', '人形机器人', '华为概念', '半导体概念',

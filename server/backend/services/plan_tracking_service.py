@@ -833,7 +833,7 @@ def compute_tracking(force=False, db_path=None) -> dict:
         return get_tracking(db_path)
 
     from backend.services.review_service import compute_review_real_time
-    from backend.core.data_layer import get_all_stocks, get_stock_klines
+    from backend.data_access.data_layer import get_all_stocks, get_stock_klines
 
     for date_str in dates:
         try:

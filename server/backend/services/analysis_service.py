@@ -3,7 +3,7 @@
 """
 import json, os
 from backend.core.config import REVIEW_CHARTS_DIR, BT_RESULTS_PATH
-from backend.core.data_layer import get_all_stocks, get_watchlist, resolve_stock, search_stock_full_market
+from backend.data_access.data_layer import get_all_stocks, get_watchlist, resolve_stock, search_stock_full_market
 from backend.core.buy_point_detection import (
     detect_buy_point,
     detect_huicai_buy_point, find_idx,
@@ -74,7 +74,7 @@ def _try_on_demand_fetch(query, stocks):
 def _analyze(code, direction, name, stocks, wl_codes):
     """执行完整的个股分析 — 基于 StockCardService 统一数据"""
     from backend.services.stock_card_service import get_stock_card
-    from backend.core.data_layer import get_all_stocks as _get_all
+    from backend.data_access.data_layer import get_all_stocks as _get_all
     from backend.core.buy_point_detection import (
         detect_buy_point, check_trend_stock, check_profit_model1,
         detect_huicai_buy_point, find_idx, _find_support_levels,

@@ -182,7 +182,7 @@ def get_sector_chart(name, board_type='industry'):
     try:
         if board_type == 'concept':
             # 通过 data_layer 获取概念板块K线
-            from backend.core.data_layer import get_sector_klines
+            from backend.data_access.data_layer import get_sector_klines
             klines = get_sector_klines(name, 'concept')
             if not klines or len(klines) < 10:
                 return None, 'insufficient data'

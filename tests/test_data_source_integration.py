@@ -25,7 +25,7 @@ network = pytest.mark.skipif(
 
 def _load_sector_daily():
     """读取 sector_daily.json"""
-    from backend.core.data_layer import load_sector_daily_uncached
+    from backend.data_access.data_layer import load_sector_daily_uncached
     return load_sector_daily_uncached()
 
 

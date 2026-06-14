@@ -221,7 +221,7 @@ def _get_holdings_analysis() -> list:
     result = []
 
     try:
-        from backend.core.data_layer import get_holdings
+        from backend.data_access.data_layer import get_holdings
         from backend.services.stock_card_service import get_stock_card
         holdings = get_holdings()
     except Exception:
@@ -324,7 +324,7 @@ def _get_rising_from_bottom() -> list:
     """
     result = []
     try:
-        from backend.core.data_layer import get_sector_daily
+        from backend.data_access.data_layer import get_sector_daily
         sd = get_sector_daily()
         if not sd:
             return result
@@ -367,7 +367,7 @@ def _get_rising_from_bottom_v2() -> list:
     """
     result = []
     try:
-        from backend.core.data_layer import get_sector_daily
+        from backend.data_access.data_layer import get_sector_daily
         sd = get_sector_daily()
         if not sd:
             return result

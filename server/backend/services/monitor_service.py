@@ -601,8 +601,8 @@ def get_leader_dashboard():
     concept_anomalies = {'surge': [], 'plunge': []}
     try:
         # 计算关注的概念列表（借鉴波谷追踪的筛选逻辑）
-        from backend.core.data_layer import get_stock_concept_map, get_concept_list
-        from backend.core.data_layer import get_watchlist
+        from backend.data_access.data_layer import get_stock_concept_map, get_concept_list
+        from backend.data_access.data_layer import get_watchlist
         watchlist_data = get_watchlist()
         watchlist_codes = set(s.get('code', '') for s in watchlist_data)
         stock_concept = get_stock_concept_map()

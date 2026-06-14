@@ -7,7 +7,7 @@ for p in [_server_root]:
         sys.path.insert(0, p)
 
 import pytest
-from backend.core.data_layer import get_all_stocks, get_all_stocks_db
+from backend.data_access.data_layer import get_all_stocks, get_all_stocks_db
 from backend.data_access.tushare_db import TushareDB
 
 

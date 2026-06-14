@@ -122,7 +122,7 @@ def load_review_data(date_str, existing, ww_dir):
     Returns: (holdings, buy_signals, all_stocks)
     """
     from backend.services.direction_service import get_active as get_active_dirs
-    from backend.core.data_layer import get_all_stocks
+    from backend.data_access.data_layer import get_all_stocks
 
     holdings_file = os.path.join(DATA_DIR, 'private', 'holdings.json')
     live_holdings = []
@@ -241,7 +241,7 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
     # ── 趋势股乖离率买点扫描 ──
     try:
         from backend.core.trend_trading import detect_trend_buy
-        from backend.core.data_layer import _load_json
+        from backend.data_access.data_layer import _load_json
         from backend.core.config import MANUAL_TREND_PATH
         manual = _load_json(MANUAL_TREND_PATH, [])
         trend_codes = set(manual)
@@ -301,7 +301,7 @@ def generate_daily_review(date_str=None):
     )
     from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
     from backend.core.scan_buy_signals import get_main_lines
-    from backend.core.data_layer import get_watchlist
+    from backend.data_access.data_layer import get_watchlist
 
     if not is_trading_day(date_str):
         print(f"[3L复盘] ⚠️ {date_str} 非A股交易日，跳过")
@@ -568,7 +568,7 @@ def compute_review_real_time(date_str=None):
     )
     from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
     from backend.core.scan_buy_signals import get_main_lines
-    from backend.core.data_layer import get_watchlist, get_all_stocks, get_index_klines, get_concept_list, get_stock_concept_map
+    from backend.data_access.data_layer import get_watchlist, get_all_stocks, get_index_klines, get_concept_list, get_stock_concept_map
 
     print(f"[3L复盘实时] 计算 {date_str} 复盘数据...")
 
@@ -771,7 +771,7 @@ def compute_review_real_time(date_str=None):
     # ── 检查板块数据时效性 ──
     _data_stale = False
     try:
-        from backend.core.data_layer import get_sector_daily
+        from backend.data_access.data_layer import get_sector_daily
         _sd = get_sector_daily()
         _lu = _sd.get('last_updated', '') if isinstance(_sd, dict) else ''
         _today_yyyymmdd = date_str.replace('-', '')

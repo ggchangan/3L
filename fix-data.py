@@ -271,7 +271,7 @@ def cmd_fix_concept_kline():
     log(f'📋  名称映射: {len(name_map)}条（同花顺 THS）')
 
     # 通过 data_layer 获取概念K线（走当前数据源：THS）
-    from backend.core.data_layer import get_concept_klines
+    from backend.data_access.data_layer import get_concept_klines
     today_klines = get_concept_klines(list(concepts.keys()))
 
     appended = 0
