@@ -226,16 +226,192 @@ CREATE TABLE trade_cal (
 
 ---
 
-## 3. 双账号策略
+## 3. 数据存储架构重整
 
-### 3.1 账号分工
+趁这次改成表格存储，把整个数据目录重新设计一遍。
+
+### 3.1 新目录结构
+
+```
+data/
+├── tushare.db              # 【新增】SQLite 主库 — 全量原始数据
+│
+├── config/                 # 【新增】用户配置（可读可改的JSON）
+│   ├── watchlist.json      # 自选股 ← 从根目录移入
+│   ├── holdings.json       # 持仓 ← 从 private/ 移入
+│   ├── trades.json         # 交易记录 ← 从 private/ 移入
+│   ├── alarms.json         # 报警配置 ← 从 private/ 移入
+│   ├── plan_tracking.json  # 计划跟踪 ← 从 private/ 移入
+│   ├── manual_trend.json   # 手动趋势股 ← 从 private/ 移入
+│   ├── directions.json     # 方向配置 ← 从根目录移入
+│   ├── watched_industries.json  # 关注的行业 ← 从根目录移入
+│   ├── journals.json       # 日志 ← 从 private/ 移入
+│   └── pinyin.json         # 拼音映射（前端用）← 从根目录移入
+│
+├── computed/               # 【新增】计算结果（可删除，可重算）
+│   ├── scan_result.json    # 最新扫描结果 ← 从根目录移入
+│   ├── industry_leaders.json   # 领涨股 ← 从根目录移入
+│   ├── candidates_data.json    # 候选股 ← 从根目录移入
+│   ├── analysis_results.json   # 分析结果 ← 从根目录移入
+│   ├── mainlines_cache.json    # 主线缓存 ← 从根目录移入
+│   ├── mainline_history.json   # 主线历史 ← 从根目录移入
+│   ├── logic_tracking.json     # 逻辑追踪 ← 从根目录移入
+│   ├── sub_sector_clusters.json # 子行业聚类 ← 从根目录移入
+│   ├── profit_quality.json     # 盈利质量 ← 从根目录移入
+│   └── key_points/             # 关键点 ← 从根目录移入
+│
+├── cache/                  # 运行时缓存（按TTL自动清理）
+│   ├── buy_signals/        # 扫描结果（按日期分）
+│   ├── volume_snapshots/   # 成交量快照
+│   ├── industry_boards/    # 行业板块
+│   └── backtest/           # 回测缓存
+│
+├── charts/                 # SVG图表（不变）
+├── public/                 # 前端公开数据（不变）
+├── simulation/             # 模拟交易（不变）
+├── knowledge_base/         # 知识库（不变）
+│
+├── private/                # 【废弃】所有文件移到 config/ 或 computed/
+│
+├── map/                    # 【废弃】移到 tushare.db
+├── sources/                # 【废弃】移到 tushare.db
+├── all_stocks_60d.json     # 【废弃】移到 tushare.db
+├── sector_daily.json       # 【废弃】移到 tushare.db
+├── index_sh_data.json      # 【废弃】移到 tushare.db
+├── stock_industry_map.json # 【废弃】移到 tushare.db
+└── ...（其他根目录散落的原始数据文件）
+```
+
+### 3.2 文件迁移清单（详细）
+
+#### 🔴 删除（被 DB 替代，不再需要）
+
+| 文件 | 大小 | 替代方 |
+|------|------|--------|
+| `all_stocks_60d.json` | 2.1M | → `stock_daily` 表 |
+| `sector_daily.json` | 15M | → `ths_daily` + `ths_index` 表 |
+| `sector_daily.ths.backup*` | 2.5M | → 同上 |
+| `index_sh_data.json` | 88K | → `index_daily` 表 |
+| `stock_industry_map.json` | 376K | → `stock_basic.industry` |
+| `all_stock_codes.json` | 152K | → `stock_basic` 表 |
+| `all_a_stocks.json` | 136K | → `stock_basic` 表 |
+| `board_constituents.json` | 180K | → `ths_member` 表 |
+| `board_names_cache.json` | 40K | → `ths_index` 表 |
+| `stock_on_demand_cache.json` | 4K | 不再需要（DB有全量） |
+| `sources/` 目录 | 1.9M | → `ths_daily` + `ths_index` 表 |
+| `map/` 目录 | 1.6M | → `ths_index` + `ths_member` 表 |
+| `private/trading_days_cache.json` | 124K | → `trade_cal` 表 |
+| **合计** | **~24MB** | |
+
+#### 🟡 移入 config/（用户配置，JSON保持可读）
+
+| 当前位置 | 新位置 | 说明 |
+|---------|--------|------|
+| `watchlist.json` | `config/watchlist.json` | 自选股 |
+| `private/holdings.json` | `config/holdings.json` | 持仓 |
+| `private/trades.json` | `config/trades.json` | 交易记录 |
+| `private/alarms.json` | `config/alarms.json` | 报警 |
+| `private/plan_tracking.json` | `config/plan_tracking.json` | 计划跟踪 |
+| `private/plan_tracking.db` | `config/plan_tracking.db` | 计划跟踪SQLite |
+| `private/manual_trend_stocks.json` | `config/manual_trend.json` | 手动趋势股 |
+| `private/watchlist.json` | → 合并到 config/watchlist.json | 冗余文件 |
+| `private/journal_entries.json` | `config/journals.json` | 日志 |
+| `directions.json` | `config/directions.json` | 方向配置 |
+| `watched_industries.json` | `config/watched_industries.json` | 关注的行业 |
+| `pinyin_initials.json` | `config/pinyin.json` | 拼音（前端用） |
+
+#### 🟡 移入 computed/（计算结果，可重算）
+
+| 当前位置 | 新位置 | 说明 |
+|---------|--------|------|
+| `latest_scan_result.json` | `computed/scan_result.json` | 最近扫描 |
+| `industry_leaders.json` | `computed/industry_leaders.json` | 领涨股 |
+| `candidates_data.json` | `computed/candidates_data.json` | 候选股 |
+| `analysis_results.json` | `computed/analysis_results.json` | 分析结果 |
+| `mainline_history.json` | `computed/mainline_history.json` | 主线历史 |
+| `logic_tracking.json` | `computed/logic_tracking.json` | 逻辑追踪 |
+| `sub_sector_clusters.json` | `computed/sub_sector_clusters.json` | 子行业聚类 |
+| `profit_quality_results.json` | `computed/profit_quality.json` | 盈利质量 |
+| `private/mainlines_cache.json` | `computed/mainlines_cache.json` | 主线缓存 |
+| `key_points/` | `computed/key_points/` | 关键点 |
+| **合计** | **~600K** | |
+
+#### 🟢 保留不动
+
+| 目录 | 大小 | 说明 |
+|------|------|------|
+| `cache/` | 12M | 运行时缓存（按TTL清理） |
+| `charts/` | 1.1M | SVG图表 |
+| `public/` | 140K | 前端公开数据 |
+| `simulation/` | 19M | 模拟交易 |
+| `knowledge_base/` | 11M | 知识库文档 |
+
+### 3.3 计算方式优化
+
+有了 Tushare DB 全量数据后，一些计算结果可以从"定时缓存"改为"按需计算"：
+
+| 当前文件 | 当前方式 | 新方式 |
+|---------|---------|--------|
+| `financial_data_cache.json` (128K) | 定时拉取财务数据缓存 | **删除** → 从 `daily_basic` 表按需查询 |
+| `industry_leaders.json` (104K) | 定时计算领涨股 | 改为按需计算（计算量小，从 stock_basic + stock_daily 聚合即可） |
+| `candidates_data.json` (136K) | 定时计算候选股 | 保持不变（扫描结果是耗时计算，适合缓存） |
+| `sub_sector_clusters.json` (44K) | 定时计算子行业 | 改为按需计算（从 ths_index + ths_member 聚合） |
+| `mainlines_cache.json` (4K) | 复盘时写入一次 | 保持（每日计算一次，供趋势候选模块读取） |
+
+### 3.4 文件路径更新
+
+`config.py` 中的路径常量全部对应更新：
+
+```python
+# config.py 新旧对照
+
+# 旧                              → 新
+ALL_STOCKS_PATH                   → 删除（DB替代）
+SECTOR_DAILY_PATH                 → 删除（DB替代）  
+INDEX_DATA_PATH                   → 删除（DB替代）
+INDUSTRY_MAP_PATH                 → 删除（DB替代）
+ALL_CODES_PATH                    → 删除（DB替代）
+CONCEPT_LIST_PATH                 → 删除（DB替代）
+STOCK_CONCEPT_MAP_PATH            → 删除（DB替代）
+CONCEPT_NAME_MAPPING_PATH         → 删除（DB替代）
+FINANCIAL_CACHE_PATH              → 删除（按需计算）
+ON_DEMAND_CACHE_PATH              → 删除（不再需要）
+SOURCES_EM_SECTOR_DAILY           → 删除（DB替代）
+SOURCES_THS_SECTOR_DAILY          → 删除（DB替代）
+SOURCES_EM_CONCEPT_MAP            → 删除（DB替代）
+
+WATCHLIST_PATH                    → CONFIG_DIR / 'watchlist.json'
+HOLDINGS_PATH                     → CONFIG_DIR / 'holdings.json'
+TRADES_PATH                       → CONFIG_DIR / 'trades.json'
+PINYIN_PATH                       → CONFIG_DIR / 'pinyin.json'
+DIRECTIONS_PATH                   → CONFIG_DIR / 'directions.json'
+
+LATEST_SCAN_PATH                  → COMPUTED_DIR / 'scan_result.json'
+INDUSTRY_LEADERS_PATH             → COMPUTED_DIR / 'industry_leaders.json'
+MAINLINES_CACHE_PATH              → COMPUTED_DIR / 'mainlines_cache.json'
+KEY_POINTS_DIR                    → COMPUTED_DIR / 'key_points'
+```
+
+新的顶层路径常量：
+
+```python
+# 新增
+TUSHARE_DB_PATH   = os.path.join(DATA_DIR, 'tushare.db')
+CONFIG_DIR        = os.path.join(DATA_DIR, 'config')
+COMPUTED_DIR      = os.path.join(DATA_DIR, 'computed')
+CACHE_DIR         = os.path.join(DATA_DIR, 'cache')    # 已有，不变
+```
+
+## 4. 双账号策略
+
+### 4.1 账号分工
 
 | 阶段 | 使用账号 | 工作内容 | 需解锁的接口 |
 |------|---------|---------|------------|
 | **一次性回填** | 15000积分账号 | 全量回填6年以上历史数据。高积分解锁全部接口，部分接口有最低积分门槛（如 `adj_factor` 等）。 | `daily`, `daily_basic`, `adj_factor`, `index_daily`, `ths_daily`, `ths_index`, `ths_member`, `stock_basic`, `trade_cal` |
 | **每日增量** | 2000积分账号 | 每日追加最新数据+日常查询。2000积分已可调用核心接口 `daily` / `daily_basic` / `ths_daily` 等。 | `daily`, `daily_basic`, `index_daily`, `ths_daily`, `ths_index`, `stock_basic`, `trade_cal` |
 
-### 3.2 回填策略（15000积分账号 → 一次性）
+### 4.2 回填策略（15000积分账号 → 一次性）
 
 **步骤:** 全量数据回填，分批执行确保不超200次/分钟限制。
 
@@ -266,7 +442,7 @@ BATCH_SIZE = 200      # 最大每批股票数
 
 **历史深度：** 回填最近 **2年**（2024-01 ~ 2026，约500个交易日）的日线数据。覆盖完整牛熊周期，足够EMA分析、波谷判定、买点回测使用。后续增量更新自动累积。
 
-### 3.3 每日增量（2000积分账号 → 日常）
+### 4.3 每日增量（2000积分账号 → 日常）
 
 ```python
 # 每日cron运行:
@@ -309,9 +485,9 @@ trade_cal:     1次
 
 ---
 
-## 4. 与现有系统集成
+## 5. 与现有系统集成
 
-### 4.1 数据流变化
+### 5.1 数据流变化
 
 ```
 当前:
@@ -372,7 +548,7 @@ Phase 3: 确认稳定后，删除JSON路径
 
 ---
 
-## 5. 实施步骤
+## 6. 实施步骤
 
 ### Phase 0: 基建（0.5天）
 - [ ] 安装 Tushare
@@ -410,9 +586,9 @@ Phase 3: 确认稳定后，删除JSON路径
 
 ---
 
-## 6. 风险与注意事项
+## 7. 风险与注意事项
 
-### 6.1 板块代码映射（已识别）
+### 7.1 板块代码映射（已识别）
 
 当前系统用中文板块名称作为key，Tushare 用 `ts_code`（如 `881121.TI`）。
 
@@ -424,7 +600,7 @@ ts_code = db.get_ths_code_by_name('人工智能')
 # 覆盖当前 get_sector_klines('人工智能', 'concept') 的调用
 ```
 
-### 6.2 前复权价格差异
+### 7.2 前复权价格差异
 
 Tushare 前复权 vs 当前 mootdx 手动矫正：
 - Tushare：统一用 `adj='qfq'` 参数获取前复权数据
@@ -436,13 +612,13 @@ Tushare 前复权 vs 当前 mootdx 手动矫正：
 
 **验证：** A/B对比脚本比较DB复权价格与当前mootdx价格差异阈值（价差<1%即通过）。
 
-### 6.3 当前JSON文件的过渡期
+### 7.3 当前JSON文件的过渡期
 
 已有用户持仓/自选股的判断逻辑依赖 `all_stocks_60d.json` 中的K线数据。
 
 **方案：** 过渡期 JSON 和 DB 双写，`data_layer` 优先读 DB，DB 无数据时回退 JSON。过渡期结束后删除 JSON 路径。
 
-### 6.4 各接口权限门槛
+### 7.4 各接口权限门槛
 
 Tushare 积分是权限等级，每个接口有最低积分要求。以下是我们需要的接口及其门槛：
 
@@ -461,13 +637,13 @@ Tushare 积分是权限等级，每个接口有最低积分要求。以下是我
 **结论：** 2000积分账号即可调用我们需要的全部接口。
 15000积分账号的优势在于**一次性回填**时更高的调用频率容忍度，以及日后可能需要的**高级接口**（如资金流向、财务数据等）。
 
-### 6.5 数据库备份
+### 7.5 数据库备份
 
 SQLite 单文件，每天cron `cp tushare.db backup/tushare_$(date +%Y%m%d).db` 即可。
 
 ---
 
-## 7. 与现有数据源的关系
+## 8. 与现有数据源的关系
 
 | 数据类型 | 迁移后主源 | 保留源 | 何时用保留源 |
 |---------|-----------|-------|------------|
@@ -485,7 +661,7 @@ SQLite 单文件，每天cron `cp tushare.db backup/tushare_$(date +%Y%m%d).db` 
 
 ---
 
-## 8. 代码结构
+## 9. 代码结构
 
 ```
 server/backend/
