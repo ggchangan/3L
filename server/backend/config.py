@@ -136,6 +136,13 @@ TUSHARE_TOKEN = _env('TUSHARE_TOKEN', '')
 TUSHARE_TOKEN_HIGH = _env('TUSHARE_TOKEN_HIGH', '') or TUSHARE_TOKEN
 TUSHARE_PROXY_URL = _env('TUSHARE_PROXY_URL', '')
 
+# MySQL 数据库配置
+MYSQL_HOST = _env('MYSQL_HOST', 'localhost')
+MYSQL_PORT = int(_env('MYSQL_PORT', '3306'))
+MYSQL_USER = _env('MYSQL_USER', 'tushare')
+MYSQL_PASSWORD = _env('MYSQL_PASSWORD', 'tushare_pass')
+MYSQL_DATABASE = _env('MYSQL_DATABASE', 'tushare')
+
 # =====================================================
 # 服务器配置
 # =====================================================

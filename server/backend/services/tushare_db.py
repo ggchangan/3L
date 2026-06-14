@@ -1,178 +1,206 @@
 """
-Tushare SQLite 数据库封装层
+Tushare MySQL 数据库封装层
 - 建表(初始化)
-- 批量写入(upsert)
+- 批量写入(upsert with REPLACE INTO)
 - 查询封装(get_stock_daily, get_daily_basic, ...)
-- 双token管理（由 config.py 提供）
+- 连接管理
 """
-import os, sqlite3, json
+import os, json, time
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from backend.config import TUSHARE_TOKEN, TUSHARE_TOKEN_HIGH, TUSHARE_PROXY_URL, DATA_DIR
+import pymysql
+from pymysql.cursors import DictCursor
+
+from backend.config import (
+    MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE,
+    TUSHARE_TOKEN, TUSHARE_TOKEN_HIGH, TUSHARE_PROXY_URL, DATA_DIR
+)
 
 
 # ════════════════════════════════════════════════════════════
-# CREATE TABLE 语句（9张表）
+# CREATE TABLE 语句（MySQL 语法）
 # ════════════════════════════════════════════════════════════
 
 CREATE_TABLES = {
     'stock_daily': """
         CREATE TABLE IF NOT EXISTS stock_daily (
-            ts_code     TEXT NOT NULL,
-            trade_date  TEXT NOT NULL,
-            open        REAL,
-            high        REAL,
-            low         REAL,
-            close       REAL,
-            pre_close   REAL,
-            change      REAL,
-            pct_chg     REAL,
-            vol         REAL,
-            amount      REAL,
+            ts_code     VARCHAR(20) NOT NULL,
+            trade_date  VARCHAR(10) NOT NULL,
+            open        DOUBLE,
+            high        DOUBLE,
+            low         DOUBLE,
+            close       DOUBLE,
+            pre_close   DOUBLE,
+            `change`    DOUBLE,
+            pct_chg     DOUBLE,
+            vol         DOUBLE,
+            amount      DOUBLE,
             PRIMARY KEY (ts_code, trade_date)
-        )
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     'daily_basic': """
         CREATE TABLE IF NOT EXISTS daily_basic (
-            ts_code         TEXT NOT NULL,
-            trade_date      TEXT NOT NULL,
-            close           REAL,
-            turnover_rate   REAL,
-            turnover_rate_f REAL,
-            volume_ratio    REAL,
-            pe              REAL,
-            pe_ttm          REAL,
-            pb              REAL,
-            ps              REAL,
-            pcf             REAL,
-            total_mv        REAL,
-            circ_mv         REAL,
-            total_share     REAL,
-            float_share     REAL,
-            free_share      REAL,
+            ts_code         VARCHAR(20) NOT NULL,
+            trade_date      VARCHAR(10) NOT NULL,
+            close           DOUBLE,
+            turnover_rate   DOUBLE,
+            turnover_rate_f DOUBLE,
+            volume_ratio    DOUBLE,
+            pe              DOUBLE,
+            pe_ttm          DOUBLE,
+            pb              DOUBLE,
+            ps              DOUBLE,
+            pcf             DOUBLE,
+            total_mv        DOUBLE,
+            circ_mv         DOUBLE,
+            total_share     DOUBLE,
+            float_share     DOUBLE,
+            free_share      DOUBLE,
             PRIMARY KEY (ts_code, trade_date)
-        )
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     'index_daily': """
         CREATE TABLE IF NOT EXISTS index_daily (
-            ts_code     TEXT NOT NULL,
-            trade_date  TEXT NOT NULL,
-            open        REAL,
-            high        REAL,
-            low         REAL,
-            close       REAL,
-            pre_close   REAL,
-            change      REAL,
-            pct_chg     REAL,
-            vol         REAL,
-            amount      REAL,
+            ts_code     VARCHAR(20) NOT NULL,
+            trade_date  VARCHAR(10) NOT NULL,
+            open        DOUBLE,
+            high        DOUBLE,
+            low         DOUBLE,
+            close       DOUBLE,
+            pre_close   DOUBLE,
+            `change`    DOUBLE,
+            pct_chg     DOUBLE,
+            vol         DOUBLE,
+            amount      DOUBLE,
             PRIMARY KEY (ts_code, trade_date)
-        )
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     'ths_daily': """
         CREATE TABLE IF NOT EXISTS ths_daily (
-            ts_code     TEXT NOT NULL,
-            trade_date  TEXT NOT NULL,
-            open        REAL,
-            high        REAL,
-            low         REAL,
-            close       REAL,
-            pre_close   REAL,
-            change      REAL,
-            pct_chg     REAL,
-            vol         REAL,
-            amount      REAL,
+            ts_code     VARCHAR(20) NOT NULL,
+            trade_date  VARCHAR(10) NOT NULL,
+            open        DOUBLE,
+            high        DOUBLE,
+            low         DOUBLE,
+            close       DOUBLE,
+            pre_close   DOUBLE,
+            `change`    DOUBLE,
+            pct_chg     DOUBLE,
+            vol         DOUBLE,
+            amount      DOUBLE,
             PRIMARY KEY (ts_code, trade_date)
-        )
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     'ths_index': """
         CREATE TABLE IF NOT EXISTS ths_index (
-            ts_code     TEXT PRIMARY KEY,
-            name        TEXT NOT NULL,
-            count       INTEGER,
-            list_date   TEXT,
-            type        TEXT
-        )
+            ts_code     VARCHAR(20) PRIMARY KEY,
+            name        VARCHAR(100) NOT NULL,
+            count       INT,
+            list_date   VARCHAR(10),
+            type        VARCHAR(10)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     'ths_member': """
         CREATE TABLE IF NOT EXISTS ths_member (
-            ts_code     TEXT NOT NULL,
-            con_code    TEXT NOT NULL,
-            con_name    TEXT,
-            weight      REAL,
+            ts_code     VARCHAR(20) NOT NULL,
+            con_code    VARCHAR(20) NOT NULL,
+            con_name    VARCHAR(100),
+            weight      DOUBLE,
             PRIMARY KEY (ts_code, con_code)
-        )
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     'stock_basic': """
         CREATE TABLE IF NOT EXISTS stock_basic (
-            ts_code         TEXT PRIMARY KEY,
-            symbol          TEXT,
-            name            TEXT,
-            area            TEXT,
-            industry        TEXT,
-            market          TEXT,
-            list_date       TEXT,
-            delist_date     TEXT,
-            is_hs           TEXT
-        )
+            ts_code     VARCHAR(20) PRIMARY KEY,
+            symbol      VARCHAR(10),
+            name        VARCHAR(50),
+            area        VARCHAR(20),
+            industry    VARCHAR(50),
+            market      VARCHAR(10),
+            list_date   VARCHAR(10),
+            delist_date VARCHAR(10),
+            is_hs       VARCHAR(5)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     'adj_factor': """
         CREATE TABLE IF NOT EXISTS adj_factor (
-            ts_code     TEXT NOT NULL,
-            trade_date  TEXT NOT NULL,
-            adj_factor  REAL,
+            ts_code     VARCHAR(20) NOT NULL,
+            trade_date  VARCHAR(10) NOT NULL,
+            adj_factor  DOUBLE,
             PRIMARY KEY (ts_code, trade_date)
-        )
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
     'trade_cal': """
         CREATE TABLE IF NOT EXISTS trade_cal (
-            exchange    TEXT NOT NULL,
-            cal_date    TEXT NOT NULL,
-            is_open     INTEGER,
-            pretrade_date TEXT,
+            exchange    VARCHAR(10) NOT NULL,
+            cal_date    VARCHAR(10) NOT NULL,
+            is_open     INT,
+            pretrade_date VARCHAR(10),
             PRIMARY KEY (exchange, cal_date)
-        )
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
 }
 
-# 索引
+# 索引（MySQL 语法 — 不含 IF NOT EXISTS）
 CREATE_INDEXES = {
-    'idx_stock_daily_ts_code': 'CREATE INDEX IF NOT EXISTS idx_stock_daily_ts_code ON stock_daily(ts_code)',
-    'idx_stock_daily_date': 'CREATE INDEX IF NOT EXISTS idx_stock_daily_date ON stock_daily(trade_date)',
-    'idx_daily_basic_ts_code': 'CREATE INDEX IF NOT EXISTS idx_daily_basic_ts_code ON daily_basic(ts_code)',
-    'idx_adj_factor_ts_code': 'CREATE INDEX IF NOT EXISTS idx_adj_factor_ts_code ON adj_factor(ts_code)',
-    'idx_ths_daily_ts_code': 'CREATE INDEX IF NOT EXISTS idx_ths_daily_ts_code ON ths_daily(ts_code)',
-    'idx_ths_member_con_code': 'CREATE INDEX IF NOT EXISTS idx_ths_member_con_code ON ths_member(con_code)',
-    'idx_ths_index_type': 'CREATE INDEX IF NOT EXISTS idx_ths_index_type ON ths_index(type)',
-    'idx_index_daily_ts_code': 'CREATE INDEX IF NOT EXISTS idx_index_daily_ts_code ON index_daily(ts_code)',
+    'idx_stock_daily_ts_code': 'CREATE INDEX idx_stock_daily_ts_code ON stock_daily(ts_code)',
+    'idx_stock_daily_date': 'CREATE INDEX idx_stock_daily_date ON stock_daily(trade_date)',
+    'idx_daily_basic_ts_code': 'CREATE INDEX idx_daily_basic_ts_code ON daily_basic(ts_code)',
+    'idx_adj_factor_ts_code': 'CREATE INDEX idx_adj_factor_ts_code ON adj_factor(ts_code)',
+    'idx_ths_daily_ts_code': 'CREATE INDEX idx_ths_daily_ts_code ON ths_daily(ts_code)',
+    'idx_ths_member_con_code': 'CREATE INDEX idx_ths_member_con_code ON ths_member(con_code)',
+    'idx_ths_index_type': 'CREATE INDEX idx_ths_index_type ON ths_index(type)',
+    'idx_index_daily_ts_code': 'CREATE INDEX idx_index_daily_ts_code ON index_daily(ts_code)',
 }
 
 
 class TushareDB:
-    """Tushare SQLite 数据库封装
+    """Tushare MySQL 数据库封装
 
     Args:
-        db_path: SQLite 文件路径，默认 data/tushare.db
+        host: MySQL host
+        port: MySQL port
+        user: MySQL user
+        password: MySQL password
+        database: MySQL database name
     """
 
-    def __init__(self, db_path: str = None):
-        if db_path is None:
-            db_path = os.path.join(DATA_DIR, 'tushare.db')
-        self.db_path = db_path
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("PRAGMA foreign_keys=OFF")
-        self.conn.row_factory = sqlite3.Row
+    def __init__(self, host: str = None, port: int = None,
+                 user: str = None, password: str = None,
+                 database: str = None):
+        self.host = host or MYSQL_HOST
+        self.port = port or MYSQL_PORT
+        self.user = user or MYSQL_USER
+        self.password = password or MYSQL_PASSWORD
+        self.database = database or MYSQL_DATABASE
+        self._conn = None
         self._init_tables()
 
+    def _get_conn(self):
+        """获取连接（懒加载，每次调用创建新连接）"""
+        return pymysql.connect(
+            host=self.host, port=self.port,
+            user=self.user, password=self.password,
+            database=self.database, charset='utf8mb4',
+            cursorclass=DictCursor,
+            autocommit=True,
+        )
+
     def _init_tables(self):
-        """建表+建索引"""
-        for sql in CREATE_TABLES.values():
-            self.conn.execute(sql)
-        for sql in CREATE_INDEXES.values():
-            self.conn.execute(sql)
-        self.conn.commit()
+        """建表+建索引（幂等）"""
+        try:
+            conn = self._get_conn()
+            with conn.cursor() as cur:
+                for sql in CREATE_TABLES.values():
+                    cur.execute(sql)
+                for sql in CREATE_INDEXES.values():
+                    try:
+                        cur.execute(sql)
+                    except Exception:
+                        pass  # 索引已存在时忽略
+        finally:
+            conn.close()
 
     # ════════════════════════════════════════════════════════════
     # 批量写入
@@ -194,39 +222,25 @@ class TushareDB:
             return 0
         return self.upsert_many_from_dicts(table, records)
 
-    # 表字段缓存: {table: set(column_names)}
-    _COLUMN_CACHE: Dict[str, set] = {}
+    def get_table_columns(self, cur, table: str) -> set:
+        """获取表的所有字段名"""
+        cur.execute(f"SHOW COLUMNS FROM `{table}`")
+        return {r['Field'] for r in cur.fetchall()}
 
-    def get_table_columns(self, table: str) -> set:
-        """获取表的所有字段名（带缓存）"""
-        if table not in self._COLUMN_CACHE:
-            cur = self.conn.execute(f"PRAGMA table_info({table})")
-            self._COLUMN_CACHE[table] = {r[1] for r in cur.fetchall()}
-        return self._COLUMN_CACHE[table]
-
-    def _ensure_columns(self, table: str, record: dict):
-        """动态添加列：如果 record 包含表中不存在的字段，ALTER TABLE ADD COLUMN
-
-        全量保留 API 返回字段，不丢数据。
-        """
-        existing = self.get_table_columns(table)
+    def _ensure_columns(self, cur, table: str, record: dict):
+        """动态添加列"""
+        existing = self.get_table_columns(cur, table)
         new_cols = set(record.keys()) - existing
+        if not new_cols:
+            return
         for col in new_cols:
-            # 跳过主键列（已经在CREATE TABLE中定义）
-            if col in ('ts_code', 'trade_date', 'symbol', 'con_code', 'name',
-                       'exchange', 'cal_date'):
-                continue
             try:
-                # TEXT 兼容各种类型
-                self.conn.execute(f"ALTER TABLE {table} ADD COLUMN \"{col}\" TEXT")
-            except sqlite3.OperationalError:
-                pass  # 可能并发添加，忽略重复列错误
-        if new_cols:
-            # 刷新缓存
-            self._COLUMN_CACHE[table] = existing | new_cols
+                cur.execute(f"ALTER TABLE `{table}` ADD COLUMN `{col}` TEXT")
+            except Exception:
+                pass
 
     def upsert_many_from_dicts(self, table: str, records: List[dict]) -> int:
-        """从 dict 列表批量写入（INSERT OR REPLACE），支持动态列
+        """从 dict 列表批量写入（REPLACE INTO），支持动态列
 
         Args:
             table: 表名
@@ -238,28 +252,31 @@ class TushareDB:
         if not records:
             return 0
 
-        # 确保所有列已存在
-        for rec in records:
-            self._ensure_columns(table, rec)
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                # 确保所有列已存在
+                for rec in records:
+                    self._ensure_columns(cur, table, rec)
 
-        # 获取当前表的列集
-        cols = self.get_table_columns(table)
-        # 只保留表中存在的列，并按列名排序保证一致性
-        col_names = sorted(cols & set(records[0].keys()))
-        if not col_names:
-            return 0
+                existing = self.get_table_columns(cur, table)
+                col_names = sorted(existing & set(records[0].keys()))
+                if not col_names:
+                    return 0
 
-        placeholders = ','.join(['?'] * len(col_names))
-        quoted_cols = ','.join([f'"{c}"' for c in col_names])
-        sql = f"INSERT OR REPLACE INTO {table} ({quoted_cols}) VALUES ({placeholders})"
+                placeholders = ','.join(['%s'] * len(col_names))
+                quoted_cols = ','.join([f'`{c}`' for c in col_names])
+                sql = f"REPLACE INTO `{table}` ({quoted_cols}) VALUES ({placeholders})"
 
-        batch = []
-        for rec in records:
-            batch.append(tuple(rec.get(c) for c in col_names))
+                batch = []
+                for rec in records:
+                    batch.append(tuple(rec.get(c) for c in col_names))
 
-        self.conn.executemany(sql, batch)
-        self.conn.commit()
-        return len(batch)
+                cur.executemany(sql, batch)
+                conn.commit()
+                return len(batch)
+        finally:
+            conn.close()
 
     # ════════════════════════════════════════════════════════════
     # 基础查询
@@ -277,14 +294,16 @@ class TushareDB:
         """
         if not conditions:
             return None
-        where = ' AND '.join([f"{k}=?" for k in conditions])
+        where = ' AND '.join([f"`{k}`=%s" for k in conditions])
         vals = list(conditions.values())
-        sql = f"SELECT * FROM {table} WHERE {where} LIMIT 1"
-        cur = self.conn.execute(sql, vals)
-        row = cur.fetchone()
-        if row is None:
-            return None
-        return dict(row)
+        sql = f"SELECT * FROM `{table}` WHERE {where} LIMIT 1"
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, vals)
+                return cur.fetchone()
+        finally:
+            conn.close()
 
     def query_many(self, table: str, where: str = None,
                    params: list = None, order_by: str = None,
@@ -301,26 +320,30 @@ class TushareDB:
         Returns:
             dict 列表
         """
-        columns = '*'
-        if isinstance(order_by, dict):
-            # 兼容旧调用：columns 通过 dict 传入
-            columns = order_by.get('columns', '*')
-            order_by = order_by.get('order_by')
-
-        sql = f"SELECT {columns} FROM {table}"
+        sql = f"SELECT * FROM `{table}`"
         if where:
             sql += f" WHERE {where}"
         if order_by:
             sql += f" ORDER BY {order_by}"
         if limit:
             sql += f" LIMIT {limit}"
-        cur = self.conn.execute(sql, params or [])
-        return [dict(r) for r in cur.fetchall()]
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, params or [])
+                return list(cur.fetchall())
+        finally:
+            conn.close()
 
     def execute_raw(self, sql: str, params: list = None) -> List[dict]:
         """执行原始 SQL 查询，返回 dict 列表"""
-        cur = self.conn.execute(sql, params or [])
-        return [dict(r) for r in cur.fetchall()]
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, params or [])
+                return list(cur.fetchall())
+        finally:
+            conn.close()
 
     # ════════════════════════════════════════════════════════════
     # 元数据查询
@@ -328,13 +351,14 @@ class TushareDB:
 
     def get_table_names(self) -> List[str]:
         """获取所有表名"""
-        cur = self.conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-        return [r[0] for r in cur.fetchall()]
+        rows = self.execute_raw("SHOW TABLES")
+        key = list(rows[0].keys())[0] if rows else 'Tables_in_tushare'
+        return [r[key] for r in rows]
 
     def get_index_names(self, table: str) -> List[str]:
         """获取指定表上的索引名"""
-        cur = self.conn.execute(f"SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=? ORDER BY name", (table,))
-        return [r[0] for r in cur.fetchall()]
+        rows = self.execute_raw(f"SHOW INDEX FROM `{table}`")
+        return list(set(r['Key_name'] for r in rows))
 
     # ════════════════════════════════════════════════════════════
     # 个股日线查询
@@ -353,7 +377,7 @@ class TushareDB:
         """
         rows = self.query_many(
             'stock_daily',
-            where='ts_code=?',
+            where='ts_code=%s',
             params=[ts_code],
             order_by='trade_date DESC',
             limit=limit,
@@ -383,13 +407,12 @@ class TushareDB:
         """对原始K线数据应用前复权
 
         前复权价 = 原始价 × latest_adj / adj_factor[t]
-        latest_adj = 最近日期的复权因子（归一化基准）
         """
         dates = [r['trade_date'] for r in rows]
-        placeholders = ','.join(['?'] * len(dates))
+        placeholders = ','.join(['%s'] * len(dates))
         adj_rows = self.query_many(
             'adj_factor',
-            where=f'ts_code=? AND trade_date IN ({placeholders})',
+            where=f'ts_code=%s AND trade_date IN ({placeholders})',
             params=[ts_code] + dates,
         )
         adj_map = {r['trade_date']: r['adj_factor'] for r in adj_rows}
@@ -423,16 +446,10 @@ class TushareDB:
     # ════════════════════════════════════════════════════════════
 
     def code_to_ts_code(self, code: str) -> Optional[str]:
-        """6位纯代码 → ts_code (600519.SH)
-
-        先查 stock_basic 表（精确匹配），再尝试按规则拼接。
-        """
-        # 直接查表
+        """6位纯代码 → ts_code (600519.SH)"""
         row = self.query_one('stock_basic', symbol=code)
         if row:
             return row['ts_code']
-
-        # 按市场规则拼接（回退）
         if code.startswith('6') or code.startswith('9'):
             return f"{code}.SH"
         elif code.startswith('0') or code.startswith('3') or code.startswith('2'):
@@ -449,9 +466,6 @@ class TushareDB:
                                   adj: str = 'qfq') -> Dict[str, List[dict]]:
         """批量查询多只股票K线
 
-        替代 get_all_stocks() 中逐个从 JSON 取 K线的逻辑。
-        内部按 code 分组，结果 {code: [{date, open, ...}, ...]，按日期倒序。
-
         Args:
             codes: 6位纯代码列表 ['000062', '000066', ...]
             limit: 每只股票返回的K线数
@@ -463,29 +477,25 @@ class TushareDB:
         if not codes:
             return {}
 
-        # 批量转 ts_code
-        code_map = {}  # {ts_code: code}
+        code_map = {}
         for code in codes:
             ts = self.code_to_ts_code(code)
             code_map[ts] = code
 
-        # 去重后查重复的 ts_code
         ts_codes = list(code_map.keys())
-        placeholders = ','.join(['?'] * len(ts_codes))
+        placeholders = ','.join(['%s'] * len(ts_codes))
         sql = (f"SELECT ts_code, trade_date, open, high, low, close, vol "
                f"FROM stock_daily WHERE ts_code IN ({placeholders}) "
                f"ORDER BY ts_code, trade_date DESC")
         rows = self.execute_raw(sql, ts_codes)
 
-        # 按 ts_code 分组
-        raw_groups: Dict[str, list] = {}
+        raw_groups = {}
         for r in rows:
             ts = r['ts_code']
             if ts not in raw_groups:
                 raw_groups[ts] = []
             raw_groups[ts].append(r)
 
-        # 格式化 + 限制条数 + 前复权
         result = {}
         for ts, group in raw_groups.items():
             code = code_map.get(ts, ts)
@@ -512,13 +522,10 @@ class TushareDB:
     # ════════════════════════════════════════════════════════════
 
     def get_index_klines(self, ts_code: str, limit: int = 500) -> List[dict]:
-        """获取指数K线（按日期倒序）
-
-        输出格式: [{date, open, close, high, low, volume}, ...]
-        """
+        """获取指数K线（按日期倒序）"""
         rows = self.query_many(
             'index_daily',
-            where='ts_code=?',
+            where='ts_code=%s',
             params=[ts_code],
             order_by='trade_date DESC',
             limit=limit,
@@ -556,21 +563,11 @@ class TushareDB:
 
     def get_sector_klines(self, sector_name: str, sector_type: str = 'industry',
                           limit: int = 120) -> List[dict]:
-        """获取板块K线（按日期倒序）
-
-        Args:
-            sector_name: 板块中文名
-            sector_type: 'industry' 或 'concept'
-            limit: 最多返回条数
-
-        Returns:
-            [{date, open, close, high, low, volume}, ...]
-        """
+        """获取板块K线（按日期倒序）"""
         ts_code = self.query_ths_code_by_name(sector_name)
         if not ts_code:
             return []
 
-        # 验证 type 匹配
         info = self.query_one('ths_index', ts_code=ts_code)
         if info:
             expected = 'I' if sector_type == 'industry' else 'N'
@@ -579,7 +576,7 @@ class TushareDB:
 
         rows = self.query_many(
             'ths_daily',
-            where='ts_code=?',
+            where='ts_code=%s',
             params=[ts_code],
             order_by='trade_date DESC',
             limit=limit,
@@ -604,3 +601,16 @@ class TushareDB:
         """获取指定表的最大交易日期"""
         rows = self.query_many(table, order_by='trade_date DESC', limit=1)
         return rows[0]['trade_date'] if rows else None
+
+    # ════════════════════════════════════════════════════════════
+    # 兼容：SQLite 下的一些操作
+    # ════════════════════════════════════════════════════════════
+
+    @property
+    def conn(self):
+        """兼容旧代码中直接访问 conn 的用法"""
+        return self._get_conn()
+
+    def close(self):
+        """兼容旧代码"""
+        pass

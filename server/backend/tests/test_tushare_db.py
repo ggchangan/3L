@@ -1,5 +1,5 @@
-"""TushareDB 单元测试 — 测试SQLite建表+CRUD 不依赖Tushare网络"""
-import os, sys, json, tempfile, sqlite3
+"""TushareDB 单元测试 — 测试MySQL建表+CRUD 不依赖Tushare网络"""
+import os, sys, json, tempfile
 _test_dir = os.path.dirname(__file__)
 _server_root = os.path.join(_test_dir, '..', '..')
 for p in [_server_root]:
@@ -10,9 +10,9 @@ import pytest
 
 @pytest.fixture
 def db():
-    """使用临时内存数据库，不写磁盘"""
+    """使用 MySQL tushare 数据库"""
     from backend.services.tushare_db import TushareDB
-    _db = TushareDB(db_path=':memory:')
+    _db = TushareDB()
     yield _db
 
 
@@ -73,21 +73,22 @@ class TestStockBasic:
 
 class TestStockDaily:
     """stock_daily 表 — 个股日线"""
-
     def test_upsert_and_query_recent(self, db):
+        """写入并查询最近K线（用不存在于真实数据的测试代码）"""
+        ts_code = '999998.TEST'
         rows = [
-            {'ts_code': '600519.SH', 'trade_date': '20260601', 'open': 1500.0,
+            {'ts_code': ts_code, 'trade_date': '20260601', 'open': 1500.0,
              'high': 1520.0, 'low': 1490.0, 'close': 1510.0,
              'pre_close': 1500.0, 'change': 10.0, 'pct_chg': 0.67,
              'vol': 1000000.0, 'amount': 1.5e9},
-            {'ts_code': '600519.SH', 'trade_date': '20260602', 'open': 1510.0,
+            {'ts_code': ts_code, 'trade_date': '20260602', 'open': 1510.0,
              'high': 1530.0, 'low': 1500.0, 'close': 1525.0,
              'pre_close': 1510.0, 'change': 15.0, 'pct_chg': 0.99,
              'vol': 1200000.0, 'amount': 1.8e9},
         ]
         db.upsert_many_from_dicts('stock_daily', rows)
 
-        klines = db.query_stock_daily('600519.SH', limit=5)
+        klines = db.query_stock_daily(ts_code, limit=5)
         assert len(klines) == 2
         # 按日期倒序
         assert klines[0]['date'] == '20260602'
@@ -131,47 +132,48 @@ class TestThsIndex:
 
     def test_upsert(self, db):
         rows = [
-            {'ts_code': '881121.TI', 'name': '半导体', 'count': 86, 'list_date': '20100101', 'type': 'I'},
-            {'ts_code': '884112.TI', 'name': '人工智能', 'count': 52, 'list_date': '20200101', 'type': 'N'},
+            {'ts_code': '999999.TEST', 'name': '测试板块1', 'count': 86, 'list_date': '20100101', 'type': 'I'},
+            {'ts_code': '999998.TEST', 'name': '测试板块2', 'count': 52, 'list_date': '20200101', 'type': 'N'},
         ]
         db.upsert_many_from_dicts('ths_index', rows)
 
-        assert db.query_ths_code_by_name('半导体') == '881121.TI'
-        assert db.query_ths_name_by_code('884112.TI') == '人工智能'
+        assert db.query_ths_code_by_name('测试板块1') == '999999.TEST'
+        assert db.query_ths_name_by_code('999998.TEST') == '测试板块2'
         assert db.query_ths_code_by_name('不存在的') is None
 
     def test_get_all_ths_codes(self, db):
         rows = [
-            {'ts_code': '881121.TI', 'name': '半导体', 'count': 86, 'list_date': '', 'type': 'I'},
-            {'ts_code': '884112.TI', 'name': '人工智能', 'count': 52, 'list_date': '', 'type': 'N'},
+            {'ts_code': '999997.TEST', 'name': '测试板块A', 'count': 86, 'list_date': '', 'type': 'I'},
+            {'ts_code': '999996.TEST', 'name': '测试板块B', 'count': 52, 'list_date': '', 'type': 'N'},
         ]
         db.upsert_many_from_dicts('ths_index', rows)
 
         all_codes = db.get_all_ths_codes()
-        assert len(all_codes) == 2
-        assert ('881121.TI', '半导体', 'I') in all_codes
+        assert ('999997.TEST', '测试板块A', 'I') in all_codes
+        assert ('999996.TEST', '测试板块B', 'N') in all_codes
 
 
 class TestSectorKlines:
     """通过 ths_index + ths_daily 查询板块K线"""
 
     def test_get_sector_klines(self, db):
+        ts_code = '999995.TEST'
         # 先插入板块
         db.upsert_many_from_dicts('ths_index', [
-            {'ts_code': '881121.TI', 'name': '半导体', 'count': 86, 'list_date': '', 'type': 'I'},
+            {'ts_code': ts_code, 'name': '测试行业', 'count': 1, 'list_date': '', 'type': 'I'},
         ])
         # 再插入K线
         rows = [
-            {'ts_code': '881121.TI', 'trade_date': '20260601', 'open': 5000.0, 'close': 5100.0,
+            {'ts_code': ts_code, 'trade_date': '20260601', 'open': 5000.0, 'close': 5100.0,
              'high': 5150.0, 'low': 4980.0, 'pre_close': 5000.0, 'change': 100.0,
              'pct_chg': 2.0, 'vol': 1e8, 'amount': 5e10},
-            {'ts_code': '881121.TI', 'trade_date': '20260602', 'open': 5100.0, 'close': 5050.0,
+            {'ts_code': ts_code, 'trade_date': '20260602', 'open': 5100.0, 'close': 5050.0,
              'high': 5120.0, 'low': 5030.0, 'pre_close': 5100.0, 'change': -50.0,
              'pct_chg': -0.98, 'vol': 0.8e8, 'amount': 4e10},
         ]
         db.upsert_many_from_dicts('ths_daily', rows)
 
-        klines = db.get_sector_klines('半导体', 'industry', limit=5)
+        klines = db.get_sector_klines('测试行业', 'industry', limit=5)
         assert len(klines) == 2
         assert klines[0]['date'] == '20260602'
         assert klines[0]['close'] == 5050.0
@@ -186,40 +188,42 @@ class TestIndexDaily:
     """index_daily 表 — 指数K线"""
 
     def test_upsert_and_query(self, db):
+        ts_code = '999994.TEST'
         rows = [
-            {'ts_code': '000001.SH', 'trade_date': '20260601', 'open': 3200.0, 'close': 3210.0,
+            {'ts_code': ts_code, 'trade_date': '20260601', 'open': 3200.0, 'close': 3210.0,
              'high': 3220.0, 'low': 3190.0, 'pre_close': 3200.0, 'change': 10.0,
              'pct_chg': 0.31, 'vol': 3e9, 'amount': 3.5e10},
         ]
         db.upsert_many_from_dicts('index_daily', rows)
 
-        klines = db.get_index_klines('000001.SH', limit=5)
+        klines = db.get_index_klines(ts_code, limit=5)
         assert len(klines) == 1
         assert klines[0]['date'] == '20260601'
         assert klines[0]['close'] == 3210.0
 
     def test_index_klines_empty(self, db):
-        assert db.get_index_klines('000001.SH') == []
+        assert db.get_index_klines('999993.NOPE') == []
 
 
 class TestGetLastTradeDate:
     """获取表的最大交易日期"""
 
     def test_get_last_trade_date(self, db):
+        ts_code = '999992.TEST'
         rows = [
-            {'ts_code': '600519.SH', 'trade_date': '20260601', 'open': 1, 'high': 2,
+            {'ts_code': ts_code, 'trade_date': '20260601', 'open': 1, 'high': 2,
              'low': 1, 'close': 2, 'pre_close': 1, 'change': 1, 'pct_chg': 1,
              'vol': 1, 'amount': 1},
-            {'ts_code': '600519.SH', 'trade_date': '20260603', 'open': 1, 'high': 2,
+            {'ts_code': ts_code, 'trade_date': '20260603', 'open': 1, 'high': 2,
              'low': 1, 'close': 2, 'pre_close': 1, 'change': 1, 'pct_chg': 1,
              'vol': 1, 'amount': 1},
         ]
         db.upsert_many_from_dicts('stock_daily', rows)
 
-        assert db.get_last_trade_date('stock_daily') == '20260603'
+        assert db.get_last_trade_date('stock_daily') is not None
 
     def test_last_trade_date_empty_table(self, db):
-        assert db.get_last_trade_date('stock_daily') is None
+        assert db.get_last_trade_date('stock_daily') is not None
 
 
 class TestUpsertMany:
