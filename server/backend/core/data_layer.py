@@ -58,7 +58,7 @@ def get_all_stocks():
 
 
 def get_all_stocks_db(limit: int = 60):
-    """从 TushareDB 读取K线数据，按方向分组
+    """从 data_source 读取K线数据，按方向分组
 
     方向分组从 watchlist 的方向标签推导，不在自选股中的股票归入"其他"。
 
@@ -66,8 +66,7 @@ def get_all_stocks_db(limit: int = 60):
         {方向: {code: [{date, open, close, high, low, volume}, ...]}, ...}
         同时包含 last_updated 字段（最新交易日）
     """
-    from backend.services.tushare_db import TushareDB
-    db = TushareDB()
+    from backend.services.data_source import get_all_stocks_from_db, _get_tushare_db
 
     # 获取自选股列表（含方向）
     wl = get_watchlist()
@@ -84,84 +83,55 @@ def get_all_stocks_db(limit: int = 60):
     if not all_codes:
         return {'last_updated': ''}
 
-    # 批量从 DB 查 K线
     codes_list = list(all_codes)
-    klines_map = db.query_stock_klines_batch(codes_list, limit=limit, adj='qfq')
+    stock_data = get_all_stocks_from_db(codes_list, limit=limit)
 
-    # 查股票名称（批量查询，避免逐个股查）
-    code_name_map = {}
-    ts_codes = [db.code_to_ts_code(c) for c in codes_list]
-    placeholders = ','.join(['%s'] * len(ts_codes))
-    name_rows = db.execute_raw(
-        f"SELECT symbol, name FROM stock_basic WHERE symbol IN ({placeholders})",
-        list(codes_list)
-    )
-    for r in name_rows:
-        code_name_map[r['symbol']] = r.get('name', '')
-    # 回退：对于 stock_basic 里查不到的，从已获取的K线数据里取第一个的 name（如果有）
-    for code in codes_list:
-        if code not in code_name_map:
-            klines = klines_map.get(code, [])
-            if klines and 'name' in klines[0]:
-                code_name_map[code] = klines[0]['name']
-
-    # 按方向分组，补 name
+    # 按方向分组
     result = {}
-    for code, klines in klines_map.items():
+    for code in codes_list:
+        info = stock_data.get(code, {'klines': [], 'name': ''})
+        klines = info.get('klines', [])
+        name = info.get('name', '')
         direction = code_info.get(code, '其他')
         if direction not in result:
             result[direction] = {}
-        name = code_name_map.get(code, '')
+        # 补 name
         if name:
             for k in klines:
                 k['name'] = name
         result[direction][code] = klines
 
     # last_updated
-    last_date = db.get_last_stock_date()
+    db = _get_tushare_db()
+    last_date = db.get_last_stock_date() if db else ''
     result['last_updated'] = last_date or ''
 
     return result
 
 def get_last_updated():
-    """返回缓存最新交易日 YYYYMMDD（优先DB，回退JSON）"""
-    try:
-        from backend.services.tushare_db import TushareDB
-        date = TushareDB().get_last_stock_date()
+    """返回缓存最新交易日 YYYYMMDD"""
+    from backend.services.data_source import _get_tushare_db
+    db = _get_tushare_db()
+    if db:
+        date = db.get_last_stock_date()
         if date:
             return date
-    except Exception:
-        pass
-    raw = _load_json(ALL_STOCKS_PATH, {})
-    return raw.get('last_updated', '')
+    return ''
 
 def save_all_stocks(stocks, last_updated=None):
-    """保存K线数据到DB。stocks格式: {方向: {code: [klines]}}"""
-    from backend.services.tushare_db import TushareDB
-    db = TushareDB()
-    total = 0
+    """保存K线数据到DB（通过 data_source）。stocks格式: {方向: {code: [klines]}}"""
+    from backend.services.data_source import save_stock_klines_to_db
+
+    # 将方向分组格式转为 data_source 接受的 {code: {klines, name}} 格式
+    stock_data = {}
     for direction, codes in stocks.items():
         if direction == 'last_updated':
             continue
         for code, klines in codes.items():
-            ts = db.code_to_ts_code(code)
-            rows = []
-            for k in klines:
-                rows.append({
-                    'ts_code': ts,
-                    'trade_date': k['date'],
-                    'open': k.get('open'),
-                    'high': k.get('high'),
-                    'low': k.get('low'),
-                    'close': k.get('close'),
-                    'vol': k.get('volume', 0),
-                    'pre_close': k.get('pre_close'),
-                    'change': k.get('change'),
-                    'pct_chg': k.get('pct_chg'),
-                })
-            if rows:
-                db.upsert_many_from_dicts('stock_daily', rows)
-                total += len(rows)
+            name = klines[0].get('name', '') if klines else ''
+            stock_data[code] = {'klines': klines, 'name': name}
+
+    total = save_stock_klines_to_db(stock_data)
     cache.invalidate('all_stocks_db')
     _clear_stock_chart_svg_cache()
     if total:
@@ -200,13 +170,11 @@ def get_stock_klines(code, direction=None, stocks=None):
     for sec, codes in stocks.items():
         if code in codes:
             return codes[code]
-    # DB回退
-    try:
-        from backend.services.tushare_db import TushareDB
-        ts = TushareDB().code_to_ts_code(code)
-        return TushareDB().query_stock_daily(ts, limit=60)
-    except Exception:
-        pass
+    # DB回退（通过 data_source）
+    from backend.services.data_source import get_all_stocks_from_db
+    stock_data = get_all_stocks_from_db([code], limit=60)
+    if stock_data and code in stock_data:
+        return stock_data[code].get('klines', [])
     return []
 
 
@@ -222,55 +190,31 @@ INDEX_CODES = {
 }
 
 def get_index_data():
-    """主入口：从MySQL读取指数数据（缓存60s）"""
+    """主入口：从MySQL读取指数数据（缓存60s，通过 data_source）"""
+    INDEX_CODES = {
+        '000001': '上证指数',
+        '000688': '科创50',
+        '000985': '中证全指',
+        '399006': '创业板指',
+    }
     try:
-        from backend.services.tushare_db import TushareDB
-        db = TushareDB()
-        indices = {}
-        latest = ''
-        for code, name in INDEX_CODES.items():
-            ts = f"{code}.SH" if code != '399006' else f"{code}.SZ"
-            klines = db.get_index_klines(ts, limit=500)
-            if klines:
-                indices[code] = {'name': name, 'klines': klines}
-                if klines[0]['date'] > latest:
-                    latest = klines[0]['date']
+        from backend.services.data_source import get_index_data_from_db
+        indices = get_index_data_from_db(INDEX_CODES)
         if indices:
+            latest = max((v['klines'][0]['date'] for v in indices.values() if v['klines']), default='')
             return {'last_updated': latest, 'indices': indices}
     except Exception as e:
         log.warning('DB获取指数失败(%s)', e)
     return {'last_updated': '', 'indices': {}}
 
 def save_index_data(data):
-    """保存指数数据到DB"""
-    _atomic_save_json(INDEX_DATA_PATH, data)
+    """保存指数数据到DB（通过 data_source）"""
+    from backend.services.data_source import save_index_klines_to_db
     cache.invalidate('index_data')
-    try:
-        from backend.services.tushare_db import TushareDB
-        db = TushareDB()
-        indices = data.get('indices', {})
-        total = 0
-        for code, info in indices.items():
-            ts = f"{code}.SH" if code != '399006' else f"{code}.SZ"
-            klines = info.get('klines', [])
-            rows = []
-            for k in klines:
-                rows.append({
-                    'ts_code': ts,
-                    'trade_date': k['date'],
-                    'open': k.get('open'),
-                    'high': k.get('high'),
-                    'low': k.get('low'),
-                    'close': k.get('close'),
-                    'vol': k.get('volume', 0),
-                })
-            if rows:
-                db.upsert_many_from_dicts('index_daily', rows)
-                total += len(rows)
-        if total:
-            log.info('save_index_data: %d条写入DB', total)
-    except Exception as e:
-        log.warning('save_index_data写入DB失败: %s', e)
+    indices = data.get('indices', {})
+    total = save_index_klines_to_db(indices)
+    if total:
+        log.info('save_index_data: %d条写入DB', total)
 
 def get_index_klines(code=INDEX_CODE):
     """返回指定指数代码的K线列表，默认中证全指"""

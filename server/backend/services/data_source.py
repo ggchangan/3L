@@ -45,6 +45,125 @@ def _get_tushare_db():
     return _TUSHARE_DB
 
 
+# ═══════════════════════════════════════════════════════
+# DB 批量查询接口（data_layer 通过这里访问 DB，不直接调 TushareDB）
+# ═══════════════════════════════════════════════════════
+def get_all_stocks_from_db(codes_list, limit=60):
+    """从DB批量获取K线数据 + 股票名称
+
+    Args:
+        codes_list: 6位股票代码列表 ['600519', '000001']
+        limit: 每只股票返回K线条数
+
+    Returns:
+        {code: {'klines': [{date, open, close, high, low, volume}, ...],
+                'name': str}}
+        查不到名称时 name 为空字符串
+    """
+    db = _get_tushare_db()
+    if not db or not codes_list:
+        return {}
+    klines_map = db.query_stock_klines_batch(codes_list, limit=limit, adj='qfq')
+    # 批量查股票名称
+    placeholders = ','.join(['%s'] * len(codes_list))
+    name_rows = db.execute_raw(
+        f"SELECT symbol, name FROM stock_basic WHERE symbol IN ({placeholders})",
+        list(codes_list)
+    )
+    code_name_map = {r['symbol']: r.get('name', '') for r in name_rows}
+    result = {}
+    for code in codes_list:
+        klines = klines_map.get(code, [])
+        name = code_name_map.get(code, '')
+        result[code] = {'klines': klines, 'name': name}
+    return result
+
+
+def get_index_data_from_db(index_codes):
+    """从DB获取多个指数的K线数据
+
+    Args:
+        index_codes: {code: name} 字典，如 {'000001': '上证指数', '000985': '中证全指'}
+
+    Returns:
+        {code: {'name': str, 'klines': [{date, open, close, high, low, volume}, ...]}}
+        DB无数据时该code不在返回结果中
+    """
+    db = _get_tushare_db()
+    if not db or not index_codes:
+        return {}
+    result = {}
+    for code, name in index_codes.items():
+        ts = f"{code}.SH" if code != '399006' else f"{code}.SZ"
+        klines = db.get_index_klines(ts, limit=500)
+        if klines:
+            result[code] = {'name': name, 'klines': klines}
+    return result
+
+
+def save_stock_klines_to_db(stock_data):
+    """保存K线数据到 stock_daily 表
+
+    Args:
+        stock_data: {code: {'klines': [{date, open, close, high, low, volume, ...}], 'name': str}}
+    """
+    db = _get_tushare_db()
+    if not db:
+        return 0
+    total = 0
+    for code, info in stock_data.items():
+        ts = db.code_to_ts_code(code)
+        klines = info.get('klines', [])
+        rows = []
+        for k in klines:
+            rows.append({
+                'ts_code': ts,
+                'trade_date': k['date'],
+                'open': k.get('open'),
+                'high': k.get('high'),
+                'low': k.get('low'),
+                'close': k.get('close'),
+                'vol': k.get('volume', 0),
+                'pre_close': k.get('pre_close'),
+                'change': k.get('change'),
+                'pct_chg': k.get('pct_chg'),
+            })
+        if rows:
+            db.upsert_many_from_dicts('stock_daily', rows)
+            total += len(rows)
+    return total
+
+
+def save_index_klines_to_db(index_data):
+    """保存指数K线数据到 index_daily 表
+
+    Args:
+        index_data: {code: {'name': str, 'klines': [{date, open, close, high, low, volume}, ...]}}
+    """
+    db = _get_tushare_db()
+    if not db:
+        return 0
+    total = 0
+    for code, info in index_data.items():
+        ts = f"{code}.SH" if code != '399006' else f"{code}.SZ"
+        klines = info.get('klines', [])
+        rows = []
+        for k in klines:
+            rows.append({
+                'ts_code': ts,
+                'trade_date': k['date'],
+                'open': k.get('open'),
+                'high': k.get('high'),
+                'low': k.get('low'),
+                'close': k.get('close'),
+                'vol': k.get('volume', 0),
+            })
+        if rows:
+            db.upsert_many_from_dicts('index_daily', rows)
+            total += len(rows)
+    return total
+
+
 # 交易日历缓存（akshare tool_trade_date_hist_sina，含节假日）
 _trade_date_cache = None
 
