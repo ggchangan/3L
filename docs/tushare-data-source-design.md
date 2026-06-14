@@ -1181,7 +1181,79 @@ trade_cal:     1次
 
 ## 6. 与现有系统集成
 
-### 6.1 数据流变化
+### 6.1 核心架构原则
+
+**最重要的设计原则：** 不改 `data_models.py`（合约）和 `data_layer.py`（统一入口）的对外接口。只改 `data_source.py`（数据获取层）的内部路由逻辑。
+
+```
+业务代码 (services)
+  get_stock_card(), get_mainline_data(), scan_buy_signals() ...
+        │  (调用 data_layer 的同一套函数，接口不变)
+        ▼
+data_layer.py          ← 统一入口，对外合约不变
+  get_stock_klines(), get_sector_klines(), get_index_klines(),
+  get_sector_push2test(), get_concept_snapshots(), get_concept_map() ...
+        │  (转发到 data_source.py)
+        ▼
+data_source.py         ← 抽象获取层，内部路由 + 故障切换
+  ┌─────────────────────────────────────────────────────────┐
+  │  Tushare (主数据源, 2000账号)                             │
+  │    stock_daily, daily_basic, index_daily,                │
+  │    stock_basic, ths_index, ths_member, adj_factor         │
+  ├─────────────────────────────────────────────────────────┤
+  │  同花顺 THS akshare (ths_daily 回退, 15000过期后)        │
+  │    stock_board_industry_index_ths / concept_index_ths     │
+  ├─────────────────────────────────────────────────────────┤
+  │  东财 push2test (板块快照, ths_daily 二级回退)            │
+  │    _fetch_live_sector_ranking()                           │
+  ├─────────────────────────────────────────────────────────┤
+  │  腾讯财经API (保留 — 涨跌停价等Tushare没有的数据)         │
+  │    tencent_quote() → limit_up, limit_down                 │
+  ├─────────────────────────────────────────────────────────┤
+  │  同花顺热点 (保留 — 独家数据)                              │
+  │    ths_hot_reason() → 题材归因                             │
+  └─────────────────────────────────────────────────────────┘
+        │  (读/写 SQLite DB)
+        ▼
+data/tushare.db        ← SQLite 统一存储
+  stock_daily, daily_basic, index_daily, ths_daily,
+  ths_index, ths_member, stock_basic, adj_factor, trade_cal
+```
+
+**故障切换链示例：**
+
+```python
+# data_source.py 中的故障切换链定义
+DATA_SOURCE_CHAINS = {
+    # 个股K线 → Tushare主，mootdx备
+    'stock_klines': [
+        ('tushare', fetch_from_tushare_db),      # SQLite已有全量
+    ],
+    
+    # 板块日线 → 回填期走Tushare，过期后akshare回退
+    'sector_klines': [
+        ('tushare', fetch_sector_from_tushare),   # 先查DB（已有2年全量）
+        ('ths_akshare', fetch_sector_from_ths),   # akshare回退补当日
+        ('push2test_fallback', fetch_sector_from_push2test),
+    ],
+    
+    # 个股实时指标(PE/PB/市值) → Tushare daily_basic主，腾讯备
+    'daily_basic': [
+        ('tushare', fetch_basic_from_tushare_db), # DB已有全量
+        ('tencent', fetch_basic_from_tencent),    # 腾讯备（盘中实时）
+    ],
+    
+    # 涨跌停价 → 腾讯财经（Tushare没有）
+    'limit_price': [
+        ('tencent', fetch_limit_from_tencent),
+    ],
+    
+    # 题材归因 → 同花顺热点（Tushare没有）
+    'hot_reason': [
+        ('ths_hot', fetch_reason_from_ths),
+    ],
+}
+```
 
 ```
 当前:
