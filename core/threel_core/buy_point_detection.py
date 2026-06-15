@@ -879,6 +879,16 @@ def get_realtime_kline(code, direction):
         except:
             pass
 
+    if not klines:
+        # 回退：从 MySQL 直接查该股票K线（all_stocks_60d.json 已被DB迁移删除）
+        try:
+            from threel_core.data_layer import get_stock_klines
+            cached = get_stock_klines(code)
+            if isinstance(cached, list):
+                klines = list(cached)
+        except:
+            pass
+
     qcode = code
     if not code.startswith(('sh', 'sz', 'SH', 'SZ')):
         qcode = ('sh' if code.startswith(('6', '9')) else 'sz') + code
