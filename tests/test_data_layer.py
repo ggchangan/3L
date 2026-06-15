@@ -2,7 +2,7 @@
 import os
 import pytest
 
-from backend.core.data_layer import (
+from backend.data_access.data_layer import (
     ALL_STOCKS_PATH,
     WATCHLIST_PATH,
     INDUSTRY_MAP_PATH,
@@ -76,7 +76,7 @@ class TestGetAllStocks:
     def test_has_eight_directions(self):
         """Directions are now managed via direction_service, not hardcoded."""
         import os
-        from backend.config import DATA_DIR
+        from backend.core.config import DATA_DIR
         dir_path = os.path.join(DATA_DIR, 'directions.json')
         if os.path.isfile(dir_path):
             from backend.services.direction_service import get_all
@@ -142,8 +142,8 @@ class TestAtomicSave:
 
     def _save_via_temp_path(self, stocks, last_updated, tmp_dir):
         """Helper: save data using _atomic_save_json to a temp path."""
-        from backend.core.data_layer import _atomic_save_json
-        from backend.config import ALL_STOCKS_PATH as REAL_PATH
+        from backend.data_access.data_layer import _atomic_save_json
+        from backend.core.config import ALL_STOCKS_PATH as REAL_PATH
         test_path = os.path.join(tmp_dir, 'test_stocks.json')
         data = {'last_updated': last_updated, 'stocks': stocks}
         _atomic_save_json(test_path, data)
@@ -176,7 +176,7 @@ class TestAtomicSave:
 
     def test_save_all_stocks_uses_atomic_write(self, monkeypatch, tmp_path):
         """save_all_stocks() uses atomic write internally."""
-        from backend.core import data_layer as dl
+        from backend.data_access import data_layer as dl
         test_path = os.path.join(tmp_path, 'all_stocks.json')
         monkeypatch.setattr(dl, 'ALL_STOCKS_PATH', test_path)
         dl.save_all_stocks({'test': {}}, last_updated='20260525')
@@ -187,7 +187,7 @@ class TestAtomicSave:
     def test_uncached_load_returns_latest_saved(self, monkeypatch, tmp_path):
         """load_all_stocks_uncached() reads the latest saved file, bypassing cache."""
         import json
-        from backend.core import data_layer as dl
+        from backend.data_access import data_layer as dl
         test_path = os.path.join(tmp_path, 'all_stocks.json')
         monkeypatch.setattr(dl, 'ALL_STOCKS_PATH', test_path)
         # Write test data directly
@@ -203,7 +203,7 @@ class TestIndexData:
     """Verify index data read/write through data_layer."""
 
     def test_save_and_uncached_load(self, monkeypatch, tmp_path):
-        from backend.core import data_layer as dl
+        from backend.data_access import data_layer as dl
         test_path = os.path.join(tmp_path, 'index_data.json')
         monkeypatch.setattr(dl, 'INDEX_DATA_PATH', test_path)
         data = {
@@ -220,7 +220,7 @@ class TestIndexData:
 
     def test_save_and_uncached_load_old_format(self, monkeypatch, tmp_path):
         """验证旧扁平格式自动迁移到多指数格式"""
-        from backend.core import data_layer as dl
+        from backend.data_access import data_layer as dl
         test_path = os.path.join(tmp_path, 'index_data2.json')
         monkeypatch.setattr(dl, 'INDEX_DATA_PATH', test_path)
         # 保存旧格式 {last_updated, klines}
@@ -233,7 +233,7 @@ class TestIndexData:
         assert len(klines) == 1
 
     def test_get_index_klines(self, monkeypatch, tmp_path):
-        from backend.core import data_layer as dl
+        from backend.data_access import data_layer as dl
         test_path = os.path.join(tmp_path, 'index_data.json')
         monkeypatch.setattr(dl, 'INDEX_DATA_PATH', test_path)
         data = {
@@ -248,7 +248,7 @@ class TestIndexData:
         assert klines[0]['close'] == 5000.0
 
     def test_index_code_constant(self):
-        from backend.core.data_layer import INDEX_CODE
+        from backend.data_access.data_layer import INDEX_CODE
         assert INDEX_CODE == '000985'
 
 
@@ -256,7 +256,7 @@ class TestSectorDaily:
     """Verify sector daily data read/write through data_layer."""
 
     def test_save_and_uncached_load(self, monkeypatch, tmp_path):
-        from backend.core import data_layer as dl
+        from backend.data_access import data_layer as dl
         test_path = os.path.join(tmp_path, 'sector_daily.json')
         monkeypatch.setattr(dl, 'SECTOR_DAILY_PATH', test_path)
         data = {
@@ -271,7 +271,7 @@ class TestSectorDaily:
         assert 'AI芯片' in loaded['concepts']
 
     def test_save_all_sectors_atomic(self, monkeypatch, tmp_path):
-        from backend.core import data_layer as dl
+        from backend.data_access import data_layer as dl
         test_path = os.path.join(tmp_path, 'sector_daily.json')
         monkeypatch.setattr(dl, 'SECTOR_DAILY_PATH', test_path)
         dl.save_sector_daily({

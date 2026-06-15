@@ -89,7 +89,7 @@ def main():
     # 5. 逐只检测买点
     from backend.services.stock_card_service import get_stock_card
     from backend.core.buy_point_detection import get_realtime_kline
-    from backend.config import MAINLINES_CACHE_PATH, REVIEW_ARCHIVE_DIR
+    from backend.core.config import MAINLINES_CACHE_PATH, REVIEW_ARCHIVE_DIR
     
     today_str = datetime.now().strftime('%Y-%m-%d')
     market_position = '波中'

@@ -23,8 +23,8 @@ os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
 import akshare as ak
 from datetime import datetime, timedelta
 
-from backend.config import DATA_DIR, SECTOR_DAILY_PATH
-from backend.core.data_layer import load_sector_daily_uncached, save_sector_daily
+from backend.core.config import DATA_DIR, SECTOR_DAILY_PATH
+from backend.data_access.data_layer import load_sector_daily_uncached, save_sector_daily
 from backend.core.update_stock_data import _df_to_kline
 
 # ── 参数 ──

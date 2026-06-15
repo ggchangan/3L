@@ -6,8 +6,8 @@ review_compute_service.py — 复盘计算层
 import json, os, sys, requests, math
 from datetime import datetime
 
-from backend import config
-from backend.config import DATA_DIR, ALL_STOCKS_PATH, WWW_DIR, MAINLINES_CACHE_PATH
+from backend.core import config
+from backend.core.config import DATA_DIR, ALL_STOCKS_PATH, WWW_DIR, MAINLINES_CACHE_PATH
 
 MAINLINE_FULL_CACHE = os.path.join(DATA_DIR, '.cache', 'mainline_full.json')
 MAINLINE_HISTORY_PATH = os.path.join(DATA_DIR, 'mainline_history.json')
@@ -28,7 +28,7 @@ def to_yyyymmdd(d):
 
 def is_trading_day(date_str):
     """判断给定日期是否为A股交易日（委托 data_models.is_trading_day）"""
-    from backend.core.data_models import is_trading_day as _is_trading_day
+    from backend.models.data_models import is_trading_day as _is_trading_day
     return _is_trading_day(date_str)
 
 
@@ -326,13 +326,13 @@ def get_mainline_data(date_str):
             pass
 
     # 从 _push2test 获取当日涨跌幅（data_layer 唯一入口）
-    from backend.core.data_layer import get_sector_push2test
+    from backend.data_access.data_layer import get_sector_push2test
     push2test_data = get_sector_push2test()
     push2test_inds = push2test_data.industries if hasattr(push2test_data, 'industries') else {}
     # _push2test 是 cron 保存的当日涨跌幅快照，权威数据源
 
     # 从本地板块K线数据计算20日涨幅（data_layer 唯一入口）
-    from backend.core.data_layer import get_sector_daily
+    from backend.data_access.data_layer import get_sector_daily
     sector_data = get_sector_daily()
     industries_data = sector_data.get('industries', {})
     if not industries_data:
@@ -429,7 +429,7 @@ def get_mainline_data(date_str):
 
 def get_concept_mainline_data(date_str):
     """概念主线排名 — 与 get_mainline_data 相同逻辑，但用概念板块数据"""
-    from backend.core.data_layer import get_sector_daily
+    from backend.data_access.data_layer import get_sector_daily
     from backend.services.concept_wave_service import judge_concept_wave as _judge_wave
     sector_data = get_sector_daily()
     concepts_data = sector_data.get('concepts', {})
@@ -437,7 +437,7 @@ def get_concept_mainline_data(date_str):
         return {'lines': [], 'secondary': [], 'all_ranked': [], 'persistence': []}
 
     # 从 _push2test 获取当日涨跌幅（同 get_mainline_data 一致）
-    from backend.core.data_layer import get_sector_push2test
+    from backend.data_access.data_layer import get_sector_push2test
     push2test_data = get_sector_push2test()
     push2test_cons = push2test_data.concepts if hasattr(push2test_data, 'concepts') else {}
 

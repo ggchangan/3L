@@ -3,7 +3,7 @@
 抽象数据层 — 统一数据获取入口，内置故障切换+健康监测
 
 用法：
-    from backend.services.data_source import (
+    from backend.data_access.data_source import (
         get_sector_rankings, get_sector_klines, get_concept_map, get_data_source_status
     )
 """
@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from backend.config import (
+from backend.core.config import (
     SECTOR_DAILY_PATH,
     SOURCES_EM_SECTOR_DAILY,
     SOURCES_THS_SECTOR_DAILY,
@@ -29,6 +29,139 @@ from backend.core.logger import get_logger
 from backend.core.exceptions import DataSourceError
 
 log = get_logger(__name__)
+
+# TushareDB 全局实例（懒加载）
+_TUSHARE_DB = None
+
+def _get_tushare_db():
+    global _TUSHARE_DB
+    if _TUSHARE_DB is None:
+        try:
+            from backend.data_access.tushare_db import TushareDB
+            _TUSHARE_DB = TushareDB()
+        except Exception as e:
+            log.warning('TushareDB 初始化失败: %s', e)
+            _TUSHARE_DB = None
+    return _TUSHARE_DB
+
+
+# ═══════════════════════════════════════════════════════
+# DB 批量查询接口（data_layer 通过这里访问 DB，不直接调 TushareDB）
+# ═══════════════════════════════════════════════════════
+def get_all_stocks_from_db(codes_list, limit=60):
+    """从DB批量获取K线数据 + 股票名称
+
+    Args:
+        codes_list: 6位股票代码列表 ['600519', '000001']
+        limit: 每只股票返回K线条数
+
+    Returns:
+        {code: {'klines': [{date, open, close, high, low, volume}, ...],
+                'name': str}}
+        查不到名称时 name 为空字符串
+    """
+    db = _get_tushare_db()
+    if not db or not codes_list:
+        return {}
+    klines_map = db.query_stock_klines_batch(codes_list, limit=limit, adj='qfq')
+    # 批量查股票名称
+    placeholders = ','.join(['%s'] * len(codes_list))
+    name_rows = db.execute_raw(
+        f"SELECT symbol, name FROM stock_basic WHERE symbol IN ({placeholders})",
+        list(codes_list)
+    )
+    code_name_map = {r['symbol']: r.get('name', '') for r in name_rows}
+    result = {}
+    for code in codes_list:
+        klines = klines_map.get(code, [])
+        name = code_name_map.get(code, '')
+        result[code] = {'klines': klines, 'name': name}
+    return result
+
+
+def get_index_data_from_db(index_codes):
+    """从DB获取多个指数的K线数据
+
+    Args:
+        index_codes: {code: name} 字典，如 {'000001': '上证指数', '000985': '中证全指'}
+
+    Returns:
+        {code: {'name': str, 'klines': [{date, open, close, high, low, volume}, ...]}}
+        DB无数据时该code不在返回结果中
+    """
+    db = _get_tushare_db()
+    if not db or not index_codes:
+        return {}
+    result = {}
+    for code, name in index_codes.items():
+        ts = f"{code}.SH" if code != '399006' else f"{code}.SZ"
+        klines = db.get_index_klines(ts, limit=500)
+        if klines:
+            result[code] = {'name': name, 'klines': klines}
+    return result
+
+
+def save_stock_klines_to_db(stock_data):
+    """保存K线数据到 stock_daily 表
+
+    Args:
+        stock_data: {code: {'klines': [{date, open, close, high, low, volume, ...}], 'name': str}}
+    """
+    db = _get_tushare_db()
+    if not db:
+        return 0
+    total = 0
+    for code, info in stock_data.items():
+        ts = db.code_to_ts_code(code)
+        klines = info.get('klines', [])
+        rows = []
+        for k in klines:
+            rows.append({
+                'ts_code': ts,
+                'trade_date': k['date'],
+                'open': k.get('open'),
+                'high': k.get('high'),
+                'low': k.get('low'),
+                'close': k.get('close'),
+                'vol': k.get('volume', 0),
+                'pre_close': k.get('pre_close'),
+                'change': k.get('change'),
+                'pct_chg': k.get('pct_chg'),
+            })
+        if rows:
+            db.upsert_many_from_dicts('stock_daily', rows)
+            total += len(rows)
+    return total
+
+
+def save_index_klines_to_db(index_data):
+    """保存指数K线数据到 index_daily 表
+
+    Args:
+        index_data: {code: {'name': str, 'klines': [{date, open, close, high, low, volume}, ...]}}
+    """
+    db = _get_tushare_db()
+    if not db:
+        return 0
+    total = 0
+    for code, info in index_data.items():
+        ts = f"{code}.SH" if code != '399006' else f"{code}.SZ"
+        klines = info.get('klines', [])
+        rows = []
+        for k in klines:
+            rows.append({
+                'ts_code': ts,
+                'trade_date': k['date'],
+                'open': k.get('open'),
+                'high': k.get('high'),
+                'low': k.get('low'),
+                'close': k.get('close'),
+                'vol': k.get('volume', 0),
+            })
+        if rows:
+            db.upsert_many_from_dicts('index_daily', rows)
+            total += len(rows)
+    return total
 
 
 # 交易日历缓存（akshare tool_trade_date_hist_sina，含节假日）
@@ -276,7 +409,7 @@ def _get_snapshot_source_path():
     Returns:
         SOURCES_THS_SECTOR_DAILY (ths 模式) 或 SOURCES_EM_SECTOR_DAILY (eastmoney 模式)
     """
-    from backend.config import CONCEPT_DATA_SOURCE
+    from backend.core.config import CONCEPT_DATA_SOURCE
     if CONCEPT_DATA_SOURCE == 'ths':
         return SOURCES_THS_SECTOR_DAILY
     elif CONCEPT_DATA_SOURCE == 'eastmoney':
@@ -287,20 +420,129 @@ def _get_snapshot_source_path():
 
 def _get_snapshot_source_label():
     """返回当前数据源显示名称（用于日志/验证）"""
-    from backend.config import CONCEPT_DATA_SOURCE
+    from backend.core.config import CONCEPT_DATA_SOURCE
     labels = {'ths': 'THS仓', 'eastmoney': 'EM仓'}
     return labels.get(CONCEPT_DATA_SOURCE, 'THS仓')
+
+
+# ════════════════════════════════════════════════════════════
+# Tushare 数据源获取函数（从 DB 读取）
+# ════════════════════════════════════════════════════════════
+
+def _fetch_tushare_sector_klines(sector_name, sector_type='industry'):
+    """从 TushareDB 读取板块K线（优先源）
+
+    Args:
+        sector_name: 板块中文名
+        sector_type: 'industry' 或 'concept'
+
+    Returns:
+        [{date, open, close, high, low, volume}, ...] 或 None
+    """
+    db = _get_tushare_db()
+    if db is None:
+        return None
+    try:
+        klines = db.get_sector_klines(sector_name, sector_type, limit=120)
+        if klines:
+            report_success('tushare_sector_klines')
+            return klines
+        # 空数据 -> None 触发 failover 链回退
+        return None
+    except Exception as e:
+        report_failure('tushare_sector_klines', str(e))
+        return None
+
+
+def _fetch_tushare_sector_ranking(date_str):
+    """从 TushareDB 读取板块当日涨跌幅排行
+
+    Args:
+        date_str: YYYYMMDD
+
+    Returns:
+        {last_updated, industries: {name: {change_pct, date, ...}},
+         concepts: {name: {change_pct, date, ...}}}
+        或 None
+    """
+    db = _get_tushare_db()
+    if db is None:
+        return None
+    try:
+        # 从 ths_daily 表获取当日的板块数据
+        all_codes = db.get_all_ths_codes()
+        if not all_codes:
+            return None
+
+        industries = {}
+        concepts = {}
+        has_data = False
+
+        for ts_code, name, stype in all_codes:
+            rows = db.query_many(
+                'ths_daily',
+                where='ts_code=? AND trade_date=?',
+                params=[ts_code, date_str],
+                limit=1,
+            )
+            if rows:
+                has_data = True
+                row = rows[0]
+                entry = {
+                    'date': date_str,
+                    'change_pct': row.get('pct_chg', 0),
+                    'close': row.get('close', 0),
+                    'open': row.get('open', 0),
+                    'high': row.get('high', 0),
+                    'low': row.get('low', 0),
+                    'volume': row.get('vol', 0),
+                }
+                target = industries if stype == 'I' else concepts
+                target[name] = entry
+
+        if has_data:
+            report_success('tushare_sector_ranking')
+            return {
+                'last_updated': date_str,
+                'industries': industries,
+                'concepts': concepts,
+            }
+        return None
+    except Exception as e:
+        report_failure('tushare_sector_ranking', str(e))
+        return None
+
+
+def _fetch_tushare_daily_basic(ts_code, trade_date):
+    """从 TushareDB 读取个股每日指标（PE/PB/市值）
+
+    Args:
+        ts_code: 股票代码含后缀 (600519.SH)
+        trade_date: YYYYMMDD
+
+    Returns:
+        {pe_ttm, pb, total_mv, ...} 或 None
+    """
+    db = _get_tushare_db()
+    if db is None:
+        return None
+    try:
+        return db.query_daily_basic(ts_code, trade_date)
+    except Exception:
+        return None
 
 
 # ====== 调用链定义 ======
 DATA_SOURCE_CHAINS = {
     'sector_ranking': [
+        ('tushare', lambda date: _fetch_tushare_sector_ranking(date)),
         ('ths_live', lambda date: _fetch_ths_live_sector_ranking(date)),
         ('live', lambda date: _fetch_live_sector_ranking(date)),
         ('legacy_sector', lambda date: _fetch_legacy_sector_ranking(date)),
         ('snapshot_sector', lambda date: _fetch_ths_sector_ranking(date)),
     ],
     'sector_klines': [
+        ('tushare', lambda name, type_: _fetch_tushare_sector_klines(name, type_)),
         ('ths_sector', lambda name, type_: _fetch_ths_sector_klines(name, type_)),
         ('snapshot_sector', lambda name, type_: _fetch_snapshot_sector_klines(name, type_)),
         ('legacy_sector', lambda name, type_: _fetch_legacy_sector_klines(name, type_)),
@@ -540,7 +782,7 @@ def get_sector_constituents(sector_code: str) -> List[tuple]:
 
 def _load_concept_name_mapping():
     """加载系统概念名 → THS概念名的映射表"""
-    from backend.config import CONCEPT_NAME_MAPPING_PATH
+    from backend.core.config import CONCEPT_NAME_MAPPING_PATH
     try:
         return _load_json(CONCEPT_NAME_MAPPING_PATH, {})
     except Exception:
@@ -742,7 +984,7 @@ def get_concept_snapshots(name_list: list = None) -> dict:
     Returns:
         {系统名: {date, change_pct, up_count, down_count, ...}}
     """
-    from backend.config import CONCEPT_DATA_SOURCE
+    from backend.core.config import CONCEPT_DATA_SOURCE
 
     if name_list is None:
         name_map = _load_concept_name_mapping()
@@ -767,7 +1009,7 @@ def get_concept_klines(name_list: list) -> dict:
     Returns:
         {系统名: {date, open, close, high, low, volume}}
     """
-    from backend.config import CONCEPT_DATA_SOURCE
+    from backend.core.config import CONCEPT_DATA_SOURCE
 
     if CONCEPT_DATA_SOURCE == 'ths':
         return get_ths_concept_klines(name_list)
@@ -930,7 +1172,7 @@ def verify_data_sources(verbose=True):
     # ════ 3. 一致性验证（THS live vs _push2test）════
     try:
         # 实时源是THS，比对 _push2test 字段（其中存的是THS数据）
-        from backend.core.data_layer import get_sector_push2test
+        from backend.data_access.data_layer import get_sector_push2test
         p2_data = get_sector_push2test()
         if (hasattr(p2_data, 'industries') and p2_data.industries
                 and 'ths_real_chg' in dir() and ths_real_chg):
@@ -952,7 +1194,7 @@ def verify_data_sources(verbose=True):
 
     # ════ 4. data_layer 合约验证 ════
     try:
-        from backend.core.data_layer import (
+        from backend.data_access.data_layer import (
             get_sector_push2test, get_sector_daily, get_sector_klines,
         )
 
@@ -1113,7 +1355,7 @@ def verify_data_coverage(verbose=True):
     """
     import json, os
     from datetime import datetime, timedelta
-    from backend.config import SECTOR_DAILY_PATH
+    from backend.core.config import SECTOR_DAILY_PATH
 
     now = datetime.now().strftime('%Y%m%d')
     today = datetime.now()

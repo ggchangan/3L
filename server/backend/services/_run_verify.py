@@ -8,7 +8,7 @@ sys.path.insert(0, 'server')
 print("=" * 60)
 print("1. verify_data_sources（50项检查）")
 print("=" * 60)
-from backend.services.data_source import verify_data_sources
+from backend.data_access.data_source import verify_data_sources
 result = verify_data_sources(verbose=False)
 print(f'\n状态: {result["status"]}')
 pass_c = sum(1 for c in result['checks'] if c['pass'])
@@ -27,7 +27,7 @@ if fails:
 print('\n' + "=" * 60)
 print("2. L0 覆盖度验证（21项）")
 print("=" * 60)
-from backend.services.data_source import verify_data_coverage as verify_data_coverage_l0
+from backend.data_access.data_source import verify_data_coverage as verify_data_coverage_l0
 l0 = verify_data_coverage_l0(verbose=False)
 print(f'\n状态: {l0["status"]}')
 print(f'通过: {l0["pass_count"]}/{len(l0["checks"])}')
@@ -43,7 +43,7 @@ if l0_fails:
 print('\n' + "=" * 60)
 print("3. 测试 THS 概念快照批量拉取效果")
 print("=" * 60)
-from backend.core.data_layer import get_ths_concept_snapshots
+from backend.data_access.data_layer import get_ths_concept_snapshots
 
 # 测试一批概念
 test_concepts = ['培育钻石', 'AI手机', '人形机器人', '华为概念', '半导体概念',

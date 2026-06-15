@@ -6,7 +6,7 @@
 import os, json, time, requests, re
 os.environ['TQDM_DISABLE'] = '1'
 import akshare as ak
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 
 OUTPUT_PATH = os.path.join(DATA_DIR, 'board_constituents.json')
 

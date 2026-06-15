@@ -14,10 +14,8 @@ from datetime import datetime
 # 导入统一算法和数据获取函数
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from backend.core.buy_point_detection import get_realtime_kline
-from backend.core.data_layer import ALL_STOCKS_PATH, WATCHLIST_PATH, REVIEW_CHARTS_DIR, REVIEW_ARCHIVE_DIR, MAINLINES_CACHE_PATH
+from backend.data_access.data_layer import WATCHLIST_PATH, REVIEW_CHARTS_DIR, REVIEW_ARCHIVE_DIR, MAINLINES_CACHE_PATH
 
-# 自选股数据
-STOCKS_FILE = ALL_STOCKS_PATH
 # 方向过滤：扫描全部
 FOCUS_DIRECTIONS = []
 # SVG输出目录

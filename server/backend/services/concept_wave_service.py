@@ -1,7 +1,7 @@
 """概念板块波谷追踪 — 服务层（V5评分 + 回测）"""
 import json, os, math, statistics
 
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 
 
 def _calc_ema(values, period):

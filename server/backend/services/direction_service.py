@@ -22,7 +22,7 @@ import json
 import os
 import logging
 
-from backend.config import DATA_DIR as _DATA_DIR
+from backend.core.config import DATA_DIR as _DATA_DIR
 
 logger = logging.getLogger(__name__)
 

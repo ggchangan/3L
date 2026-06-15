@@ -99,7 +99,7 @@ def check_buy_signal(code):
         market_position = '波中'
         main_lines = []
         try:
-            from backend.config import MAINLINES_CACHE_PATH, REVIEW_ARCHIVE_DIR
+            from backend.core.config import MAINLINES_CACHE_PATH, REVIEW_ARCHIVE_DIR
             if os.path.isfile(MAINLINES_CACHE_PATH):
                 with open(MAINLINES_CACHE_PATH) as f:
                     mc = json.load(f)

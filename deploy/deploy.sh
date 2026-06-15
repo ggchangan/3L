@@ -18,11 +18,9 @@ echo "  3L 交易系统 — 一键部署"
 echo "=============================================="
 
 # ==== 1. 获取密码 ====
-# 优先使用命令行参数，否则强制交互输入（忽略环境变量，防止重复运行跳过）
 if [ $# -ge 1 ]; then
     AUTH_PASS="$1"
 else
-    # 清除可能残留的环境变量，确保每次都弹密码输入
     unset AUTH_PASS
     while true; do
         read -s -p "请输入登录密码: " AUTH_PASS
@@ -43,7 +41,6 @@ fi
 echo ""
 echo "=> 微信报警配置（WxPusher）"
 echo "   注册地址: https://wxpusher.zjiecode.com"
-echo "   创建应用 → 获取 APP_TOKEN → 用户管理获取 UID"
 echo "   留空可跳过，之后在前端 /alarm-sounds 页面配置"
 echo ""
 read -p "WXPUSHER_TOKEN (AT_xxx，留空跳过): " WX_TOKEN
@@ -68,7 +65,42 @@ if command -v ufw &>/dev/null; then
     fi
 fi
 
-# ==== 5. 检查 Docker ====
+# ==== 5. MySQL 数据库安装（Docker数据源需要） ====
+echo ""
+echo "=> 检查 MySQL..."
+if ! command -v mysql &>/dev/null; then
+    echo "   正在安装 MySQL 8.0..."
+    sudo apt-get install -y -qq mysql-server python3-pymysql
+    sudo systemctl start mysql
+    sudo systemctl enable mysql
+    echo "   MySQL 安装完成"
+fi
+
+if ! sudo mysql -e "SELECT 1" &>/dev/null; then
+    echo "   启动 MySQL..."
+    sudo systemctl start mysql
+fi
+
+# 建库建用户（幂等）
+sudo mysql -e "
+CREATE DATABASE IF NOT EXISTS tushare CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'tushare'@'localhost' IDENTIFIED WITH mysql_native_password BY 'tushare_pass';
+CREATE USER IF NOT EXISTS 'tushare'@'%' IDENTIFIED WITH mysql_native_password BY 'tushare_pass';
+GRANT ALL PRIVILEGES ON tushare.* TO 'tushare'@'localhost';
+GRANT ALL PRIVILEGES ON tushare.* TO 'tushare'@'%';
+FLUSH PRIVILEGES;
+" 2>/dev/null
+echo "   MySQL 数据库就绪"
+
+# 从 SQLite 迁移到 MySQL（如果 SQLite 文件存在）
+SQLITE_FILE="${DATA_DIR}/tushare.db"
+if [ -f "${SQLITE_FILE}" ]; then
+    echo "   发现旧 SQLite 数据库，迁移到 MySQL..."
+    sudo docker exec 3l-server python3 -m backend.services.migrate_to_mysql 2>/dev/null || \
+    echo "   迁移跳过（容器未运行，后续可手动执行）"
+fi
+
+# ==== 6. 检查 Docker ====
 echo ""
 echo "=> 检查 Docker..."
 if ! command -v docker &>/dev/null; then
@@ -80,13 +112,13 @@ if ! command -v docker &>/dev/null; then
     echo "Docker 安装完成"
 fi
 
-# ==== 6. 准备数据目录 ====
+# ==== 7. 准备数据目录 ====
 echo ""
 echo "=> 创建数据目录..."
-mkdir -p "${DATA_DIR}"/{private,cache,charts}
+mkdir -p "${DATA_DIR}"/{private,cache,charts,config,computed,public}
 mkdir -p "${LOG_DIR}"
 
-# ==== 7. 拉取镜像 ====
+# ==== 8. 拉取镜像 ====
 echo ""
 echo "=> 登录镜像仓库..."
 echo "   (账号: 100048956351)"
@@ -95,13 +127,13 @@ sudo docker login ccr.ccs.tencentyun.com -u 100048956351 -p ygys30ds
 echo "=> 拉取镜像..."
 sudo docker pull ${IMAGE}
 
-# ==== 8. 停止旧容器 ====
+# ==== 9. 停止旧容器 ====
 echo ""
 echo "=> 停止旧容器..."
 sudo docker stop 3l-server 2>/dev/null || true
 sudo docker rm 3l-server 2>/dev/null || true
 
-# ==== 9. 构建环境变量 ====
+# ==== 10. 构建环境变量 ====
 ENV_OPTS=""
 ENV_OPTS="${ENV_OPTS} -e AUTH_USER=admin"
 ENV_OPTS="${ENV_OPTS} -e AUTH_PASS=${AUTH_PASS}"
@@ -109,6 +141,12 @@ ENV_OPTS="${ENV_OPTS} -e PORT=8080"
 ENV_OPTS="${ENV_OPTS} -e DATA_DIR=/data"
 ENV_OPTS="${ENV_OPTS} -e LOG_DIR=/app/logs"
 ENV_OPTS="${ENV_OPTS} -e LOG_LEVEL=INFO"
+# MySQL 连接配置（容器用 host.docker.internal 连宿主机 MySQL）
+ENV_OPTS="${ENV_OPTS} -e MYSQL_HOST=host.docker.internal"
+ENV_OPTS="${ENV_OPTS} -e MYSQL_PORT=3306"
+ENV_OPTS="${ENV_OPTS} -e MYSQL_USER=tushare"
+ENV_OPTS="${ENV_OPTS} -e MYSQL_PASSWORD=tushare_pass"
+ENV_OPTS="${ENV_OPTS} -e MYSQL_DATABASE=tushare"
 if [ -n "${WX_TOKEN:-}" ]; then
     ENV_OPTS="${ENV_OPTS} -e WXPUSHER_TOKEN=${WX_TOKEN}"
 fi
@@ -116,15 +154,11 @@ if [ -n "${WX_UID:-}" ]; then
     ENV_OPTS="${ENV_OPTS} -e WXPUSHER_UID=${WX_UID}"
 fi
 
-# ==== 10. 启动容器 ====
+# ==== 11. 启动容器 ====
 echo ""
 echo "=> 启动服务..."
 
-# 端口映射: ${PORT}:8080（容器内固定8080，宿主机端口可选）
 PORT_MAP="${PORT}:8080"
-
-# 优先使用 docker compose / docker-compose
-USE_COMPOSE=""
 COMPOSE_FILE="${HOME}/3l-server/docker-compose.yml"
 
 if docker compose version &>/dev/null; then
@@ -136,6 +170,8 @@ services:
     container_name: 3l-server
     ports:
       - "${PORT_MAP}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${DATA_DIR}:/data
       - ${LOG_DIR}:/app/logs
@@ -145,7 +181,11 @@ services:
       - PORT=8080
       - LOG_DIR=/app/logs
       - LOG_LEVEL=INFO
-    restart: unless-stopped
+      - MYSQL_HOST=host.docker.internal
+      - MYSQL_PORT=3306
+      - MYSQL_USER=tushare
+      - MYSQL_PASSWORD=tushare_pass
+      - MYSQL_DATABASE=tushare
 EOF
     echo "   使用 docker compose 启动 (宿主机端口 ${PORT})"
     cd "$(dirname "${COMPOSE_FILE}")"
@@ -161,6 +201,8 @@ services:
     container_name: 3l-server
     ports:
       - "${PORT_MAP}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${DATA_DIR}:/data
       - ${LOG_DIR}:/app/logs
@@ -170,7 +212,11 @@ services:
       - PORT=8080
       - LOG_DIR=/app/logs
       - LOG_LEVEL=INFO
-    restart: unless-stopped
+      - MYSQL_HOST=host.docker.internal
+      - MYSQL_PORT=3306
+      - MYSQL_USER=tushare
+      - MYSQL_PASSWORD=tushare_pass
+      - MYSQL_DATABASE=tushare
 EOF
     echo "   使用 docker-compose 启动 (宿主机端口 ${PORT})"
     cd "$(dirname "${COMPOSE_FILE}")"
@@ -181,13 +227,14 @@ else
     sudo docker run -d --restart unless-stopped \
       --name 3l-server \
       -p "${PORT_MAP}" \
+      --add-host host.docker.internal:host-gateway \
       -v "${DATA_DIR}:/data" \
       -v "${LOG_DIR}:/app/logs" \
       ${ENV_OPTS} \
       ${IMAGE}
 fi
 
-# ==== 11. 等待服务就绪 ====
+# ==== 12. 等待服务就绪 ====
 echo "=> 等待服务就绪..."
 for i in $(seq 1 30); do
     if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:${PORT}/ 2>/dev/null | grep -q 200; then
@@ -205,14 +252,13 @@ else
     echo "   ⚠️ 容器可能未正常运行，查看日志: sudo docker logs 3l-server"
 fi
 
-# ==== 12. 数据初始化（已有则跳过） ====
+# ==== 13. 数据初始化 ====
 echo ""
 if [ -f "${DATA_DIR}/all_stocks_60d.json" ]; then
     echo "   已有数据文件，跳过初始化。如需强制更新:"
     echo "   sudo docker exec 3l-server python3 -m backend.core.update_stock_data"
 else
     echo "=> 首次数据初始化（拉取 A股 K线数据，约 3-5 分钟）..."
-    echo "   包含: 个股60天 / 中证全指200天 / 行业板块90天"
     echo "   请耐心等待，不要中断..."
     if sudo docker exec 3l-server python3 -m backend.core.update_stock_data; then
         echo "   ✅ 数据初始化完成"
@@ -249,7 +295,6 @@ echo "  手动更新: sudo docker exec 3l-server python3 -m backend.core.update_
 echo ""
 echo "  查看日志: sudo docker logs -f 3l-server"
 echo "  重启服务: sudo docker restart 3l-server"
-echo "  升级服务: sudo docker pull ${IMAGE} && sudo docker stop 3l-server && sudo docker rm 3l-server"
-echo "  升级后按同样方式重新启动即可"
+echo "  MySQL 连接: mysql -h 127.0.0.1 -u tushare -p'tushare_pass' tushare"
 echo ""
 echo "=============================================="

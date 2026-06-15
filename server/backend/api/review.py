@@ -42,7 +42,7 @@ def _handle_cron_daily_review(h, path):
 def _handle_review_dates(h, path):
     """返回历史复盘日期列表"""
     import os
-    from backend import config
+    from backend.core import config
     archive_dir = config.REVIEW_ARCHIVE_DIR
     dates = []
     if os.path.isdir(archive_dir):
@@ -56,7 +56,7 @@ def _handle_review_dates(h, path):
 def _handle_review_get(h, path):
     """返回当前复盘数据"""
     import json
-    from backend import config
+    from backend.core import config
     try:
         with open(config.REVIEW_DATA_PATH, 'r', encoding='utf-8') as f:
             data = json.load(f)

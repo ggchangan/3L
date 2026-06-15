@@ -2,7 +2,7 @@
 """
 唯一数据更新脚本 — 17:00 cron 运行
 范围 = 个股K线 + 中证全指 + 行业/概念板块日K线
-所有文件I/O通过 backend.core.data_layer 完成
+所有文件I/O通过 backend.data_access.data_layer 完成
 
 用法:
     python3 scripts/update_stock_data.py
@@ -14,8 +14,8 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 # ⚠️ 注意: file 在 server/backend/core/ 下
 # dirname×1=core/  ×2=backend/  ×3=server/（backend 包所在位置）
-from backend.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH
-from backend.core.data_layer import (
+from backend.core.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH
+from backend.data_access.data_layer import (
     get_watchlist,
     load_all_stocks_uncached,
     get_last_updated,
@@ -28,7 +28,7 @@ from backend.core.data_layer import (
     load_sector_daily_uncached,
     save_sector_daily,
 )
-from backend.core.data_layer import (
+from backend.data_access.data_layer import (
     get_concept_list,
     get_stock_concept_map,
     save_concept_list,
@@ -493,7 +493,7 @@ def _fetch_today_industries_from_ths():
 
         df = ak.stock_board_industry_summary_ths()
         # 目标日期是上一个已完成交易日（交易日历含节假日）
-        from backend.services.data_source import get_last_completed_trading_day
+        from backend.data_access.data_source import get_last_completed_trading_day
         today = get_last_completed_trading_day()
 
         result = {}
@@ -710,7 +710,7 @@ def update_sectors():
 
     # ── 确定追踪中的概念 ──
     # 目标日期是上一个已完成交易日（交易日历含节假日）
-    from backend.services.data_source import get_last_completed_trading_day
+    from backend.data_access.data_source import get_last_completed_trading_day
     today = get_last_completed_trading_day()
     try:
         _concept_list = get_concept_list()
@@ -747,7 +747,7 @@ def update_sectors():
     # 未映射到同花顺的概念不拉取（用户说"对不上的回头再看"）
     # 数据准确（用户已验证培育钻石 -3.30% vs push2test +5.69%）
     # ═══════════════════════════════════════════════════
-    from backend.core.data_layer import get_concept_snapshots
+    from backend.data_access.data_layer import get_concept_snapshots
     con_today = get_concept_snapshots(list(tracked_concepts))
 
     # ── 保存今日快照到独立字段 ──
@@ -803,7 +803,7 @@ def update_sectors():
 
     # 同步刷新快照源文件（路径由 CONCEPT_DATA_SOURCE 配置驱动，供 failover 回退使用）
     try:
-        from backend.services.data_source import _get_snapshot_source_path, _get_snapshot_source_label
+        from backend.data_access.data_source import _get_snapshot_source_path, _get_snapshot_source_label
         snap_path = _get_snapshot_source_path()
         snap_label = _get_snapshot_source_label()
         snap_dir = os.path.dirname(snap_path)
@@ -824,7 +824,7 @@ def update_sectors():
 
     # ── 板块数据验证 ──
     try:
-        from backend.core.data_layer import verify_data_sources
+        from backend.data_access.data_layer import verify_data_sources
         vresult = verify_data_sources(verbose=False)
         vpass = vresult['pass_count'] if 'pass_count' in vresult else sum(1 for c in vresult['checks'] if c['pass'])
         vtotal = len(vresult['checks'])

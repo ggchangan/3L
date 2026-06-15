@@ -30,28 +30,45 @@ def _env(key, default):
 # =====================================================
 WWW_DIR = _env('WWW_DIR', '/home/ubuntu/3l-server')
 DATA_DIR = _env('DATA_DIR', '/home/ubuntu/data/3l')
+CONFIG_DIR = os.path.join(DATA_DIR, 'config')
+COMPUTED_DIR = os.path.join(DATA_DIR, 'computed')
 
 # =====================================================
-# 数据文件路径
+# 数据文件路径（旧JSON已迁移至DB，路径保留作空回退）
 # =====================================================
-ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
-WATCHLIST_PATH = os.path.join(DATA_DIR, 'watchlist.json')
-INDUSTRY_MAP_PATH = os.path.join(DATA_DIR, 'stock_industry_map.json')
-SUB_SECTOR_CLUSTERS_PATH = os.path.join(DATA_DIR, 'sub_sector_clusters.json')
-FINANCIAL_CACHE_PATH = os.path.join(DATA_DIR, 'financial_data_cache.json')
-PROFIT_QUALITY_PATH = os.path.join(DATA_DIR, 'profit_quality_results.json')
-INDEX_DATA_PATH = os.path.join(DATA_DIR, 'index_sh_data.json')
-SECTOR_DAILY_PATH = os.path.join(DATA_DIR, 'sector_daily.json')
-INDUSTRY_LEADERS_PATH = os.path.join(DATA_DIR, 'industry_leaders.json')
-WATCHED_INDUSTRIES_PATH = os.path.join(DATA_DIR, 'watched_industries.json')
-LATEST_SCAN_PATH = os.path.join(DATA_DIR, 'latest_scan_result.json')
-ALL_CODES_PATH = os.path.join(DATA_DIR, 'all_stock_codes.json')
-PINYIN_PATH = os.path.join(DATA_DIR, 'pinyin_initials.json')
-LOGIC_TRACKING_PATH = os.path.join(DATA_DIR, 'logic_tracking.json')
-ON_DEMAND_CACHE_PATH = os.path.join(DATA_DIR, 'stock_on_demand_cache.json')
+ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')   # →DB（文件已删）
+INDEX_DATA_PATH = os.path.join(DATA_DIR, 'index_sh_data.json')    # →DB（文件已删）
+SECTOR_DAILY_PATH = os.path.join(DATA_DIR, 'sector_daily.json')   # →DB（待迁移）
+ALL_CODES_PATH = os.path.join(DATA_DIR, 'all_stock_codes.json')   # 代码缓存（JSON保留）
+
+# 用户配置（config/）
+WATCHLIST_PATH = os.path.join(CONFIG_DIR, 'watchlist.json')
+WATCHED_INDUSTRIES_PATH = os.path.join(CONFIG_DIR, 'watched_industries.json')
+HOLDINGS_PATH = os.path.join(CONFIG_DIR, 'holdings.json')
+TRADES_PATH = os.path.join(CONFIG_DIR, 'trades.json')
+MANUAL_TREND_PATH = os.path.join(CONFIG_DIR, 'manual_trend.json')
+MAINLINES_CACHE_PATH = os.path.join(CONFIG_DIR, 'mainlines_cache.json')
+REVIEW_DATA_PATH = os.path.join(CONFIG_DIR, 'review_data.json')
+
+# 计算结果（computed/）
+INDUSTRY_MAP_PATH = os.path.join(COMPUTED_DIR, 'stock_industry_map.json')
+SUB_SECTOR_CLUSTERS_PATH = os.path.join(COMPUTED_DIR, 'sub_sector_clusters.json')
+FINANCIAL_CACHE_PATH = os.path.join(COMPUTED_DIR, 'financial_data_cache.json')
+PROFIT_QUALITY_PATH = os.path.join(COMPUTED_DIR, 'profit_quality.json')
+INDUSTRY_LEADERS_PATH = os.path.join(COMPUTED_DIR, 'industry_leaders.json')
+LATEST_SCAN_PATH = os.path.join(COMPUTED_DIR, 'scan_result.json')
+LOGIC_TRACKING_PATH = os.path.join(COMPUTED_DIR, 'logic_tracking.json')
+SOURCE_HEALTH_PATH = os.path.join(COMPUTED_DIR, 'source_health.json')
+KEY_POINTS_DIR = os.path.join(COMPUTED_DIR, 'key_points')
+
+# 概念映射（待删→DB）
 CONCEPT_LIST_PATH = os.path.join(DATA_DIR, 'map', 'concept_list.json')
 STOCK_CONCEPT_MAP_PATH = os.path.join(DATA_DIR, 'map', 'stock_concept.json')
 CONCEPT_NAME_MAPPING_PATH = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.json')
+
+# 运行时缓存（cache/）
+
+# 前端公开数据
 SCRIPTS_DIR = os.path.join(WWW_DIR, 'scripts')
 
 # =====================================================
@@ -59,7 +76,7 @@ SCRIPTS_DIR = os.path.join(WWW_DIR, 'scripts')
 # =====================================================
 CACHE_DIR = os.path.join(DATA_DIR, 'cache')
 ANALYSIS_CACHE_PATH = os.path.join(CACHE_DIR, 'watchlist_analysis_cache.json')
-KEY_POINTS_DIR = os.path.join(DATA_DIR, 'key_points')
+ON_DEMAND_CACHE_PATH = os.path.join(CACHE_DIR, 'stock_on_demand_cache.json')
 
 # =====================================================
 # 知识库
@@ -71,10 +88,7 @@ TRADING_TIPS_DIR = os.path.join(KB_BASE, 'trading_tips')
 # 私人数据（持仓、交易、复盘存档）
 # =====================================================
 PRIVATE_DIR = os.path.join(DATA_DIR, 'private')
-HOLDINGS_PATH = os.path.join(PRIVATE_DIR, 'holdings.json')
-TRADES_PATH = os.path.join(PRIVATE_DIR, 'trades.json')
 REVIEW_ARCHIVE_DIR = os.path.join(PRIVATE_DIR, 'review_archive')
-MANUAL_TREND_PATH = os.path.join(PRIVATE_DIR, 'manual_trend_stocks.json')
 BT_RESULTS_PATH = os.path.join(WWW_DIR, 'files', 'buy_signal_backtest_results.json')
 
 # =====================================================
@@ -83,21 +97,17 @@ BT_RESULTS_PATH = os.path.join(WWW_DIR, 'files', 'buy_signal_backtest_results.js
 PUBLIC_DIR = os.path.join(WWW_DIR, 'data', 'public')
 CHARTS_DIR = os.path.join(PUBLIC_DIR, 'charts')
 FILES_DIR = os.path.join(PUBLIC_DIR, 'files')
+PINYIN_PATH = os.path.join(PUBLIC_DIR, 'pinyin.json')
 
 # =====================================================
 # 复盘图表
 # =====================================================
 REVIEW_CHARTS_DIR = CHARTS_DIR
-REVIEW_DATA_PATH = os.path.join(PRIVATE_DIR, 'review_data.json')
-
-# 主线缓存（每日复盘时写入一次，供趋势候选等模块读取）
-MAINLINES_CACHE_PATH = os.path.join(PRIVATE_DIR, 'mainlines_cache.json')
 
 # =====================================================
 # 数据源架构（2026-06-07 新增） — 多仓库+抽象层
 # =====================================================
 SOURCES_DIR = os.path.join(DATA_DIR, 'sources')    # 数据源独立仓库根目录
-SOURCE_HEALTH_PATH = os.path.join(DATA_DIR, 'source_health.json')  # 数据源健康状态
 
 # 各数据源仓库路径
 SOURCES_EM_DIR = os.path.join(SOURCES_DIR, 'em')       # EM仓(push2test)
@@ -117,6 +127,21 @@ SOURCES_THS_SECTOR_DAILY = os.path.join(SOURCES_THS_DIR, 'sector_daily.json')
 # 可选值: 'ths'（同花顺，当前主源）| 'eastmoney'（东财push2test，备源）
 # =====================================================
 CONCEPT_DATA_SOURCE = 'ths'
+
+# =====================================================
+# Tushare Pro 配置（2026-06-14 新增）
+# 从 .env 读取，不硬编码
+# =====================================================
+TUSHARE_TOKEN = _env('TUSHARE_TOKEN', '')
+TUSHARE_TOKEN_HIGH = _env('TUSHARE_TOKEN_HIGH', '') or TUSHARE_TOKEN
+TUSHARE_PROXY_URL = _env('TUSHARE_PROXY_URL', '')
+
+# MySQL 数据库配置
+MYSQL_HOST = _env('MYSQL_HOST', 'localhost')
+MYSQL_PORT = int(_env('MYSQL_PORT', '3306'))
+MYSQL_USER = _env('MYSQL_USER', 'tushare')
+MYSQL_PASSWORD = _env('MYSQL_PASSWORD', 'tushare_pass')
+MYSQL_DATABASE = _env('MYSQL_DATABASE', 'tushare')
 
 # =====================================================
 # 服务器配置

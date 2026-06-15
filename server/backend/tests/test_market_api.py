@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 """测试大盘市场数据路由"""
 import pytest
 from unittest.mock import MagicMock, patch
-from backend.core.data_layer import INDEX_CODES
+from backend.data_access.data_layer import INDEX_CODES
 
 
 class TestMarketApi:
@@ -20,7 +20,7 @@ class TestMarketApi:
         from backend.api.market import _handle_market
         _handle_market(mock_h, path)
 
-    @patch('backend.core.data_layer.get_index_klines')
+    @patch('backend.data_access.data_layer.get_index_klines')
     @patch('backend.services.review_compute_service.judge_peak_valley')
     @patch('backend.services.review_compute_service.fetch_market_quote')
     def test_no_code_defaults_to_985(self, mock_quote, mock_judge, mock_klines, mock_server):
@@ -37,7 +37,7 @@ class TestMarketApi:
         # 验证 get_index_klines 被无参调用（默认 000985）
         mock_klines.assert_called_once()
 
-    @patch('backend.core.data_layer.get_index_klines')
+    @patch('backend.data_access.data_layer.get_index_klines')
     @patch('backend.services.review_compute_service.judge_peak_valley')
     @patch('backend.services.review_compute_service.fetch_market_quote')
     def test_code_param_passed_to_get_index_klines(self, mock_quote, mock_judge, mock_klines, mock_server):
@@ -53,7 +53,7 @@ class TestMarketApi:
 
         mock_klines.assert_called_once_with('000001')
 
-    @patch('backend.core.data_layer.get_index_klines')
+    @patch('backend.data_access.data_layer.get_index_klines')
     @patch('backend.services.review_compute_service.judge_peak_valley')
     @patch('backend.services.review_compute_service.fetch_market_quote')
     def test_unknown_code_returns_fallback(self, mock_quote, mock_judge, mock_klines, mock_server):

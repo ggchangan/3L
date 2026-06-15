@@ -8,10 +8,12 @@ from collections import OrderedDict
 from datetime import datetime
 
 # 从 config 读取路径（支持环境变量覆盖）
-from backend import config
+from backend.core import config
 
 WWW_DIR = config.WWW_DIR
-DATA_PATH = config.ALL_STOCKS_PATH
+# DB读取（不再走 JSON）
+from backend.data_access.data_layer import get_all_stocks_db as _get_stocks_db
+DATA_PATH = None
 SCAN_PATH = config.LATEST_SCAN_PATH
 HOLDINGS_PATH = config.HOLDINGS_PATH
 OUT_DIR = config.CHARTS_DIR
@@ -220,14 +222,9 @@ def gen_svg(name, code, klines, kps, output_path):
 
 
 def main():
-    print("📂 读取数据...")
-    if not os.path.exists(DATA_PATH):
-        print(f"❌ {DATA_PATH} 不存在")
-        return
-    with open(DATA_PATH) as f:
-        data = json.load(f)
-    stocks = data.get('stocks', {})
-
+    print("📂 从DB读取数据...")
+    stocks = _get_stocks_db()
+    stocks.pop('last_updated', None)
     all_codes = {}
     for sec, sec_stocks in stocks.items():
         for code, klines in sec_stocks.items():

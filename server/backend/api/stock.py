@@ -47,7 +47,7 @@ def _get_stock_trading_system(code):
             break
     raw_code = raw_code[-6:] if len(raw_code) >= 6 else raw_code
     try:
-        from backend.config import MANUAL_TREND_PATH
+        from backend.core.config import MANUAL_TREND_PATH
         import json
         with open(MANUAL_TREND_PATH, 'r', encoding='utf-8') as f:
             manual = json.load(f)

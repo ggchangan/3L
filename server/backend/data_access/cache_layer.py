@@ -8,7 +8,7 @@
 - 支持 Mock（测试注入）
 
 用法:
-    from backend.core.cache_layer import cache
+    from backend.data_access.cache_layer import cache
     data = cache.get('all_stocks', loader_func, ttl=30)
     cache.invalidate('all_stocks')
 """
