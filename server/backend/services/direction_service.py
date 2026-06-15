@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 DATA_DIR = _DATA_DIR  # 暴露给测试
 DIRECTIONS_FILE = os.environ.get('DIRECTIONS_PATH',
-                                 os.path.join(DATA_DIR, 'directions.json'))
+                                 os.path.join(DATA_DIR, 'config', 'directions.json'))
 
 # ── 概念数据路径 ──
 CONCEPT_LIST_PATH = os.path.join(DATA_DIR, 'map', 'concept_list.json')

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-盘中买点扫描 - 每1小时运行一次
+盘中买点扫描 - 每15分钟运行一次
 使用 buy_point_detection.py（统一算法），但用腾讯实时行情替代缓存数据
 扫描完成后自动更新买点股票的SVG图表（含当天数据）
 """
@@ -306,21 +306,34 @@ def _estimate_full_day_volume(current_vol, now=None):
 def _parallel_fetch_klines(stocks, fetch_fn=None, max_workers=10):
     """线程池并行获取所有股票的K线
 
-    瓶颈是腾讯行情 API（每个请求~0.3-0.5s），269只串行约2min，
-    并行后约20-30s。单只股票抓取失败只跳过不影响整体。
+    优化：先批量从 MySQL 预取所有历史K线（1次查询），
+    并行时只调腾讯 API 获取实时行情（≈12s）。
 
     Args:
         stocks: [{code, direction, name}, ...]
-        fetch_fn: 可注入 mock 用于测试，默认 get_realtime_kline
+        fetch_fn: 可注入 mock 用于测试，默认 _fetch_with_cached_stocks
         max_workers: 并行数（默认10）
 
     Returns:
         [{code, direction, name, klines}, ...]
         只返回 klines 长度 >= 30 的股票，保持输入顺序。
     """
+
+    # 预取全部历史K线（MySQL 1次批量查询 ≈4s）
+    log.info('批量预取全部历史K线...')
+    from threel_core.data_layer import get_all_stocks
+    all_stocks = get_all_stocks(limit=60)
+    # 构建 code -> klines 快速查找表
+    cache = {}
+    for direction, codes in all_stocks.items():
+        if direction == 'last_updated':
+            continue
+        for code, klines in codes.items():
+            cache[code] = klines
+    log.info('历史K线预取完成: %d只', len(cache))
+
     if fetch_fn is None:
-        from backend.core.buy_point_detection import get_realtime_kline
-        fetch_fn = get_realtime_kline
+        fetch_fn = _fetch_realtime_only
 
     total = len(stocks)
     results = [None] * total
@@ -329,7 +342,9 @@ def _parallel_fetch_klines(stocks, fetch_fn=None, max_workers=10):
 
     def _fetch(i, s):
         try:
-            klines = fetch_fn(s['code'], s['direction'])
+            code = s['code']
+            # 用缓存的历史K线，只拿腾讯实时行情
+            klines = fetch_fn(code, s['direction'], cache.get(code, []))
             return i, s, klines, None
         except Exception as e:
             return i, s, None, e
@@ -355,6 +370,15 @@ def _parallel_fetch_klines(stocks, fetch_fn=None, max_workers=10):
 
     log.info('并行抓取完成: %d只可用, %d只跳过/失败', len([r for r in results if r]), errors)
     return [r for r in results if r is not None]
+
+
+def _fetch_realtime_only(code, direction, cached_klines):
+    """只调腾讯 API 获取实时行情，合并到缓存的历史K线
+
+    委托给 data_source.get_realtime_kline_tencent()
+    """
+    from backend.data_access.data_source import get_realtime_kline_tencent
+    return get_realtime_kline_tencent(code, cached_klines)
 
 
 def main():

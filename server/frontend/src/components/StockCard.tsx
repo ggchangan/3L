@@ -73,18 +73,26 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
   // 板块对比标识（个股 vs 板块 5日涨幅）
   const vsSector = (s as any).vs_sector_5d
   const sectorChg5d = (s as any).sector_chg_5d
-  let vsSectorContent = null
-  if (vsSector !== undefined && vsSector !== null) {
-    const isWeak = vsSector < -3
-    vsSectorContent = (
-      <div className="field" style={{ marginTop: 2 }}>
-        <span className="l">板块对比:</span>
-        <span className="v" style={{ color: isWeak ? '#ff9800' : '#888', fontSize: 11 }}>
-          {isWeak ? '⚠️ ' : ''}跑赢板块 {vsSector >= 0 ? '+' : ''}{vsSector.toFixed(1)}%
-          {isWeak ? ' 偏弱' : ''}
-        </span>
-      </div>
-    )
+  // 板块信息行：名称 + 涨跌幅 + 板块对比合并为一行
+  let sectorLine: React.ReactNode = null
+  const secName = s.sector || s.direction || ''
+  if (secName) {
+    const parts: React.ReactNode[] = []
+    parts.push(<span key="name" className="v" style={{ color: '#aaa', fontSize: 11 }}>{secName}</span>)
+    if (s.sector_chg != null) {
+      parts.push(<span key="chg" style={{ color: s.sector_chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginLeft: 4 }}>{s.sector_chg >= 0 ? '+' : ''}{s.sector_chg.toFixed(2)}%</span>)
+    }
+    if (vsSector !== undefined && vsSector !== null && vsSector !== '') {
+      const val = typeof vsSector === 'number' ? vsSector : Number(vsSector)
+      const isWeak = val < -3
+      parts.push(<span key="vs" style={{ color: isWeak ? '#ff9800' : '#888', fontSize: 10, marginLeft: 4 }}>| {isWeak ? '⚠️' : ''}比板块 {val >= 0 ? '+' : ''}{val.toFixed(1)}%{isWeak ? ' 偏弱' : ''}</span>)
+    }
+    if (s.direction) {
+      parts.push(<span key="dir" style={{ color: '#555', margin: '0 4px' }}>|</span>)
+      parts.push(<span key="dir-label" className="l" style={{ fontSize: 11 }}>方向:</span>)
+      parts.push(<span key="dir-val" className="v" style={{ color: '#4ecdc4', fontSize: 11, marginLeft: 2 }}>{s.direction}</span>)
+    }
+    sectorLine = <div className="field" style={{ marginTop: 2 }}><span className="l" style={{ fontSize: 11 }}>板块:</span> {parts}</div>
   }
 
   // 结论
@@ -146,13 +154,7 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
         <div className="field"><span className="l">阶段:</span> <span className="v" style={{ color: stageColor, fontWeight: 'bold' }}>{icon} {s.stage || '--'}</span></div>
         {bpContent}
         {slContent}
-        {vsSectorContent}
-        <div className="field">
-          <span className="l">板块:</span>
-          <span className="v" style={{ color: '#aaa', fontSize: 11 }}>{s.sector || '--'}</span>
-          {s.sector_chg != null ? <span style={{ color: s.sector_chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginLeft: 4 }}>{s.sector_chg >= 0 ? '+' : ''}{s.sector_chg.toFixed(2)}%</span> : null}
-          {s.direction ? <><span style={{ color: '#555', margin: '0 4px' }}>|</span><span className="l">方向:</span> <span className="v" style={{ color: '#4ecdc4', fontSize: 11 }}>{s.direction}</span></> : null}
-        </div>
+        {sectorLine}
         {/* 机会类型标注 */}
         {(() => {
           const secName = s.sector || s.direction || ''
@@ -176,11 +178,11 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
             <span className="v" style={{ color: s.mainline_level === '主线' ? '#e94560' : s.mainline_level === '次级主线' ? '#ffd700' : '#666', fontSize: 11 }}>{s.mainline_level}</span>
           </div>
         ) : null}
-        <div className="field">
-          <span className="l" style={{ cursor: 'pointer', color: '#4ecdc4' }} onClick={() => { setChartEverShown(true); setShowChart(v => !v); }}>📊</span>
-        </div>
       </div>
-      <div style={{ marginTop: 2, fontSize: 11, color: conclusionColor, padding: '2px 0' }}>💡 {conclusion}</div>
+      <div style={{ marginTop: 2, fontSize: 11, color: conclusionColor, padding: '2px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span>💡 {conclusion}</span>
+        <span style={{ cursor: 'pointer', color: '#4ecdc4', fontSize: 13 }} onClick={() => { setChartEverShown(true); setShowChart(v => !v); }}>📊</span>
+      </div>
 
       {/* 融合判定信号显示 */}
       {s.triggered_signals && s.triggered_signals.length > 0 && (

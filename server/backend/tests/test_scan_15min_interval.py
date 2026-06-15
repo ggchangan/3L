@@ -398,7 +398,7 @@ class TestParallelKlineFetch:
             {'code': '000002', 'direction': '房地产', 'name': '万科A'},
         ]
 
-        def fake_klines(code, direction):
+        def fake_klines(code, direction, cached_klines=None):
             """模拟 get_realtime_kline 返回，35条K线满足>=30条件"""
             return [{'date': '2026-06-12', 'close': 10.0, 'volume': 1000}] * 35
 
@@ -419,7 +419,7 @@ class TestParallelKlineFetch:
         ]
         call_count = [0]
 
-        def fake_klines(code, direction):
+        def fake_klines(code, direction, cached_klines=None):
             call_count[0] += 1
             if code == '999999':
                 return []  # K线不足30天，跳过
@@ -434,7 +434,7 @@ class TestParallelKlineFetch:
         from backend.core.scan_buy_signals import _parallel_fetch_klines
         stocks = [{'code': f'{300+i}', 'direction': '半导体', 'name': f'股{i}'} for i in range(5)]
 
-        def fake_klines(code, direction):
+        def fake_klines(code, direction, cached_klines=None):
             k = [{'date': '2026-06-12', 'close': float(code[-3:]), 'volume': 1000}] * 35
             return k
 
@@ -452,7 +452,7 @@ class TestParallelKlineFetch:
         ]
         call_count = [0]
 
-        def fake_klines(code, direction):
+        def fake_klines(code, direction, cached_klines=None):
             call_count[0] += 1
             if code == '000002':
                 raise ConnectionError('模拟网络超时')

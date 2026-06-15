@@ -12,7 +12,27 @@ from backend.core.config import DATA_DIR
 
 
 def _load_index_data():
-    """读 index_sh_data.json（多指数格式），返回 {closes, highs, lows, vols, last_close}"""
+    """读中证全指K线，返回 {closes, highs, lows, vols, last_close}
+
+    优先从 MySQL 读取（data_layer），回退 JSON 文件。
+    """
+    # 优先从 data_layer（MySQL）读取
+    try:
+        from backend.data_access.data_layer import get_index_klines
+        klines = get_index_klines('000985')
+        if klines and len(klines) >= 30:
+            closes = [k['close'] for k in klines]
+            highs = [k['high'] for k in klines]
+            lows = [k['low'] for k in klines]
+            vols = [k.get('volume', 0) for k in klines]
+            return {
+                'closes': closes, 'highs': highs, 'lows': lows, 'vols': vols,
+                'last_close': closes[-1], 'klines_count': len(klines),
+            }
+    except Exception:
+        pass
+
+    # 回退：读旧 JSON 文件
     path = os.path.join(DATA_DIR, 'index_sh_data.json')
     if not os.path.isfile(path):
         return None

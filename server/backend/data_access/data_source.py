@@ -1788,3 +1788,63 @@ def verify_data_coverage(verbose=True):
         'warn_count': warn_count,
         'now': now,
     }
+
+
+# ═══════════════════════════════════════════════════════
+# 实时行情（Tencent API）- 盘中唯一来源
+# ═══════════════════════════════════════════════════════
+
+def get_realtime_kline_tencent(code, cached_klines=None):
+    """通过腾讯行情 API 获取实时K线数据，合并到缓存的日K线
+
+    腾讯 qt.gtimg.cn 是盘中实时行情的最佳来源（即时更新、免费）。
+    Tushare daily API 只盘后更新，无法替代盘中实时。
+
+    Args:
+        code: 6位股票代码
+        cached_klines: 可选，已有的历史K线列表，实时数据会合并更新到最新条或追加
+
+    Returns:
+        [{date, open, close, high, low, volume}, ...]
+    """
+    import requests
+    from datetime import datetime
+
+    klines = list(cached_klines) if isinstance(cached_klines, list) else []
+
+    qcode = code
+    if not code.startswith(('sh', 'sz', 'SH', 'SZ')):
+        qcode = ('sh' if code.startswith(('6', '9')) else 'sz') + code
+    try:
+        r = requests.get(f'https://qt.gtimg.cn/q={qcode}',
+                         headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
+                         timeout=5)
+        line = r.text
+        try:
+            line = line.decode('gbk')
+        except:
+            pass
+        fields = line.split('"')[1].split('~') if '"' in line else []
+        if len(fields) >= 40:
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            today_vol = (int(fields[6]) if fields[6].isdigit() else 0)
+            if klines and str(klines[-1].get('date', '')).replace('-', '') == datetime.now().strftime('%Y%m%d'):
+                klines[-1]['close'] = float(fields[3]) if fields[3] else klines[-1]['close']
+                klines[-1]['high'] = max(float(fields[33]) if fields[33] else 0, klines[-1]['high'])
+                klines[-1]['low'] = min(float(fields[34]) if fields[34] else float('inf'), klines[-1]['low'])
+                klines[-1]['volume'] = today_vol or klines[-1]['volume']
+            else:
+                last_close = klines[-1]['close'] if klines else 0
+                klines.append({
+                    'date': today_str,
+                    'open': float(fields[5]) if fields[5] else last_close,
+                    'close': float(fields[3]) if fields[3] else last_close,
+                    'high': float(fields[33]) if fields[33] else last_close,
+                    'low': float(fields[34]) if fields[34] else last_close,
+                    'volume': today_vol or 0,
+                })
+    except:
+        pass
+
+    return klines
+
