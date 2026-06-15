@@ -139,7 +139,7 @@ export default function Monitor() {
                 if (toggle) toggle.textContent = body.style.display === 'none' ? '▶' : '▼'
               }
             }}>
-              🎯 盘中机会 <span className="badge">每1小时扫描</span>
+              🎯 盘中机会 <span className="badge">每15分钟扫描</span>
               <span className="collapse-indicator ib-toggle">▼</span>
             </div>
             <div className="ib-body">

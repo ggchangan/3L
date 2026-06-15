@@ -99,7 +99,7 @@ def _run_scan_sync(cache_file=None):
     try:
         r = subprocess.run(
             [sys.executable, scan_file],
-            capture_output=True, text=True, timeout=120
+            capture_output=True, text=True, timeout=900
         )
         # stdout 可能混有日志行，提取最后一行JSON
         data = None
