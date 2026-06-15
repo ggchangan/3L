@@ -175,6 +175,8 @@ def _flatten_stocks(sector_map):
     """{sector: {code: [klines]}} → {code: {sector, klines, name}}"""
     result = {}
     for sector, codes in sector_map.items():
+        if not isinstance(codes, dict):
+            continue
         for code, klines in codes.items():
             name = klines[0].get('name', '') if klines else ''
             result[code] = {'sector': sector, 'klines': klines, 'name': name}
