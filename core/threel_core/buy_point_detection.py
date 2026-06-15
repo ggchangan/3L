@@ -394,6 +394,10 @@ def detect_huicai_buy_point(code, date_str, all_stocks):
     if not kls:
         return None
 
+    # 确保K线升序（旧→新），降序则反转
+    if kls and len(kls) >= 2 and str(kls[0].get('date', '')) > str(kls[-1].get('date', '')):
+        kls = list(reversed(kls))
+
     idx = find_idx(date_str, kls)
     if idx < 30:
         return None
@@ -473,7 +477,11 @@ def detect_buy_point(code, date_str, all_stocks, market_position='', main_lines=
     resolved_code, kls = _resolve_code(code, all_stocks)
     if not kls:
         return None
-    
+
+    # 确保K线升序（旧→新），降序则反转
+    if kls and len(kls) >= 2 and str(kls[0].get('date', '')) > str(kls[-1].get('date', '')):
+        kls = list(reversed(kls))
+
     idx = find_idx(date_str, kls)
     if idx < 30:
         return None
