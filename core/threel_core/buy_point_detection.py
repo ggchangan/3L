@@ -904,8 +904,8 @@ def get_realtime_kline(code, direction):
         fields = line.split('"')[1].split('~') if '"' in line else []
         if len(fields) >= 40:
             today_str = datetime.now().strftime('%Y-%m-%d')
-            # 腾讯fields[6]单位是手，缓存单位是股，×100统一
-            today_vol = (int(fields[6]) if fields[6].isdigit() else 0) * 100
+            # 腾讯fields[6]单位是手，一起统一为手
+            today_vol = (int(fields[6]) if fields[6].isdigit() else 0)
             if klines and str(klines[-1].get('date', '')).replace('-', '') == datetime.now().strftime('%Y%m%d'):
                 klines[-1]['close'] = float(fields[3]) if fields[3] else klines[-1]['close']
                 klines[-1]['high'] = max(float(fields[33]) if fields[33] else 0, klines[-1]['high'])
