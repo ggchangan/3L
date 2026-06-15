@@ -321,14 +321,14 @@ def generate_daily_review(date_str=None):
         index_klines = [k for k in index_klines if k['date'] <= date_str]
     today_quote = fetch_market_quote()
 
-    print(f"[3L复盘] K线数据: 共{len(index_klines)}天, 最新={index_klines[-1]['date'] if index_klines else '无'}")
+    print(f"[3L复盘] K线数据: 共{len(index_klines)}天, 最新={index_klines[0]['date'] if index_klines else '无'}")
 
     # ① 大盘周期判定
     print("[3L复盘] ① 判定大盘周期(V5)...")
     market_cycle = judge_peak_valley(index_klines)
     if index_klines:
-        last = index_klines[-1]
-        prev = index_klines[-2] if len(index_klines) >= 2 else None
+        last = index_klines[0]
+        prev = index_klines[1] if len(index_klines) >= 2 else None
         market_cycle['price'] = f"{last['close']:.2f}"
         if prev:
             chg_pct = (last['close'] - prev['close']) / prev['close'] * 100
@@ -574,8 +574,8 @@ def compute_review_real_time(date_str=None):
     # ① 大盘周期判定
     market_cycle = judge_peak_valley(index_klines)
     if index_klines:
-        last = index_klines[-1]
-        prev = index_klines[-2] if len(index_klines) >= 2 else None
+        last = index_klines[0]
+        prev = index_klines[1] if len(index_klines) >= 2 else None
         market_cycle['price'] = f"{last['close']:.2f}"
         if prev:
             chg_pct = (last['close'] - prev['close']) / prev['close'] * 100
