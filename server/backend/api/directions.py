@@ -95,11 +95,22 @@ def _load_board_constituents():
 
 
 def _load_all_a_stocks():
-    """加载全量A股股票列表 {code: name}"""
+    """加载全量A股股票列表 {code: name}，缺失时自动从 all_stock_codes.json 生成"""
     path = os.path.join(DATA_DIR, 'all_a_stocks.json')
     if os.path.isfile(path):
         with open(path) as f:
             return json.load(f)
+    # 从 all_stock_codes.json 自动生成
+    src = os.path.join(DATA_DIR, 'all_stock_codes.json')
+    if os.path.isfile(src):
+        try:
+            data = json.load(open(src))
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
+            print(f'[directions] ⚡ 自动生成 all_a_stocks.json ({len(data)}只)', flush=True)
+            return data
+        except Exception:
+            pass
     return {}
 
 
@@ -229,6 +240,19 @@ def _handle_search_stocks(h, path):
 
     if not matched or len(matched) < 20:
         pinyin_path = os.path.join(DATA_DIR, 'pinyin_initials.json')
+        if not os.path.isfile(pinyin_path):
+            # 缺失时从 names 自动生成拼音首字母映射
+            try:
+                from pypinyin import pinyin as _py, Style as _Style
+                if names:
+                    py_map = {}
+                    for c, n in names.items():
+                        py_map[c] = ''.join(p[0][0].upper() for p in _py(n, style=_Style.FIRST_LETTER))
+                    with open(pinyin_path, 'w', encoding='utf-8') as _f:
+                        json.dump(py_map, _f, ensure_ascii=False, separators=(',', ':'))
+                    print(f'[directions] ⚡ 自动生成 pinyin_initials.json ({len(py_map)}只)', flush=True)
+            except Exception:
+                pass
         if os.path.isfile(pinyin_path):
             try:
                 pinyin_map = json.load(open(pinyin_path))
