@@ -7,10 +7,17 @@ for p in [_server_root]:
         sys.path.insert(0, p)
 
 import pytest
+from backend.data_access.tushare_db import is_db_available
+
+_DB_AVAILABLE = is_db_available()
+_DB_REASON = "MySQL not available in CI"
+
 
 @pytest.fixture
 def db():
     """使用 MySQL tushare 数据库"""
+    if not _DB_AVAILABLE:
+        pytest.skip(_DB_REASON)
     from backend.data_access.tushare_db import TushareDB
     _db = TushareDB()
     yield _db

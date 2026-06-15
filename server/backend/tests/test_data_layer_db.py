@@ -8,18 +8,23 @@ for p in [_server_root]:
 
 import pytest
 from backend.data_access.data_layer import get_all_stocks, get_all_stocks_db
-from backend.data_access.tushare_db import TushareDB
+from backend.data_access.tushare_db import TushareDB, is_db_available
 
 
+@pytest.fixture
+def db():
+    """MySQL TushareDB 实例（懒加载）"""
+    return TushareDB()
+
+
+@pytest.mark.skipif(not is_db_available(), reason="MySQL not available in CI")
 class TestTushareDBIntegration:
     """验证 data_layer 从 DB 读数据与旧 JSON 格式兼容"""
 
-    db = TushareDB()
-
-    def test_query_stock_klines_batch_returns_formatted_klines(self):
+    def test_query_stock_klines_batch_returns_formatted_klines(self, db):
         """批量查询返回格式 {code: [{date, open, close, high, low, volume}, ...]}"""
         codes = ['000001', '600519']
-        result = self.db.query_stock_klines_batch(codes, limit=5)
+        result = db.query_stock_klines_batch(codes, limit=5)
         assert '000001' in result or '600519' in result, "应返回至少一只股票"
 
         for code, klines in result.items():
@@ -30,13 +35,13 @@ class TestTushareDBIntegration:
                     assert field in k, f"{code} K线缺少 {field}"
                 assert 'name' not in k, "name 由 data_layer 追加，batch 本身不返回"
 
-    def test_query_stock_klines_batch_handles_empty_codes(self):
+    def test_query_stock_klines_batch_handles_empty_codes(self, db):
         """空代码列表返回空 dict"""
-        assert self.db.query_stock_klines_batch([]) == {}
+        assert db.query_stock_klines_batch([]) == {}
 
-    def test_query_stock_klines_batch_mixed_exists_not_exists(self):
+    def test_query_stock_klines_batch_mixed_exists_not_exists(self, db):
         """在和不存在的代码混合查询"""
-        result = self.db.query_stock_klines_batch(['000001', '999999'], limit=3)
+        result = db.query_stock_klines_batch(['000001', '999999'], limit=3)
         assert '000001' in result, "存在的代码应返回K线"
         assert '999999' not in result, "不存在的代码不应返回"
 
@@ -109,12 +114,12 @@ class TestTushareDBIntegration:
             assert db_updated >= old_updated, \
                 f"DB({db_updated}) 应比 JSON({old_updated}) 更新或相同"
 
-    def test_code_to_ts_code_resolves_correctly(self):
+    def test_code_to_ts_code_resolves_correctly(self, db):
         """6位纯代码正确映射到 ts_code"""
         # 平安银行
-        ts = self.db.code_to_ts_code('000001')
-        assert ts == '000001.SZ' or self.db.query_one('stock_basic', symbol='000001') is not None
+        ts = db.code_to_ts_code('000001')
+        assert ts == '000001.SZ' or db.query_one('stock_basic', symbol='000001') is not None
 
         # 贵州茅台
-        ts = self.db.code_to_ts_code('600519')
+        ts = db.code_to_ts_code('600519')
         assert ts == '600519.SH'

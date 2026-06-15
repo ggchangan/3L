@@ -8,12 +8,17 @@ for p in [_server_root]:
 
 import pytest
 from unittest.mock import patch
-from backend.data_access.tushare_db import TushareDB
+from backend.data_access.tushare_db import TushareDB, is_db_available
+
+_DB_AVAILABLE = is_db_available()
+_DB_REASON = "MySQL not available in CI"
 
 
 @pytest.fixture
 def db():
     """MySQL TushareDB，用测试代码避免与实数据冲突"""
+    if not _DB_AVAILABLE:
+        pytest.skip(_DB_REASON)
     _db = TushareDB()
 
     # 填板块列表（用测试代码）
@@ -57,6 +62,8 @@ def db():
 @pytest.fixture
 def empty_db():
     """空 MySQL 数据库（用测试代码查不到数据）"""
+    if not _DB_AVAILABLE:
+        pytest.skip(_DB_REASON)
     return TushareDB()
 
 
@@ -91,9 +98,8 @@ class TestFetchFromTushareDB:
 
     def test_fetch_stock_klines_via_tushare(self, db):
         """验证从 Tushare DB 读取个股日线"""
-        # 直接用 TushareDB 验证，不走 data_source 的间接调用
-        from backend.data_access.tushare_db import TushareDB
-        result = TushareDB().query_stock_daily('600519.SH', limit=3)
+        # 用 fixture 注入的测试数据，不走 data_source 间接层
+        result = db.query_stock_daily('999999.TEST', limit=3)
         assert len(result) > 0
         assert 'date' in result[0]
         assert 'close' in result[0]

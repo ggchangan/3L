@@ -155,6 +155,21 @@ CREATE_INDEXES = {
 }
 
 
+def is_db_available() -> bool:
+    """检查 MySQL 是否可达（供测试跳过等外部使用）"""
+    try:
+        conn = pymysql.connect(
+            host=MYSQL_HOST, port=MYSQL_PORT,
+            user=MYSQL_USER, password=MYSQL_PASSWORD,
+            database=MYSQL_DATABASE, charset='utf8mb4',
+            connect_timeout=1,
+        )
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
 class TushareDB:
     """Tushare MySQL 数据库封装
 
@@ -175,10 +190,16 @@ class TushareDB:
         self.password = password or MYSQL_PASSWORD
         self.database = database or MYSQL_DATABASE
         self._conn = None
-        self._init_tables()
+        self._db_available = True
+        try:
+            self._init_tables()
+        except Exception:
+            self._db_available = False
 
     def _get_conn(self):
         """获取连接（懒加载，每次调用创建新连接）"""
+        if not self._db_available:
+            raise RuntimeError('MySQL 不可达 — TushareDB 初始化时连接失败')
         return pymysql.connect(
             host=self.host, port=self.port,
             user=self.user, password=self.password,
@@ -189,6 +210,7 @@ class TushareDB:
 
     def _init_tables(self):
         """建表+建索引（幂等）"""
+        conn = None
         try:
             conn = self._get_conn()
             with conn.cursor() as cur:
@@ -200,7 +222,8 @@ class TushareDB:
                     except Exception:
                         pass  # 索引已存在时忽略
         finally:
-            conn.close()
+            if conn:
+                conn.close()
 
     # ════════════════════════════════════════════════════════════
     # 批量写入
