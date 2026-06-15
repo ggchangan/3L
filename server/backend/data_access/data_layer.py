@@ -493,30 +493,8 @@ def get_holdings(user_id=1):
         [{code, name, direction, target_ratio, cost_price, stop_loss_price, sector}, ...]
     """
     try:
-        from backend.data_access.data_source import _get_tushare_db
-        db = _get_tushare_db()
-        if db:
-            rows = db.execute_raw(
-                "SELECT code, name, direction, target_ratio, cost_price, stop_loss_price, sector "
-                "FROM holdings WHERE user_id=%s AND is_active=1 ORDER BY code",
-                [user_id]
-            )
-            result = []
-            for r in rows:
-                item = {
-                    'code': r['code'],
-                    'name': r['name'],
-                    'direction': r['direction'],
-                    'target_ratio': float(r['target_ratio']) if r['target_ratio'] else 0,
-                }
-                if r['cost_price'] is not None:
-                    item['cost_price'] = float(r['cost_price'])
-                if r['stop_loss_price'] is not None:
-                    item['stop_loss_price'] = float(r['stop_loss_price'])
-                if r.get('sector'):
-                    item['sector'] = r['sector']
-                result.append(item)
-            return result
+        from backend.data_access.holdings_repo import get_holdings as _repo_get
+        return _repo_get(user_id)
     except Exception as e:
         log.warning('get_holdings DB查询失败(%s)，回退JSON', e)
     # 回退：旧 JSON 路径
@@ -531,35 +509,8 @@ def save_holdings(user_id, holdings_list):
         holdings_list: [{code, name, direction, target_ratio, cost_price, stop_loss_price, sector}, ...]
     """
     try:
-        from backend.data_access.data_source import _get_tushare_db
-        db = _get_tushare_db()
-        if not db:
-            raise RuntimeError('DB unavailable')
-        conn = db._get_conn()
-        try:
-            with conn.cursor() as cur:
-                # 删除旧持仓
-                cur.execute("DELETE FROM holdings WHERE user_id=%s", [user_id])
-                # 插入新持仓
-                for h in holdings_list:
-                    cur.execute(
-                        "INSERT INTO holdings(user_id, code, name, direction, target_ratio, cost_price, stop_loss_price, sector) "
-                        "VALUES(%s, %s, %s, %s, %s, %s, %s, %s)",
-                        [
-                            user_id,
-                            h.get('code', ''),
-                            h.get('name', ''),
-                            h.get('direction', ''),
-                            h.get('target_ratio', 0),
-                            h.get('cost_price') or None,
-                            h.get('stop_loss_price') or None,
-                            h.get('sector', ''),
-                        ]
-                    )
-                conn.commit()
-        finally:
-            conn.close()
-        return True
+        from backend.data_access.holdings_repo import save_holdings as _repo_save
+        return _repo_save(user_id, holdings_list)
     except Exception as e:
         log.warning('save_holdings DB写入失败(%s)，回退JSON', e)
         _save_json(HOLDINGS_PATH, holdings_list)
