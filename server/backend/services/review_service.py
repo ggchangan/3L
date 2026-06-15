@@ -192,8 +192,8 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
         latest_date = ''
         for sec, stocks in all_stocks_60d.items():
             for code, kls in stocks.items():
-                if kls and kls[-1]['date'] > latest_date:
-                    latest_date = kls[-1]['date']
+                if kls and kls[0]['date'] > latest_date:
+                    latest_date = kls[0]['date']
 
         scan_date = latest_date if latest_date else today_yyyymmdd
         ml_names = [l['name'] for l in mainline_data.get('lines', [])]
@@ -596,7 +596,10 @@ def compute_review_real_time(date_str=None):
 
     # ③ 扫描买点信号（只扫持仓股 + 启用方向自选股）
     all_stocks = get_all_stocks()
-    all_stocks_60d = all_stocks.get('stocks', {}) if isinstance(all_stocks, dict) else {}
+    # get_all_stocks() 返回 {方向: {code: [kline,...]}, 'last_updated': '...'}
+    # 过滤掉非 dict 字段（如 last_updated）
+    all_stocks_60d = {k: v for k, v in all_stocks.items()
+                      if isinstance(v, dict)} if isinstance(all_stocks, dict) else {}
     if not all_stocks_60d:
         if os.path.isfile(ALL_STOCKS_PATH):
             with open(ALL_STOCKS_PATH) as _f:
