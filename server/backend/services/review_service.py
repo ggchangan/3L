@@ -122,18 +122,10 @@ def load_review_data(date_str, existing, ww_dir):
     Returns: (holdings, buy_signals, all_stocks)
     """
     from backend.services.direction_service import get_active as get_active_dirs
-    from backend.data_access.data_layer import get_all_stocks
+    from backend.data_access.data_layer import get_all_stocks, get_holdings
 
-    holdings_file = os.path.join(DATA_DIR, 'private', 'holdings.json')
-    live_holdings = []
-    if os.path.isfile(holdings_file):
-        try:
-            with open(holdings_file) as f:
-                hdata = json.load(f)
-            live_holdings = hdata.get('holdings', [])
-        except Exception:
-            log.warning('review: silent skip')
-            pass
+    # 从 DB 读取持仓（user_id=1 默认用户）
+    live_holdings = get_holdings(1)
     holdings = live_holdings or existing.get('holdings', []) or existing.get('stocks', {}).get('stocks', [])
 
     buy_signals = []
@@ -611,16 +603,8 @@ def compute_review_real_time(date_str=None):
                 all_stocks_60d = json.load(_f).get('stocks', {})
 
     # 先加载持仓股，合并到扫描范围
-    holdings_file = os.path.join(DATA_DIR, 'private', 'holdings.json')
-    holdings = []
-    if os.path.isfile(holdings_file):
-        try:
-            with open(holdings_file) as f:
-                hdata = json.load(f)
-            holdings = hdata.get('holdings', [])
-        except Exception:
-            log.warning('review: silent skip')
-            pass
+    from backend.data_access.data_layer import get_holdings
+    holdings = get_holdings(1)
 
     buy_signals, all_stocks_60d = scan_buy_signals_if_needed(
         [], all_stocks_60d,
