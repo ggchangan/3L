@@ -318,7 +318,6 @@ def _parallel_fetch_klines(stocks, fetch_fn=None, max_workers=10):
         [{code, direction, name, klines}, ...]
         只返回 klines 长度 >= 30 的股票，保持输入顺序。
     """
-    import requests
 
     # 预取全部历史K线（MySQL 1次批量查询 ≈4s）
     log.info('批量预取全部历史K线...')
@@ -376,48 +375,10 @@ def _parallel_fetch_klines(stocks, fetch_fn=None, max_workers=10):
 def _fetch_realtime_only(code, direction, cached_klines):
     """只调腾讯 API 获取实时行情，合并到缓存的历史K线
 
-    与 get_realtime_kline() 逻辑一致，但跳过 MySQL 查询部分。
+    委托给 data_source.get_realtime_kline_tencent()
     """
-    import requests
-    from datetime import datetime
-
-    klines = list(cached_klines) if isinstance(cached_klines, list) else []
-
-    qcode = code
-    if not code.startswith(('sh', 'sz', 'SH', 'SZ')):
-        qcode = ('sh' if code.startswith(('6', '9')) else 'sz') + code
-    try:
-        r = requests.get(f'https://qt.gtimg.cn/q={qcode}',
-                         headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-                         timeout=5)
-        line = r.text
-        try:
-            line = line.decode('gbk')
-        except:
-            pass
-        fields = line.split('"')[1].split('~') if '"' in line else []
-        if len(fields) >= 40:
-            today_str = datetime.now().strftime('%Y-%m-%d')
-            today_vol = (int(fields[6]) if fields[6].isdigit() else 0) * 100
-            if klines and str(klines[-1].get('date', '')).replace('-', '') == datetime.now().strftime('%Y%m%d'):
-                klines[-1]['close'] = float(fields[3]) if fields[3] else klines[-1]['close']
-                klines[-1]['high'] = max(float(fields[33]) if fields[33] else 0, klines[-1]['high'])
-                klines[-1]['low'] = min(float(fields[34]) if fields[34] else float('inf'), klines[-1]['low'])
-                klines[-1]['volume'] = today_vol or klines[-1]['volume']
-            else:
-                last_close = klines[-1]['close'] if klines else 0
-                klines.append({
-                    'date': today_str,
-                    'open': float(fields[5]) if fields[5] else last_close,
-                    'close': float(fields[3]) if fields[3] else last_close,
-                    'high': float(fields[33]) if fields[33] else last_close,
-                    'low': float(fields[34]) if fields[34] else last_close,
-                    'volume': today_vol or 0,
-                })
-    except:
-        pass
-
-    return klines
+    from backend.data_access.data_source import get_realtime_kline_tencent
+    return get_realtime_kline_tencent(code, cached_klines)
 
 
 def main():
