@@ -331,13 +331,22 @@ def get_mainline_data(date_str):
     push2test_inds = push2test_data.industries if hasattr(push2test_data, 'industries') else {}
     # _push2test 是 cron 保存的当日涨跌幅快照，权威数据源
 
-    # 从本地板块K线数据计算20日涨幅（data_layer 唯一入口）
+    # 从 sector_daily.json 获取行业K线数据
     from backend.data_access.data_layer import get_sector_daily
     sector_data = get_sector_daily()
     industries_data = sector_data.get('industries', {})
     if not industries_data:
         print(f"[WARN] 本地板块数据为空（sector_daily.json 可能未更新）")
         return {'lines': [], 'secondary': [], 'industries': get_industry_rankings(), 'all_ranked': []}
+
+    # 对 K线不足20天的行业，从 DB（ths_daily）补全
+    from backend.data_access.data_layer import get_ths_industry_klines
+    ths_industries = get_ths_industry_klines(ths_type='I')
+    for name in industries_data:
+        if len(industries_data[name]) < 20 and name in ths_industries:
+            ths_klines = ths_industries[name]
+            if len(ths_klines) >= 20:
+                industries_data[name] = ths_klines
 
     # 导入概念波谷判定（复用至行业板块）
     from backend.services.concept_wave_service import judge_concept_wave as _judge_wave

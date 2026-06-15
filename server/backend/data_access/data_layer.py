@@ -299,6 +299,76 @@ def get_concept_klines(name_list: list) -> dict:
         return {}
 
 
+def get_ths_industry_klines(ths_type='I', limit=120):
+    """从 ths_daily 读取行业/概念K线数据
+
+    Args:
+        ths_type: 'I'=行业, 'N'=概念, 'BB'=板块
+        limit: 每行业最多K线条数
+
+    Returns:
+        {name: [{date, open, close, high, low, volume}, ...], ...}
+        名称与 sector_daily.json 的 industries/concepts 格式兼容
+    """
+    try:
+        from backend.data_access.data_source import _get_tushare_db
+        db = _get_tushare_db()
+        if not db:
+            return {}
+
+        # 查 ths_index 获取 ts_code → name 映射
+        idx_rows = db.execute_raw(
+            "SELECT ts_code, name FROM ths_index WHERE type=%s ORDER BY name",
+            [ths_type]
+        )
+        if not idx_rows:
+            return {}
+
+        ts_codes = [r['ts_code'] for r in idx_rows]
+        name_map = {r['ts_code']: r['name'] for r in idx_rows}
+
+        # 批量查 ths_daily
+        placeholders = ','.join(['%s'] * len(ts_codes))
+        rows = db.execute_raw(
+            f"SELECT ts_code, trade_date, open, high, low, close, vol "
+            f"FROM ths_daily WHERE ts_code IN ({placeholders}) "
+            f"ORDER BY ts_code, trade_date DESC",
+            ts_codes
+        )
+
+        # 按 ts_code 分组，每组取最新 limit 条
+        raw_groups = {}
+        for r in rows:
+            tc = r['ts_code']
+            if tc not in raw_groups:
+                raw_groups[tc] = []
+            if len(raw_groups[tc]) < limit:
+                raw_groups[tc].append(r)
+
+        # 转为 {name: [{date, open, close, high, low, volume}, ...]} 格式（升序）
+        result = {}
+        for tc, group in raw_groups.items():
+            name = name_map.get(tc, tc)
+            # 按 trade_date 升序（旧→新）
+            group.sort(key=lambda x: x['trade_date'])
+            klines = []
+            for r in group:
+                klines.append({
+                    'date': r['trade_date'],
+                    'open': float(r['open']) if r['open'] else 0,
+                    'close': float(r['close']) if r['close'] else 0,
+                    'high': float(r['high']) if r['high'] else 0,
+                    'low': float(r['low']) if r['low'] else 0,
+                    'volume': int(r['vol']) if r['vol'] else 0,
+                })
+            result[name] = klines
+
+        return result
+    except Exception as e:
+        log.warning('get_ths_industry_klines 失败: %s', e)
+        return {}
+
+
 # ====== 数据源验证 ======
 
 def verify_data_sources(verbose=False):
