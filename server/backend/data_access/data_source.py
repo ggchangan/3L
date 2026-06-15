@@ -339,23 +339,7 @@ def _fetch_ths_live_sector_ranking(date_str):
 
 
 # --- 快照源文件获取函数（路径由 CONCEPT_DATA_SOURCE 配置驱动） ---
-def _fetch_snapshot_sector_klines(sector_name, sector_type):
-    """从当前快照源文件获取单日K线（只有今日数据）"""
-    data = _load_json(_get_snapshot_source_path())
-    key = 'industries' if sector_type == 'industry' else 'concepts'
-    container = data.get(key, {})
-    entry = container.get(sector_name)
-    if entry and isinstance(entry, dict):
-        return [{
-            'date': entry.get('date', ''),
-            'open': entry.get('open', 0),
-            'close': entry.get('close', 0),
-            'high': entry.get('high', 0),
-            'low': entry.get('low', 0),
-            'volume': entry.get('volume', 0),
-            'change_pct': entry.get('change_pct', 0),
-        }]
-    return []
+
 
 def _fetch_ths_sector_ranking(date_str):
     data = _load_json(SOURCES_THS_SECTOR_DAILY)
@@ -388,14 +372,6 @@ def _fetch_ths_sector_klines(sector_name, sector_type):
 def _fetch_legacy_sector_ranking(date_str):
     data = _load_json(SECTOR_DAILY_PATH)
     return data if data else None
-
-def _fetch_legacy_sector_klines(sector_name, sector_type):
-    data = _load_json(SECTOR_DAILY_PATH)
-    key = 'industries' if sector_type == 'industry' else 'concepts'
-    result = data.get(key, {}).get(sector_name)
-    if result is None:
-        return None
-    return result
 
 # ════════════════════════════════════════════════════════════
 # 配置驱动的数据源选择
@@ -544,8 +520,6 @@ DATA_SOURCE_CHAINS = {
     'sector_klines': [
         ('tushare', lambda name, type_: _fetch_tushare_sector_klines(name, type_)),
         ('ths_sector', lambda name, type_: _fetch_ths_sector_klines(name, type_)),
-        ('snapshot_sector', lambda name, type_: _fetch_snapshot_sector_klines(name, type_)),
-        ('legacy_sector', lambda name, type_: _fetch_legacy_sector_klines(name, type_)),
     ],
     'concept_map': [
         ('em_sector', lambda: _fetch_em_concept_map()),
