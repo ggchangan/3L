@@ -16,7 +16,6 @@ from typing import Dict, List, Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from backend.core.config import (
-    SOURCES_EM_CONCEPT_MAP,
     STOCK_CONCEPT_MAP_PATH,
 )
 from backend.services.source_health import (
@@ -33,6 +32,8 @@ SECTOR_DAILY_PATH = os.path.join(DATA_DIR, 'sector_daily.json')
 SOURCES_EM_SECTOR_DAILY = os.path.join(DATA_DIR, 'sources', 'em', 'sector_daily.json')
 SOURCES_THS_SECTOR_DAILY = os.path.join(DATA_DIR, 'sources', 'ths', 'sector_daily.json')
 CONCEPT_DATA_SOURCE = 'ths'
+SOURCES_EM_CONCEPT_MAP = os.path.join(DATA_DIR, 'sources', 'em', 'concept_map.json')
+CONCEPT_NAME_MAPPING_PATH = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.json')
 
 # TushareDB 全局实例（懒加载）
 _TUSHARE_DB = None
@@ -771,7 +772,7 @@ def get_sector_constituents(sector_code: str) -> List[tuple]:
 
 def _load_concept_name_mapping():
     """加载系统概念名 → THS概念名的映射表"""
-    from backend.core.config import CONCEPT_NAME_MAPPING_PATH
+    # CONCEPT_NAME_MAPPING_PATH 已本地常量
     try:
         return _load_json(CONCEPT_NAME_MAPPING_PATH, {})
     except Exception:

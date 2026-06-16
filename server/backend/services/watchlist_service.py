@@ -4,8 +4,10 @@
 import json
 import os
 from backend.core import config as cfg
-from backend.core.config import WATCHLIST_PATH, ALL_STOCKS_PATH, ALL_CODES_PATH, PINYIN_PATH, INDUSTRY_MAP_PATH, ANALYSIS_CACHE_PATH
-from backend.core.config import atomic_json_dump
+from backend.core.config import WATCHLIST_PATH, ALL_CODES_PATH, PINYIN_PATH, INDUSTRY_MAP_PATH, ANALYSIS_CACHE_PATH
+from backend.core.config import atomic_json_dump, DATA_DIR
+
+ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
 
 from backend.core.logger import get_logger
 

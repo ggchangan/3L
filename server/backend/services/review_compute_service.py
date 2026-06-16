@@ -7,7 +7,9 @@ import json, os, sys, requests, math
 from datetime import datetime
 
 from backend.core import config
-from backend.core.config import DATA_DIR, ALL_STOCKS_PATH, WWW_DIR, MAINLINES_CACHE_PATH
+from backend.core.config import DATA_DIR, WWW_DIR, MAINLINES_CACHE_PATH
+
+ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
 
 MAINLINE_FULL_CACHE = os.path.join(DATA_DIR, '.cache', 'mainline_full.json')
 MAINLINE_HISTORY_PATH = os.path.join(DATA_DIR, 'mainline_history.json')

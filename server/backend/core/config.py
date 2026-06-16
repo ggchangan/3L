@@ -36,8 +36,6 @@ COMPUTED_DIR = os.path.join(DATA_DIR, 'computed')
 # =====================================================
 # 数据文件路径
 # =====================================================
-ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
-INDEX_DATA_PATH = os.path.join(DATA_DIR, 'index_sh_data.json')
 ALL_CODES_PATH = os.path.join(DATA_DIR, 'all_stock_codes.json')
 
 # 用户配置（config/）
@@ -60,10 +58,9 @@ LOGIC_TRACKING_PATH = os.path.join(COMPUTED_DIR, 'logic_tracking.json')
 SOURCE_HEALTH_PATH = os.path.join(COMPUTED_DIR, 'source_health.json')
 KEY_POINTS_DIR = os.path.join(COMPUTED_DIR, 'key_points')
 
-# 概念映射（待删→DB）
+# 概念映射
 CONCEPT_LIST_PATH = os.path.join(DATA_DIR, 'map', 'concept_list.json')
 STOCK_CONCEPT_MAP_PATH = os.path.join(DATA_DIR, 'map', 'stock_concept.json')
-CONCEPT_NAME_MAPPING_PATH = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.json')
 
 # 运行时缓存（cache/）
 
@@ -102,9 +99,6 @@ PINYIN_PATH = os.path.join(PUBLIC_DIR, 'pinyin.json')
 # 复盘图表
 # =====================================================
 REVIEW_CHARTS_DIR = CHARTS_DIR
-
-# EM仓文件
-SOURCES_EM_CONCEPT_MAP = os.path.join(DATA_DIR, 'sources', 'em', 'concept_map.json')
 
 # =====================================================
 # Tushare Pro 配置（2026-06-14 新增）

@@ -12,9 +12,13 @@ from datetime import datetime
 from backend.core.config import (
     REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
     WWW_DIR, PRIVATE_DIR, SCRIPTS_DIR, MOMENTUM_CACHE_PREFIX,
-    CHARTS_DIR, ALL_STOCKS_PATH, DATA_DIR, INDUSTRY_MAP_PATH, MAINLINES_CACHE_PATH,
+    CHARTS_DIR, DATA_DIR, INDUSTRY_MAP_PATH, MAINLINES_CACHE_PATH,
 )
 from backend.core import config
+
+# ── 局部路径常量（旧JSON已迁移至DB，保留供 fallback 读取）──
+ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
+
 from backend.core.exceptions import DataError
 from backend.core.logger import get_logger
 

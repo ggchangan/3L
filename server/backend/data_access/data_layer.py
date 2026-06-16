@@ -20,9 +20,9 @@ from backend.core.logger import get_logger
 log = get_logger(__name__)
 from backend.core.config import (
     DATA_DIR, WWW_DIR, CACHE_DIR, PRIVATE_DIR,
-    ALL_STOCKS_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH,
+    WATCHLIST_PATH, INDUSTRY_MAP_PATH,
     SUB_SECTOR_CLUSTERS_PATH, FINANCIAL_CACHE_PATH,
-    PROFIT_QUALITY_PATH, INDEX_DATA_PATH,
+    PROFIT_QUALITY_PATH,
     INDUSTRY_LEADERS_PATH,
     LATEST_SCAN_PATH, ALL_CODES_PATH, KEY_POINTS_DIR,
     HOLDINGS_PATH, TRADES_PATH, REVIEW_ARCHIVE_DIR,
@@ -32,6 +32,10 @@ from backend.core.config import (
     CONCEPT_LIST_PATH, STOCK_CONCEPT_MAP_PATH,
     CHARTS_DIR,
 )
+
+# ── 局部路径常量（旧JSON文件已迁移至DB，保留供 fallback 读取）──
+ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
+INDEX_DATA_PATH = os.path.join(DATA_DIR, 'index_sh_data.json')
 
 # ====== 共享函数 — 从 threel_core 转发（加缓存）======
 
