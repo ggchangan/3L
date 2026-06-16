@@ -444,6 +444,32 @@ def get_ths_industry_klines(ths_type='I', limit=120):
         ts_codes = [r['ts_code'] for r in idx_rows]
         name_map = {r['ts_code']: r['name'] for r in idx_rows}
 
+        # 过滤：排除含境外股票的行业/概念（con_code 非A股格式）
+        try:
+            placeholders = ','.join(['%s'] * len(ts_codes))
+            member_rows = db.execute_raw(
+                f"SELECT ts_code, con_code FROM ths_member "
+                f"WHERE ts_code IN ({placeholders})",
+                ts_codes
+            )
+            # 按 ts_code 分组，检查是否有境外股
+            # A股格式: 6位数字.SH/.SZ/.BJ
+            import re
+            a_share_pattern = re.compile(r'^\d{6}\.(SH|SZ|BJ)$')
+            valid_ts = {}
+            for r in member_rows:
+                if r['ts_code'] not in valid_ts:
+                    valid_ts[r['ts_code']] = True
+                if not a_share_pattern.match(r['con_code']):
+                    valid_ts[r['ts_code']] = False
+            valid_codes = [c for c in ts_codes if valid_ts.get(c, False)]
+            if len(valid_codes) < len(ts_codes):
+                log.info('过滤了 %d 个含境外股票的行业/概念',
+                         len(ts_codes) - len(valid_codes))
+            ts_codes = valid_codes
+        except Exception:
+            pass  # ths_member 表不存在时跳过过滤
+
         # 批量查 ths_daily
         placeholders = ','.join(['%s'] * len(ts_codes))
         rows = db.execute_raw(
