@@ -44,14 +44,19 @@ def save_watchlist(data, wl_path=None):
 
 
 def _build_dir_price_map():
+    """从 get_all_stocks 构建 {code: (direction, price)} 映射"""
     m = {}
-    if os.path.isfile(ALL_STOCKS_PATH):
-        with open(ALL_STOCKS_PATH, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        for direction, stocks in data.get('stocks', {}).items():
-            for code, klines in stocks.items():
-                price = klines[-1]['close'] if klines else 0
-                m[code] = (direction, price)
+    try:
+        from backend.data_access.data_layer import get_all_stocks
+        stocks = get_all_stocks()
+        for sec, codes in stocks.items():
+            if not isinstance(codes, dict):
+                continue
+            for code, kls in codes.items():
+                price = kls[-1]['close'] if kls else 0
+                m[code] = (sec, price)
+    except Exception:
+        pass
     return m
 
 
@@ -247,9 +252,8 @@ def get_watchlist_analysis(stocks=None, wl=None):
             if os.path.exists(ANALYSIS_CACHE_PATH):
                 cache_mtime = os.path.getmtime(ANALYSIS_CACHE_PATH)
                 wl_mtime = os.path.getmtime(WATCHLIST_PATH)
-                ks_mtime = os.path.getmtime(ALL_STOCKS_PATH)
-                # 缓存比数据文件新 → 有效
-                if cache_mtime > wl_mtime and cache_mtime > ks_mtime:
+                # 缓存比自选股列表新 → 有效（ALL_STOCKS_PATH 已不存在）
+                if cache_mtime > wl_mtime:
                     with open(ANALYSIS_CACHE_PATH, 'r', encoding='utf-8') as f:
                         cached = json.load(f)
                     # 验证缓存股票数量与自选股一致
@@ -272,6 +276,8 @@ def get_watchlist_analysis(stocks=None, wl=None):
     # 建倒排索引：code → klines，避免逐方向遍历
     kline_index = {}
     for sec, codes in stocks.items():
+        if not isinstance(codes, dict):
+            continue  # 跳过 last_updated
         for code, kls in codes.items():
             kline_index[code] = kls
 
