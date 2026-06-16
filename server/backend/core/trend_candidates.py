@@ -73,7 +73,7 @@ def _batch_fetch_klines(codes_list):
             if name:
                 for k in kls:
                     k['name'] = name
-            result[code] = kls  # 已是升序（query_stock_klines 返回正序）
+            result[code] = sorted(kls, key=lambda x: x['date'])  # 确保升序（防御 _apply_qfq_batch 不一致）
     # 写缓存
     _batch_klines_cache['data'] = result
     _batch_klines_cache['ts'] = time.time()

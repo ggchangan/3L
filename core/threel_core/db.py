@@ -114,18 +114,18 @@ def _apply_qfq_batch(conn, ts_code: str, rows: List[dict],
     latest_date = dates[0]  # 因为按 trade_date DESC 排序
     latest_adj = adj_map.get(latest_date)
     if not latest_adj:
-        # 没有复权因子，返回原始数据
-        return [
-            {
+        # 没有复权因子，返回原始数据（但仍需升序排列）
+        result = []
+        for r in reversed(rows):
+            result.append({
                 'date': r['trade_date'],
                 'open': float(r['open']) if r['open'] else 0,
                 'close': float(r['close']) if r['close'] else 0,
                 'high': float(r['high']) if r['high'] else 0,
                 'low': float(r['low']) if r['low'] else 0,
                 'volume': int(r['vol']) if r['vol'] else 0,
-            }
-            for r in rows
-        ]
+            })
+        return result
 
     result = []
     for r in reversed(rows):  # 正序返回
