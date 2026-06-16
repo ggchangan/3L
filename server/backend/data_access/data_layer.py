@@ -73,6 +73,82 @@ def get_stock_klines(code, direction=None, stocks=None):
     return _threel_get_stock_klines(code)
 
 
+def fetch_stock_klines_from_db(codes, limit=60):
+    """从 stock_daily 批量拉取个股K线（不含 name），返回 {code: [{date, open, ...}]}"""
+    from backend.data_access.tushare_db import TushareDB
+    db = TushareDB()
+    return db.query_stock_klines_batch(codes, limit=limit, adj='qfq')
+
+
+def get_stock_names_from_db(codes):
+    """从 stock_basic 批量查询股票名称，返回 {code: name}"""
+    from backend.data_access.tushare_db import TushareDB
+    db = TushareDB()
+    placeholders = ','.join(['%s'] * len(codes))
+    rows = db.execute_raw(
+        f"SELECT symbol, name FROM stock_basic WHERE symbol IN ({placeholders})",
+        codes,
+    )
+    return {r['symbol']: r['name'] for r in rows}
+
+
+def get_stock_daily_latest_date() -> str:
+    """返回 stock_daily 表最新交易日 YYYYMMDD"""
+    from backend.data_access.tushare_db import TushareDB
+    db = TushareDB()
+    return db.get_last_stock_date() or ''
+
+
+def fetch_index_klines_from_akshare(code, limit=500):
+    """从 akshare 获取指数K线，返回 [{date, open, close, high, low, volume}]"""
+    import akshare as ak
+    import warnings
+    warnings.filterwarnings('ignore')
+    prefix = 'sz' if code.startswith(('399', '300')) else 'sh'
+    try:
+        df = ak.stock_zh_index_daily_tx(symbol=f'{prefix}{code}')
+        if df is None or len(df) == 0:
+            return []
+        records = []
+        for _, row in df.iterrows():
+            records.append({
+                'date': str(row.get('date', ''))[:10].replace('-', '') if row.get('date') else '',
+                'open': round(float(row.get('open', 0)), 2),
+                'close': round(float(row.get('close', 0)), 2),
+                'high': round(float(row.get('high', 0)), 2),
+                'low': round(float(row.get('low', 0)), 2),
+                'volume': int(float(row.get('volume', 0))),
+            })
+        records = [r for r in records if r['date']]
+        records.sort(key=lambda x: x['date'])
+        return records[-limit:]
+    except Exception as e:
+        log.warning('fetch_index_klines(%s) 失败: %s', code, e)
+        return []
+
+
+def update_trade_cal_from_tushare():
+    """增量更新 trade_cal 表（补最新交易日到上个月底）"""
+    from backend.data_access.tushare_db import TushareDB
+    from backend.scripts.fill_history import fetch_and_upsert
+    db = TushareDB()
+    # 查明 DB 里最新交易日
+    rows = db.execute_raw('SELECT MAX(cal_date) as last FROM trade_cal')
+    last = rows[0]['last'] if rows and rows[0]['last'] else '20200101'
+    today = datetime.now().strftime('%Y%m%d')
+    if last >= today:
+        return 0  # 已最新
+    # 从 Tushare API 拉最新的
+    import tushare as ts
+    api = ts.pro_api()
+    start = last[:6] + '01'  # 从最新那个月月初开始
+    rows_count = fetch_and_upsert(db, api, 'trade_cal', 'trade_cal',
+                                   exchange='SSE', start_date=start, end_date=today)
+    if rows_count:
+        log.info('trade_cal: 新增 %d 行 (%s~%s)', rows_count, start, today)
+    return rows_count or 0
+
+
 def get_watchlist():
     """返回自选股列表（缓存10s）"""
     return cache.get('watchlist', _threel_get_watchlist, ttl=10)

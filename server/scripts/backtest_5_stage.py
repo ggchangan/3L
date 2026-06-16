@@ -8,7 +8,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 os.environ.setdefault('DATA_DIR', '/home/ubuntu/data/3l')
 
 from backend.services.concept_wave_service import judge_concept_wave
-from backend.core.config import SECTOR_DAILY_PATH
+
+DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
+SECTOR_DAILY_PATH = os.path.join(DATA_DIR, 'sector_daily.json')
 
 # 加载数据
 d = json.load(open(SECTOR_DAILY_PATH, encoding='utf-8'))
