@@ -34,6 +34,13 @@ from backend.data_access.data_layer import (
     save_concept_list,
     save_stock_concept_map,
 )
+from backend.data_access.data_layer import (
+    get_ths_index_names,
+    fetch_ths_daily_klines_akshare,
+    build_industry_map_from_db,
+    build_concept_maps_from_db,
+    tushare_fetch_daily_incremental,
+)
 
 CACHE_DIR = os.path.join(DATA_DIR, '.cache')
 
@@ -184,69 +191,6 @@ def update_stocks():
 # 指数（中证全指 000985 + 上证 000001 + 科创50 000688）
 # ════════════════════════════════════════════════════════════════
 
-def _df_to_kline(df):
-    """akshare DataFrame → [{date, open, close, high, low, volume}]
-    兼容中英文列名（akshare 不同接口用不同语言）
-    """
-    records = []
-    # 列名映射：中/英 → 标准键
-    col_map = {
-        '日期': 'date', 'date': 'date',
-        '开盘价': 'open', 'open': 'open',
-        '收盘价': 'close', 'close': 'close',
-        '最高价': 'high', 'high': 'high',
-        '最低价': 'low', 'low': 'low',
-        '成交量': 'volume', 'volume': 'volume',
-        '成交额': 'amount', 'amount': 'amount',
-    }
-    # 找到存在的列
-    present = {}
-    for col in df.columns:
-        col_lower = col.lower().strip()
-        if col_lower in col_map:
-            present[col_map[col_lower]] = col
-
-    for _, row in df.iterrows():
-        r = {}
-        # 日期
-        date_col = present.get('date')
-        if date_col:
-            raw = str(row[date_col])
-            r['date'] = raw[:10].replace('-', '') if '-' in raw else raw[:8]
-        else:
-            continue
-
-        # OHL
-        for key in ('open', 'close', 'high', 'low'):
-            col = present.get(key)
-            if col:
-                try:
-                    r[key] = round(float(row[col]), 2)
-                except (ValueError, TypeError):
-                    r[key] = 0.0
-            else:
-                r[key] = 0.0
-
-        # 成交量：优先 volume，其次 amount 转股（指数/板块用股数），都没有则0
-        vol_col = present.get('volume')
-        if vol_col:
-            try:
-                r['volume'] = int(float(row[vol_col]))
-            except (ValueError, TypeError):
-                r['volume'] = 0
-        else:
-            amt_col = present.get('amount')
-            if amt_col:
-                # 成交额(元) 无法精确转股数，记0
-                r['volume'] = 0
-            else:
-                r['volume'] = 0
-
-        if 'date' in r and r['date']:
-            records.append(r)
-    return records
-
-
 def update_index():
     """从 index_daily DB 重建指数缓存（替代 akshare→JSON 旧路径）
 
@@ -274,51 +218,8 @@ def update_index():
 
 
 # ════════════════════════════════════════════════════════════════
-# 板块（行业+概念）
-
-    def _fetch_one(name):
-        try:
-            stype = name_type_map[name]
-            if stype == 'industry':
-                df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)
-            else:
-                df = ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=today)
-            if df is None or df.empty:
-                return name, []
-            return name, _df_to_kline(df)
-        except Exception:
-            return name, []
-
-    records = []
-    names_to_fetch = list(name_code_map.keys())
-    with ThreadPoolExecutor(max_workers=5) as ex:
-        futures = {ex.submit(_fetch_one, n): n for n in names_to_fetch}
-        for future in as_completed(futures):
-            name, klines = future.result()
-            if not klines:
-                continue
-            ts_code = name_code_map[name]
-            klines.sort(key=lambda x: x['date'])  # 旧→新，算 pct_chg
-            for i, k in enumerate(klines):
-                prev_close = klines[i - 1]['close'] if i > 0 else 0
-                pct = round((k['close'] - prev_close) / prev_close * 100, 2) if prev_close else 0
-                records.append({
-                    'ts_code': ts_code,
-                    'trade_date': k['date'],
-                    'open': k.get('open', 0),
-                    'high': k.get('high', 0),
-                    'low': k.get('low', 0),
-                    'close': k.get('close', 0),
-                    'vol': k.get('volume', 0),
-                    'pct_chg': pct,
-                })
-
-    if not records:
-        return (0, len(names_to_fetch))
-
-    written = db.upsert_many_from_dicts('ths_daily', records)
-    log(f'  写入 ths_daily: {written}条 (请求{len(names_to_fetch)}个板块)')
-    return (written, len(names_to_fetch))
+# 板块（行业+概念）数据源：同花顺 THS
+# ════════════════════════════════════════════════════════════════
 
 
 def update_sectors():
@@ -368,23 +269,16 @@ def update_sectors():
         log(f'⚠️  计算追踪概念失败: {e}，回退到全量更新')
         tracked_concepts = set()
 
-    # ── 构建要更新的板块列表（从 DB 获取行业名 + 追踪中的概念）──
+    # ── 构建要更新的板块列表（通过 data_layer 获取行业名 + 追踪中的概念）──
     names_to_update = []
     try:
-        db = TushareDB()
-        conn = db._get_conn()
-        from pymysql.cursors import DictCursor
-        with conn.cursor(DictCursor) as cur:
-            # 行业名
-            cur.execute("SELECT name FROM ths_index WHERE type='I'")
-            ind_today = [r['name'] for r in cur.fetchall()]
-            for name in ind_today:
-                names_to_update.append((name, 'industry'))
-            # 概念名（只取追踪中的）
-            if tracked_concepts:
-                for name in tracked_concepts:
-                    names_to_update.append((name, 'concept'))
-        conn.close()
+        industry_names = get_ths_index_names('I')
+        ind_today = [n for n, _ in industry_names]
+        for name in ind_today:
+            names_to_update.append((name, 'industry'))
+        if tracked_concepts:
+            for name in tracked_concepts:
+                names_to_update.append((name, 'concept'))
     except Exception as e:
         log(f'⚠️  获取板块列表失败: {e}')
         names_to_update = []
@@ -392,9 +286,9 @@ def update_sectors():
     ind_saved = len(ind_today) if 'ind_today' in dir() else 0
     con_saved = len(tracked_concepts)
 
-    # ── 写 K 线到 ths_daily DB ──
+    # ── 写 K 线到 ths_daily DB（通过 data_layer）──
     try:
-        written, requested = _upsert_klines_to_db(names_to_update, today)
+        written, requested = fetch_ths_daily_klines_akshare(names_to_update, today)
         log(f'📊  板块K线写入DB: {written}条 (请求{requested}个板块)')
     except Exception as e:
         log(f'🚨 板块K线写入DB失败: {e}')
@@ -417,50 +311,13 @@ def _normalize_industry(name):
     return name.replace('Ⅱ', '').strip()
 
 def update_industry_map():
-    """从 ths_member + ths_index DB 重建行业映射，写入 stock_industry_map.json
+    """从 ths_member + ths_index DB 重建行业映射
 
-    数据源：ths_member（成分股）+ ths_index(type=I)（同花顺行业列表）
-    一只股票可能属于多个同花顺行业（如银行+银行Ⅲ），取名称最长的（最细粒度）。
-    格式：{code: {code, name, ths_industry}}
-    返回：写入的股票数量
+    通过 data_layer → data_source 访问 DB，不直接调 TushareDB。
+    一只股票可能属于多个同花顺行业，取名称最长的。
+    输出写入 stock_industry_map.json。
     """
-    try:
-        db = TushareDB()
-        conn = db._get_conn()
-        from pymysql.cursors import DictCursor
-        try:
-            with conn.cursor(DictCursor) as cur:
-                cur.execute("""
-                    SELECT m.con_code, m.con_name, i.name
-                    FROM ths_member m
-                    JOIN ths_index i ON m.ts_code = i.ts_code
-                    WHERE i.type = 'I'
-                """)
-                rows = cur.fetchall()
-        finally:
-            conn.close()
-    except Exception as e:
-        log(f'⚠️  DB查询行业映射失败: {e}')
-        return 0
-
-    # 组装：同只股票多个行业 → 取名称最长的
-    from collections import defaultdict
-    stock_industries = defaultdict(list)
-    for r in rows:
-        code = r['con_code'].replace('.SZ', '').replace('.SH', '').replace('.BJ', '')
-        name = r['con_name']
-        industry = r['name']
-        if code and industry:
-            stock_industries[code].append((industry, name))
-
-    result = {}
-    for code, entries in stock_industries.items():
-        # 取行业名最长的（最细粒度）
-        entries.sort(key=lambda x: -len(x[0]))
-        best_industry = entries[0][0]
-        best_name = entries[0][1]
-        result[code] = {'code': code, 'name': best_name, 'ths_industry': best_industry}
-
+    result = build_industry_map_from_db()
     if result:
         save_industry_map(result)
         log(f'🏭  行业映射: DB重建完成 ({len(result)}只)')
@@ -472,85 +329,21 @@ def update_industry_map():
 # ════════════════════════════════════════════════════════════════
 
 def update_concept_maps():
-    """从 ths_member + ths_index DB 重建概念映射
+    """从 ths_index + ths_member DB 重建概念映射
 
-    数据源:
-      ths_index(type=N): 概念板块列表 {ts_code, name}
-      ths_member: 成分股归属 {ts_code, con_code, con_name}
-
-    输出:
-      concept_list.json:  {概念code: {name, stock_count, stocks: [股票code,...]}}
-      stock_concept_map.json: {股票code: {code, name, concept_codes, concept_names}}
+    通过 data_layer → data_source 访问 DB，不直接调 TushareDB。
+    输出：concept_list.json + stock_concept_map.json
     """
-    try:
-        db = TushareDB()
-        conn = db._get_conn()
-        from pymysql.cursors import DictCursor
-        try:
-            # 查概念列表
-            with conn.cursor(DictCursor) as cur:
-                cur.execute("SELECT ts_code, name FROM ths_index WHERE type = 'N'")
-                concepts = {r['ts_code']: r['name'] for r in cur.fetchall()}
-                log(f'🗺️  概念板块列表: {len(concepts)} 个')
-
-            # 查概念成分股
-            if concepts:
-                codes_list = list(concepts.keys())
-                concept_list = {}
-                stock_concept_data = {}
-                # 分批查询（SQL IN 限制）
-                chunk_size = 500
-                for i in range(0, len(codes_list), chunk_size):
-                    chunk = codes_list[i:i + chunk_size]
-                    placeholders = ','.join(['%s'] * len(chunk))
-                    with conn.cursor(DictCursor) as cur:
-                        cur.execute(
-                            f"SELECT ts_code, con_code, con_name FROM ths_member WHERE ts_code IN ({placeholders})",
-                            chunk
-                        )
-                        for r in cur.fetchall():
-                            ts_code = r['ts_code']
-                            con_code = r['con_code'].replace('.SZ', '').replace('.SH', '').replace('.BJ', '')
-                            con_name = r['con_name']
-                            cname = concepts.get(ts_code, '')
-
-                            # concept_list: 概念→股票
-                            if ts_code not in concept_list:
-                                concept_list[ts_code] = {'name': cname, 'stock_count': 0, 'stocks': []}
-                            if con_code not in concept_list[ts_code]['stocks']:
-                                concept_list[ts_code]['stocks'].append(con_code)
-
-                            # stock_concept_data: 股票→概念
-                            if con_code not in stock_concept_data:
-                                stock_concept_data[con_code] = {
-                                    'code': con_code, 'name': con_name,
-                                    'concept_codes': [], 'concept_names': [],
-                                }
-                            if ts_code not in stock_concept_data[con_code]['concept_codes']:
-                                stock_concept_data[con_code]['concept_codes'].append(ts_code)
-                                stock_concept_data[con_code]['concept_names'].append(cname)
-
-                # 回写 stock_count
-                for ci in concept_list.values():
-                    ci['stock_count'] = len(ci['stocks'])
-
-                # 保存
-                save_concept_list(concept_list)
-                save_stock_concept_map(stock_concept_data)
-
-                concept_cnt = sum(1 for c in concept_list.values() if c['stocks'])
-                log(f'  ✅ 概念映射: {concept_cnt}个有成分股, {len(stock_concept_data)}只有概念')
-
-        finally:
-            conn.close()
-    except Exception as e:
-        log(f'⚠️  概念映射DB重建失败: {e}')
-        import traceback
-        for line in traceback.format_exc().splitlines():
-            log(f'  {line}')
-
-    return (len(concept_list) if 'concept_list' in dir() else 0,
-            len(stock_concept_data) if 'stock_concept_data' in dir() else 0)
+    concept_list, stock_concept_data = build_concept_maps_from_db()
+    if concept_list or stock_concept_data:
+        save_concept_list(concept_list)
+        save_stock_concept_map(stock_concept_data)
+        concept_cnt = sum(1 for c in concept_list.values() if c.get('stocks')) if concept_list else 0
+        log(f'  ✅ 概念映射: {concept_cnt}个有成分股, {len(stock_concept_data)}只有概念')
+    else:
+        log('⚠️  概念映射DB重建失败或为空')
+    return (len(concept_list) if concept_list else 0,
+            len(stock_concept_data) if stock_concept_data else 0)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -588,71 +381,8 @@ def update_concept_klines():
 # ════════════════════════════════════════════════════════════════
 
 def _fetch_tushare_daily_incremental():
-    """拉取最新交易日数据到 stock_daily + index_daily DB 表
-
-    只在交易时段后执行（08:00~20:00），非交易日直接跳过。
-    检查该日期是否已有数据，避免重复拉取。
-    """
-    from backend.data_access.data_source import get_last_completed_trading_day
-    from backend.data_access.tushare_db import TushareDB
-    from backend.core.config import TUSHARE_TOKEN
-    import tushare as ts
-
-    # 非交易日跳过
-    now = datetime.now()
-    if now.weekday() >= 5:
-        log('⏭️  非交易日，跳过 Tushare 增量拉取')
-        return
-
-    # 确定目标日期（上一个已完成交易日）
-    trade_date = get_last_completed_trading_day()
-    if not trade_date:
-        log('⚠️  无法确定交易日，跳过 Tushare 增量拉取')
-        return
-
-    log(f'📡 Tushare 增量拉取目标日期: {trade_date}')
-
-    start = time.time()
-    db = TushareDB()
-    api = ts.pro_api(TUSHARE_TOKEN)
-    total_rows = 0
-
-    # ── 个股日线 stock_daily ──
-    try:
-        latest = db.get_last_trade_date('stock_daily')
-        if latest and latest >= trade_date:
-            log(f'  stock_daily 已有 {trade_date} 数据，跳过')
-        else:
-            df = api.daily(trade_date=trade_date)
-            if df is not None and not df.empty:
-                rows = db.upsert_many('stock_daily', df)
-                log(f'  stock_daily: 写入 {rows} 条')
-                total_rows += rows
-            time.sleep(0.6)
-    except Exception as e:
-        log(f'⚠️  stock_daily 增量失败: {e}')
-
-    # ── 指数日线 index_daily ──
-    try:
-        for ts_code in ['000001.SH', '000688.SH', '000985.SH', '399006.SZ']:
-            try:
-                latest = db.get_last_trade_date('index_daily')
-                if latest and latest >= trade_date:
-                    log(f'  index_daily[{ts_code}] 已有数据 ({latest})，跳过')
-                    continue
-                df = api.index_daily(ts_code=ts_code, start_date=trade_date, end_date=trade_date)
-                if df is not None and not df.empty:
-                    rows = db.upsert_many('index_daily', df)
-                    log(f'  index_daily[{ts_code}]: 写入 {rows} 条')
-                    total_rows += rows
-                time.sleep(0.6)
-            except Exception as e:
-                log(f'  ⚠️  index_daily[{ts_code}] 失败: {e}')
-    except Exception as e:
-        log(f'⚠️  index_daily 增量失败: {e}')
-
-    elapsed = time.time() - start
-    log(f'📡 Tushare 增量完成: {total_rows} 条写入 DB，耗时 {elapsed:.1f}s')
+    """Tushare 增量拉取最新交易日数据到 stock_daily + index_daily"""
+    tushare_fetch_daily_incremental()
 
 
 def main():
