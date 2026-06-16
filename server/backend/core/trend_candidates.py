@@ -2,18 +2,18 @@
 趋势候选扫描 — 从主线/次级主线 THS 行业扫描全市场候选股票
 返回 signalStockCard 兼容的完整个股分析数据
 同时生成 trend_ 趋势交易SVG图表
+
+性能优化：只拉目标行业的股票K线，不走全量 get_all_stocks()
 """
-import json, os, sys
+import json, os, sys, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from backend.core.logger import get_logger
-from backend.core.config import DATA_DIR
-from backend.data_access.data_layer import get_all_stocks, _load_json
+from backend.data_access.data_layer import _load_json
 from backend.core.ema_utils import ema_list, get_structure, get_stage
 from backend.core.gen_trend_chart import gen_trend_svg
 from backend.core.trend_trading import _load_manual_trend
 from backend.core import config
 
-DATA_DIR = config.DATA_DIR
 INDUSTRY_MAP_PATH = config.INDUSTRY_MAP_PATH
 MANUAL_TREND_PATH = config.MANUAL_TREND_PATH
 WATCHLIST_PATH = config.WATCHLIST_PATH
@@ -22,23 +22,79 @@ REVIEW_CHARTS_DIR = config.REVIEW_CHARTS_DIR
 log = get_logger(__name__)
 
 
-def _build_stock_kline_map():
-    """从 DB 全量加载个股K线，构建 {code: [klines]} 快速查找表（K线升序排列）"""
-    all_data = get_all_stocks()
-    m = {}
-    for sec, codes in all_data.items():
-        if isinstance(codes, dict):
-            for code, kls in codes.items():
-                if kls:
-                    m[code] = sorted(kls, key=lambda x: x['date'])
-    return m
+def _ensure_suffix(code):
+    """6位纯数字代码 → 含后缀代码（用于MySQL查询）"""
+    if '.' in code:
+        return code
+    if code.startswith('6'):
+        return f'{code}.SH'
+    return f'{code}.SZ'
+
+
+# 进程级缓存（热点追踪页面频繁刷新时避免重复DB查询）
+_batch_klines_cache = {'data': {}, 'ts': 0}
+_BATCH_CACHE_TTL = 30
+
+
+def _batch_fetch_klines(codes_list):
+    """批量从DB拉取K线数据（含前复权），返回 {code: [升序排列的K线]}
+
+    使用 threel_core/db.py（单连接批量查询），比 TushareDB 快10倍+。
+    带30s进程级缓存。
+    """
+    if not codes_list:
+        return {}
+    now = time.time()
+    if now - _batch_klines_cache['ts'] < _BATCH_CACHE_TTL:
+        cached = _batch_klines_cache['data']
+        if all(c in cached for c in codes_list):
+            return {c: cached.get(c, []) for c in codes_list}
+    from threel_core.db import query_stock_klines
+    lookup = [_ensure_suffix(c) for c in codes_list]
+    ts_code_map = {_ensure_suffix(c): c for c in codes_list}
+    raw = query_stock_klines(lookup, limit=60)
+    # 转换回纯数字代码
+    klines_map = {}
+    for ts, kls in raw.items():
+        code = ts_code_map.get(ts, ts)
+        klines_map[code] = kls
+    # 补充股票名称
+    from backend.data_access.data_layer import get_stock_names_from_db
+    names = get_stock_names_from_db(codes_list)
+    imap = _load_json(INDUSTRY_MAP_PATH, {})
+    result = {}
+    for code in codes_list:
+        kls = klines_map.get(code, [])
+        if kls:
+            name = names.get(code, '')
+            if not name:
+                info = imap.get(code, {})
+                name = info.get('name', '') if isinstance(info, dict) else ''
+            if name:
+                for k in kls:
+                    k['name'] = name
+            result[code] = kls  # 已是升序（query_stock_klines 返回正序）
+    # 写缓存
+    _batch_klines_cache['data'] = result
+    _batch_klines_cache['ts'] = time.time()
+    return result
 
 
 def scan_trend_candidates(main_line_names, sub_main_names):
     """扫描主线+次级主线，返回完整个股分析数据"""
     imap = _load_json(INDUSTRY_MAP_PATH, {})
-    all_s = _build_stock_kline_map()
     manual = _load_manual_trend()
+
+    # 收集目标行业的所有股票代码（避免拉全量自选股K线）
+    target_names = set(main_line_names + sub_main_names)
+    target_codes = []
+    for code, info in imap.items():
+        ths = info.get('ths_industry', '') if isinstance(info, dict) else ''
+        if ths in target_names:
+            target_codes.append(code)
+
+    # 只拉目标股票的K线，不走 get_all_stocks()
+    all_s = _batch_fetch_klines(target_codes)
 
     result = {
         'main_lines': _scan_industries(main_line_names, imap, all_s, manual),
@@ -65,7 +121,7 @@ def _scan_industries(industry_names, imap, all_s, manual):
             continue
         candidates = []
         for code, info in stocks:
-            kls = _find_klines(code, all_s)
+            kls = all_s.get(code, [])
             if not kls or len(kls) < 30:
                 continue
 
@@ -90,20 +146,17 @@ def _scan_industries(industry_names, imap, all_s, manual):
             cur_b5 = round((cur_close - ema5_last) / ema5_last * 100, 2)
             change_pct = round((closes[-1] - closes[-2]) / closes[-2] * 100, 2) if len(closes) >= 2 else 0
 
-            # 阶段
             highs = [k['high'] for k in kls]
             lows = [k['low'] for k in kls]
             vols = [k.get('volume', k.get('vol', 0)) for k in kls]
             stage = get_stage(closes, structure, highs, lows, volumes=vols)
 
-            # 信号（用 get_stock_card 统一判定，已标记→趋势判定，未标记→3L判定）
             signal = 'hold'
             try:
                 from backend.services.stock_card_service import get_stock_card
-                _kls = kls
-                _today = _kls[-1]['date']
+                _today = kls[-1]['date']
                 _today_fmt = f'{_today[:4]}-{_today[4:6]}-{_today[6:8]}'
-                _card = get_stock_card(code, _today_fmt, klines=_kls)
+                _card = get_stock_card(code, _today_fmt, klines=kls)
                 signal = _card.get('signal', 'hold')
             except Exception:
                 log.warning('个股信号获取失败（趋势候选扫描）: %s', code)
@@ -112,11 +165,9 @@ def _scan_industries(industry_names, imap, all_s, manual):
             in_manual = code in manual
             trading_system = 'trend' if in_manual else '3l'
 
-            # 生成趋势SVG图表
             _gen_chart(name, code, kls, cur_b5)
 
             candidates.append({
-                # signalStockCard 基础字段
                 'name': name,
                 'code': code,
                 'price': cur_close,
@@ -124,12 +175,11 @@ def _scan_industries(industry_names, imap, all_s, manual):
                 'signal': signal,
                 'structure': structure,
                 'stage': stage,
-                'sector': ind,            # 同花顺行业板块名
-                'direction': direction,    # 用户的8大方向
+                'sector': ind,
+                'direction': direction,
                 'trading_system': trading_system,
                 'trading_reason': '手动指定趋势交易' if in_manual else '3L体系',
                 'trend_bias': cur_b5,
-                # 额外字段
                 'ema5_slope': slope,
                 'in_manual': in_manual,
             })
@@ -150,24 +200,17 @@ def _gen_chart(name, code, klines, bias5):
             print(f'[trend_candidates] SVG生成失败 {code}: {e}')
 
 
-def _find_klines(code, all_s):
-    return all_s.get(code, [])
-
-
 def toggle_trend_stock(code, enable):
     manual = set(_load_manual_trend())
     changed = False
     if enable and code not in manual:
         manual.add(code)
         changed = True
-        # 标记为趋势股时，自动加入自选股（如不在）
         _ensure_in_watchlist(code)
-        # 同步更新 watchlist 里的 trading_system 字段
         _set_watchlist_trading_system(code, 'trend')
     elif not enable and code in manual:
         manual.discard(code)
         changed = True
-        # 取消趋势时恢复 watchlist 里的 trading_system 字段
         _set_watchlist_trading_system(code, '3l')
     if changed:
         config.atomic_json_dump(sorted(manual), MANUAL_TREND_PATH)
@@ -175,7 +218,6 @@ def toggle_trend_stock(code, enable):
 
 
 def _set_watchlist_trading_system(code, system):
-    """同步 watchlist 中个股的 trading_system 字段"""
     try:
         wl = _load_json(WATCHLIST_PATH, {'stocks': []})
         for s in wl.get('stocks', []):
@@ -194,22 +236,18 @@ def _set_watchlist_trading_system(code, system):
 
 
 def _ensure_in_watchlist(code):
-    """确保股票在自选股列表中，不在则自动添加"""
     try:
         wl = _load_json(WATCHLIST_PATH, {'stocks': []})
         existing = {s['code'] for s in wl.get('stocks', [])}
         if code in existing:
-            return  # 已在自选股中
-        # 查行业映射获取名称/方向/行业
+            return
         imap = _load_json(INDUSTRY_MAP_PATH, {})
         info = imap.get(code, {})
         name = info.get('name', '')
         if not name:
-            # 从K线数据取
-            all_s = _build_stock_kline_map()
-            kls = all_s.get(code, [])
-            if kls:
-                name = kls[0].get('name', code)
+            from backend.data_access.data_layer import get_stock_names_from_db
+            names = get_stock_names_from_db([code])
+            name = names.get(code, code)
         wl['stocks'].append({
             'code': code,
             'name': name or code,
@@ -226,21 +264,25 @@ def _ensure_in_watchlist(code):
 def get_tracked_stocks():
     """返回已手动标记趋势交易的股票完整分析数据（不经过主线筛选）"""
     imap = _load_json(INDUSTRY_MAP_PATH, {})
-    all_s = _build_stock_kline_map()
     manual = _load_manual_trend()
 
+    codes_list = sorted(manual)
+    if not codes_list:
+        return {'count': 0, 'candidates': []}
+
+    all_s = _batch_fetch_klines(codes_list)
+
     candidates = []
-    for code in sorted(manual):
+    for code in codes_list:
         info = imap.get(code, {})
         kls = all_s.get(code, [])
         if not kls or len(kls) < 30:
-            # 数据不足仍返回基本信息
             candidates.append({
-                'name': info.get('code', code), 'code': code,
+                'name': info.get('code', code) if isinstance(info, dict) else code, 'code': code,
                 'price': 0, 'change': 0, 'signal': 'hold',
                 'structure': '--', 'stage': '--',
-                'sector': info.get('ths_industry', ''),
-                'direction': info.get('direction', ''),
+                'sector': info.get('ths_industry', '') if isinstance(info, dict) else '',
+                'direction': info.get('direction', '') if isinstance(info, dict) else '',
                 'trading_system': 'trend',
                 'trading_reason': '手动指定趋势交易',
                 'trend_bias': 0,
@@ -265,7 +307,6 @@ def get_tracked_stocks():
 
         name = kls[0].get('name', code) if kls else code
 
-        # 信号（全部用 get_stock_card 统一判定，内部已处理趋势/3L分支）
         signal = 'hold'
         try:
             from backend.services.stock_card_service import get_stock_card
@@ -277,15 +318,14 @@ def get_tracked_stocks():
             log.warning('个股信号获取失败（跟踪趋势）: %s', code)
             pass
 
-        # 更新SVG
         _gen_chart(name, code, kls, cur_b5)
 
         candidates.append({
             'name': name, 'code': code,
             'price': closes[-1], 'change': change_pct,
             'signal': signal, 'structure': structure, 'stage': stage,
-            'sector': info.get('ths_industry', ''),
-            'direction': info.get('direction', ''),
+            'sector': info.get('ths_industry', '') if isinstance(info, dict) else '',
+            'direction': info.get('direction', '') if isinstance(info, dict) else '',
             'trading_system': 'trend',
             'trading_reason': '手动指定趋势交易',
             'trend_bias': cur_b5,
@@ -293,5 +333,4 @@ def get_tracked_stocks():
             'in_manual': True,
         })
 
-    # 无行业分组，统一返回
     return {'count': len(candidates), 'candidates': candidates}
