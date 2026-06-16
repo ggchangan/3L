@@ -84,7 +84,30 @@ def _parse_tencent_response(text):
 
 
 def get_holdings():
-    """获取持仓数据（原始）"""
+    """获取持仓数据（从 MySQL DB 读取，回退 JSON）
+
+    Returns:
+      dict: {"holdings": [{code, name, direction, ratio, price, stop_loss_price, sector, ...}], "cash_ratio": float}
+    """
+    try:
+        from backend.data_access.data_layer import get_holdings as _dl_holdings
+        rows = _dl_holdings(user_id=1)
+        if rows:
+            holdings = []
+            for r in rows:
+                holdings.append({
+                    'code': r.get('code', ''),
+                    'name': r.get('name', ''),
+                    'direction': r.get('direction', ''),
+                    'ratio': r.get('target_ratio', 0),
+                    'price': r.get('cost_price'),
+                    'stop_loss_price': r.get('stop_loss_price'),
+                    'sector': r.get('sector', ''),
+                })
+            return {'holdings': holdings, 'cash_ratio': 0}
+    except Exception:
+        log.warning('get_holdings DB读取失败，回退JSON')
+    # 回退：JSON
     if os.path.isfile(HOLDINGS_PATH):
         with open(HOLDINGS_PATH, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -204,43 +227,24 @@ def save_holdings(data):
     if cash_ratio < 0 or cash_ratio > 100:
         return {'success': False, 'error': f'cash_ratio 超出范围 (0-100): {cash_ratio}'}
 
-    # ── 防误覆盖 ──
-    if os.path.isfile(HOLDINGS_PATH):
-        try:
-            with open(HOLDINGS_PATH, 'r', encoding='utf-8') as f:
-                existing = json.load(f)
-            existing_count = len(existing.get('holdings', []))
-            if existing_count >= 50 and len(holdings) <= 10:
-                return {
-                    'success': False,
-                    'error': f'拒绝写入：已有{existing_count}只但仅写入{len(holdings)}只（防误覆盖）'
-                }
-        except (json.JSONDecodeError, IOError):
-            pass  # 文件损坏，允许写入
-
-    # ── 写入 ──
-    today = datetime.now().strftime('%Y-%m-%d')
-    output = {
-        'update_date': today,
-        'holdings': holdings,
-        'cash_ratio': cash_ratio
-    }
-
-    # 原子写入
-    dir_path = os.path.dirname(HOLDINGS_PATH)
-    if dir_path and not os.path.isdir(dir_path):
-        os.makedirs(dir_path, exist_ok=True)
-
-    fd, tmp_path = tempfile.mkstemp(dir=dir_path or os.path.dirname(dir_path) or '.',
-                                    suffix='.json')
+    # ── 写入 MySQL DB ──
     try:
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
-            json.dump(output, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_path, HOLDINGS_PATH)
+        from backend.data_access.data_layer import save_holdings as _dl_save
+        _db_list = []
+        for h in holdings:
+            _db_list.append({
+                'code': h.get('code', ''),
+                'name': h.get('name', ''),
+                'direction': h.get('direction', ''),
+                'target_ratio': h.get('ratio', 0),
+                'cost_price': h.get('price') or None,
+                'stop_loss_price': h.get('stop_loss_price') or None,
+                'sector': h.get('sector', ''),
+            })
+        _dl_save(1, _db_list)
     except Exception as e:
-        if os.path.isfile(tmp_path):
-            os.unlink(tmp_path)
-        return {'success': False, 'error': f'写入失败: {e}'}
+        log.error('holdings DB save failed: %s', e)
+        return {'success': False, 'error': f'DB写入失败: {e}'}
 
     # 同步方向到自选股（方向管理是权威源，但持仓编辑也需同步）
     try:
