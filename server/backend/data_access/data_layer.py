@@ -785,6 +785,40 @@ load_all_stocks_uncached = _threel_get_all_stocks
 load_index_data_uncached = get_index_data
 
 
+# ════════════════════════════════════════════════════════════════
+# DB 访问封装（转发到 data_source，供 update_stock_data.py 等脚本调用）
+# ════════════════════════════════════════════════════════════════
+
+def get_ths_index_names(type_code='I'):
+    """获取同花顺板块名称列表"""
+    from backend.data_access.data_source import get_ths_index_names as _fn
+    return _fn(type_code)
+
+
+def fetch_ths_daily_klines_akshare(names_to_update, today):
+    """从 akshare 拉取板块K线并写入 ths_daily"""
+    from backend.data_access.data_source import fetch_ths_daily_klines_akshare as _fn
+    return _fn(names_to_update, today)
+
+
+def build_industry_map_from_db():
+    """从 ths_member + ths_index 构建行业映射"""
+    from backend.data_access.data_source import build_industry_map_from_db as _fn
+    return _fn()
+
+
+def build_concept_maps_from_db():
+    """从 ths_index + ths_member 构建概念映射"""
+    from backend.data_access.data_source import build_concept_maps_from_db as _fn
+    return _fn()
+
+
+def tushare_fetch_daily_incremental():
+    """Tushare 增量拉取最新交易日数据到 stock_daily + index_daily"""
+    from backend.data_access.data_source import tushare_fetch_daily_incremental as _fn
+    return _fn()
+
+
 # ====== 快速验证 ======
 if __name__ == '__main__':
     stocks = get_all_stocks()
