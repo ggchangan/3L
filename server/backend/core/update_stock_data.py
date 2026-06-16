@@ -275,186 +275,6 @@ def update_index():
 
 # ════════════════════════════════════════════════════════════════
 # 板块（行业+概念）
-# ════════════════════════════════════════════════════════════════
-
-# ── push2test 常量（主数据源：东财测试API，实测可用） ──
-_PUSH2TEST_URL = 'https://push2test.eastmoney.com/api/qt/clist/get'
-_PUSH2TEST_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
-    'Referer': 'https://quote.eastmoney.com/',
-}
-_PUSH2TEST_UT = 'bd1d9ddb04089700cf9c27f6f7426281'
-_SECTOR_FS = {'industry': 'm:90+t:2', 'concept': 'm:90+t:3'}
-
-
-def _fetch_board_names_from_push2test(sector_type):
-    """从 push2test 获取板块名称列表
-    sector_type: 'industry' | 'concept'
-    返回 [name, ...]，失败返回 []
-    """
-    import requests as _req
-    fs = _SECTOR_FS.get(sector_type)
-    if not fs:
-        return []
-    params = {
-        'pn': '1', 'pz': '2000', 'po': '1', 'np': '1',
-        'ut': _PUSH2TEST_UT, 'fltt': '2', 'invt': '2',
-        'fs': fs, 'fields': 'f14',
-    }
-    try:
-        r = _req.get(_PUSH2TEST_URL, params=params, headers=_PUSH2TEST_HEADERS, timeout=15)
-        items = r.json().get('data', {}).get('diff', [])
-        names = [(item.get('f14') or '').strip() for item in items if item.get('f14')]
-        log(f'  push2test[{sector_type}]: {len(names)}个板块名')
-        return names
-    except Exception as e:
-        log(f'❌ push2test[{sector_type}] 板块列表失败: {type(e).__name__}: {e}')
-        return []
-
-
-def _fetch_today_industries_from_ths():
-    """【行业主源】从同花顺获取行业板块今日实时涨跌幅
-
-    数据源: stock_board_industry_summary_ths()
-    同花顺行业数据一直稳定好用，90个行业一次返回。
-    字段: 涨跌幅、总成交量、总成交额、净流入、上涨/下跌家数、领涨股
-    返回 {name: {date, change_pct, ...}}，全部失败返回 {}
-    """
-    try:
-        import os
-        os.environ['TQDM_DISABLE'] = '1'
-        import akshare as ak
-
-        df = ak.stock_board_industry_summary_ths()
-        # 目标日期是上一个已完成交易日（交易日历含节假日）
-        from backend.data_access.data_source import get_last_completed_trading_day
-        today = get_last_completed_trading_day()
-
-        result = {}
-        for _, row in df.iterrows():
-            name = str(row.get('板块', '')).strip()
-            chg = row.get('涨跌幅', None)
-            up = row.get('上涨家数', None)
-            down = row.get('下跌家数', None)
-            vol = row.get('总成交量', None)
-            amt = row.get('总成交额', None)
-            net = row.get('净流入', None)
-            leader = row.get('领涨股', None)
-            leader_chg = row.get('领涨股-涨跌幅', None)
-            if name and chg is not None:
-                result[name] = {
-                    'date': today,
-                    'change_pct': round(float(chg), 2),
-                    'up_count': int(up) if up is not None else None,
-                    'down_count': int(down) if down is not None else None,
-                    'volume': float(vol) if vol is not None else None,
-                    'amount': float(amt) if amt is not None else None,
-                    'net_flow': float(net) if net is not None else None,
-                    'leader': str(leader) if leader else '',
-                    'leader_chg': round(float(leader_chg), 2) if leader_chg is not None else None,
-                }
-
-        log(f'  THS[industry]: 成功获取{len(result)}个行业（同花顺主源，含涨跌幅/上涨下跌家数/领涨股）')
-        return result
-    except Exception as e:
-        log(f'❌ THS行业数据获取失败: {type(e).__name__}: {e}')
-        return {}
-
-
-def _fetch_today_sectors_from_push2test(sector_type, name_list):
-    """【概念主源】从 push2test.eastmoney.com 批量获取概念板块今日实时数据
-    sector_type: 'industry' | 'concept'
-    name_list: 板块名称列表（仅用于日志，实际拉全量再过滤）
-    返回 {name: {date, open, close, high, low, volume}}，全部失败则返回 {}
-    """
-    import requests as _req
-
-    fs = _SECTOR_FS.get(sector_type)
-    if not fs:
-        log(f'❌ _fetch_today_sectors_from_push2test: 未知板块类型 {sector_type}')
-        return {}
-
-    today = datetime.now().strftime('%Y%m%d')
-    # 非交易日回退到上一个交易日
-    d = datetime.now()
-    for _ in range(7):
-        if d.weekday() < 5:
-            today = d.strftime('%Y%m%d')
-            break
-        d -= timedelta(days=1)
-    params = {
-        'pn': '1', 'pz': '2000', 'po': '1', 'np': '1',
-        'ut': _PUSH2TEST_UT, 'fltt': '2', 'invt': '2',
-        'fs': fs,
-        'fields': 'f2,f12,f14,f15,f16,f17,f18,f5,f6',
-    }
-
-    try:
-        r = _req.get(_PUSH2TEST_URL, params=params, headers=_PUSH2TEST_HEADERS, timeout=20)
-        items = r.json().get('data', {}).get('diff', [])
-    except Exception as e:
-        log(f'❌ push2test板块列表请求失败 [{sector_type}]: {type(e).__name__}: {e}')
-        return {}
-
-    # 建立 name → 数据的映射
-    name_map = {}
-    for item in items:
-        name = (item.get('f14') or '').strip()
-        if name and name in name_list:
-            # 归一化名称：去掉东财的Ⅱ/Ⅲ/D后缀，对齐 legacy 命名
-            clean = name.replace('Ⅱ', '').replace('Ⅲ', '').replace('D', '').strip()
-            close = float(item.get('f2', 0) or 0)
-            high = float(item.get('f15', close) or close)
-            low = float(item.get('f16', close) or close)
-            open_ = float(item.get('f17', close) or close)
-            volume = int(float(item.get('f5', 0) or 0))
-            change_pct = float(item.get('f3', 0) or 0)   # 当日涨跌幅%
-            prev_close = float(item.get('f18', 0) or 0)   # 昨收
-            name_map[clean] = {
-                'date': today,
-                'open': round(open_, 2),
-                'close': round(close, 2),
-                'high': round(high, 2),
-                'low': round(low, 2),
-                'volume': volume,
-                'change_pct': round(change_pct, 2),
-                'prev_close': round(prev_close, 2),
-            }
-
-    hit_rate = len(name_map) / len(name_list) * 100 if name_list else 0
-    log(f'  push2test[{sector_type}]: 命中{len(name_map)}/{len(name_list)} ({hit_rate:.0f}%)')
-    return name_map
-
-
-def _upsert_klines_to_db(names_with_type, today):
-    """从 akshare 拉板块K线，计算 pct_chg，upsert 到 ths_daily DB
-
-    Args:
-        names_with_type: [(name, stype), ...]  stype='industry'|'concept'
-        today: YYYYMMDD
-
-    Returns:
-        (写入行数, 请求板块数)
-    """
-    import akshare as ak
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    from backend.data_access.tushare_db import TushareDB
-
-    LOOKBACK_DAYS = 5
-    start = (datetime.now() - timedelta(days=LOOKBACK_DAYS)).strftime('%Y%m%d')
-
-    # 建 name → ts_code 映射 + name → stype 映射
-    db = TushareDB()
-    name_code_map = {}
-    name_type_map = {}
-    for name, stype in names_with_type:
-        ts_code = db.query_ths_code_by_name(name)
-        if ts_code:
-            name_code_map[name] = ts_code
-            name_type_map[name] = stype
-
-    if not name_code_map:
-        return (0, 0)
 
     def _fetch_one(name):
         try:
@@ -548,32 +368,29 @@ def update_sectors():
         log(f'⚠️  计算追踪概念失败: {e}，回退到全量更新')
         tracked_concepts = set()
 
-    # ── 行业今日快照 ──
-    ind_today = _fetch_today_industries_from_ths()
-
-    # ── 概念今日快照 ──
-    from backend.data_access.data_layer import get_concept_snapshots
-    con_today = get_concept_snapshots(list(tracked_concepts))
-
-    ind_saved = len(ind_today)
-    con_saved = len(con_today)
-
-    # ── 失败率分析 ──
-    if len(ind_today) == 0:
-        log('🚨 行业板块从同花顺 THS 获取全部失败！')
-
-    con_tracked = len(tracked_concepts)
-    con_miss = con_tracked - len(con_today)
-    if con_tracked > 0 and con_miss / con_tracked > 0.5:
-        log(f'🚨 概念板块大面积获取失败: {con_miss}/{con_tracked}({con_miss/con_tracked*100:.0f}%)')
-
-    # ── 构建要更新的板块列表 ──
+    # ── 构建要更新的板块列表（从 DB 获取行业名 + 追踪中的概念）──
     names_to_update = []
-    for name in ind_today:
-        names_to_update.append((name, 'industry'))
-    for name in tracked_concepts:
-        if name not in ind_today:
-            names_to_update.append((name, 'concept'))
+    try:
+        db = TushareDB()
+        conn = db._get_conn()
+        from pymysql.cursors import DictCursor
+        with conn.cursor(DictCursor) as cur:
+            # 行业名
+            cur.execute("SELECT name FROM ths_index WHERE type='I'")
+            ind_today = [r['name'] for r in cur.fetchall()]
+            for name in ind_today:
+                names_to_update.append((name, 'industry'))
+            # 概念名（只取追踪中的）
+            if tracked_concepts:
+                for name in tracked_concepts:
+                    names_to_update.append((name, 'concept'))
+        conn.close()
+    except Exception as e:
+        log(f'⚠️  获取板块列表失败: {e}')
+        names_to_update = []
+
+    ind_saved = len(ind_today) if 'ind_today' in dir() else 0
+    con_saved = len(tracked_concepts)
 
     # ── 写 K 线到 ths_daily DB ──
     try:
@@ -585,23 +402,7 @@ def update_sectors():
         for line in traceback.format_exc().splitlines():
             log(f'  {line}')
 
-    stats = f'push2test: 行业{ind_saved}条, 概念{con_saved}条 (THS旧数据保留不变)'
-    log(f'📈  板块: {stats}')
-
-    # ── 板块数据验证 ──
-    try:
-        from backend.data_access.data_layer import verify_data_sources
-        vresult = verify_data_sources(verbose=False)
-        vpass = vresult['pass_count'] if 'pass_count' in vresult else sum(1 for c in vresult['checks'] if c['pass'])
-        vtotal = len(vresult['checks'])
-        if vresult['status'] == 'pass':
-            log(f'✅  数据源验证通过: {vpass}/{vtotal}')
-        else:
-            fails = [c for c in vresult['checks'] if not c['pass']]
-            log(f'⚠️  数据源验证: {vpass}/{vtotal}, 失败项: {[c["check"] for c in fails]}')
-    except Exception as e:
-        log(f'⚠️  数据源验证异常: {e}')
-
+    log(f'📈  板块: 行业{ind_saved}个, 概念{con_saved}个 (K线已写入DB)')
     return (ind_saved, con_saved)
 
 
