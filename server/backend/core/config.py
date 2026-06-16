@@ -10,9 +10,18 @@ import os, json, tempfile
 from threading import Lock
 
 # ── 从 .env 文件加载（如果存在）──────────────────
-_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
-if os.path.isfile(_env_path):
-    with open(_env_path, 'r') as _f:
+# 优先项目根目录（project_root/.env），fallback 到 server/ 子目录
+_env_paths = [
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), '.env'),  # project root
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env'),  # server/
+]
+_env_loaded = None
+for _p in _env_paths:
+    if os.path.isfile(_p):
+        _env_loaded = _p
+        break
+if _env_loaded:
+    with open(_env_loaded, 'r') as _f:
         for _line in _f:
             _line = _line.strip()
             if not _line or _line.startswith('#'):
