@@ -224,14 +224,23 @@ def get_index_klines(code=INDEX_CODE):
 # ====== 板块日K线 ======
 
 def get_sector_daily():
-    """返回 {last_updated, industries, concepts}（缓存60s）"""
-    def _load_from_data_source():
-        try:
-            from backend.data_access.data_source import get_merged_sector_data
-            return get_merged_sector_data()
-        except Exception:
-            return _load_json(SECTOR_DAILY_PATH, {})
-    return cache.get('sector_daily', _load_from_data_source, ttl=60)
+    """返回 {last_updated, industries, concepts}（从 DB 读取，缓存60s）
+
+    industries/concepts 格式: {name: [{date, open, close, high, low, volume}, ...]}
+    """
+    def _load_from_db():
+        industries = get_ths_industry_klines(ths_type='I', limit=120)
+        concepts = get_ths_industry_klines(ths_type='N', limit=120)
+        last_date = ''
+        for klines in industries.values():
+            if klines and klines[-1].get('date', '') > last_date:
+                last_date = klines[-1]['date']
+        return {
+            'last_updated': last_date or datetime.now().strftime('%Y%m%d'),
+            'industries': industries,
+            'concepts': concepts,
+        }
+    return cache.get('sector_daily', _load_from_db, ttl=60)
 
 
 def save_sector_daily(data):
@@ -246,24 +255,90 @@ def load_sector_daily_uncached():
 
 
 def get_sector_push2test():
-    """获取当日涨跌幅快照（_push2test 字段）"""
-    from backend.models.data_models import SectorPush2Test, ths_dict_to_snapshot, push2test_dict_to_snapshot
-    data = _load_json(SECTOR_DAILY_PATH, {})
-    raw = data.get('_push2test', {})
-    if not isinstance(raw, dict):
+    """从 ths_daily 计算当日涨跌幅快照（替代 JSON _push2test 字段）
+
+    Returns:
+        SectorPush2Test(industries={name: ThsIndustrySnapshot, ...},
+                        concepts={name: Push2TestConceptSnapshot, ...})
+    """
+    from backend.models.data_models import SectorPush2Test, ThsIndustrySnapshot, Push2TestConceptSnapshot
+    try:
+        from backend.data_access.data_source import _get_tushare_db
+        db = _get_tushare_db()
+        if not db:
+            return SectorPush2Test()
+
+        # 取最新2个交易日
+        dates = db.execute_raw(
+            "SELECT DISTINCT trade_date FROM ths_daily ORDER BY trade_date DESC LIMIT 2"
+        )
+        if not dates or len(dates) < 2:
+            return SectorPush2Test()
+        t1, t0 = dates[0]['trade_date'], dates[1]['trade_date']
+
+        # 查 ths_index 获取 name → (ts_code, type) 映射
+        idx_rows = db.execute_raw(
+            "SELECT ts_code, name, type FROM ths_index WHERE type IN ('I','N')"
+        )
+        code_name = {r['ts_code']: r['name'] for r in idx_rows}
+        code_type = {r['ts_code']: r['type'] for r in idx_rows}
+
+        # 取 ths_daily 最新2个交易日的完整数据
+        rows = db.execute_raw(
+            "SELECT ts_code, trade_date, open, high, low, close, pre_close, "
+            "pct_chg, vol, amount "
+            "FROM ths_daily WHERE trade_date IN (%s,%s) ORDER BY ts_code, trade_date",
+            [t1, t0]
+        )
+        # 按 ts_code 分组
+        grouped = {}
+        for r in rows:
+            tc = r['ts_code']
+            if tc not in grouped:
+                grouped[tc] = []
+            grouped[tc].append(r)
+
+        industries = {}
+        concepts = {}
+        for tc, recs in grouped.items():
+            name = code_name.get(tc, tc)
+            tp = code_type.get(tc, 'I')
+            today_rec = next((r for r in recs if r['trade_date'] == t1), None)
+            if today_rec is None:
+                continue
+            # pct_chg: 优先 DB 存储值，回退从 close 计算
+            pct = today_rec.get('pct_chg')
+            if pct is None:
+                yesterday_rec = next((r for r in recs if r['trade_date'] == t0), None)
+                close_yest = float(yesterday_rec['close']) if yesterday_rec and yesterday_rec['close'] else 0
+                close_today = float(today_rec['close']) if today_rec['close'] else 0
+                pct = round((close_today - close_yest) / close_yest * 100, 2) if close_yest else 0
+            else:
+                pct = float(pct)
+
+            if tp == 'I':
+                industries[name] = ThsIndustrySnapshot(
+                    date=t1,
+                    change_pct=round(pct, 2),
+                    volume=float(today_rec['vol']) if today_rec.get('vol') else None,
+                    amount=float(today_rec['amount']) if today_rec.get('amount') else None,
+                )
+            else:
+                concepts[name] = Push2TestConceptSnapshot(
+                    date=t1,
+                    change_pct=round(pct, 2),
+                    close=float(today_rec['close']) if today_rec['close'] else 0,
+                    open_=float(today_rec['open']) if today_rec['open'] else 0,
+                    high=float(today_rec['high']) if today_rec['high'] else 0,
+                    low=float(today_rec['low']) if today_rec['low'] else 0,
+                    volume=int(today_rec['vol']) if today_rec['vol'] else 0,
+                    prev_close=float(today_rec['pre_close']) if today_rec['pre_close'] else 0,
+                )
+
+        return SectorPush2Test(industries=industries, concepts=concepts)
+    except Exception as e:
+        log.warning('get_sector_push2test DB计算失败(%s)，返回空', e)
         return SectorPush2Test()
-
-    industries = {}
-    for name, entry in raw.get('industries', {}).items():
-        if isinstance(entry, dict):
-            industries[name] = ths_dict_to_snapshot(entry)
-
-    concepts = {}
-    for name, entry in raw.get('concepts', {}).items():
-        if isinstance(entry, dict):
-            concepts[name] = push2test_dict_to_snapshot(entry)
-
-    return SectorPush2Test(industries=industries, concepts=concepts)
 
 
 def get_sector_klines(sector_name, sector_type='industry'):
