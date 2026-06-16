@@ -169,12 +169,29 @@ class TestStrongTrendService:
     @patch('backend.services.strong_trend_service.get_stock_concepts')
     @patch('backend.services.strong_trend_service.get_stock_industry')
     @patch('backend.services.strong_trend_service.load_sector_daily')
-    @patch('backend.services.strong_trend_service.load_all_stocks')
-    def test_full_pipeline(self, mock_load_stocks, mock_sector, mock_industry, mock_concepts, mock_card):
+    @patch('threel_core.db.query_stock_klines')
+    @patch('backend.services.strong_trend_service._load_industry_map')
+    def test_full_pipeline(self, mock_imap, mock_db_klines, mock_sector,
+                           mock_industry, mock_concepts, mock_card):
         """完整筛选流程返回正确格式"""
         from backend.services.strong_trend_service import get_strong_trend_candidates
 
-        mock_load_stocks.return_value = _make_all_stocks()
+        # 模拟行业映射 {code: {ths_industry: 行业名}}
+        rev = _make_reverse_industry_map()
+        imap = {}
+        for ind, codes in rev.items():
+            for code in codes:
+                imap[code] = {'code': code, 'name': code, 'ths_industry': ind}
+        mock_imap.return_value = imap
+
+        # 模拟DB批量K线查询（返回 {带后缀code: [klines]}）
+        all_stocks = _make_all_stocks()
+        db_result = {}
+        for code, kls in all_stocks.items():
+            suffix = f'{code}.SH' if code.startswith('6') else f'{code}.SZ'
+            db_result[suffix] = kls
+        mock_db_klines.return_value = db_result
+
         mock_sector.return_value = _make_sector_daily()
         # 模拟个股行业归属
         def _mock_industry(code):

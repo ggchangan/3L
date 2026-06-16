@@ -2,9 +2,9 @@
 import os, json
 from typing import List, Tuple, Optional
 
-from backend.core.config import DATA_DIR
+from backend.core.config import DATA_DIR, INDUSTRY_MAP_PATH
 
-# ── 数据加载 ──
+# ── 数据加载（DB / JSON 统一入口）──
 
 def load_sector_daily() -> dict:
     """读取板块K线数据（通过 data_layer 统一接口）"""
@@ -13,70 +13,109 @@ def load_sector_daily() -> dict:
 
 
 def load_all_stocks() -> dict:
-    """读取个股K线数据（展平为 {code: klines}）"""
-    path = os.path.join(DATA_DIR, 'all_stocks_60d.json')
-    if not os.path.isfile(path):
+    """从行业映射+DB加载个股K线，返回 {code: [升序K线]}
+
+    只加载行业映射中存在的股票（全市场数据），K线从DB批量拉取。
+    """
+    imap = _load_industry_map()
+    if not imap:
         return {}
-    with open(path) as f:
-        data = json.load(f)
+    codes = []
+    for code, info in imap.items():
+        if isinstance(info, dict) and info.get('ths_industry'):
+            codes.append(code)
+    if not codes:
+        return {}
+    # 批量从DB拉K线
+    from threel_core.db import query_stock_klines
+    lookup = [_ensure_suffix(c) for c in codes]
+    ts_map = {_ensure_suffix(c): c for c in codes}
+    raw = query_stock_klines(lookup, limit=90)
+    result = {}
+    for ts, kls in raw.items():
+        code = ts_map.get(ts, ts)
+        if kls:
+            result[code] = sorted(kls, key=lambda x: x['date'])
+    return result
 
-    # 格式1: {stocks: {code: klines}} 或 {all: {code: klines}}
-    if 'stocks' in data and isinstance(data['stocks'], dict):
-        stocks = data['stocks']
-    elif 'all' in data and isinstance(data['all'], dict):
-        stocks = data['all']
-    else:
-        stocks = data
 
-    # 格式2: 按方向分组 {方向名: {code: klines}}
-    flat = {}
-    for key, val in stocks.items():
-        if isinstance(val, dict):
-            # 检查是否是 {code: klines} 格式
-            sample = next(iter(val.values()), None)
-            if sample and isinstance(sample, list) and len(sample) > 0 and isinstance(sample[0], dict) and 'close' in sample[0]:
-                # 是 {code: klines} 格式
-                flat.update(val)
-    if flat:
-        return flat
-    return stocks
+def _load_industry_map() -> dict:
+    """加载行业映射（兼容 JSON 和 config 路径）"""
+    path = INDUSTRY_MAP_PATH
+    if os.path.isfile(path):
+        try:
+            with open(path, encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    # fallback
+    fallback = os.path.join(DATA_DIR, 'stock_industry_map.json')
+    if os.path.isfile(fallback):
+        try:
+            with open(fallback, encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _ensure_suffix(code):
+    if '.' in code:
+        return code
+    if code.startswith('6'):
+        return f'{code}.SH'
+    return f'{code}.SZ'
 
 
 def get_stock_industry(code: str) -> str:
-    """查个股所属行业"""
-    path = os.path.join(DATA_DIR, 'stock_industry_map.json')
-    if not os.path.isfile(path):
-        return ''
-    with open(path) as f:
-        imap = json.load(f)
+    """查个股所属行业（从 INDUSTRY_MAP_PATH）"""
+    imap = _load_industry_map()
     info = imap.get(code, {})
     return info.get('ths_industry', '') if isinstance(info, dict) else ''
 
 
 def get_stock_concepts(code: str) -> list:
     """查个股所属概念列表"""
-    path = os.path.join(DATA_DIR, 'map', 'stock_concept.json')
-    if not os.path.isfile(path):
-        return []
-    with open(path) as f:
-        cmap = json.load(f)
+    cmap = _load_concept_map()
     info = cmap.get(code, {})
     if isinstance(info, dict):
         return info.get('concept_names', [])
     return []
 
 
+def _load_concept_map() -> dict:
+    """预加载概念映射（内存缓存，避免每次打开文件）"""
+    _cache = getattr(_load_concept_map, '_cache', None)
+    if _cache is not None:
+        return _cache
+    path = os.path.join(DATA_DIR, 'map', 'stock_concept.json')
+    _cache = {}
+    if os.path.isfile(path):
+        try:
+            with open(path) as f:
+                _cache = json.load(f)
+        except Exception:
+            pass
+    _load_concept_map._cache = _cache
+    return _cache
+
+
 # ── 板块强度排名 ──
 
 def get_top_sectors(sectors: dict, window_days: int = 20, top_n: int = 8) -> List[Tuple[str, float]]:
-    """返回涨幅TOP N的板块列表 (name, chg_pct)"""
+    """返回涨幅TOP N的板块列表 (name, chg_pct)
+
+    sectors: {name: [升序K线]} 预期 K 线升序排列（旧→新）
+    """
     results = []
     for name, klines in sectors.items():
         if not klines or len(klines) < window_days + 1:
             continue
-        recent_close = klines[-1]['close']
+        # klines 为升序，klines[-1] = 最新
+        recent_close = float(klines[-1]['close'])
+        # 取 window_days 天前的收盘价
         past_idx = max(0, len(klines) - window_days - 1)
-        past_close = klines[past_idx]['close']
+        past_close = float(klines[past_idx]['close'])
         if past_close <= 0:
             continue
         chg = round((recent_close - past_close) / past_close * 100, 2)
@@ -90,7 +129,6 @@ def get_top_sectors(sectors: dict, window_days: int = 20, top_n: int = 8) -> Lis
 
 def calc_ema(klines_close: list, period: int) -> list:
     """计算EMA"""
-
     ema = []
     multiplier = 2.0 / (period + 1)
     for i, price in enumerate(klines_close):
@@ -112,7 +150,7 @@ def score_stock(klines: list) -> dict:
             'max_consecutive_down_10d': 0, 'price_vs_ema20_pct': 0,
         }
 
-    prices = [k['close'] for k in klines]
+    prices = [float(k['close']) for k in klines]
     ema5 = calc_ema(prices, 5)
     ema10 = calc_ema(prices, 10)
     ema20 = calc_ema(prices, 20)
@@ -131,8 +169,8 @@ def score_stock(klines: list) -> dict:
 
     # 3. 近10日调整深度
     recent = klines[-10:]
-    recent_high = max(k['high'] for k in recent)
-    recent_low = min(k['low'] for k in recent)
+    recent_high = max(float(k['high']) for k in recent)
+    recent_low = min(float(k['low']) for k in recent)
     max_drawdown = round((recent_low - recent_high) / recent_high * 100, 2) if recent_high > 0 else 0
 
     # 4. 近10日连跌天数
@@ -200,8 +238,6 @@ def get_strong_trend_candidates(
     import datetime
 
     sector_data = load_sector_daily()
-    all_stocks = load_all_stocks()
-
     industries = sector_data.get('industries', {})
     concepts = sector_data.get('concepts', {})
 
@@ -227,27 +263,28 @@ def get_strong_trend_candidates(
     top_concepts_list = [{'name': n, 'chg_20d': c} for n, c in all_con_pairs[:top_concepts]]
     hot_concepts_list = [{'name': n, 'chg_5d': c} for n, c in get_top_sectors(concepts, 5, hot_concepts)]
 
-    # 3. 遍历自选股（all_stocks_60d 中的），检查是否属于强势板块
-    code_set = set()
-    code_to_sectors = {}  # {code: [{type, name, chg_20d, chg_5d}]}
-
     # 预加载行业/概念涨幅查找表
     ind_chg20_map = dict(get_top_sectors(industries, 20, 100))
     ind_chg5_map = dict(get_top_sectors(industries, 5, 100))
     con_chg20_map = dict(get_top_sectors(concepts, 20, 100))
     con_chg5_map = dict(get_top_sectors(concepts, 5, 100))
 
-    for code in all_stocks:
-        score_this = False
-        # 查行业
-        ind = get_stock_industry(code)
+    # 3. 从行业映射中查找候选股代码（不拉K线，纯JSON）
+    imap = _load_industry_map()
+    candiate_codes = []
+    code_to_sectors = {}
+    for code, info in imap.items():
+        if not isinstance(info, dict):
+            continue
+        ind = info.get('ths_industry', '')
+        matched = False
         if ind and ind in strong_industries:
             code_to_sectors.setdefault(code, []).append({
                 'type': 'industry', 'name': ind,
                 'chg_20d': ind_chg20_map.get(ind, 0),
                 'chg_5d': ind_chg5_map.get(ind, 0),
             })
-            score_this = True
+            matched = True
         # 查概念
         for con in get_stock_concepts(code):
             if con in strong_concepts:
@@ -256,44 +293,68 @@ def get_strong_trend_candidates(
                     'chg_20d': con_chg20_map.get(con, 0),
                     'chg_5d': con_chg5_map.get(con, 0),
                 })
-                score_this = True
-        if score_this:
-            code_set.add(code)
+                matched = True
+        if matched:
+            candiate_codes.append(code)
 
-    # 4. 对每只候选股评分
+    if not candiate_codes:
+        return {
+            'date': datetime.date.today().strftime('%Y%m%d'),
+            'top_industries': top_industries_list,
+            'hot_industries': hot_industries_list,
+            'top_concepts': top_concepts_list,
+            'hot_concepts': hot_concepts_list,
+            'candidates': [],
+        }
+
+    # 4. 批量拉取候选股的K线（只拉候选，不拉全市场）
+    from threel_core.db import query_stock_klines
+    lookup = [_ensure_suffix(c) for c in candiate_codes]
+    ts_map = {_ensure_suffix(c): c for c in candiate_codes}
+    raw = query_stock_klines(lookup, limit=90)
+    all_stocks = {}
+    for ts, kls in raw.items():
+        code = ts_map.get(ts, ts)
+        if kls:
+            all_stocks[code] = sorted(kls, key=lambda x: x['date'])
+
+    # 5. 对每只候选股评分
     from backend.services.stock_card_service import get_stock_card
     today_str = datetime.date.today().strftime('%Y%m%d')
     candidates = []
-    for code in code_set:
-        klines = all_stocks[code]
+    # 预加载股票名称
+    name_map = {}
+    aas_path = os.path.join(DATA_DIR, 'all_a_stocks.json')
+    if os.path.isfile(aas_path):
+        try:
+            with open(aas_path) as f:
+                name_map = json.load(f)
+        except Exception:
+            pass
+
+    for code in candiate_codes:
+        klines = all_stocks.get(code, [])
+        if not klines or len(klines) < 20:
+            continue
         st = score_stock(klines)
         if st['score'] < min_score:
             continue
 
-        # 取板块信息（综合评分用板块强度加成）
         best_sector = max(code_to_sectors[code], key=lambda s: max(abs(s['chg_20d']), abs(s['chg_5d'])))
-        # 板块强度加分
         max_sector_chg = max(abs(s['chg_20d']) for s in code_to_sectors[code])
         sector_bonus = min(2.0, max_sector_chg / 10.0)
         total_score = round(min(10.0, st['score'] + sector_bonus), 1)
 
-        # 取股票名
-        aas_path = os.path.join(DATA_DIR, 'all_a_stocks.json')
-        name = code
-        if os.path.isfile(aas_path):
-            with open(aas_path) as f:
-                aas = json.load(f)
-            name = aas.get(code, code)
+        name = name_map.get(code, code)
 
-        # 取信号数据（用已有的 K 线避免重复读文件）
         card = get_stock_card(code, today_str, klines=klines)
 
         candidates.append({
             'code': code,
             'name': name,
-            'price': klines[-1]['close'],
-            'chg_1d': round((klines[-1]['close'] - klines[-2]['close']) / klines[-2]['close'] * 100, 2) if len(klines) >= 2 else 0,
-            'chg_5d': round((klines[-1]['close'] - klines[-6]['close']) / klines[-6]['close'] * 100, 2) if len(klines) >= 6 else 0,
+            'price': float(klines[-1]['close']),
+            'chg_1d': round((float(klines[-1]['close']) - float(klines[-2]['close'])) / float(klines[-2]['close']) * 100, 2) if len(klines) >= 2 else 0,
+            'chg_5d': round((float(klines[-1]['close']) - float(klines[-6]['close'])) / float(klines[-6]['close']) * 100, 2) if len(klines) >= 6 else 0,
             'sectors': code_to_sectors[code],
             'trend_metrics': {k: st[k] for k in ['ema_alignment', 'ema5_slope', 'ema10_slope', 'ema5', 'ema10', 'ema20', 'price_vs_ema20_pct']},
             'adjustment_quality': {k: st[k] for k in ['max_drawdown_10d', 'max_consecutive_down_10d']},
@@ -314,7 +375,7 @@ def get_strong_trend_candidates(
             'conclusion': card.get('conclusion', ''),
         })
 
-    # 5. 排序
+    # 6. 排序
     candidates.sort(key=lambda x: -x['score'])
 
     return {
