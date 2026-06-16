@@ -60,8 +60,22 @@ api/ → services/ → data_access/data_layer
 
 | 账号 | 积分 | 用途 | 代理 |
 |------|------|------|------|
-| 15000 | 高权限 | 一次性回填历史全量 | `https://tu.brze.top` |
-| 2000 | 标准 | 日常增量更新 | 直连（无代理） |
+| 主账号 | 2000 | **日常全部数据更新** | 直连（无代理） |
+| 高积分 | 15000 | 一次性回填历史全量（已跑完） | `https://tu.brze.top` |
+
+**日常更新管线（2000分为主）：**
+
+| 数据 | 当前方案 | 是否可用2000分 | 备注 |
+|------|---------|:--------------:|------|
+| **个股K线** `stock_daily` | mootdx / Tushare 2000分 | ✅ | 改用 Tushare `api.daily()` |
+| **指数K线** `index_daily` | mootdx / Tushare 2000分 | ✅ | 改用 Tushare `api.index_daily()` |
+| **行业映射** | push2test 东财 HTTP | ❌ Tushare无此数据 | 保持现状 |
+| **概念映射** | push2test 东财 HTTP | ❌ Tushare无此数据 | 保持现状 |
+| **板块K线+快照** | akshare 同花顺 | ❌ `ths_daily`需15000分 | 保持现状 |
+
+**一次性回填（已跑完，15000分代理）：**
+- `stock_daily` / `daily_basic` / `index_daily` / `adj_factor` — 2000分可用，但一次性全量走代理更快
+- `ths_daily` / `ths_index` / `ths_member` — 必须15000分
 
 ---
 
@@ -165,9 +179,15 @@ data_layer.py（屏蔽层 — 业务代码的唯一入口）
 | `concept_list.json` | `map/`（已备） | 概念列表 |
 | `scan_result.json` | `computed/` | 扫描结果 |
 
-### 3.3 待迁移（板块数据）
+### 3.3 板块数据（迁移中）
 
-`SECTOR_DAILY_PATH` 仍走 JSON 生成/读取，但文件由 `update_stock_data.py` 运行时自动生成。`ths_daily` 表已回填84万行历史数据，但尚未对接为读取源。
+`SECTOR_DAILY_PATH`（`sector_daily.json`）是最后一块JSON存储的K线数据。
+
+**迁移方案：**
+- `ths_daily` 表已回填84万行历史数据（15000分一次性）
+- 日常增量通过 akshare（同花顺免费接口）写入 `ths_daily` DB
+- 删除 `sector_daily.json` 所有读写路径
+- 读者统一用 `get_ths_industry_klines()`（已实现）
 
 ---
 
