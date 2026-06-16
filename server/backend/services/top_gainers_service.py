@@ -2,11 +2,9 @@
 涨幅榜服务 — 计算全市场指定区间涨幅排名 + 板块饼图 + 个股操作信息
 """
 import json, os
-from backend.core.config import DATA_DIR
+from backend.core.config import DATA_DIR, INDUSTRY_MAP_PATH
 from backend.data_access.data_layer import get_all_stocks
 from backend.core.ema_utils import get_structure, get_stage
-
-INDUSTRY_MAP_PATH = os.path.join(DATA_DIR, 'stock_industry_map.json')
 
 
 def get_top_gainers(start, end, limit=50, stocks=None):
@@ -40,6 +38,8 @@ def get_top_gainers(start, end, limit=50, stocks=None):
 
     _results = []
     for _sec, _ss in _stocks.items():
+        if not isinstance(_ss, dict):
+            continue  # 跳过 last_updated 等非方向字段
         for _code, _kls in _ss.items():
             if len(_kls) < 2:
                 continue
@@ -174,10 +174,9 @@ def get_top_gainers(start, end, limit=50, stocks=None):
 def _load_main_lines():
     """简易主线数据加载（涨幅榜不需要精确主线，降低门槛）"""
     try:
-        from backend.data_access.data_layer import get_industry_map
-        _path = os.path.join(DATA_DIR, 'public', 'main_lines.json')
-        if os.path.exists(_path):
-            with open(_path, 'r', encoding='utf-8') as f:
+        from backend.core.config import MAINLINES_CACHE_PATH
+        if os.path.exists(MAINLINES_CACHE_PATH):
+            with open(MAINLINES_CACHE_PATH, 'r', encoding='utf-8') as f:
                 return json.load(f)
     except Exception:
         pass
