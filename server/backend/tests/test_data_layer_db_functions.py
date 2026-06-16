@@ -136,3 +136,66 @@ class TestDataSourceNewFunctions:
         assert result[0]['high'] == 102.0
         assert result[0]['low'] == 99.0
         assert result[0]['volume'] == 10000
+
+
+class TestTushareIncrementalIndexDaily:
+    """验证 index_daily 增量拉取的按代码独立检查逻辑（避免其他指数误跳过）"""
+
+    @patch('backend.data_access.data_source.datetime')
+    @patch('backend.data_access.data_source.get_last_completed_trading_day')
+    @patch('backend.data_access.data_source._get_tushare_db')
+    def test_index_checked_independently(self, mock_db, mock_ltd, mock_dt):
+        """验证每个指数按 ts_code 独立检查最新日期，不互相干扰"""
+        import tushare as ts
+
+        mock_ltd.return_value = '20260617'
+        mock_dt.now.return_value.weekday.return_value = 2  # 周三
+
+        # mock DB: stock_daily 已有数据（跳过），index_daily 部分有数据
+        mock_db_inst = MagicMock()
+        mock_db_inst.get_last_trade_date.return_value = '20260617'  # stock_daily 跳过
+
+        # 模拟 execute_raw 按 ts_code 返回不同最新日期
+        def mock_execute_raw(sql, params=None):
+            if '000001.SH' in str(params):
+                return [{'latest': '20260617'}]   # 000001 已有数据
+            elif '000688.SH' in str(params):
+                return [{'latest': '20260616'}]   # 000688 需要拉取
+            elif '000985.SH' in str(params):
+                return [{'latest': '20260617'}]   # 000985 已有数据
+            elif '399006.SZ' in str(params):
+                return [{'latest': '20260616'}]   # 399006 需要拉取
+            return [{'latest': '20260616'}]
+
+        mock_db_inst.execute_raw.side_effect = mock_execute_raw
+        mock_db_inst.upsert_many.return_value = 1  # 每次成功写入1条
+        mock_db.return_value = mock_db_inst
+
+        # mock Tushare API — 只 mock pro_api，不 mock 整个 tushare 模块
+        import pandas as pd
+        mock_pro_api = MagicMock()
+        mock_pro_api.index_daily.return_value = pd.DataFrame({
+            'ts_code': ['000688.SH'],
+            'trade_date': ['20260617'],
+            'open': [1750.0], 'close': [1760.0], 'high': [1770.0],
+            'low': [1745.0], 'pre_close': [1750.0], 'change': [10.0],
+            'pct_chg': [0.57], 'vol': [1e8], 'amount': [5e10],
+        })
+
+        from backend.data_access.data_source import tushare_fetch_daily_incremental
+
+        with patch('tushare.pro_api', return_value=mock_pro_api):
+            result = tushare_fetch_daily_incremental()
+
+        # 验证: 000001.SH 和 000985.SH 被跳过，000688.SH 和 399006.SZ 被拉取
+        assert result == 2, f'期望拉取2条指数，实际{result}条'
+        assert mock_pro_api.index_daily.call_count == 2
+
+        # 验证调用了按 ts_code 的查询
+        calls = [c[0] for c in mock_db_inst.execute_raw.call_args_list
+                 if 'WHERE ts_code' in str(c[0])]
+        assert len(calls) == 4, f'期望4次按代码查询，实际{len(calls)}次'
+        for c in calls:
+            sql, params = c
+            assert params is not None and len(params) == 1
+            assert params[0] in ['000001.SH', '000688.SH', '000985.SH', '399006.SZ']
