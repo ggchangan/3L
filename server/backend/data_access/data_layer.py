@@ -22,7 +22,7 @@ from backend.core.config import (
     DATA_DIR, WWW_DIR, CACHE_DIR, PRIVATE_DIR,
     ALL_STOCKS_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH,
     SUB_SECTOR_CLUSTERS_PATH, FINANCIAL_CACHE_PATH,
-    PROFIT_QUALITY_PATH, INDEX_DATA_PATH, SECTOR_DAILY_PATH,
+    PROFIT_QUALITY_PATH, INDEX_DATA_PATH,
     INDUSTRY_LEADERS_PATH,
     LATEST_SCAN_PATH, ALL_CODES_PATH, KEY_POINTS_DIR,
     HOLDINGS_PATH, TRADES_PATH, REVIEW_ARCHIVE_DIR,
@@ -243,17 +243,6 @@ def get_sector_daily():
     return cache.get('sector_daily', _load_from_db, ttl=60)
 
 
-def save_sector_daily(data):
-    """原子保存板块日K线数据"""
-    _atomic_save_json(SECTOR_DAILY_PATH, data)
-    cache.invalidate('sector_daily')
-
-
-def load_sector_daily_uncached():
-    """强制从磁盘读取（不走缓存）"""
-    return _load_json(SECTOR_DAILY_PATH, {})
-
-
 def get_sector_push2test():
     """从 ths_daily 计算当日涨跌幅快照（替代 JSON _push2test 字段）
 
@@ -343,13 +332,8 @@ def get_sector_push2test():
 
 def get_sector_klines(sector_name, sector_type='industry'):
     """获取单个板块历史K线数据"""
-    try:
-        from backend.data_access.data_source import get_sector_klines as _ds_klines
-        return _ds_klines(sector_name, sector_type)
-    except Exception:
-        data = _load_json(SECTOR_DAILY_PATH, {})
-        key = 'industries' if sector_type == 'industry' else 'concepts'
-        return data.get(key, {}).get(sector_name, [])
+    from backend.data_access.data_source import get_sector_klines as _ds_klines
+    return _ds_klines(sector_name, sector_type)
 
 
 # ====== 概念快照 ======

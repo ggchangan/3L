@@ -25,7 +25,6 @@ from backend.data_access.data_layer import (
     load_index_data_uncached,
     save_index_data,
     INDEX_CODES,
-    load_sector_daily_uncached,
 )
 from backend.data_access.data_layer import (
     get_concept_list,
@@ -1035,9 +1034,9 @@ def update_concept_klines():
     未来可优化为：只拉取追踪中的概念（减少请求量）
     """
     t0 = time.time()
-    # 从 sector_daily.json 读概念K线
-    sector = load_sector_daily_uncached()
-    concepts_kline = sector.get('concepts', {})
+    # 从 DB 读概念K线
+    from backend.data_access.data_layer import get_ths_industry_klines
+    concepts_kline = get_ths_industry_klines(ths_type='N')
     if not concepts_kline:
         log('⚠️  板块数据中无概念K线')
         return 0

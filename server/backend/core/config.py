@@ -38,7 +38,7 @@ COMPUTED_DIR = os.path.join(DATA_DIR, 'computed')
 # =====================================================
 ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')   # →DB（文件已删）
 INDEX_DATA_PATH = os.path.join(DATA_DIR, 'index_sh_data.json')    # →DB（文件已删）
-SECTOR_DAILY_PATH = os.path.join(DATA_DIR, 'sector_daily.json')   # →DB（待迁移）
+SECTOR_DAILY_PATH = os.path.join(DATA_DIR, 'sector_daily.json')   # 已废弃（→DB迁移完成）
 ALL_CODES_PATH = os.path.join(DATA_DIR, 'all_stock_codes.json')   # 代码缓存（JSON保留）
 
 # 用户配置（config/）

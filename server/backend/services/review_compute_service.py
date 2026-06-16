@@ -307,21 +307,14 @@ def classify_opportunity(is_mainline, is_secondary, stage, vl_score):
 
 def get_mainline_data(date_str):
     """三梯队：前5=主线，6~10=次级主线，其余=非主线（当天文件缓存）"""
-    # 检查当天缓存（同时检查底层 sector_daily.json 是否已被 cron 更新）
+    # 检查当天缓存（数据源已经是 DB，不再检查文件 mtime）
     if os.path.isfile(MAINLINE_FULL_CACHE):
         try:
             with open(MAINLINE_FULL_CACHE) as _f:
                 cached = json.load(_f)
             if cached.get('date') == date_str:
-                # 缓存中的 sector_mtime 比文件 mtime 新才有效
-                sector_path = config.SECTOR_DAILY_PATH
-                sector_mtime = os.path.getmtime(sector_path) if os.path.isfile(sector_path) else 0
-                cache_mtime = os.path.getmtime(MAINLINE_FULL_CACHE)
-                if cache_mtime >= sector_mtime:
-                    print(f"[3L复盘] 主线数据读缓存 {date_str}")
-                    return cached
-                else:
-                    print(f"[3L复盘] 底层板块数据已更新（cache={cache_mtime:.0f} < sector={sector_mtime:.0f}），重算")
+                print(f"[3L复盘] 主线数据读缓存 {date_str}")
+                return cached
         except Exception:
             pass
 
