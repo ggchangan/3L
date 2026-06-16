@@ -127,28 +127,6 @@ def fetch_index_klines_from_akshare(code, limit=500):
         return []
 
 
-def update_trade_cal_from_tushare():
-    """增量更新 trade_cal 表（补最新交易日到上个月底）"""
-    from backend.data_access.tushare_db import TushareDB
-    from backend.scripts.fill_history import fetch_and_upsert
-    db = TushareDB()
-    # 查明 DB 里最新交易日
-    rows = db.execute_raw('SELECT MAX(cal_date) as last FROM trade_cal')
-    last = rows[0]['last'] if rows and rows[0]['last'] else '20200101'
-    today = datetime.now().strftime('%Y%m%d')
-    if last >= today:
-        return 0  # 已最新
-    # 从 Tushare API 拉最新的
-    import tushare as ts
-    api = ts.pro_api()
-    start = last[:6] + '01'  # 从最新那个月月初开始
-    rows_count = fetch_and_upsert(db, api, 'trade_cal', 'trade_cal',
-                                   exchange='SSE', start_date=start, end_date=today)
-    if rows_count:
-        log.info('trade_cal: 新增 %d 行 (%s~%s)', rows_count, start, today)
-    return rows_count or 0
-
-
 def get_watchlist():
     """返回自选股列表（缓存10s）"""
     return cache.get('watchlist', _threel_get_watchlist, ttl=10)

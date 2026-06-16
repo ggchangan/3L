@@ -29,7 +29,6 @@ from backend.data_access.data_layer import (
     get_stock_names_from_db,
     get_stock_daily_latest_date,
     fetch_index_klines_from_akshare,
-    update_trade_cal_from_tushare,
 )
 from backend.data_access.data_layer import (
     get_concept_list,
@@ -914,14 +913,6 @@ def main():
     # 全局关闭 tqdm 进度条（在 akshare 首次导入前生效）
     os.environ['TQDM_DISABLE'] = '1'
     os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
-
-    # 增量更新交易日历（补最新交易日）
-    try:
-        cnt = update_trade_cal_from_tushare()
-        if cnt:
-            log(f'📅 trade_cal: 补 {cnt} 行')
-    except Exception as e:
-        log(f'⚠️  trade_cal更新失败: {e}')
 
     # 确保 all_stock_codes.json 存在（搜索用）
     if not os.path.isfile(ALL_CODES_PATH):
