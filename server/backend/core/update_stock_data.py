@@ -907,12 +907,87 @@ def update_concept_klines():
 # 主入口
 # ════════════════════════════════════════════════════════════════
 
+# ════════════════════════════════════════════════════════════════
+# Tushare 增量拉取 — 将最新交易日数据写入 DB
+# ════════════════════════════════════════════════════════════════
+
+def _fetch_tushare_daily_incremental():
+    """拉取最新交易日数据到 stock_daily + index_daily DB 表
+
+    只在交易时段后执行（08:00~20:00），非交易日直接跳过。
+    检查该日期是否已有数据，避免重复拉取。
+    """
+    from backend.data_access.data_source import get_last_completed_trading_day
+    from backend.data_access.tushare_db import TushareDB
+    from backend.core.config import TUSHARE_TOKEN
+    import tushare as ts
+
+    # 非交易日跳过
+    now = datetime.now()
+    if now.weekday() >= 5:
+        log('⏭️  非交易日，跳过 Tushare 增量拉取')
+        return
+
+    # 确定目标日期（上一个已完成交易日）
+    trade_date = get_last_completed_trading_day()
+    if not trade_date:
+        log('⚠️  无法确定交易日，跳过 Tushare 增量拉取')
+        return
+
+    log(f'📡 Tushare 增量拉取目标日期: {trade_date}')
+
+    start = time.time()
+    db = TushareDB()
+    api = ts.pro_api(TUSHARE_TOKEN)
+    total_rows = 0
+
+    # ── 个股日线 stock_daily ──
+    try:
+        latest = db.get_last_trade_date('stock_daily')
+        if latest and latest >= trade_date:
+            log(f'  stock_daily 已有 {trade_date} 数据，跳过')
+        else:
+            df = api.daily(trade_date=trade_date)
+            if df is not None and not df.empty:
+                rows = db.upsert_many('stock_daily', df)
+                log(f'  stock_daily: 写入 {rows} 条')
+                total_rows += rows
+            time.sleep(0.6)
+    except Exception as e:
+        log(f'⚠️  stock_daily 增量失败: {e}')
+
+    # ── 指数日线 index_daily ──
+    try:
+        for ts_code in ['000001.SH', '000688.SH', '000985.SH', '399006.SZ']:
+            try:
+                latest = db.get_last_trade_date('index_daily')
+                if latest and latest >= trade_date:
+                    log(f'  index_daily[{ts_code}] 已有数据 ({latest})，跳过')
+                    continue
+                df = api.index_daily(ts_code=ts_code, start_date=trade_date, end_date=trade_date)
+                if df is not None and not df.empty:
+                    rows = db.upsert_many('index_daily', df)
+                    log(f'  index_daily[{ts_code}]: 写入 {rows} 条')
+                    total_rows += rows
+                time.sleep(0.6)
+            except Exception as e:
+                log(f'  ⚠️  index_daily[{ts_code}] 失败: {e}')
+    except Exception as e:
+        log(f'⚠️  index_daily 增量失败: {e}')
+
+    elapsed = time.time() - start
+    log(f'📡 Tushare 增量完成: {total_rows} 条写入 DB，耗时 {elapsed:.1f}s')
+
+
 def main():
     t0 = time.time()
 
     # 全局关闭 tqdm 进度条（在 akshare 首次导入前生效）
     os.environ['TQDM_DISABLE'] = '1'
     os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
+
+    # ── Tushare 增量拉取（先确保 stock_daily / index_daily 有最新数据）──
+    _fetch_tushare_daily_incremental()
 
     # 确保 all_stock_codes.json 存在（搜索用）
     if not os.path.isfile(ALL_CODES_PATH):
