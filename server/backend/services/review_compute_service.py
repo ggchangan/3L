@@ -7,7 +7,9 @@ import json, os, sys, requests, math
 from datetime import datetime
 
 from backend.core import config
-from backend.core.config import DATA_DIR, ALL_STOCKS_PATH, WWW_DIR, MAINLINES_CACHE_PATH
+from backend.core.config import DATA_DIR, WWW_DIR, MAINLINES_CACHE_PATH
+
+ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
 
 MAINLINE_FULL_CACHE = os.path.join(DATA_DIR, '.cache', 'mainline_full.json')
 MAINLINE_HISTORY_PATH = os.path.join(DATA_DIR, 'mainline_history.json')
@@ -307,21 +309,14 @@ def classify_opportunity(is_mainline, is_secondary, stage, vl_score):
 
 def get_mainline_data(date_str):
     """三梯队：前5=主线，6~10=次级主线，其余=非主线（当天文件缓存）"""
-    # 检查当天缓存（同时检查底层 sector_daily.json 是否已被 cron 更新）
+    # 检查当天缓存（数据源已经是 DB，不再检查文件 mtime）
     if os.path.isfile(MAINLINE_FULL_CACHE):
         try:
             with open(MAINLINE_FULL_CACHE) as _f:
                 cached = json.load(_f)
             if cached.get('date') == date_str:
-                # 缓存中的 sector_mtime 比文件 mtime 新才有效
-                sector_path = config.SECTOR_DAILY_PATH
-                sector_mtime = os.path.getmtime(sector_path) if os.path.isfile(sector_path) else 0
-                cache_mtime = os.path.getmtime(MAINLINE_FULL_CACHE)
-                if cache_mtime >= sector_mtime:
-                    print(f"[3L复盘] 主线数据读缓存 {date_str}")
-                    return cached
-                else:
-                    print(f"[3L复盘] 底层板块数据已更新（cache={cache_mtime:.0f} < sector={sector_mtime:.0f}），重算")
+                print(f"[3L复盘] 主线数据读缓存 {date_str}")
+                return cached
         except Exception:
             pass
 
@@ -329,14 +324,11 @@ def get_mainline_data(date_str):
     from backend.data_access.data_layer import get_sector_push2test
     push2test_data = get_sector_push2test()
     push2test_inds = push2test_data.industries if hasattr(push2test_data, 'industries') else {}
-    # _push2test 是 cron 保存的当日涨跌幅快照，权威数据源
 
-    # 从本地板块K线数据计算20日涨幅（data_layer 唯一入口）
-    from backend.data_access.data_layer import get_sector_daily
-    sector_data = get_sector_daily()
-    industries_data = sector_data.get('industries', {})
+    # 从 DB（ths_daily）获取行业K线数据
+    from backend.data_access.data_layer import get_ths_industry_klines
+    industries_data = get_ths_industry_klines(ths_type='I')
     if not industries_data:
-        print(f"[WARN] 本地板块数据为空（sector_daily.json 可能未更新）")
         return {'lines': [], 'secondary': [], 'industries': get_industry_rankings(), 'all_ranked': []}
 
     # 导入概念波谷判定（复用至行业板块）
@@ -429,10 +421,9 @@ def get_mainline_data(date_str):
 
 def get_concept_mainline_data(date_str):
     """概念主线排名 — 与 get_mainline_data 相同逻辑，但用概念板块数据"""
-    from backend.data_access.data_layer import get_sector_daily
+    from backend.data_access.data_layer import get_ths_industry_klines
     from backend.services.concept_wave_service import judge_concept_wave as _judge_wave
-    sector_data = get_sector_daily()
-    concepts_data = sector_data.get('concepts', {})
+    concepts_data = get_ths_industry_klines(ths_type='N')
     if not concepts_data:
         return {'lines': [], 'secondary': [], 'all_ranked': [], 'persistence': []}
 

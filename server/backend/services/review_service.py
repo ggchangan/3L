@@ -12,9 +12,13 @@ from datetime import datetime
 from backend.core.config import (
     REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
     WWW_DIR, PRIVATE_DIR, SCRIPTS_DIR, MOMENTUM_CACHE_PREFIX,
-    CHARTS_DIR, ALL_STOCKS_PATH, DATA_DIR, INDUSTRY_MAP_PATH, MAINLINES_CACHE_PATH,
+    CHARTS_DIR, DATA_DIR, INDUSTRY_MAP_PATH, MAINLINES_CACHE_PATH,
 )
 from backend.core import config
+
+# ── 局部路径常量（旧JSON已迁移至DB，保留供 fallback 读取）──
+ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
+
 from backend.core.exceptions import DataError
 from backend.core.logger import get_logger
 
@@ -122,18 +126,10 @@ def load_review_data(date_str, existing, ww_dir):
     Returns: (holdings, buy_signals, all_stocks)
     """
     from backend.services.direction_service import get_active as get_active_dirs
-    from backend.data_access.data_layer import get_all_stocks
+    from backend.data_access.data_layer import get_all_stocks, get_holdings
 
-    holdings_file = os.path.join(DATA_DIR, 'private', 'holdings.json')
-    live_holdings = []
-    if os.path.isfile(holdings_file):
-        try:
-            with open(holdings_file) as f:
-                hdata = json.load(f)
-            live_holdings = hdata.get('holdings', [])
-        except Exception:
-            log.warning('review: silent skip')
-            pass
+    # 从 DB 读取持仓（user_id=1 默认用户）
+    live_holdings = get_holdings(1)
     holdings = live_holdings or existing.get('holdings', []) or existing.get('stocks', {}).get('stocks', [])
 
     buy_signals = []
@@ -200,8 +196,8 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
         latest_date = ''
         for sec, stocks in all_stocks_60d.items():
             for code, kls in stocks.items():
-                if kls and kls[-1]['date'] > latest_date:
-                    latest_date = kls[-1]['date']
+                if kls and kls[0]['date'] > latest_date:
+                    latest_date = kls[0]['date']
 
         scan_date = latest_date if latest_date else today_yyyymmdd
         ml_names = [l['name'] for l in mainline_data.get('lines', [])]
@@ -329,14 +325,14 @@ def generate_daily_review(date_str=None):
         index_klines = [k for k in index_klines if k['date'] <= date_str]
     today_quote = fetch_market_quote()
 
-    print(f"[3L复盘] K线数据: 共{len(index_klines)}天, 最新={index_klines[-1]['date'] if index_klines else '无'}")
+    print(f"[3L复盘] K线数据: 共{len(index_klines)}天, 最新={index_klines[0]['date'] if index_klines else '无'}")
 
     # ① 大盘周期判定
     print("[3L复盘] ① 判定大盘周期(V5)...")
     market_cycle = judge_peak_valley(index_klines)
     if index_klines:
-        last = index_klines[-1]
-        prev = index_klines[-2] if len(index_klines) >= 2 else None
+        last = index_klines[0]
+        prev = index_klines[1] if len(index_klines) >= 2 else None
         market_cycle['price'] = f"{last['close']:.2f}"
         if prev:
             chg_pct = (last['close'] - prev['close']) / prev['close'] * 100
@@ -582,8 +578,8 @@ def compute_review_real_time(date_str=None):
     # ① 大盘周期判定
     market_cycle = judge_peak_valley(index_klines)
     if index_klines:
-        last = index_klines[-1]
-        prev = index_klines[-2] if len(index_klines) >= 2 else None
+        last = index_klines[0]
+        prev = index_klines[1] if len(index_klines) >= 2 else None
         market_cycle['price'] = f"{last['close']:.2f}"
         if prev:
             chg_pct = (last['close'] - prev['close']) / prev['close'] * 100
@@ -604,23 +600,18 @@ def compute_review_real_time(date_str=None):
 
     # ③ 扫描买点信号（只扫持仓股 + 启用方向自选股）
     all_stocks = get_all_stocks()
-    all_stocks_60d = all_stocks.get('stocks', {}) if isinstance(all_stocks, dict) else {}
+    # get_all_stocks() 返回 {方向: {code: [kline,...]}, 'last_updated': '...'}
+    # 过滤掉非 dict 字段（如 last_updated）
+    all_stocks_60d = {k: v for k, v in all_stocks.items()
+                      if isinstance(v, dict)} if isinstance(all_stocks, dict) else {}
     if not all_stocks_60d:
         if os.path.isfile(ALL_STOCKS_PATH):
             with open(ALL_STOCKS_PATH) as _f:
                 all_stocks_60d = json.load(_f).get('stocks', {})
 
     # 先加载持仓股，合并到扫描范围
-    holdings_file = os.path.join(DATA_DIR, 'private', 'holdings.json')
-    holdings = []
-    if os.path.isfile(holdings_file):
-        try:
-            with open(holdings_file) as f:
-                hdata = json.load(f)
-            holdings = hdata.get('holdings', [])
-        except Exception:
-            log.warning('review: silent skip')
-            pass
+    from backend.data_access.data_layer import get_holdings
+    holdings = get_holdings(1)
 
     buy_signals, all_stocks_60d = scan_buy_signals_if_needed(
         [], all_stocks_60d,

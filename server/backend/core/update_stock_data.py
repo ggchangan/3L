@@ -25,8 +25,10 @@ from backend.data_access.data_layer import (
     load_index_data_uncached,
     save_index_data,
     INDEX_CODES,
-    load_sector_daily_uncached,
-    save_sector_daily,
+    fetch_stock_klines_from_db,
+    get_stock_names_from_db,
+    get_stock_daily_latest_date,
+    fetch_index_klines_from_akshare,
 )
 from backend.data_access.data_layer import (
     get_concept_list,
@@ -48,6 +50,7 @@ def log(msg):
 # ════════════════════════════════════════════════════════════════
 
 def _get_stock_name(code):
+    """通过腾讯接口获取股票名称"""
     market = 'sz' if code.startswith(('0', '3')) else 'sh'
     try:
         import requests
@@ -65,112 +68,6 @@ def _get_stock_name(code):
     return None
 
 
-def fetch_klines_from_mootdx(client, code, count=800):
-    try:
-        bars = client.bars(symbol=code, frequency=9, start=0, count=count, fq=True)
-        if bars is None or len(bars) == 0:
-            return []
-        records = []
-        for _, row in bars.iterrows():
-            records.append({
-                'date': row['datetime'][:10].replace('-', ''),
-                'open': round(float(row['open']), 2),
-                'close': round(float(row['close']), 2),
-                'high': round(float(row['high']), 2),
-                'low': round(float(row['low']), 2),
-                'volume': int(float(row['volume'])) * 100,
-            })
-        # 手动前复权矫正（mootdx的fq=True不返回正确前复权数据）
-        xdxr_records = client.xdxr(symbol=code)
-        if xdxr_records is not None and len(xdxr_records) > 0:
-            xdxr_events = []
-            for _, row in xdxr_records.iterrows():
-                xdxr_events.append({
-                    'year': row['year'], 'month': row['month'], 'day': row['day'],
-                    'category': row['category'],
-                    'qianzongguben': row['qianzongguben'],
-                    'houzongguben': row['houzongguben'],
-                    'fenhong': row['fenhong'],
-                    'panqianliutong': row['panqianliutong'],
-                    'panhouliutong': row['panhouliutong'],
-                })
-            records = _apply_fq_adjustment(records, xdxr_events)
-        return records
-    except Exception:
-        return []
-
-
-def _apply_fq_adjustment(records, xdxr_events):
-    """对不复权的K线数据做前复权矫正
-
-    mootdx的bars(fq=True)不返回正确前复权数据（实证发现）。
-    用xdxr()获取除权除息事件后手动调整。
-
-    前复权逻辑：
-    - 送转股(category=9)：价格 × 前总股本/后总股本
-    - 分红(category=1)：价格下调（幅度小，精确度要求低时可不处理）
-    - 从最新事件往最旧事件逐次调整（前复权时序）
-    """
-    if not records or not xdxr_events:
-        return records
-
-    # 过滤出K线范围内的除权事件
-    dates = {r['date'] for r in records}
-    if not dates:
-        return records
-
-    min_date = min(dates)
-    max_date = max(dates)
-
-    # 只在K线范围内的除权事件
-    relevant = []
-    for ev in xdxr_events:
-        ev_date = f"{ev['year']}{ev['month']:02d}{ev['day']:02d}"
-        if ev_date >= min_date and ev_date <= max_date:
-            relevant.append((ev_date, ev))
-
-    if not relevant:
-        return records
-
-    # 按日期倒序（从最新除权事件往前调整）
-    relevant.sort(key=lambda x: x[0], reverse=True)
-
-    for ev_date, ev in relevant:
-        factor = 1.0
-
-        # 送转股调整
-        if ev['category'] == 9:
-            qzg = ev.get('qianzongguben')
-            hzg = ev.get('houzongguben')
-            if qzg and hzg and hzg > 0 and qzg > 0:
-                factor *= qzg / hzg
-
-        # 分红调整
-        if ev['category'] == 1:
-            fenhong = ev.get('fenhong')
-            if fenhong and fenhong > 0:
-                # 找到除权前最后一天的收盘价做分红系数
-                prev_close = None
-                for r in records:
-                    if r['date'] < ev_date:
-                        prev_close = r['close']
-                    else:
-                        break
-                if prev_close and prev_close > 0:
-                    factor *= (prev_close - fenhong) / prev_close
-
-        # 应用调整：除权日之前的所有K线乘以系数
-        if abs(factor - 1.0) > 0.001:
-            for r in records:
-                if r['date'] < ev_date:
-                    r['open'] = round(r['open'] * factor, 2)
-                    r['close'] = round(r['close'] * factor, 2)
-                    r['high'] = round(r['high'] * factor, 2)
-                    r['low'] = round(r['low'] * factor, 2)
-
-    return records
-
-
 def _flatten_stocks(sector_map):
     """{sector: {code: [klines]}} → {code: {sector, klines, name}}"""
     result = {}
@@ -183,8 +80,8 @@ def _flatten_stocks(sector_map):
     return result
 
 
-def update_stocks(client):
-    """更新个股K线，返回统计 (updated, new_added, names_fixed)"""
+def update_stocks():
+    """更新个股K线 — 从 stock_daily DB 批量拉取，不再用 mootdx"""
     wl = get_watchlist()
     codes = sorted(set(
         s.get('code', '')[-6:] for s in wl if s.get('code')
@@ -193,10 +90,11 @@ def update_stocks(client):
         log('⚠️  自选股列表为空，跳过个股更新')
         return (0, 0, 0)
 
+    industry_map = get_industry_map()
     existing_sector_map = load_all_stocks_uncached()
     existing = _flatten_stocks(existing_sector_map)
     last_updated = get_last_updated()
-    industry_map = get_industry_map()
+    db_latest = get_stock_daily_latest_date()
 
     # 判断是否需要更新
     need_update = False
@@ -204,32 +102,18 @@ def update_stocks(client):
         if code not in existing:
             need_update = True
             break
-    if not need_update and last_updated:
-        # 用第一只股票判断mootdx最新交易日
-        sample = client.bars(symbol=codes[0], frequency=9, start=0, count=3)
-        if sample is not None and len(sample) > 0:
-            latest = sample.iloc[-1]['datetime'][:10].replace('-', '')
-        else:
-            latest = datetime.now().strftime('%Y%m%d')
-        if latest <= last_updated.replace('-', ''):
+    if not need_update and last_updated and db_latest:
+        if db_latest <= last_updated.replace('-', ''):
             log('✅  个股数据已最新，跳过')
-            # 但还要返回 codes 给上游判断最新交易日
             return (0, 0, 0)
 
-    today_str = datetime.now().strftime('%Y%m%d')
-    if codes:
-        sample = client.bars(symbol=codes[0], frequency=9, start=0, count=3)
-        if sample is not None and len(sample) > 0:
-            latest_mootdx = sample.iloc[-1]['datetime'][:10].replace('-', '')
-        else:
-            latest_mootdx = today_str
-    else:
-        latest_mootdx = today_str
+    # 从 stock_daily 批量拉取最新60天K线
+    klines_map = fetch_stock_klines_from_db(codes, limit=60)
+    name_map = get_stock_names_from_db(codes)
 
     # 清除缓存
-    cache_path = os.path.join(CACHE_DIR, 'all_stocks.json')
     try:
-        os.remove(cache_path)
+        os.remove(os.path.join(CACHE_DIR, 'all_stocks.json'))
     except (FileNotFoundError, OSError):
         pass
 
@@ -238,53 +122,44 @@ def update_stocks(client):
     names_fixed = 0
 
     for code in codes:
-        try:
-            records = fetch_klines_from_mootdx(client, code)
-            if not records:
-                continue
+        klines = klines_map.get(code, [])
+        if not klines:
+            log(f'  ⚠️ {code}: 无K线数据')
+            continue
 
-            if code in existing:
-                klines = existing[code]['klines']
-                seen = {k['date'] for k in klines}
-                has_new = False
-                for r in records:
-                    if r['date'] > (last_updated or '').replace('-', ''):
-                        if r['date'] not in seen:
-                            klines.append(r)
-                            has_new = True
-                if has_new:
-                    klines.sort(key=lambda x: x['date'])
-                    while len(klines) > 60:
-                        klines.pop(0)
-                    updated += 1
+        if code in existing:
+            existing_dates = {k['date'] for k in existing[code]['klines']}
+            has_new = any(k['date'] not in existing_dates for k in klines)
+            if has_new:
+                existing[code]['klines'] = sorted(klines, key=lambda x: x['date'])[-60:]
+                updated += 1
+        else:
+            im = industry_map.get(code, {})
+            if isinstance(im, dict):
+                name = im.get('name', '') or name_map.get(code, '')
             else:
-                name = None
-                im = industry_map.get(code, {})
-                if isinstance(im, dict):
-                    name = im.get('name', '')
-                if not name:
-                    name = _get_stock_name(code)
-                    if name:
-                        names_fixed += 1
+                name = name_map.get(code, '')
+            if not name:
+                name = _get_stock_name(code)
+                if name:
+                    names_fixed += 1
 
-                records = records[-60:]
-                for r in records:
-                    r['name'] = name or code
+            klines = sorted(klines, key=lambda x: x['date'])[-60:]
+            for r in klines:
+                r['name'] = name or code
 
-                ths_industry = '未知'
-                if isinstance(im, dict) and im.get('ths_industry'):
-                    ths_industry = im['ths_industry']
+            ths_industry = '未知'
+            if isinstance(im, dict) and im.get('ths_industry'):
+                ths_industry = im['ths_industry']
 
-                existing[code] = {
-                    'sector': ths_industry,
-                    'klines': records,
-                    'name': name or code,
-                }
-                new_added += 1
-        except Exception as e:
-            log(f'  ⚠️ {code}: {e}')
+            existing[code] = {
+                'sector': ths_industry,
+                'klines': klines,
+                'name': name or code,
+            }
+            new_added += 1
 
-    # 组装输出
+    # 组装 sector_map
     sector_map = {}
     for code, info in existing.items():
         if code in codes:
@@ -301,8 +176,7 @@ def update_stocks(client):
                 klines.pop(0)
             sector_map[sec][code] = klines
 
-    save_all_stocks(sector_map, last_updated=latest_mootdx)
-
+    save_all_stocks(sector_map, last_updated=db_latest)
     stats = f'{updated}只更新, {new_added}只新增, {names_fixed}只补名'
     log(f'📈  个股: {stats}')
     return (updated, new_added, names_fixed)
@@ -375,18 +249,8 @@ def _df_to_kline(df):
     return records
 
 
-def _index_symbol(code):
-    """返回 akshare 的指数symbol，创业板指(399xxx)用 sz 前缀"""
-    if code.startswith('399') or code.startswith('300'):
-        return f'sz{code}'
-    return f'sh{code}'
-
-def update_index(client):
-    """更新所有指数日K线（上证/创业板/科创50/中证全指）"""
-    import akshare as ak
-    import warnings
-    warnings.filterwarnings('ignore')
-
+def update_index():
+    """更新所有指数日K线（通过 data_layer 封装，不再直接调 akshare）"""
     existing = load_index_data_uncached()
     indices = existing.get('indices', {})
     total_added = 0
@@ -397,17 +261,11 @@ def update_index(client):
         existing_klines = info.get('klines', [])
         existing_dates = {k['date'] for k in existing_klines}
 
-        try:
-            df = ak.stock_zh_index_daily_tx(symbol=_index_symbol(code))
-        except Exception as e:
-            log(f'⚠️  {name}({code})拉取失败: {e}')
-            continue
+        new_klines = fetch_index_klines_from_akshare(code)
 
-        if df is None or len(df) == 0:
-            log(f'⚠️  {name}({code})数据为空')
+        if not new_klines:
+            log(f'⚠️  {name}({code})数据为空' if len(existing_klines) == 0 else '')
             continue
-
-        new_klines = _df_to_kline(df)
 
         added = 0
         for k in new_klines:
@@ -417,7 +275,6 @@ def update_index(client):
 
         if added > 0:
             existing_klines.sort(key=lambda x: x['date'])
-            # 裁剪：保留最近200天
             if len(existing_klines) > 200:
                 existing_klines = existing_klines[-200:]
             last_kline = existing_klines[-1]
@@ -429,15 +286,13 @@ def update_index(client):
         total_added += added
 
     if total_added == 0:
-        log(f'✅  指数数据已最新')
+        log('✅  指数数据已最新')
     else:
         log(f'📈  指数合计: {total_added}条新增, 最新{last_date}')
 
-    # 统一保存
     existing['indices'] = indices
     existing['last_updated'] = last_date or existing.get('last_updated', '')
     save_index_data(existing)
-
     return (total_added, last_date)
 
 
@@ -594,95 +449,79 @@ def _fetch_today_sectors_from_push2test(sector_type, name_list):
     return name_map
 
 
-def _append_klines_from_ths(industries, concepts, today):
-    """追加最近3天 THS K 线到 industries/concepts 字典（去重）
+def _upsert_klines_to_db(names_with_type, today):
+    """从 akshare 拉板块K线，计算 pct_chg，upsert 到 ths_daily DB
 
-    每次 cron 运行调用，确保顶层 K 线和 _push2test 快照数据源一致。
-    只追加已存在的 THS 板块名（全量回填后 industries/concepts 只有 THS 名）。
+    Args:
+        names_with_type: [(name, stype), ...]  stype='industry'|'concept'
+        today: YYYYMMDD
+
+    Returns:
+        (写入行数, 请求板块数)
     """
     import akshare as ak
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    from backend.data_access.tushare_db import TushareDB
 
-    LOOKBACK_DAYS = 5  # 拉5天确保覆盖交易日间隔
+    LOOKBACK_DAYS = 5
     start = (datetime.now() - timedelta(days=LOOKBACK_DAYS)).strftime('%Y%m%d')
 
-    # 构建需要更新的列表
-    ind_names_to_update = [n for n in industries if n]
-    con_names_to_update = [n for n in concepts if n]
+    # 建 name → ts_code 映射 + name → stype 映射
+    db = TushareDB()
+    name_code_map = {}
+    name_type_map = {}
+    for name, stype in names_with_type:
+        ts_code = db.query_ths_code_by_name(name)
+        if ts_code:
+            name_code_map[name] = ts_code
+            name_type_map[name] = stype
 
-    def _fetch_one(name, stype):
+    if not name_code_map:
+        return (0, 0)
+
+    def _fetch_one(name):
         try:
+            stype = name_type_map[name]
             if stype == 'industry':
                 df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)
             else:
                 df = ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=today)
             if df is None or df.empty:
-                return name, stype, []
-            klines = _df_to_kline(df)
-            return name, stype, klines
+                return name, []
+            return name, _df_to_kline(df)
         except Exception:
-            return name, stype, []
+            return name, []
 
-    # 并发拉取行业
-    if ind_names_to_update:
-        _t0i = time.time()
-        ind_ok = 0
-        ind_empty = 0
-        ind_got_today = 0
-        ind_no_today = 0
-        with ThreadPoolExecutor(max_workers=5) as ex:
-            futures = {ex.submit(_fetch_one, n, 'industry'): n for n in ind_names_to_update}
-            for future in as_completed(futures):
-                name, stype, klines = future.result()
-                if not klines:
-                    ind_empty += 1
-                    continue
-                if name not in industries:
-                    continue
-                existing_dates = {k['date'] for k in industries[name]}
-                has_today = today in existing_dates
-                new_klines = [k for k in klines if k['date'] not in existing_dates]
-                if new_klines:
-                    industries[name].extend(new_klines)
-                ind_ok += 1
-                if has_today or any(k['date'] == today for k in klines):
-                    ind_got_today += 1
-                else:
-                    ind_no_today += 1
-        log(f'📊  行业K线: 成功{ind_ok}个, 有空{ind_empty}个, '
-            f'含今日({today[-2:]}): {ind_got_today}, 无今日: {ind_no_today}, '
-            f'耗时{time.time()-_t0i:.0f}s')
+    records = []
+    names_to_fetch = list(name_code_map.keys())
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        futures = {ex.submit(_fetch_one, n): n for n in names_to_fetch}
+        for future in as_completed(futures):
+            name, klines = future.result()
+            if not klines:
+                continue
+            ts_code = name_code_map[name]
+            klines.sort(key=lambda x: x['date'])  # 旧→新，算 pct_chg
+            for i, k in enumerate(klines):
+                prev_close = klines[i - 1]['close'] if i > 0 else 0
+                pct = round((k['close'] - prev_close) / prev_close * 100, 2) if prev_close else 0
+                records.append({
+                    'ts_code': ts_code,
+                    'trade_date': k['date'],
+                    'open': k.get('open', 0),
+                    'high': k.get('high', 0),
+                    'low': k.get('low', 0),
+                    'close': k.get('close', 0),
+                    'vol': k.get('volume', 0),
+                    'pct_chg': pct,
+                })
 
-    # 并发拉取概念
-    if con_names_to_update:
-        _t0 = time.time()
-        con_ok = 0
-        con_empty = 0
-        con_err = 0
-        con_got_today = 0
-        con_no_today = 0
-        with ThreadPoolExecutor(max_workers=5) as ex:
-            futures = {ex.submit(_fetch_one, n, 'concept'): n for n in con_names_to_update}
-            for future in as_completed(futures):
-                name, stype, klines = future.result()
-                if not klines:
-                    con_empty += 1
-                    continue
-                if name not in concepts:
-                    continue
-                existing_dates = {k['date'] for k in concepts[name]}
-                has_today = today in existing_dates
-                new_klines = [k for k in klines if k['date'] not in existing_dates]
-                if new_klines:
-                    concepts[name].extend(new_klines)
-                con_ok += 1
-                if has_today or any(k['date'] == today for k in klines):
-                    con_got_today += 1
-                else:
-                    con_no_today += 1
-        log(f'📊  概念K线: 成功{con_ok}个, 有空{con_empty}个, '
-            f'含今日({today[-2:]}): {con_got_today}, 无今日: {con_no_today}, '
-            f'耗时{time.time()-_t0:.0f}s')
+    if not records:
+        return (0, len(names_to_fetch))
+
+    written = db.upsert_many_from_dicts('ths_daily', records)
+    log(f'  写入 ths_daily: {written}条 (请求{len(names_to_fetch)}个板块)')
+    return (written, len(names_to_fetch))
 
 
 def update_sectors():
@@ -703,17 +542,12 @@ def update_sectors():
         log('⏭️  非交易日，跳过板块更新')
         return (0, 0)
 
-    existing = load_sector_daily_uncached()
-    last_updated = existing.get('last_updated', '')
-    industries = existing.get('industries', {})
-    concepts = existing.get('concepts', {})
-
-    log(f'📋  行业{len(industries)}个, 概念{len(concepts)}个, 上次更新{last_updated}')
-
-    # ── 确定追踪中的概念 ──
-    # 目标日期是上一个已完成交易日（交易日历含节假日）
+    # 目标日期是上一个已完成交易日
     from backend.data_access.data_source import get_last_completed_trading_day
     today = get_last_completed_trading_day()
+    log(f'📋  目标日期: {today}')
+
+    # ── 确定追踪中的概念 ──
     try:
         _concept_list = get_concept_list()
         _stock_concept_map = get_stock_concept_map()
@@ -735,91 +569,44 @@ def update_sectors():
         log(f'📋  追踪概念: {len(tracked_concepts)}个（自选股关联≥6只）')
     except Exception as e:
         log(f'⚠️  计算追踪概念失败: {e}，回退到全量更新')
-        tracked_concepts = set(con_names)
+        tracked_concepts = set()
 
-    # ═══════════════════════════════════════════════════
-    # 【行业】主源：同花顺 stock_board_industry_summary_ths()
-    # 同花顺行业数据一直稳定好用，90个行业一次返回，名字无后缀
-    # ═══════════════════════════════════════════════════
+    # ── 行业今日快照 ──
     ind_today = _fetch_today_industries_from_ths()
 
-    # ═══════════════════════════════════════════════════
-    # 【概念】主源：同花顺 THS 概念 info_ths()
-    # 使用 stock_board_concept_info_ths() 逐个拉取已映射概念的今日数据
-    # 未映射到同花顺的概念不拉取（用户说"对不上的回头再看"）
-    # 数据准确（用户已验证培育钻石 -3.30% vs push2test +5.69%）
-    # ═══════════════════════════════════════════════════
+    # ── 概念今日快照 ──
     from backend.data_access.data_layer import get_concept_snapshots
     con_today = get_concept_snapshots(list(tracked_concepts))
 
-    # ── 保存今日快照到独立字段 ──
-    # 行业来源：同花顺 THS，概念来源：同花顺 THS
-    # 字段名仍用 _push2test 保持向后兼容（各读者读取此字段获取 chg_1d）
-    push2test_data = {'industries': ind_today, 'concepts': con_today}
-    existing['_push2test'] = push2test_data
-    existing['_push2test_updated'] = today
-    
-    # 统计
     ind_saved = len(ind_today)
     con_saved = len(con_today)
 
-    # ═══════════════════════════════════════════════════
-    # 失败率分析 + 告警
-    # ═══════════════════════════════════════════════════
-    # 行业：THS 要么全成功（90个），要么全失败（0个）
-    if len(ind_today) == 0 and industries:
-        log('🚨 行业板块从同花顺 THS 获取全部失败！回退使用旧缓存数据')
+    # ── 失败率分析 ──
+    if len(ind_today) == 0:
+        log('🚨 行业板块从同花顺 THS 获取全部失败！')
 
     con_tracked = len(tracked_concepts)
     con_miss = con_tracked - len(con_today)
     if con_tracked > 0 and con_miss / con_tracked > 0.5:
-        msg = f'🚨 概念板块大面积获取失败: {con_miss}/{con_tracked}({con_miss/con_tracked*100:.0f}%)'
-        log(msg)
+        log(f'🚨 概念板块大面积获取失败: {con_miss}/{con_tracked}({con_miss/con_tracked*100:.0f}%)')
 
-    # 全源全量失败 → 抛异常让cron能感知
-    if len(ind_today) == 0 and not industries:
-        raise RuntimeError('行业板块全源获取失败，无任何缓存数据可用')
-    if con_tracked > 0 and len(con_today) == 0 and not any(name in concepts for name in tracked_concepts):
-        raise RuntimeError('概念板块全源获取失败（追踪中），无任何缓存数据可用')
+    # ── 构建要更新的板块列表 ──
+    names_to_update = []
+    for name in ind_today:
+        names_to_update.append((name, 'industry'))
+    for name in tracked_concepts:
+        if name not in ind_today:
+            names_to_update.append((name, 'concept'))
 
-    # ═══════════════════════════════════════════════════
-    # 【新增】追加 THS K 线到 industries/concepts 顶层字段
-    # 每次 cron 运行拉最近3天K线，去重追加
-    # 确保顶层K线和 _push2test 快照数据源一致、时效一致
-    # ═══════════════════════════════════════════════════
+    # ── 写 K 线到 ths_daily DB ──
     try:
-        _append_klines_from_ths(industries, concepts, today)
+        written, requested = _upsert_klines_to_db(names_to_update, today)
+        log(f'📊  板块K线写入DB: {written}条 (请求{requested}个板块)')
     except Exception as e:
-        log(f'⚠️  THS K线追加失败（不影响_push2test）: {type(e).__name__}: {e}')
-
-    # 最新日期
-    latest_date = existing.get('_push2test_updated', existing.get('last_updated', ''))
-
-    save_sector_daily({
-        'last_updated': latest_date,
-        'industries': industries,
-        'concepts': concepts,
-        '_push2test': existing.get('_push2test', {}),
-        '_push2test_updated': existing.get('_push2test_updated', ''),
-    })
-
-    # 同步刷新快照源文件（路径由 CONCEPT_DATA_SOURCE 配置驱动，供 failover 回退使用）
-    try:
-        from backend.data_access.data_source import _get_snapshot_source_path, _get_snapshot_source_label
-        snap_path = _get_snapshot_source_path()
-        snap_label = _get_snapshot_source_label()
-        snap_dir = os.path.dirname(snap_path)
-        os.makedirs(snap_dir, exist_ok=True)
-        snap_data = {
-            'last_updated': latest_date,
-            'industries': {k: v for k, v in ind_today.items()},
-            'concepts': {k: v for k, v in con_today.items()},
-        }
-        with open(snap_path, 'w', encoding='utf-8') as f:
-            json.dump(snap_data, f, ensure_ascii=False, indent=2)
-        log(f'📤  {snap_label}同步完成: 行业{len(ind_today)}条, 概念{len(con_today)}条')
-    except Exception as e:
-        log(f'⚠️  快照源文件同步失败: {e}')
+        log(f'🚨 板块K线写入DB失败: {e}')
+        import traceback
+        for line in traceback.format_exc().splitlines():
+            log(f'  {line}')
 
     stats = f'push2test: 行业{ind_saved}条, 概念{con_saved}条 (THS旧数据保留不变)'
     log(f'📈  板块: {stats}')
@@ -1104,9 +891,9 @@ def update_concept_klines():
     未来可优化为：只拉取追踪中的概念（减少请求量）
     """
     t0 = time.time()
-    # 从 sector_daily.json 读概念K线
-    sector = load_sector_daily_uncached()
-    concepts_kline = sector.get('concepts', {})
+    # 从 DB 读概念K线
+    from backend.data_access.data_layer import get_ths_industry_klines
+    concepts_kline = get_ths_industry_klines(ths_type='N')
     if not concepts_kline:
         log('⚠️  板块数据中无概念K线')
         return 0
@@ -1120,56 +907,12 @@ def update_concept_klines():
 # 主入口
 # ════════════════════════════════════════════════════════════════
 
-def _ensure_mootdx_config():
-    """确保 mootdx 配置文件中有有效的 BESTIP，避免空配置导致连接失败。"""
-    from pathlib import Path
-    import json
-    config_path = Path.home() / '.mootdx' / 'config.json'
-    if not config_path.exists():
-        return
-    try:
-        cfg = json.loads(config_path.read_text(encoding='utf-8'))
-        bestip = cfg.get('BESTIP', {})
-        hq = bestip.get('HQ', '')
-        if not hq or (isinstance(hq, (list, tuple)) and len(hq) != 2):
-            # 空BESTIP或格式错误 → 写入一个已知可达的服务器
-            bestip['HQ'] = ['218.6.170.47', 7709]
-            bestip['EX'] = ['47.112.95.207', 7720]
-            bestip['GP'] = ['120.76.152.87', 7709]
-            config_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding='utf-8')
-            log('🔧 已修复 mootdx 配置: BESTIP.HQ 为空，填入默认服务器')
-    except Exception as e:
-        log(f'⚠️  读取mootdx配置失败: {e}')
-
-
-def _create_mootdx_client(max_retries=3, delay=5):
-    """创建 mootdx 客户端，带重试机制。通达信服务器偶发连接失败，自动重试。"""
-    from mootdx.quotes import Quotes
-    last_err = None
-    for attempt in range(1, max_retries + 1):
-        try:
-            client = Quotes.factory(market='std')
-            # 快速验证：请求1根K线确认连接可用
-            test = client.bars(symbol='000001', frequency=9, start=0, count=1)
-            if test is not None:
-                return client
-        except Exception as e:
-            last_err = e
-            log(f'⚠️  mootdx连接第{attempt}次失败: {e}')
-            if attempt < max_retries:
-                time.sleep(delay)
-    raise last_err or RuntimeError('mootdx所有重试均失败')
-
-
 def main():
     t0 = time.time()
 
     # 全局关闭 tqdm 进度条（在 akshare 首次导入前生效）
     os.environ['TQDM_DISABLE'] = '1'
     os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
-
-    # 启动前确保 mootdx 配置有效（避免空BESTIP导致连接失败）
-    _ensure_mootdx_config()
 
     # 确保 all_stock_codes.json 存在（搜索用）
     if not os.path.isfile(ALL_CODES_PATH):
@@ -1192,15 +935,13 @@ def main():
     log('━━━ 概念映射 ━━━')
     update_concept_maps()
 
-    client = _create_mootdx_client()
-
     # 阶段1: 个股
     log('━━━ 个股更新 ━━━')
-    s1 = update_stocks(client)
+    s1 = update_stocks()
 
     # 阶段2: 指数
     log('━━━ 指数更新 ━━━')
-    s2 = update_index(client)
+    s2 = update_index()
 
     # 阶段3: 板块
     log('━━━ 板块更新 ━━━')

@@ -16,10 +16,6 @@ from typing import Dict, List, Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from backend.core.config import (
-    SECTOR_DAILY_PATH,
-    SOURCES_EM_SECTOR_DAILY,
-    SOURCES_THS_SECTOR_DAILY,
-    SOURCES_EM_CONCEPT_MAP,
     STOCK_CONCEPT_MAP_PATH,
 )
 from backend.services.source_health import (
@@ -29,6 +25,15 @@ from backend.core.logger import get_logger
 from backend.core.exceptions import DataSourceError
 
 log = get_logger(__name__)
+
+# ── 本地路径常量（已废弃→DB迁移完成，保留给旧脚本向后兼容） ──
+DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
+SECTOR_DAILY_PATH = os.path.join(DATA_DIR, 'sector_daily.json')
+SOURCES_EM_SECTOR_DAILY = os.path.join(DATA_DIR, 'sources', 'em', 'sector_daily.json')
+SOURCES_THS_SECTOR_DAILY = os.path.join(DATA_DIR, 'sources', 'ths', 'sector_daily.json')
+CONCEPT_DATA_SOURCE = 'ths'
+SOURCES_EM_CONCEPT_MAP = os.path.join(DATA_DIR, 'sources', 'em', 'concept_map.json')
+CONCEPT_NAME_MAPPING_PATH = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.json')
 
 # TushareDB 全局实例（懒加载）
 _TUSHARE_DB = None
@@ -164,15 +169,26 @@ def save_index_klines_to_db(index_data):
     return total
 
 
-# 交易日历缓存（akshare tool_trade_date_hist_sina，含节假日）
+# 交易日历缓存（优先 MySQL trade_cal，回退 akshare）
 _trade_date_cache = None
 
 
 def _get_trade_date_cache():
-    """获取交易日历缓存，按需加载"""
+    """获取交易日历缓存（MySQL trade_cal → akshare 回退）"""
     global _trade_date_cache
     if _trade_date_cache is not None:
         return _trade_date_cache
+    # 优先从 MySQL trade_cal 表读
+    try:
+        from backend.data_access.tushare_db import TushareDB
+        db = TushareDB()
+        rows = db.execute_raw('SELECT cal_date FROM trade_cal WHERE is_open=1')
+        if rows:
+            _trade_date_cache = set(r['cal_date'] for r in rows)
+            return _trade_date_cache
+    except Exception:
+        pass
+    # fallback: akshare 新浪交易日历
     try:
         import akshare as ak
         df = ak.tool_trade_date_hist_sina()
@@ -339,23 +355,7 @@ def _fetch_ths_live_sector_ranking(date_str):
 
 
 # --- 快照源文件获取函数（路径由 CONCEPT_DATA_SOURCE 配置驱动） ---
-def _fetch_snapshot_sector_klines(sector_name, sector_type):
-    """从当前快照源文件获取单日K线（只有今日数据）"""
-    data = _load_json(_get_snapshot_source_path())
-    key = 'industries' if sector_type == 'industry' else 'concepts'
-    container = data.get(key, {})
-    entry = container.get(sector_name)
-    if entry and isinstance(entry, dict):
-        return [{
-            'date': entry.get('date', ''),
-            'open': entry.get('open', 0),
-            'close': entry.get('close', 0),
-            'high': entry.get('high', 0),
-            'low': entry.get('low', 0),
-            'volume': entry.get('volume', 0),
-            'change_pct': entry.get('change_pct', 0),
-        }]
-    return []
+
 
 def _fetch_ths_sector_ranking(date_str):
     data = _load_json(SOURCES_THS_SECTOR_DAILY)
@@ -389,14 +389,6 @@ def _fetch_legacy_sector_ranking(date_str):
     data = _load_json(SECTOR_DAILY_PATH)
     return data if data else None
 
-def _fetch_legacy_sector_klines(sector_name, sector_type):
-    data = _load_json(SECTOR_DAILY_PATH)
-    key = 'industries' if sector_type == 'industry' else 'concepts'
-    result = data.get(key, {}).get(sector_name)
-    if result is None:
-        return None
-    return result
-
 # ════════════════════════════════════════════════════════════
 # 配置驱动的数据源选择
 # 根据 CONCEPT_DATA_SOURCE 路由到对应的源文件
@@ -409,7 +401,7 @@ def _get_snapshot_source_path():
     Returns:
         SOURCES_THS_SECTOR_DAILY (ths 模式) 或 SOURCES_EM_SECTOR_DAILY (eastmoney 模式)
     """
-    from backend.core.config import CONCEPT_DATA_SOURCE
+# CONCEPT_DATA_SOURCE 已硬编码为 'ths' 本地常量
     if CONCEPT_DATA_SOURCE == 'ths':
         return SOURCES_THS_SECTOR_DAILY
     elif CONCEPT_DATA_SOURCE == 'eastmoney':
@@ -420,7 +412,7 @@ def _get_snapshot_source_path():
 
 def _get_snapshot_source_label():
     """返回当前数据源显示名称（用于日志/验证）"""
-    from backend.core.config import CONCEPT_DATA_SOURCE
+# CONCEPT_DATA_SOURCE 已硬编码为 'ths' 本地常量
     labels = {'ths': 'THS仓', 'eastmoney': 'EM仓'}
     return labels.get(CONCEPT_DATA_SOURCE, 'THS仓')
 
@@ -544,8 +536,6 @@ DATA_SOURCE_CHAINS = {
     'sector_klines': [
         ('tushare', lambda name, type_: _fetch_tushare_sector_klines(name, type_)),
         ('ths_sector', lambda name, type_: _fetch_ths_sector_klines(name, type_)),
-        ('snapshot_sector', lambda name, type_: _fetch_snapshot_sector_klines(name, type_)),
-        ('legacy_sector', lambda name, type_: _fetch_legacy_sector_klines(name, type_)),
     ],
     'concept_map': [
         ('em_sector', lambda: _fetch_em_concept_map()),
@@ -782,7 +772,7 @@ def get_sector_constituents(sector_code: str) -> List[tuple]:
 
 def _load_concept_name_mapping():
     """加载系统概念名 → THS概念名的映射表"""
-    from backend.core.config import CONCEPT_NAME_MAPPING_PATH
+    # CONCEPT_NAME_MAPPING_PATH 已本地常量
     try:
         return _load_json(CONCEPT_NAME_MAPPING_PATH, {})
     except Exception:
@@ -984,7 +974,7 @@ def get_concept_snapshots(name_list: list = None) -> dict:
     Returns:
         {系统名: {date, change_pct, up_count, down_count, ...}}
     """
-    from backend.core.config import CONCEPT_DATA_SOURCE
+# CONCEPT_DATA_SOURCE 已硬编码为 'ths' 本地常量
 
     if name_list is None:
         name_map = _load_concept_name_mapping()
@@ -1009,7 +999,7 @@ def get_concept_klines(name_list: list) -> dict:
     Returns:
         {系统名: {date, open, close, high, low, volume}}
     """
-    from backend.core.config import CONCEPT_DATA_SOURCE
+# CONCEPT_DATA_SOURCE 已硬编码为 'ths' 本地常量
 
     if CONCEPT_DATA_SOURCE == 'ths':
         return get_ths_concept_klines(name_list)
@@ -1355,7 +1345,7 @@ def verify_data_coverage(verbose=True):
     """
     import json, os
     from datetime import datetime, timedelta
-    from backend.core.config import SECTOR_DAILY_PATH
+    # SECTOR_DAILY_PATH 已本地常量
 
     now = datetime.now().strftime('%Y%m%d')
     today = datetime.now()

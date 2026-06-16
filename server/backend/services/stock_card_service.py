@@ -48,24 +48,6 @@ from backend.core.signal_detector.fusion import fusion_judge
 from backend.core.signal_detector.sell_point_detection import detect_sell_point
 from backend.core.structure_wave import judge_structure_wave
 
-# 板块K线缓存（模块级，只加载一次）
-_SECTOR_DAILY = None
-
-def _load_sector_daily():
-    global _SECTOR_DAILY
-    if _SECTOR_DAILY is not None:
-        return _SECTOR_DAILY
-    _sdp = os.path.join(DATA_DIR, 'sector_daily.json')
-    if os.path.isfile(_sdp):
-        try:
-            import json
-            with open(_sdp) as _f:
-                _SECTOR_DAILY = json.load(_f)
-        except Exception:
-            _SECTOR_DAILY = {}
-    else:
-        _SECTOR_DAILY = {}
-    return _SECTOR_DAILY
 
 def _calc_sector_chg_5d(sector):
     """计算板块5日涨跌幅（通过 data_source 抽象层获取K线）"""

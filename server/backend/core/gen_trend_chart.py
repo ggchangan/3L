@@ -15,7 +15,7 @@ from datetime import date
 
 from backend.core import config
 
-DATA_PATH = config.ALL_STOCKS_PATH
+DATA_PATH = os.path.join(config.DATA_DIR, 'all_stocks_60d.json')
 OUT_DIR = config.CHARTS_DIR
 
 

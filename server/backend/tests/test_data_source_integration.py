@@ -120,10 +120,7 @@ class TestDataSourceFailover:
         return patch('backend.data_access.data_source._get_tushare_db', return_value=_db)
 
     def test_failover_to_akshare_when_db_empty(self, empty_db):
-        """TushareDB 返回空时，回退到 akshare 读取（验证不崩溃）"""
-        from backend.data_access.data_source import get_sector_klines
-        with self._patch_db(empty_db):
-            # 用不存在的板块触发完整 failover 链
-            klines = get_sector_klines('NONEXISTENT_SECTOR_XYZ', 'industry')
-        # 可能返回空或 akshare 数据，只要不崩溃即可
-        assert klines is not None
+        """所有数据源均不可用时抛 DataUnavailableError"""
+        from backend.data_access.data_source import get_sector_klines, DataUnavailableError
+        with self._patch_db(empty_db), pytest.raises(DataUnavailableError):
+            get_sector_klines('NONEXISTENT_SECTOR_XYZ', 'industry')

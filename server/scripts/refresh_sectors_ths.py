@@ -23,7 +23,7 @@ os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
 import akshare as ak
 from datetime import datetime, timedelta
 
-from backend.core.config import DATA_DIR, SECTOR_DAILY_PATH
+from backend.core.config import DATA_DIR
 from backend.data_access.data_layer import load_sector_daily_uncached, save_sector_daily
 from backend.core.update_stock_data import _df_to_kline
 
@@ -37,7 +37,7 @@ TIME_BETWEEN = 0.2          # 并发批次内单次延迟
 
 def backup_existing():
     """备份现有 sector_daily.json"""
-    src = SECTOR_DAILY_PATH
+    src = os.path.join(DATA_DIR, 'sector_daily.json')
     if not os.path.isfile(src):
         print(f'[备份] 文件不存在，跳过备份: {src}')
         return None

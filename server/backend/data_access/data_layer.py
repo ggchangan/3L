@@ -20,9 +20,9 @@ from backend.core.logger import get_logger
 log = get_logger(__name__)
 from backend.core.config import (
     DATA_DIR, WWW_DIR, CACHE_DIR, PRIVATE_DIR,
-    ALL_STOCKS_PATH, WATCHLIST_PATH, INDUSTRY_MAP_PATH,
+    WATCHLIST_PATH, INDUSTRY_MAP_PATH,
     SUB_SECTOR_CLUSTERS_PATH, FINANCIAL_CACHE_PATH,
-    PROFIT_QUALITY_PATH, INDEX_DATA_PATH, SECTOR_DAILY_PATH,
+    PROFIT_QUALITY_PATH,
     INDUSTRY_LEADERS_PATH,
     LATEST_SCAN_PATH, ALL_CODES_PATH, KEY_POINTS_DIR,
     HOLDINGS_PATH, TRADES_PATH, REVIEW_ARCHIVE_DIR,
@@ -32,6 +32,10 @@ from backend.core.config import (
     CONCEPT_LIST_PATH, STOCK_CONCEPT_MAP_PATH,
     CHARTS_DIR,
 )
+
+# ── 局部路径常量（旧JSON文件已迁移至DB，保留供 fallback 读取）──
+ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
+INDEX_DATA_PATH = os.path.join(DATA_DIR, 'index_sh_data.json')
 
 # ====== 共享函数 — 从 threel_core 转发（加缓存）======
 
@@ -71,6 +75,60 @@ def get_stock_klines(code, direction=None, stocks=None):
             return codes[code]
     # DB回退
     return _threel_get_stock_klines(code)
+
+
+def fetch_stock_klines_from_db(codes, limit=60):
+    """从 stock_daily 批量拉取个股K线（不含 name），返回 {code: [{date, open, ...}]}"""
+    from backend.data_access.tushare_db import TushareDB
+    db = TushareDB()
+    return db.query_stock_klines_batch(codes, limit=limit, adj='qfq')
+
+
+def get_stock_names_from_db(codes):
+    """从 stock_basic 批量查询股票名称，返回 {code: name}"""
+    from backend.data_access.tushare_db import TushareDB
+    db = TushareDB()
+    placeholders = ','.join(['%s'] * len(codes))
+    rows = db.execute_raw(
+        f"SELECT symbol, name FROM stock_basic WHERE symbol IN ({placeholders})",
+        codes,
+    )
+    return {r['symbol']: r['name'] for r in rows}
+
+
+def get_stock_daily_latest_date() -> str:
+    """返回 stock_daily 表最新交易日 YYYYMMDD"""
+    from backend.data_access.tushare_db import TushareDB
+    db = TushareDB()
+    return db.get_last_stock_date() or ''
+
+
+def fetch_index_klines_from_akshare(code, limit=500):
+    """从 akshare 获取指数K线，返回 [{date, open, close, high, low, volume}]"""
+    import akshare as ak
+    import warnings
+    warnings.filterwarnings('ignore')
+    prefix = 'sz' if code.startswith(('399', '300')) else 'sh'
+    try:
+        df = ak.stock_zh_index_daily_tx(symbol=f'{prefix}{code}')
+        if df is None or len(df) == 0:
+            return []
+        records = []
+        for _, row in df.iterrows():
+            records.append({
+                'date': str(row.get('date', ''))[:10].replace('-', '') if row.get('date') else '',
+                'open': round(float(row.get('open', 0)), 2),
+                'close': round(float(row.get('close', 0)), 2),
+                'high': round(float(row.get('high', 0)), 2),
+                'low': round(float(row.get('low', 0)), 2),
+                'volume': int(float(row.get('volume', 0))),
+            })
+        records = [r for r in records if r['date']]
+        records.sort(key=lambda x: x['date'])
+        return records[-limit:]
+    except Exception as e:
+        log.warning('fetch_index_klines(%s) 失败: %s', code, e)
+        return []
 
 
 def get_watchlist():
@@ -224,57 +282,116 @@ def get_index_klines(code=INDEX_CODE):
 # ====== 板块日K线 ======
 
 def get_sector_daily():
-    """返回 {last_updated, industries, concepts}（缓存60s）"""
-    def _load_from_data_source():
-        try:
-            from backend.data_access.data_source import get_merged_sector_data
-            return get_merged_sector_data()
-        except Exception:
-            return _load_json(SECTOR_DAILY_PATH, {})
-    return cache.get('sector_daily', _load_from_data_source, ttl=60)
+    """返回 {last_updated, industries, concepts}（从 DB 读取，缓存60s）
 
-
-def save_sector_daily(data):
-    """原子保存板块日K线数据"""
-    _atomic_save_json(SECTOR_DAILY_PATH, data)
-    cache.invalidate('sector_daily')
-
-
-def load_sector_daily_uncached():
-    """强制从磁盘读取（不走缓存）"""
-    return _load_json(SECTOR_DAILY_PATH, {})
+    industries/concepts 格式: {name: [{date, open, close, high, low, volume}, ...]}
+    """
+    def _load_from_db():
+        industries = get_ths_industry_klines(ths_type='I', limit=120)
+        concepts = get_ths_industry_klines(ths_type='N', limit=120)
+        last_date = ''
+        for klines in industries.values():
+            if klines and klines[-1].get('date', '') > last_date:
+                last_date = klines[-1]['date']
+        return {
+            'last_updated': last_date or datetime.now().strftime('%Y%m%d'),
+            'industries': industries,
+            'concepts': concepts,
+        }
+    return cache.get('sector_daily', _load_from_db, ttl=60)
 
 
 def get_sector_push2test():
-    """获取当日涨跌幅快照（_push2test 字段）"""
-    from backend.models.data_models import SectorPush2Test, ths_dict_to_snapshot, push2test_dict_to_snapshot
-    data = _load_json(SECTOR_DAILY_PATH, {})
-    raw = data.get('_push2test', {})
-    if not isinstance(raw, dict):
+    """从 ths_daily 计算当日涨跌幅快照（替代 JSON _push2test 字段）
+
+    Returns:
+        SectorPush2Test(industries={name: ThsIndustrySnapshot, ...},
+                        concepts={name: Push2TestConceptSnapshot, ...})
+    """
+    from backend.models.data_models import SectorPush2Test, ThsIndustrySnapshot, Push2TestConceptSnapshot
+    try:
+        from backend.data_access.data_source import _get_tushare_db
+        db = _get_tushare_db()
+        if not db:
+            return SectorPush2Test()
+
+        # 取最新2个交易日
+        dates = db.execute_raw(
+            "SELECT DISTINCT trade_date FROM ths_daily ORDER BY trade_date DESC LIMIT 2"
+        )
+        if not dates or len(dates) < 2:
+            return SectorPush2Test()
+        t1, t0 = dates[0]['trade_date'], dates[1]['trade_date']
+
+        # 查 ths_index 获取 name → (ts_code, type) 映射
+        idx_rows = db.execute_raw(
+            "SELECT ts_code, name, type FROM ths_index WHERE type IN ('I','N')"
+        )
+        code_name = {r['ts_code']: r['name'] for r in idx_rows}
+        code_type = {r['ts_code']: r['type'] for r in idx_rows}
+
+        # 取 ths_daily 最新2个交易日的完整数据
+        rows = db.execute_raw(
+            "SELECT ts_code, trade_date, open, high, low, close, pre_close, "
+            "pct_chg, vol, amount "
+            "FROM ths_daily WHERE trade_date IN (%s,%s) ORDER BY ts_code, trade_date",
+            [t1, t0]
+        )
+        # 按 ts_code 分组
+        grouped = {}
+        for r in rows:
+            tc = r['ts_code']
+            if tc not in grouped:
+                grouped[tc] = []
+            grouped[tc].append(r)
+
+        industries = {}
+        concepts = {}
+        for tc, recs in grouped.items():
+            name = code_name.get(tc, tc)
+            tp = code_type.get(tc, 'I')
+            today_rec = next((r for r in recs if r['trade_date'] == t1), None)
+            if today_rec is None:
+                continue
+            # pct_chg: 优先 DB 存储值，回退从 close 计算
+            pct = today_rec.get('pct_chg')
+            if pct is None:
+                yesterday_rec = next((r for r in recs if r['trade_date'] == t0), None)
+                close_yest = float(yesterday_rec['close']) if yesterday_rec and yesterday_rec['close'] else 0
+                close_today = float(today_rec['close']) if today_rec['close'] else 0
+                pct = round((close_today - close_yest) / close_yest * 100, 2) if close_yest else 0
+            else:
+                pct = float(pct)
+
+            if tp == 'I':
+                industries[name] = ThsIndustrySnapshot(
+                    date=t1,
+                    change_pct=round(pct, 2),
+                    volume=float(today_rec['vol']) if today_rec.get('vol') else None,
+                    amount=float(today_rec['amount']) if today_rec.get('amount') else None,
+                )
+            else:
+                concepts[name] = Push2TestConceptSnapshot(
+                    date=t1,
+                    change_pct=round(pct, 2),
+                    close=float(today_rec['close']) if today_rec['close'] else 0,
+                    open_=float(today_rec['open']) if today_rec['open'] else 0,
+                    high=float(today_rec['high']) if today_rec['high'] else 0,
+                    low=float(today_rec['low']) if today_rec['low'] else 0,
+                    volume=int(today_rec['vol']) if today_rec['vol'] else 0,
+                    prev_close=float(today_rec['pre_close']) if today_rec['pre_close'] else 0,
+                )
+
+        return SectorPush2Test(industries=industries, concepts=concepts)
+    except Exception as e:
+        log.warning('get_sector_push2test DB计算失败(%s)，返回空', e)
         return SectorPush2Test()
-
-    industries = {}
-    for name, entry in raw.get('industries', {}).items():
-        if isinstance(entry, dict):
-            industries[name] = ths_dict_to_snapshot(entry)
-
-    concepts = {}
-    for name, entry in raw.get('concepts', {}).items():
-        if isinstance(entry, dict):
-            concepts[name] = push2test_dict_to_snapshot(entry)
-
-    return SectorPush2Test(industries=industries, concepts=concepts)
 
 
 def get_sector_klines(sector_name, sector_type='industry'):
     """获取单个板块历史K线数据"""
-    try:
-        from backend.data_access.data_source import get_sector_klines as _ds_klines
-        return _ds_klines(sector_name, sector_type)
-    except Exception:
-        data = _load_json(SECTOR_DAILY_PATH, {})
-        key = 'industries' if sector_type == 'industry' else 'concepts'
-        return data.get(key, {}).get(sector_name, [])
+    from backend.data_access.data_source import get_sector_klines as _ds_klines
+    return _ds_klines(sector_name, sector_type)
 
 
 # ====== 概念快照 ======
@@ -296,6 +413,76 @@ def get_concept_klines(name_list: list) -> dict:
         return _ds_klines(name_list)
     except Exception as e:
         log.warning('get_concept_klines 失败: %s', e)
+        return {}
+
+
+def get_ths_industry_klines(ths_type='I', limit=120):
+    """从 ths_daily 读取行业/概念K线数据
+
+    Args:
+        ths_type: 'I'=行业, 'N'=概念, 'BB'=板块
+        limit: 每行业最多K线条数
+
+    Returns:
+        {name: [{date, open, close, high, low, volume}, ...], ...}
+        名称与 sector_daily.json 的 industries/concepts 格式兼容
+    """
+    try:
+        from backend.data_access.data_source import _get_tushare_db
+        db = _get_tushare_db()
+        if not db:
+            return {}
+
+        # 查 ths_index 获取 ts_code → name 映射
+        idx_rows = db.execute_raw(
+            "SELECT ts_code, name FROM ths_index WHERE type=%s ORDER BY name",
+            [ths_type]
+        )
+        if not idx_rows:
+            return {}
+
+        ts_codes = [r['ts_code'] for r in idx_rows]
+        name_map = {r['ts_code']: r['name'] for r in idx_rows}
+
+        # 批量查 ths_daily
+        placeholders = ','.join(['%s'] * len(ts_codes))
+        rows = db.execute_raw(
+            f"SELECT ts_code, trade_date, open, high, low, close, vol "
+            f"FROM ths_daily WHERE ts_code IN ({placeholders}) "
+            f"ORDER BY ts_code, trade_date DESC",
+            ts_codes
+        )
+
+        # 按 ts_code 分组，每组取最新 limit 条
+        raw_groups = {}
+        for r in rows:
+            tc = r['ts_code']
+            if tc not in raw_groups:
+                raw_groups[tc] = []
+            if len(raw_groups[tc]) < limit:
+                raw_groups[tc].append(r)
+
+        # 转为 {name: [{date, open, close, high, low, volume}, ...]} 格式（升序）
+        result = {}
+        for tc, group in raw_groups.items():
+            name = name_map.get(tc, tc)
+            # 按 trade_date 升序（旧→新）
+            group.sort(key=lambda x: x['trade_date'])
+            klines = []
+            for r in group:
+                klines.append({
+                    'date': r['trade_date'],
+                    'open': float(r['open']) if r['open'] else 0,
+                    'close': float(r['close']) if r['close'] else 0,
+                    'high': float(r['high']) if r['high'] else 0,
+                    'low': float(r['low']) if r['low'] else 0,
+                    'volume': int(r['vol']) if r['vol'] else 0,
+                })
+            result[name] = klines
+
+        return result
+    except Exception as e:
+        log.warning('get_ths_industry_klines 失败: %s', e)
         return {}
 
 
@@ -413,12 +600,38 @@ def save_profit_quality_results(data):
 
 # ====== 持仓与交易 ======
 
-def get_holdings():
+def get_holdings(user_id=1):
+    """从DB读取持仓列表
+
+    Args:
+        user_id: 用户ID，默认1（default用户）
+
+    Returns:
+        [{code, name, direction, target_ratio, cost_price, stop_loss_price, sector}, ...]
+    """
+    try:
+        from backend.data_access.holdings_repo import get_holdings as _repo_get
+        return _repo_get(user_id)
+    except Exception as e:
+        log.warning('get_holdings DB查询失败(%s)，回退JSON', e)
+    # 回退：旧 JSON 路径
     return _load_json(HOLDINGS_PATH, [])
 
 
-def save_holdings(data):
-    _save_json(HOLDINGS_PATH, data)
+def save_holdings(user_id, holdings_list):
+    """保存持仓列表到DB（先删后插）
+
+    Args:
+        user_id: 用户ID
+        holdings_list: [{code, name, direction, target_ratio, cost_price, stop_loss_price, sector}, ...]
+    """
+    try:
+        from backend.data_access.holdings_repo import save_holdings as _repo_save
+        return _repo_save(user_id, holdings_list)
+    except Exception as e:
+        log.warning('save_holdings DB写入失败(%s)，回退JSON', e)
+        _save_json(HOLDINGS_PATH, holdings_list)
+        return False
 
 
 def get_trades():

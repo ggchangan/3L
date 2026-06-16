@@ -8,16 +8,8 @@ from backend.core.config import DATA_DIR
 
 def load_sector_daily() -> dict:
     """读取板块K线数据（通过 data_layer 统一接口）"""
-    try:
-        from backend.data_access.data_layer import get_sector_daily
-        return get_sector_daily()
-    except Exception:
-        import json
-        path = os.path.join(DATA_DIR, 'sector_daily.json')
-        if os.path.isfile(path):
-            with open(path) as f:
-                return json.load(f)
-        return {'industries': {}, 'concepts': {}}
+    from backend.data_access.data_layer import get_sector_daily
+    return get_sector_daily()
 
 
 def load_all_stocks() -> dict:

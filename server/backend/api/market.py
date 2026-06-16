@@ -22,8 +22,8 @@ def _handle_market(h, path):
         today_quote = fetch_market_quote()
         market_cycle = judge_peak_valley(index_klines)
         if index_klines:
-            last = index_klines[-1]
-            prev = index_klines[-2] if len(index_klines) >= 2 else None
+            last = index_klines[0]
+            prev = index_klines[1] if len(index_klines) >= 2 else None
             market_cycle['price'] = f"{last['close']:.2f}"
             if prev:
                 chg_pct = (last['close'] - prev['close']) / prev['close'] * 100

@@ -34,12 +34,9 @@ CONFIG_DIR = os.path.join(DATA_DIR, 'config')
 COMPUTED_DIR = os.path.join(DATA_DIR, 'computed')
 
 # =====================================================
-# 数据文件路径（旧JSON已迁移至DB，路径保留作空回退）
+# 数据文件路径
 # =====================================================
-ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')   # →DB（文件已删）
-INDEX_DATA_PATH = os.path.join(DATA_DIR, 'index_sh_data.json')    # →DB（文件已删）
-SECTOR_DAILY_PATH = os.path.join(DATA_DIR, 'sector_daily.json')   # →DB（待迁移）
-ALL_CODES_PATH = os.path.join(DATA_DIR, 'all_stock_codes.json')   # 代码缓存（JSON保留）
+ALL_CODES_PATH = os.path.join(DATA_DIR, 'all_stock_codes.json')
 
 # 用户配置（config/）
 WATCHLIST_PATH = os.path.join(CONFIG_DIR, 'watchlist.json')
@@ -61,10 +58,9 @@ LOGIC_TRACKING_PATH = os.path.join(COMPUTED_DIR, 'logic_tracking.json')
 SOURCE_HEALTH_PATH = os.path.join(COMPUTED_DIR, 'source_health.json')
 KEY_POINTS_DIR = os.path.join(COMPUTED_DIR, 'key_points')
 
-# 概念映射（待删→DB）
+# 概念映射
 CONCEPT_LIST_PATH = os.path.join(DATA_DIR, 'map', 'concept_list.json')
 STOCK_CONCEPT_MAP_PATH = os.path.join(DATA_DIR, 'map', 'stock_concept.json')
-CONCEPT_NAME_MAPPING_PATH = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.json')
 
 # 运行时缓存（cache/）
 
@@ -103,30 +99,6 @@ PINYIN_PATH = os.path.join(PUBLIC_DIR, 'pinyin.json')
 # 复盘图表
 # =====================================================
 REVIEW_CHARTS_DIR = CHARTS_DIR
-
-# =====================================================
-# 数据源架构（2026-06-07 新增） — 多仓库+抽象层
-# =====================================================
-SOURCES_DIR = os.path.join(DATA_DIR, 'sources')    # 数据源独立仓库根目录
-
-# 各数据源仓库路径
-SOURCES_EM_DIR = os.path.join(SOURCES_DIR, 'em')       # EM仓(push2test)
-SOURCES_THS_DIR = os.path.join(SOURCES_DIR, 'ths')     # THS仓(akshare)
-SOURCES_TENCENT_DIR = os.path.join(SOURCES_DIR, 'tencent')  # 腾讯仓
-
-# EM仓文件
-SOURCES_EM_SECTOR_DAILY = os.path.join(SOURCES_EM_DIR, 'sector_daily.json')
-SOURCES_EM_CONCEPT_MAP = os.path.join(SOURCES_EM_DIR, 'concept_map.json')
-
-# THS仓文件
-SOURCES_THS_SECTOR_DAILY = os.path.join(SOURCES_THS_DIR, 'sector_daily.json')
-
-# =====================================================
-# 数据源切换配置（2026-06-07 新增工厂模式）
-# 概念板块当前使用的数据源，切换时只改此处
-# 可选值: 'ths'（同花顺，当前主源）| 'eastmoney'（东财push2test，备源）
-# =====================================================
-CONCEPT_DATA_SOURCE = 'ths'
 
 # =====================================================
 # Tushare Pro 配置（2026-06-14 新增）
