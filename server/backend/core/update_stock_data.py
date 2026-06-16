@@ -22,13 +22,11 @@ from backend.data_access.data_layer import (
     get_industry_map,
     save_industry_map,
     save_all_stocks,
-    load_index_data_uncached,
     save_index_data,
-    INDEX_CODES,
+    get_index_data,
     fetch_stock_klines_from_db,
     get_stock_names_from_db,
     get_stock_daily_latest_date,
-    fetch_index_klines_from_akshare,
 )
 from backend.data_access.data_layer import (
     get_concept_list,
@@ -250,50 +248,29 @@ def _df_to_kline(df):
 
 
 def update_index():
-    """更新所有指数日K线（通过 data_layer 封装，不再直接调 akshare）"""
-    existing = load_index_data_uncached()
-    indices = existing.get('indices', {})
-    total_added = 0
-    last_date = existing.get('last_updated', '')
+    """从 index_daily DB 重建指数缓存（替代 akshare→JSON 旧路径）
 
-    for code, name in INDEX_CODES.items():
-        info = indices.get(code, {'name': name, 'klines': []})
-        existing_klines = info.get('klines', [])
-        existing_dates = {k['date'] for k in existing_klines}
+    经 Phase 1 的 Tushare 增量拉取，index_daily DB 已有最新数据。
+    这里直接从 DB 读取并保存到缓存。
+    """
+    data = get_index_data()
+    indices = data.get('indices', {})
+    if not indices:
+        log('⚠️  指数数据为空')
+        return (0, '')
 
-        new_klines = fetch_index_klines_from_akshare(code)
+    total = 0
+    last_date = data.get('last_updated', '')
+    for code, info in indices.items():
+        klines = info.get('klines', [])
+        name = info.get('name', code)
+        total += len(klines)
+        if klines:
+            log(f'📈  {name}: {len(klines)}条, 最新{klines[0]["date"]}')
 
-        if not new_klines:
-            log(f'⚠️  {name}({code})数据为空' if len(existing_klines) == 0 else '')
-            continue
-
-        added = 0
-        for k in new_klines:
-            if k['date'] not in existing_dates:
-                existing_klines.append(k)
-                added += 1
-
-        if added > 0:
-            existing_klines.sort(key=lambda x: x['date'])
-            if len(existing_klines) > 200:
-                existing_klines = existing_klines[-200:]
-            last_kline = existing_klines[-1]
-            if last_kline['date'] > last_date:
-                last_date = last_kline['date']
-            log(f'📈  {name}: {added}条新增, 最新{last_kline["date"]}')
-
-        indices[code] = {'name': name, 'klines': existing_klines}
-        total_added += added
-
-    if total_added == 0:
-        log('✅  指数数据已最新')
-    else:
-        log(f'📈  指数合计: {total_added}条新增, 最新{last_date}')
-
-    existing['indices'] = indices
-    existing['last_updated'] = last_date or existing.get('last_updated', '')
-    save_index_data(existing)
-    return (total_added, last_date)
+    save_index_data(data)
+    log(f'📈  指数合计: {total}条, 最新{last_date}')
+    return (total, last_date)
 
 
 # ════════════════════════════════════════════════════════════════
