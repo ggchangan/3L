@@ -7,7 +7,7 @@ import json, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from backend.core.logger import get_logger
 from backend.core.config import DATA_DIR
-from backend.data_access.data_layer import _load_json
+from backend.data_access.data_layer import get_all_stocks, _load_json
 from backend.core.ema_utils import ema_list, get_structure, get_stage
 from backend.core.gen_trend_chart import gen_trend_svg
 from backend.core.trend_trading import _load_manual_trend
@@ -15,7 +15,6 @@ from backend.core import config
 
 DATA_DIR = config.DATA_DIR
 INDUSTRY_MAP_PATH = config.INDUSTRY_MAP_PATH
-ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
 MANUAL_TREND_PATH = config.MANUAL_TREND_PATH
 WATCHLIST_PATH = config.WATCHLIST_PATH
 REVIEW_CHARTS_DIR = config.REVIEW_CHARTS_DIR
@@ -23,10 +22,22 @@ REVIEW_CHARTS_DIR = config.REVIEW_CHARTS_DIR
 log = get_logger(__name__)
 
 
+def _build_stock_kline_map():
+    """从 DB 全量加载个股K线，构建 {code: [klines]} 快速查找表（K线升序排列）"""
+    all_data = get_all_stocks()
+    m = {}
+    for sec, codes in all_data.items():
+        if isinstance(codes, dict):
+            for code, kls in codes.items():
+                if kls:
+                    m[code] = sorted(kls, key=lambda x: x['date'])
+    return m
+
+
 def scan_trend_candidates(main_line_names, sub_main_names):
     """扫描主线+次级主线，返回完整个股分析数据"""
     imap = _load_json(INDUSTRY_MAP_PATH, {})
-    all_s = _load_json(ALL_STOCKS_PATH, {}).get('stocks', {})
+    all_s = _build_stock_kline_map()
     manual = _load_manual_trend()
 
     result = {
@@ -140,10 +151,9 @@ def _gen_chart(name, code, klines, bias5):
 
 
 def _find_klines(code, all_s):
-    for sec, codes in all_s.items():
-        if code in codes:
-            return codes[code]
-    return []
+    return all_s.get(code, [])
+
+
 def toggle_trend_stock(code, enable):
     manual = set(_load_manual_trend())
     changed = False
@@ -196,11 +206,10 @@ def _ensure_in_watchlist(code):
         name = info.get('name', '')
         if not name:
             # 从K线数据取
-            all_s = _load_json(ALL_STOCKS_PATH, {}).get('stocks', {})
-            for sec, ss in all_s.items():
-                if code in ss and ss[code]:
-                    name = ss[code][0].get('name', code)
-                    break
+            all_s = _build_stock_kline_map()
+            kls = all_s.get(code, [])
+            if kls:
+                name = kls[0].get('name', code)
         wl['stocks'].append({
             'code': code,
             'name': name or code,
@@ -217,13 +226,13 @@ def _ensure_in_watchlist(code):
 def get_tracked_stocks():
     """返回已手动标记趋势交易的股票完整分析数据（不经过主线筛选）"""
     imap = _load_json(INDUSTRY_MAP_PATH, {})
-    all_s = _load_json(ALL_STOCKS_PATH, {}).get('stocks', {})
+    all_s = _build_stock_kline_map()
     manual = _load_manual_trend()
 
     candidates = []
     for code in sorted(manual):
         info = imap.get(code, {})
-        kls = _find_klines(code, all_s)
+        kls = all_s.get(code, [])
         if not kls or len(kls) < 30:
             # 数据不足仍返回基本信息
             candidates.append({
