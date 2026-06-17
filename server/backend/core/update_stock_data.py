@@ -435,6 +435,15 @@ def main():
             log(f'  {line}')
         raise  # 非零退出码让cron感知
 
+    # 板块数据更新后，清除依赖的主线缓存（避免页面读到过期数据）
+    _cache_files = [
+        os.path.join(DATA_DIR, '.cache', 'mainline_full.json'),
+    ]
+    for _cf in _cache_files:
+        if os.path.isfile(_cf):
+            os.remove(_cf)
+            log(f'🧹  已清除过期缓存: {os.path.basename(_cf)}')
+
     elapsed = time.time() - t0
     log(f'{"━"*30}')
     log(f'📊 汇总: 个股{s1[0]+s1[1]}只变动 | 指数{s2[0]}条新增 | 板块{s3[0]+s3[1]}只变动')
