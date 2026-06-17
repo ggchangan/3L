@@ -13,7 +13,7 @@ def _handle_recommended_stop(h, path, body):
     """POST /api/holdings/recommended-stop — 获取推荐止损价
 
     Body: {"code": "002371"}
-    从 get_stock_card() 读取推荐止损价返回。
+    从 get_stock_card() 读取推荐止损价返回（优先使用 holdings_service 的缓存）。
     """
     try:
         data = json.loads(body)
@@ -21,10 +21,14 @@ def _handle_recommended_stop(h, path, body):
         if not code:
             h.send_json({'success': False, 'error': '缺少 code'})
             return
-        from backend.services.stock_card_service import get_stock_card
-        from datetime import datetime
-        today = datetime.now().strftime('%Y-%m-%d')
-        card = get_stock_card(code, today)
+        # 优先从持仓卡片缓存取
+        from backend.services.holdings_service import _get_cached_card
+        card = _get_cached_card(code)
+        if card is None:
+            from backend.services.stock_card_service import get_stock_card
+            from datetime import datetime
+            today = datetime.now().strftime('%Y-%m-%d')
+            card = get_stock_card(code, today)
         stop_loss = card.get('stop_loss')
         if stop_loss and stop_loss > 0:
             h.send_json({

@@ -37,6 +37,14 @@ def _invalidate_card_cache(code):
     _CARD_CACHE.pop(code, None)
     _CARD_CACHE_EXPIRY.pop(code, None)
 
+
+def _get_cached_card(code):
+    """获取单只个股卡片缓存，未命中返回 None"""
+    now = _time.time()
+    if code in _CARD_CACHE and now < _CARD_CACHE_EXPIRY.get(code, 0):
+        return _CARD_CACHE[code]
+    return None
+
 # ── 腾讯行情接口格式 ────────────────────────────────────
 # 请求: http://qt.gtimg.cn/q=sh603259,sz301200
 # 返回: v_pvixnGq="51.200","2.300",... 多行
