@@ -182,6 +182,21 @@ def update_stocks():
             sector_map[sec][code] = klines
 
     save_all_stocks(sector_map, last_updated=db_latest)
+
+    # ── 生成 all_stocks_60d.json 缓存（性能优化，避免每次297次MySQL查询）──
+    try:
+        _cache_path = os.path.join(DATA_DIR, 'all_stocks_60d.json')
+        _cache_data = {
+            'stocks': sector_map,
+            'last_updated': db_latest or datetime.now().strftime('%Y-%m-%d'),
+        }
+        with open(_cache_path, 'w', encoding='utf-8') as _f:
+            json.dump(_cache_data, _f, ensure_ascii=False)
+        _stock_count = sum(len(c) for c in sector_map.values())
+        log(f'📁  缓存: 已写入 {os.path.basename(_cache_path)} ({len(sector_map)}个板块, {_stock_count}只股票)')
+    except Exception as _e:
+        log(f'⚠️  缓存写入失败: {_e}')
+
     stats = f'{updated}只更新, {new_added}只新增, {names_fixed}只补名'
     log(f'📈  个股: {stats}')
     return (updated, new_added, names_fixed)

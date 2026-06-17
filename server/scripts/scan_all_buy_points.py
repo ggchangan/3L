@@ -12,7 +12,6 @@ os.environ.setdefault('DATA_DIR', '/home/ubuntu/data/3l')
 # ── 路径 ──
 DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
 WATCHLIST = os.path.join(DATA_DIR, 'watchlist.json')
-HOLDINGS = os.path.join(DATA_DIR, 'private', 'holdings.json')
 TREND = os.path.join(DATA_DIR, 'private', 'manual_trend_stocks.json')
 
 # ── 腾讯实时行情 ──
@@ -68,8 +67,8 @@ def load_all_stocks():
         codes.add(c)
         code_sources.setdefault(c, []).append('自选股')
     
-    with open(HOLDINGS) as f:
-        hl = json.load(f)
+    from backend.services.holdings_service import get_holdings
+    hl = get_holdings()
     for h in hl.get('holdings', []):
         c = h['code']
         codes.add(c)

@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.join(_SCRIPTS_DIR, '..'))
 os.environ.setdefault('DATA_DIR', '/home/ubuntu/data/3l')
 
 DATA_DIR = os.environ['DATA_DIR']
-with open(os.path.join(DATA_DIR, 'private', 'holdings.json')) as f:
-    holdings = json.load(f)['holdings']
+from backend.services.holdings_service import get_holdings
+holdings = get_holdings()['holdings']
 
 from backend.core.buy_point_detection import get_realtime_kline
 

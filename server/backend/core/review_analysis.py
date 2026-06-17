@@ -164,25 +164,32 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
         # 方向优先从 watchlist 取（用户手动设定），回退到空让卡片自己算
         direction = direction_map.get(code, '')
 
-        # 全部从 StockCardService 取
-        kls_for_card = None
-        for sec, ss in stocks.items():
-            if code in ss:
-                kls_for_card = ss[code]
-                break
+        # 扫描已产出完整卡片数据 → 直接格式化（无重复调 get_stock_card）
+        if s.get('stop_loss') is not None or s.get('structure'):
+            card_data = dict(s)
+            if direction:
+                card_data['direction'] = direction
+            card = card_data
+        else:
+            # 补充扫描（盈利模式1/趋势股）没有完整卡片数据，调一次
+            kls_for_card = None
+            for sec, ss in stocks.items():
+                if code in ss:
+                    kls_for_card = ss[code]
+                    break
 
-        try:
-            card = get_stock_card(
-                code=code,
-                date_str=actual_date,
-                market_position="波中",
-                main_lines=mainlines,
-                direction=direction,
-                klines=kls_for_card,
-            )
-        except Exception:
-            log.warning('个股卡片生成失败（趋势候选）: %s', code)
-            card = None
+            try:
+                card = get_stock_card(
+                    code=code,
+                    date_str=actual_date,
+                    market_position="波中",
+                    main_lines=mainlines,
+                    direction=direction,
+                    klines=kls_for_card,
+                )
+            except Exception:
+                log.warning('个股卡片生成失败（趋势候选）: %s', code)
+                card = None
 
         if not card:
             continue
