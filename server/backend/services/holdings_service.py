@@ -7,6 +7,36 @@ log = get_logger(__name__)
 from datetime import datetime
 from backend.core.config import HOLDINGS_PATH, TRADES_PATH
 
+# ── 个股持仓卡片缓存（个股粒度，K线不变不重算）──
+import time as _time
+_CARD_CACHE = {}       # {code: card_data}
+_CARD_CACHE_EXPIRY = {}  # {code: expiry_timestamp}
+_CARD_CACHE_TTL = 300   # 5分钟
+
+
+def _get_cached_cards(codes):
+    """批量读取缓存，返回 {已缓存code: card}，缺失的code另行计算"""
+    now = _time.time()
+    result = {}
+    for code in codes:
+        if code in _CARD_CACHE and now < _CARD_CACHE_EXPIRY.get(code, 0):
+            result[code] = _CARD_CACHE[code]
+    return result
+
+
+def _set_cached_cards(cards):
+    """批量写入缓存"""
+    expiry = _time.time() + _CARD_CACHE_TTL
+    for code, card in cards.items():
+        _CARD_CACHE[code] = card
+        _CARD_CACHE_EXPIRY[code] = expiry
+
+
+def _invalidate_card_cache(code):
+    """个股卡片缓存失效"""
+    _CARD_CACHE.pop(code, None)
+    _CARD_CACHE_EXPIRY.pop(code, None)
+
 # ── 腾讯行情接口格式 ────────────────────────────────────
 # 请求: http://qt.gtimg.cn/q=sh603259,sz301200
 # 返回: v_pvixnGq="51.200","2.300",... 多行
@@ -170,27 +200,28 @@ def get_holdings_with_prices():
     except Exception:
         log.warning('holdings: silent skip')
         pass
-    # 板块/结构/阶段 — 通过 StockCardService 统一获取（并行加速）
-    try:
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        from backend.services.stock_card_service import get_stock_card
-        date_str = datetime.now().strftime('%Y%m%d')
-        card_futures = {}
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            for h in holdings:
-                code = h.get('code', '')
-                if code:
+    # 板块/结构/阶段 — 通过 StockCardService 统一获取（缓存+并行加速）
+    card_results = _get_cached_cards(codes)
+    uncached = [c for c in codes if c not in card_results]
+    if uncached:
+        try:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            from backend.services.stock_card_service import get_stock_card
+            date_str = datetime.now().strftime('%Y%m%d')
+            card_futures = {}
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                for code in uncached:
                     fut = executor.submit(get_stock_card, code=code, date_str=date_str)
                     card_futures[fut] = code
-            card_results = {}
-            for fut in as_completed(card_futures):
-                code = card_futures[fut]
-                try:
-                    card_results[code] = fut.result()
-                except Exception:
-                    card_results[code] = {}
-    except Exception:
-        card_results = {}
+                for fut in as_completed(card_futures):
+                    code = card_futures[fut]
+                    try:
+                        card_results[code] = fut.result()
+                    except Exception:
+                        card_results[code] = {}
+            _set_cached_cards(card_results)
+        except Exception:
+            pass
 
     for h in holdings:
         item = dict(h)
