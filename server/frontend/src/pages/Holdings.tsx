@@ -10,6 +10,7 @@ interface HoldingItem {
   change: number | null; stop_loss_pct: number | null
   sector: string; structure: string; stage: string
   signal?: string
+  buy_date?: string | null
 }
 
 interface HoldingsData {
@@ -47,6 +48,7 @@ export default function Holdings() {
   const [modalDirection, setModalDirection] = useState('')
   const [modalRatio, setModalRatio] = useState('')
   const [modalStopLoss, setModalStopLoss] = useState('')
+  const [modalBuyDate, setModalBuyDate] = useState('')
   const [modalSaving, setModalSaving] = useState(false)
   const [directions, setDirections] = useState<string[]>([])
   const [cachedPrice, setCachedPrice] = useState<number | null>(null)
@@ -219,7 +221,7 @@ export default function Holdings() {
 
   function openAddModal() {
     setEditIdx(-1); setSelectedStock(null); setSearchQ(''); setModalDirection('')
-    setModalRatio(''); setModalStopLoss(''); setCachedPrice(null)
+    setModalRatio(''); setModalStopLoss(''); setModalBuyDate(''); setCachedPrice(null)
     setSearchResults([]); setModalOpen(true)
     loadDirections()
   }
@@ -230,7 +232,7 @@ export default function Holdings() {
     setEditIdx(idx); setSelectedStock({ name: h.name, code: h.code })
     setSearchQ(''); setModalDirection(h.direction || '')
     setModalRatio(String(h.ratio || '')); setModalStopLoss(h.stop_loss_price ? String(h.stop_loss_price) : '')
-    setCachedPrice(h.price ?? null); setSearchResults([])
+    setModalBuyDate(h.buy_date || ''); setCachedPrice(h.price ?? null); setSearchResults([])
     setModalOpen(true)
     loadDirections()
   }
@@ -285,6 +287,7 @@ export default function Holdings() {
         ratio, direction: modalDirection, stop_loss_price: slVal,
         price: null, change: null, stop_loss_pct: null,
         sector: '', structure: '--', stage: '--',
+        buy_date: modalBuyDate || null,
       }
       if (editIdx >= 0 && editIdx < holdings.length) holdings[editIdx] = item
       else holdings.push(item)
@@ -591,6 +594,11 @@ export default function Holdings() {
                 >🔄 更新止损</button>
               </div>
               <div className="hint" dangerouslySetInnerHTML={{ __html: calcStopLossPct() }} />
+            </div>
+
+            <div className="form-row">
+              <label>买入日期</label>
+              <input type="date" value={modalBuyDate} onChange={e => setModalBuyDate(e.target.value)} />
             </div>
 
             <div className="btn-row">
