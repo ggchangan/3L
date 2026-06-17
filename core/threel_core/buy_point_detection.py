@@ -92,16 +92,28 @@ def _find_support_levels(klines, idx):
     return min(highs[-20:]) if len(highs) >= 20 else None
 
 
-def calc_stop_loss(klines, idx, close_price=None, buy_type=None, entry_idx=None):
+def calc_stop_loss(klines, idx, close_price=None, buy_type=None, entry_idx=None,
+                   cost_price=None, buy_date=None):
     """计算推荐止损位和止损率 — 基于买点类型（简放训练营第15期）
 
     不同买点类型对应不同止损位置：
     - 突破买点：突破失败 = 跌破突破位置 → 止损在突破K线最低价下方3%
     - 中继买点(低吸)：低吸失败 = 跌破低吸点 → 止损在低吸K线最低价下方3%
     - 恐慌买点/反转买点：失败 = 跌破信号K线 → 止损在信号K线最低价下方3%
-    - 无买点(默认)：用支撑位×0.97 或 EMA20×0.97
+    - 非3L买入（有cost_price但无买点）：用 ATR(14) × 2 低于买入价
+    - 无任何数据(默认)：用支撑位×0.97 或 EMA20×0.97
 
-    返回: (stop_loss_price, stop_loss_pct)
+    Args:
+        klines: K线列表（升序）
+        idx: 当前K线下标
+        close_price: 当前价（不传则取klines[idx].close）
+        buy_type: 买点类型（突破/中继/恐慌/反转）
+        entry_idx: 买点K线下标
+        cost_price: 买入价（非3L买入用）
+        buy_date: 买入日期YYYYMMDD（备用）
+
+    Returns:
+        (stop_loss_price, stop_loss_pct)
     """
     if idx < 10 or not klines or len(klines) <= idx:
         return (None, None)
@@ -144,6 +156,20 @@ def calc_stop_loss(klines, idx, close_price=None, buy_type=None, entry_idx=None)
             # 恐慌/反转买点：止损在信号K线最低价下方3%
             sl = round(ek_low * 0.97, 2)
             sl_pct = round((cur - sl) / cur * 100, 2) if cur > 0 else None
+            return (sl, sl_pct)
+
+    # ── 非3L买入：有 cost_price 但无 buy_type → 用 ATR ──
+    if cost_price is not None and cost_price > 0 and not buy_type:
+        from threel_core.atr import calc_atr, calc_stop_loss_atr
+        atr = calc_atr(klines[:idx + 1], 14)
+        sl, sl_pct = calc_stop_loss_atr(cost_price, atr, cur, multiplier=2.0)
+        if sl is not None:
+            # 兜底：不高于支撑位 × 0.97
+            support = _find_support_levels(klines, idx)
+            if support is not None and support > 0:
+                support_sl = round(support * 0.97, 2)
+                sl = min(sl, support_sl)
+                sl_pct = round((cur - sl) / cur * 100, 2) if cur > 0 else None
             return (sl, sl_pct)
 
     # ── 无买点类型：用支撑位×0.97 或 EMA20×0.97 ──
