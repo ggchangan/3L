@@ -28,7 +28,7 @@ def get_holdings(user_id: int = 1) -> list:
         user_id: 用户 ID（默认 1）
 
     Returns:
-        [{code, name, direction, target_ratio, cost_price?, stop_loss_price?, sector?}, ...]
+        [{code, name, direction, target_ratio, cost_price?, stop_loss_price?, sector?, buy_date?}, ...]
         查询失败返回空列表
     """
     try:
@@ -37,7 +37,7 @@ def get_holdings(user_id: int = 1) -> list:
         try:
             with conn.cursor(DictCursor) as cur:
                 cur.execute(
-                    "SELECT code, name, direction, target_ratio, cost_price, stop_loss_price, sector "
+                    "SELECT code, name, direction, target_ratio, cost_price, stop_loss_price, sector, buy_date "
                     "FROM holdings WHERE user_id=%s AND is_active=1 ORDER BY code",
                     [user_id]
                 )
@@ -56,6 +56,8 @@ def get_holdings(user_id: int = 1) -> list:
                         item['stop_loss_price'] = float(r['stop_loss_price'])
                     if r.get('sector'):
                         item['sector'] = r['sector']
+                    if r.get('buy_date') is not None:
+                        item['buy_date'] = str(r['buy_date']).replace('-', '')  # DATE→YYYYMMDD
                     result.append(item)
                 return result
         finally:
@@ -86,8 +88,8 @@ def save_holdings(user_id: int, holdings_list: list) -> bool:
                 for h in holdings_list:
                     cur.execute(
                         "INSERT INTO holdings(user_id, code, name, direction, target_ratio, "
-                        "cost_price, stop_loss_price, sector) "
-                        "VALUES(%s, %s, %s, %s, %s, %s, %s, %s)",
+                        "cost_price, stop_loss_price, sector, buy_date) "
+                        "VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                         [
                             user_id,
                             h.get('code', ''),
@@ -97,6 +99,7 @@ def save_holdings(user_id: int, holdings_list: list) -> bool:
                             h.get('cost_price') or None,
                             h.get('stop_loss_price') or None,
                             h.get('sector', ''),
+                            h.get('buy_date') or None,
                         ]
                     )
                 conn.commit()

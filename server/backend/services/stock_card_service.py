@@ -125,12 +125,13 @@ def _calc_sector_chg(code):
     return None
 
 
-def _calc_stop_loss(klines, idx, buy_type=None, entry_idx=None):
+def _calc_stop_loss(klines, idx, buy_type=None, entry_idx=None, cost_price=None):
     """计算止损价和百分比 — 按买点类型"""
     try:
         if idx < 10 or len(klines) <= idx:
             return None, None
-        sl, sl_pct = calc_stop_loss(klines, idx, buy_type=buy_type, entry_idx=entry_idx)
+        sl, sl_pct = calc_stop_loss(klines, idx, buy_type=buy_type, entry_idx=entry_idx,
+                                     cost_price=cost_price)
         return float(sl) if sl else None, float(sl_pct) if sl_pct else None
     except Exception:
         return None, None
@@ -336,7 +337,8 @@ def _calc_action_reason(signal, structure, stage, fusion_reason,
 # ═══════════════════════════════════════════
 
 def get_stock_card(code, date_str, market_position='波中',
-                   main_lines=None, direction=None, klines=None):
+                   main_lines=None, direction=None, klines=None,
+                   cost_price=None):
     """
     获取个股卡片数据
 
@@ -583,7 +585,9 @@ def get_stock_card(code, date_str, market_position='波中',
         wave_stage = ''
 
     # 6. 止损（按买点类型）
-    sl_result = _calc_stop_loss(klines, idx, buy_type=buy_point if buy_point else None, entry_idx=idx if buy_point else None)
+    sl_result = _calc_stop_loss(klines, idx, buy_type=buy_point if buy_point else None,
+                                entry_idx=idx if buy_point else None,
+                                cost_price=cost_price)
     if sl_result and sl_result[0]:
         stop_loss, stop_loss_pct = sl_result
     elif signal == 'buy' and close > 0:

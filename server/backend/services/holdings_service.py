@@ -103,6 +103,7 @@ def get_holdings():
                     'price': r.get('cost_price'),
                     'stop_loss_price': r.get('stop_loss_price'),
                     'sector': r.get('sector', ''),
+                    'buy_date': r.get('buy_date', ''),
                 })
             return {'holdings': holdings, 'cash_ratio': 0}
     except Exception:
@@ -240,6 +241,7 @@ def save_holdings(data):
                 'cost_price': h.get('price') or None,
                 'stop_loss_price': h.get('stop_loss_price') or None,
                 'sector': h.get('sector', ''),
+                'buy_date': h.get('buy_date') or None,
             })
         _dl_save(1, _db_list)
     except Exception as e:
