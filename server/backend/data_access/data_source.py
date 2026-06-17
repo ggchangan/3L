@@ -468,9 +468,15 @@ def tushare_fetch_daily_incremental():
     try:
         for ts_code in ['000001.SH', '000688.SH', '000985.SH', '399006.SZ']:
             try:
-                latest = db.get_last_trade_date('index_daily')
-                if latest and latest >= trade_date:
-                    log.info('  index_daily[%s] 已有数据 (%s)，跳过', ts_code, latest)
+                # 按指数代码分别检查最新日期，避免 000001.SH 写入后其他指数被误跳过
+                cur_latest = db.get_last_trade_date('index_daily')
+                rows = db.execute_raw(
+                    'SELECT MAX(trade_date) as latest FROM index_daily WHERE ts_code=%s',
+                    [ts_code]
+                )
+                idx_latest = rows[0]['latest'] if rows else None
+                if idx_latest and idx_latest >= trade_date:
+                    log.info('  index_daily[%s] 已有数据 (%s)，跳过', ts_code, idx_latest)
                     continue
                 df = api.index_daily(ts_code=ts_code, start_date=trade_date, end_date=trade_date)
                 if df is not None and not df.empty:

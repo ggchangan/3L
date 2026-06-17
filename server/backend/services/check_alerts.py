@@ -355,11 +355,8 @@ def _sync_holdings_to_alarms():
     """
 
     try:
-        holdings_path = os.path.join(DATA_DIR, 'private', 'holdings.json')
-        if not os.path.exists(holdings_path):
-            return
-        with open(holdings_path) as f:
-            hdata = json.load(f)
+        from backend.services.holdings_service import get_holdings
+        hdata = get_holdings()
         items = hdata.get('holdings', []) if isinstance(hdata, dict) else hdata
         if not isinstance(items, list):
             return

@@ -182,6 +182,21 @@ def update_stocks():
             sector_map[sec][code] = klines
 
     save_all_stocks(sector_map, last_updated=db_latest)
+
+    # ── 生成 all_stocks_60d.json 缓存（性能优化，避免每次297次MySQL查询）──
+    try:
+        _cache_path = os.path.join(DATA_DIR, 'all_stocks_60d.json')
+        _cache_data = {
+            'stocks': sector_map,
+            'last_updated': db_latest or datetime.now().strftime('%Y-%m-%d'),
+        }
+        with open(_cache_path, 'w', encoding='utf-8') as _f:
+            json.dump(_cache_data, _f, ensure_ascii=False)
+        _stock_count = sum(len(c) for c in sector_map.values())
+        log(f'📁  缓存: 已写入 {os.path.basename(_cache_path)} ({len(sector_map)}个板块, {_stock_count}只股票)')
+    except Exception as _e:
+        log(f'⚠️  缓存写入失败: {_e}')
+
     stats = f'{updated}只更新, {new_added}只新增, {names_fixed}只补名'
     log(f'📈  个股: {stats}')
     return (updated, new_added, names_fixed)
@@ -434,6 +449,15 @@ def main():
         for line in traceback.format_exc().splitlines():
             log(f'  {line}')
         raise  # 非零退出码让cron感知
+
+    # 板块数据更新后，清除依赖的主线缓存（避免页面读到过期数据）
+    _cache_files = [
+        os.path.join(DATA_DIR, '.cache', 'mainline_full.json'),
+    ]
+    for _cf in _cache_files:
+        if os.path.isfile(_cf):
+            os.remove(_cf)
+            log(f'🧹  已清除过期缓存: {os.path.basename(_cf)}')
 
     elapsed = time.time() - t0
     log(f'{"━"*30}')

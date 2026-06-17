@@ -133,12 +133,7 @@ def load_review_data(date_str, existing, ww_dir):
     holdings = live_holdings or existing.get('holdings', []) or existing.get('stocks', {}).get('stocks', [])
 
     buy_signals = []
-
-    # 盈利模式1检查
     all_stocks = get_all_stocks()
-    from backend.core.buy_point_detection import check_profit_model1_on_signals, check_trend_stock_on_signals
-    buy_signals = check_profit_model1_on_signals(buy_signals, all_stocks, date_str)
-    buy_signals = check_trend_stock_on_signals(buy_signals, all_stocks, date_str)
 
     return holdings, buy_signals, all_stocks
 
@@ -149,8 +144,9 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
     """扫描/过滤买点信号
 
     始终按当前已启用方向过滤 buy_signals，
-    按 holdings_codes + 启用方向自选股限定扫描范围，
-    必要时才执行全量扫描（buy_signals 为空时）。
+    按 holdings_codes + 启用方向自选股限定扫描范围。
+
+    直接使用 get_stock_card（权威源）判定，不再依赖 format_buy_signals 预过滤。
 
     Returns: (buy_signals, all_stocks_60d)
     """
@@ -164,121 +160,114 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
     if holdings_codes:
         wl_codes |= holdings_codes
 
-    # 已有信号 → 按当前启用方向过滤后返回（排除禁用方向的历史数据）
-    if buy_signals:
-        if wl_codes:
-            before = len(buy_signals)
-            buy_signals = [s for s in buy_signals if s.get('code', '') in wl_codes]
-            if len(buy_signals) < before:
-                print(f"[3L复盘] 方向过滤: 移除 {before - len(buy_signals)} 个禁用方向信号")
-        return buy_signals, all_stocks_60d
+    if not wl_codes:
+        return [], all_stocks_60d
 
+    # ── 加载 K线缓存 ──
+    if all_stocks_60d is None:
+        if os.path.isfile(all_stocks_path):
+            with open(all_stocks_path) as f:
+                as60_data = json.load(f)
+            all_stocks_60d = as60_data.get('stocks', {})
+
+    if not all_stocks_60d:
+        return [], all_stocks_60d
+
+    # ── 方向映射 ──
+    wl_dir_map = {s['code']: s.get('direction', '') for s in wl}
+
+    # ── 用 get_stock_card 逐一扫描 ──
+    from backend.services.stock_card_service import get_stock_card
+    seen = set()
+    ml_names = [l['name'] for l in mainline_data.get('lines', [])]
+    scan_date = date_str.replace('-', '')
+
+    for code in wl_codes:
+        # 找该股票的K线
+        kls = None
+        for sec, ss in all_stocks_60d.items():
+            if code in ss:
+                kls = ss[code]
+                break
+        if not kls or len(kls) < 30:
+            continue
+
+        direction = wl_dir_map.get(code, '')
+        try:
+            card = get_stock_card(
+                code=code, date_str=scan_date,
+                market_position=market_cycle.get('position', ''),
+                main_lines=ml_names,
+                direction=direction,
+                klines=kls,
+            )
+        except Exception:
+            continue
+
+        if card.get('signal') != 'buy':
+            continue
+        if card.get('buy_point') in ('', None):
+            continue
+        if code in seen:
+            continue
+
+        seen.add(code)
+        # 直接保存完整卡片格式，generate_buy_signals_review 直接复用无需再调
+        buy_signals.append({
+            'code': card['code'],
+            'name': card['name'],
+            'sector': card['sector'],
+            'direction': direction,
+            'price': card['price'],
+            'change': card['change'],
+            'score': card['score'],
+            'buy_point': card['buy_point'],
+            'stop_loss': card['stop_loss'],
+            'stop_loss_pct': card['stop_loss_pct'],
+            'structure': card['structure'],
+            'stage': card['stage'],
+            'signal': card['signal'],
+            'profit_model1': card['profit_model1'],
+            'trend_stock': card.get('trend_stock', False),
+            'trading_system': card['trading_system'],
+            'trading_reason': card.get('trading_reason', ''),
+            'trend_buy_type': card.get('trend_buy_type', ''),
+            'trend_bias': card.get('trend_bias', ''),
+            'mainline_level': card.get('mainline_level', ''),
+            'flags': '',
+            'vol_analysis': card.get('vol_analysis', '--'),
+            'triggered_signals': card.get('triggered_signals', []),
+            'fusion_type': card.get('fusion_type', ''),
+            'fusion_reason': card.get('fusion_reason', ''),
+            'wave_position': card.get('wave_position', ''),
+            'action_type': card.get('action_type', '持有'),
+            'action_signal': card.get('action_signal', ''),
+            'action_priority': card.get('action_priority', '中'),
+            'action_reason': card.get('action_reason', ''),
+            'ema': card.get('ema', ''),
+        })
+
+    print(f"[3L复盘] StockCard扫描: {len(buy_signals)} 个买点信号")
+
+    # ── 盈利模式1 + 趋势股补充扫描 ──
     try:
-        from backend.core.buy_point_detection import format_buy_signals
-
-        if all_stocks_60d is None:
-            if os.path.isfile(all_stocks_path):
-                with open(all_stocks_path) as f:
-                    as60_data = json.load(f)
-                all_stocks_60d = as60_data.get('stocks', {})
-
-        if not all_stocks_60d:
-            return [], all_stocks_60d
-
-        latest_date = ''
-        for sec, stocks in all_stocks_60d.items():
-            for code, kls in stocks.items():
-                if kls and kls[-1]['date'] > latest_date:
-                    latest_date = kls[-1]['date']
-
-        today_yyyymmdd = date_str.replace('-', '')
-
-        latest_date = ''
-        for sec, stocks in all_stocks_60d.items():
-            for code, kls in stocks.items():
-                if kls and kls[0]['date'] > latest_date:
-                    latest_date = kls[0]['date']
-
-        scan_date = latest_date if latest_date else today_yyyymmdd
-        ml_names = [l['name'] for l in mainline_data.get('lines', [])]
-        # wl/wl_codes 已在函数顶部按方向过滤过，直接使用
-        scan_result = format_buy_signals(scan_date, all_stocks_60d, ml_names,
-                                          top_n=20,
-                                          market_position=market_cycle.get('position', ''),
-                                          watchlist_codes=wl_codes)
-
-        seen = set()
-        # 建立 code → watchlist 方向映射（用已过滤的 wl）
-        wl_dir_map = {}
-        for w in wl:
-            code = w.get('code', '')
-            if code:
-                wl_dir_map[code] = w.get('direction', '')
-        for key in ['zhongji_main', 'zhongji_nonmain', 'tupo_main', 'tupo_nonmain']:
-            for s in scan_result.get(key, []):
+        from backend.core.buy_point_detection import check_profit_model1_on_signals, check_trend_stock_on_signals
+        pm1 = check_profit_model1_on_signals([], all_stocks_60d, date_str)
+        trend = check_trend_stock_on_signals([], all_stocks_60d, date_str)
+        extra = pm1 + trend
+        if extra:
+            for s in extra:
                 if s['code'] not in seen:
                     seen.add(s['code'])
-                    wl_dir = wl_dir_map.get(s['code'], '')
-                    buy_signals.append({
-                        'name': s.get('name', s['code']),
-                        'code': s['code'],
-                        'sector': s['sector'],
-                        'direction': wl_dir,  # 从 watchlist 取方向，不用 scan 的 sector
-                        'buy_point': '中继买点' if key.startswith('zhongji') else '突破买点',
-                        'price': s.get('close', 0), 'change': s['gain'],
-                        'score': s['score'],
-                        'flags': s['flags'],
-                        'profit_model1': False,
-                    })
-        print(f"[3L复盘] 全量扫描: {len(buy_signals)} 个买点信号")
-    except Exception as e:
-        print(f"[3L复盘] 全量扫描跳过: {e}")
-
-    # ── 趋势股乖离率买点扫描 ──
-    try:
-        from backend.core.trend_trading import detect_trend_buy
-        from backend.data_access.data_layer import _load_json
-        from backend.core.config import MANUAL_TREND_PATH
-        manual = _load_json(MANUAL_TREND_PATH, [])
-        trend_codes = set(manual)
-        if trend_codes and wl_codes:
-            trend_wl_codes = trend_codes & wl_codes
-            for code in trend_wl_codes:
-                if code in seen:
-                    continue
-                kls = None
-                for sec, ss in all_stocks_60d.items():
-                    if code in ss:
-                        kls = ss[code]
-                        break
-                if not kls or len(kls) < 30:
-                    continue
-                date_clean = date_str.replace('-', '')
-                wl_dir = wl_dir_map.get(code, '')
-                sec_name = kls[0].get('ths_industry', kls[0].get('sector', '')) if kls else ''
-                data = {sec_name or '': {code: kls}}
-                tb = detect_trend_buy(code, date_clean, data, ml_names)
-                if tb and tb.get('has_buy'):
-                    seen.add(code)
-                    cur_close = kls[-1]['close']
-                    cur_change = round((kls[-1]['close'] - kls[-2]['close']) / kls[-2]['close'] * 100, 2) if len(kls) >= 2 else 0
-                    name = kls[0].get('name', code) if kls else code
-                    buy_signals.append({
-                        'name': name, 'code': code, 'sector': sec_name,
-                        'direction': wl_dir,
-                        'buy_point': tb.get('buy_type', 'BIAS5乖离率买入'),
-                        'price': cur_close, 'change': cur_change,
-                        'score': 5, 'flags': '', 'profit_model1': False,
-                    })
-                    print(f'[3L复盘] 趋势股买点: {name}({code}) - {tb.get("buy_type", "乖离率买入")}')
-        if manual:
-            added = len([s for s in buy_signals if s.get('code') in trend_codes])
-            if added:
-                print(f'[3L复盘] 趋势股扫描: 新增 {added} 个乖离率买点')
-    except Exception as e:
-        print(f'[3L复盘] 趋势股扫描跳过: {e}')
+                    buy_signals.append(s)
+            print(f"[3L复盘] 补充扫描: {len(extra)} 个额外信号 (盈利模式1+趋势股)")
+    except Exception as _e:
+        print(f"[3L复盘] 补充扫描跳过: {_e}")
 
     return buy_signals, all_stocks_60d
+
+
+
 
 
 # ═══════════════════════════════════════════════════════════════
