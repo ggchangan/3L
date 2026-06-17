@@ -94,17 +94,22 @@ def get_holdings():
         rows = _dl_holdings(user_id=1)
         if rows:
             holdings = []
+            total_ratio = 0
             for r in rows:
+                ratio = r.get('target_ratio', 0)
+                total_ratio += ratio
                 holdings.append({
                     'code': r.get('code', ''),
                     'name': r.get('name', ''),
                     'direction': r.get('direction', ''),
-                    'ratio': r.get('target_ratio', 0),
-                    'price': r.get('cost_price'),
+                    'ratio': ratio,
+                    'buy_price': float(r['cost_price']) if r.get('cost_price') is not None else None,
                     'stop_loss_price': r.get('stop_loss_price'),
                     'sector': r.get('sector', ''),
+                    'buy_date': r.get('buy_date', ''),
                 })
-            return {'holdings': holdings, 'cash_ratio': 0}
+            cash_ratio = round(max(0, 100 - total_ratio), 2)
+            return {'holdings': holdings, 'cash_ratio': cash_ratio}
     except Exception:
         log.warning('get_holdings DB读取失败，回退JSON')
     # 回退：JSON
@@ -169,8 +174,11 @@ def get_holdings_with_prices():
         item = dict(h)
         code = h.get('code', '')
         price_info = prices.get(code, {})
-        item['price'] = price_info.get('price')
+        item['price'] = price_info.get('price')  # 实时行情价
         item['change'] = price_info.get('change')
+        # 保留买入价格（cost_price）不覆盖
+        if 'buy_price' not in item or item['buy_price'] is None:
+            item['buy_price'] = None
 
         # 计算止损跌幅（用实时价）
         stop_price = h.get('stop_loss_price')
@@ -237,9 +245,11 @@ def save_holdings(data):
                 'name': h.get('name', ''),
                 'direction': h.get('direction', ''),
                 'target_ratio': h.get('ratio', 0),
-                'cost_price': h.get('price') or None,
+                # buy_price 优先，回退 price（前端旧格式）
+                'cost_price': h.get('buy_price') or h.get('price') or None,
                 'stop_loss_price': h.get('stop_loss_price') or None,
                 'sector': h.get('sector', ''),
+                'buy_date': h.get('buy_date') or None,
             })
         _dl_save(1, _db_list)
     except Exception as e:
