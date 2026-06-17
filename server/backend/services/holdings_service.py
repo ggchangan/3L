@@ -170,6 +170,28 @@ def get_holdings_with_prices():
     except Exception:
         log.warning('holdings: silent skip')
         pass
+    # 板块/结构/阶段 — 通过 StockCardService 统一获取（并行加速）
+    try:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from backend.services.stock_card_service import get_stock_card
+        date_str = datetime.now().strftime('%Y%m%d')
+        card_futures = {}
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for h in holdings:
+                code = h.get('code', '')
+                if code:
+                    fut = executor.submit(get_stock_card, code=code, date_str=date_str)
+                    card_futures[fut] = code
+            card_results = {}
+            for fut in as_completed(card_futures):
+                code = card_futures[fut]
+                try:
+                    card_results[code] = fut.result()
+                except Exception:
+                    card_results[code] = {}
+    except Exception:
+        card_results = {}
+
     for h in holdings:
         item = dict(h)
         code = h.get('code', '')
@@ -192,24 +214,17 @@ def get_holdings_with_prices():
         if code in wl_dirs:
             item['direction'] = wl_dirs[code]
 
-        # 板块/结构/阶段 — 通过 StockCardService 统一获取
-        item['sector'] = ''
-        item['structure'] = '--'
-        item['stage'] = '--'
-        try:
-            from backend.services.stock_card_service import get_stock_card
-            card = get_stock_card(code=code, date_str=datetime.now().strftime('%Y%m%d'))
-            item['sector'] = card.get('sector', '') or ''
-            item['structure'] = card.get('structure', '--')
-            item['stage'] = card.get('stage', '--')
-            item['signal'] = card.get('signal', '--')
-            item['buy_point'] = card.get('buy_point', '')
-            item['fusion_type'] = card.get('fusion_type', '')
-            item['fusion_reason'] = card.get('fusion_reason', '')
-            item['triggered_signals'] = card.get('triggered_signals', [])
-            item['wave_position'] = card.get('wave_position', '')
-        except Exception:
-            pass
+        # 板块/结构/阶段 — 从并行计算的结果中取
+        card = card_results.get(code, {})
+        item['sector'] = card.get('sector', '') or ''
+        item['structure'] = card.get('structure', '--')
+        item['stage'] = card.get('stage', '--')
+        item['signal'] = card.get('signal', '--')
+        item['buy_point'] = card.get('buy_point', '')
+        item['fusion_type'] = card.get('fusion_type', '')
+        item['fusion_reason'] = card.get('fusion_reason', '')
+        item['triggered_signals'] = card.get('triggered_signals', [])
+        item['wave_position'] = card.get('wave_position', '')
 
         enriched.append(item)
 
