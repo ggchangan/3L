@@ -229,9 +229,56 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
                 df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)
             else:
                 df = ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=today)
-            if df is None or df.empty:
+            if df is not None and not df.empty:
+                return name, _convert_board_kline(df)
+        except Exception:
+            pass
+
+        # Fallback: akshare 查不到时（名不在那90个一级行业列表里），
+        # 从 ths_index 拿到 ts_code，直连同花顺原始K线接口
+        # 仅对同花顺原生行业代码（88开头）做 fallback，GICS/申万分类跳过
+        try:
+            ts_code = name_code_map.get(name)
+            if not ts_code or not ts_code.startswith('88'):
                 return name, []
-            return name, _convert_board_kline(df)
+            bk_code = ts_code.replace('.TI', '')
+            import requests, re, json
+            current_year = int(today[:4])
+            all_rows = []
+            for year in [current_year]:
+                url = f"https://d.10jqka.com.cn/v4/line/bk_{bk_code}/01/{year}.js"
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Referer": "http://q.10jqka.com.cn",
+                    "Host": "d.10jqka.com.cn",
+                }
+                r = requests.get(url, headers=headers, timeout=10)
+                if r.status_code != 200:
+                    continue
+                raw = re.search(r'\((.*)\)', r.text)
+                if not raw:
+                    continue
+                data = json.loads(raw.group(1))
+                for line in data['data'].split(';'):
+                    if not line.strip():
+                        continue
+                    parts = line.split(',')
+                    if len(parts) >= 7:
+                        all_rows.append({
+                            'date': parts[0],
+                            'open': float(parts[1]),
+                            'high': float(parts[2]),
+                            'low': float(parts[3]),
+                            'close': float(parts[4]),
+                            'volume': float(parts[5]),
+                            'amount': float(parts[6]),
+                        })
+            if not all_rows:
+                return name, []
+            # 按日期过滤
+            all_rows.sort(key=lambda x: x['date'])
+            filtered = [r for r in all_rows if start <= r['date'] <= today]
+            return name, filtered
         except Exception:
             return name, []
 
