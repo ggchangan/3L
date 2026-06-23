@@ -13,6 +13,7 @@ from backend.core.config import (
     REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
     WWW_DIR, PRIVATE_DIR, SCRIPTS_DIR, MOMENTUM_CACHE_PREFIX,
     CHARTS_DIR, DATA_DIR, INDUSTRY_MAP_PATH, MAINLINES_CACHE_PATH,
+    BOARD_CONSTITUENTS_PATH,
 )
 from backend.core import config
 
@@ -673,37 +674,61 @@ def compute_review_real_time(date_str=None):
 
     # ── 板块领涨股（为每个行业/概念板块加 leaders 字段） ──
     try:
-        # 绕过缓存，直接读文件（get_all_stocks缓存可能为空）
-        if os.path.isfile(ALL_STOCKS_PATH):
-            with open(ALL_STOCKS_PATH) as _f:
-                _all_raw = json.load(_f)
-            _all_60d = _all_raw.get('stocks', {})
-        else:
-            _all_60d = all_stocks_60d
+        # 加载 THS 行业板块 → 成分股 映射（由 build_board_mapping.py 生成）
+        _board_data = {}
+        if os.path.isfile(BOARD_CONSTITUENTS_PATH):
+            with open(BOARD_CONSTITUENTS_PATH) as _f:
+                _bc = json.load(_f)
+            _board_data = _bc.get('boards', {})
 
-        if os.path.isfile(INDUSTRY_MAP_PATH):
-            with open(INDUSTRY_MAP_PATH) as _f:
-                _ind_map_raw = json.load(_f)
-            _ind_to_stocks = {}
-            for _code, _info in _ind_map_raw.items():
-                _ind = _info.get('ths_industry', '')
-                if _ind:
-                    _ind_to_stocks.setdefault(_ind, []).append(_code)
-
+        # 从数据库 stock_daily 构建 K线索引（覆盖全量股票）
         _kline_index = {}
-        for _dir, _ss in _all_60d.items():
-            for _code, _kls in _ss.items():
-                _kline_index[_code] = _kls
+        _stock_names = {}
+        try:
+            from backend.data_access.tushare_db import TushareDB
+            _tdb = TushareDB()
 
-        _wl = get_watchlist()
-        _wl_list = _wl.get('stocks', _wl) if isinstance(_wl, dict) else _wl
-        _wl_codes = set(s.get('code', '') for s in _wl_list if isinstance(s, dict) and s.get('code'))
+            # 股票名称从 stock_basic 取
+            try:
+                _sb_rows = _tdb.query_many('stock_basic')
+                for _r in _sb_rows:
+                    _stock_names[_r['ts_code']] = _r.get('name', '')
+            except Exception:
+                pass
 
-        def _calc_stock_leaders(stock_codes, kline_index, wl_codes, top_n=5):
+            _conn = _tdb._get_conn()
+            _cur = _conn.cursor()
+            _cur.execute("SELECT DISTINCT trade_date FROM stock_daily ORDER BY trade_date DESC LIMIT 5")
+            _recent_dates = sorted([list(r.values())[0] for r in _cur.fetchall()])
+            _cur.close()
+            _conn.close()
+
+            if _recent_dates:
+                _rows = _tdb.query_many('stock_daily',
+                    where='trade_date IN (%s)' % ','.join(['%s'] * len(_recent_dates)),
+                    params=_recent_dates)
+                for _r in _rows:
+                    _tc = _r['ts_code']
+                    if _tc not in _kline_index:
+                        _kline_index[_tc] = []
+                    _kline_index[_tc].append({
+                        'date': str(_r['trade_date']),
+                        'close': float(_r['close']),
+                        'open': float(_r['open']),
+                        'high': float(_r['high']),
+                        'low': float(_r['low']),
+                        'volume': float(_r['vol']),
+                    })
+                # 按日期升序
+                for _tc in _kline_index:
+                    _kline_index[_tc].sort(key=lambda x: x['date'])
+        except Exception as _e:
+            print(f'[3L复盘] 数据库加载K线失败: {_e}')
+            import traceback; traceback.print_exc()
+
+        def _calc_stock_leaders(stock_codes, kline_index, stock_names, top_n=5):
             _candidates = []
             for _c in stock_codes:
-                if _c not in wl_codes:
-                    continue
                 _kls = kline_index.get(_c)
                 if not _kls or len(_kls) < 5:
                     continue
@@ -712,11 +737,7 @@ def compute_review_real_time(date_str=None):
                 _close_5d = _kls[-5]['close'] if len(_kls) >= 5 else _close_now
                 _chg_1d = round((_close_now - _close_1d) / _close_1d * 100, 1)
                 _chg_5d = round((_close_now - _close_5d) / _close_5d * 100, 1)
-                _name = ''
-                for _d, _ss in _all_60d.items():
-                    if _c in _ss and len(_ss[_c]) > 0:
-                        _name = _ss[_c][0].get('name', _c)
-                        break
+                _name = stock_names.get(_c, _c)
                 _tag = '🏆领涨' if _chg_5d >= 5 else ('💪中军' if _chg_1d > 0 else '')
                 _candidates.append({
                     'code': _c, 'name': _name or _c,
@@ -730,8 +751,8 @@ def compute_review_real_time(date_str=None):
         if mainline_data.get('all_ranked'):
             for _entry in mainline_data['all_ranked']:
                 _sname = _entry.get('name', '')
-                _codes = _ind_to_stocks.get(_sname, [])
-                _entry['leaders'] = _calc_stock_leaders(_codes, _kline_index, _wl_codes)
+                _codes = _board_data.get(_sname, [])
+                _entry['leaders'] = _calc_stock_leaders(_codes, _kline_index, _stock_names)
 
         _cm = mainline_data.get('concept_mainline', {})
         if _cm.get('all_ranked'):
@@ -743,7 +764,7 @@ def compute_review_real_time(date_str=None):
                         _ccode = _cc
                         break
                 _concept_stocks = _concept_list.get(_ccode, {}).get('stocks', []) if _ccode else []
-                _entry['leaders'] = _calc_stock_leaders(_concept_stocks, _kline_index, _wl_codes)
+                _entry['leaders'] = _calc_stock_leaders(_concept_stocks, _kline_index, _stock_names)
     except Exception as e:
         print(f'[3L复盘] ⚠️ 板块领涨股计算失败: {e}')
         import traceback; traceback.print_exc()

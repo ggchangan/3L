@@ -62,6 +62,7 @@ SUB_SECTOR_CLUSTERS_PATH = os.path.join(COMPUTED_DIR, 'sub_sector_clusters.json'
 FINANCIAL_CACHE_PATH = os.path.join(COMPUTED_DIR, 'financial_data_cache.json')
 PROFIT_QUALITY_PATH = os.path.join(COMPUTED_DIR, 'profit_quality.json')
 INDUSTRY_LEADERS_PATH = os.path.join(COMPUTED_DIR, 'industry_leaders.json')
+BOARD_CONSTITUENTS_PATH = os.path.join(DATA_DIR, 'board_constituents.json')
 LATEST_SCAN_PATH = os.path.join(COMPUTED_DIR, 'scan_result.json')
 LOGIC_TRACKING_PATH = os.path.join(COMPUTED_DIR, 'logic_tracking.json')
 SOURCE_HEALTH_PATH = os.path.join(COMPUTED_DIR, 'source_health.json')
