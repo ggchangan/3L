@@ -13,7 +13,6 @@ from backend.core.config import (
     REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
     WWW_DIR, PRIVATE_DIR, SCRIPTS_DIR, MOMENTUM_CACHE_PREFIX,
     CHARTS_DIR, DATA_DIR, INDUSTRY_MAP_PATH, MAINLINES_CACHE_PATH,
-    BOARD_CONSTITUENTS_PATH,
 )
 from backend.core import config
 
@@ -674,19 +673,31 @@ def compute_review_real_time(date_str=None):
 
     # ── 板块领涨股（为每个行业/概念板块加 leaders 字段） ──
     try:
-        # 加载 THS 行业板块 → 成分股 映射（由 build_board_mapping.py 生成）
+        # 从数据库 ths_index + ths_member 直接查行业→成分股映射
         _board_data = {}
-        if os.path.isfile(BOARD_CONSTITUENTS_PATH):
-            with open(BOARD_CONSTITUENTS_PATH) as _f:
-                _bc = json.load(_f)
-            _board_data = _bc.get('boards', {})
-
-        # 从数据库 stock_daily 构建 K线索引（覆盖全量股票）
-        _kline_index = {}
         _stock_names = {}
+        _kline_index = {}
         try:
             from backend.data_access.tushare_db import TushareDB
             _tdb = TushareDB()
+
+            # 行业→成分股映射（单条 JOIN 查询，毫秒级）
+            try:
+                _conn = _tdb._get_conn()
+                _cur = _conn.cursor()
+                _cur.execute("""
+                    SELECT ti.name, tm.con_code
+                    FROM ths_member tm
+                    JOIN ths_index ti ON tm.ts_code = ti.ts_code
+                    WHERE ti.type = 'I'
+                """)
+                for _r in _cur.fetchall():
+                    vals = list(_r.values())
+                    _board_data.setdefault(vals[0], []).append(vals[1].upper().strip())
+                _cur.close()
+                _conn.close()
+            except Exception:
+                pass
 
             # 股票名称从 stock_basic 取
             try:
