@@ -19,6 +19,8 @@ export default function BuySignalsArea() {
   const [searchQ, setSearchQ] = useState('')
   const [dirOrder, setDirOrder] = useState<string[]>([])
 
+  // 提取完整缓存时间，含日期
+  const cacheTimeFull = scanMeta.scan_time
   // 用 ref 保持最新 activeDir 引用，避免轮询闭包捕获旧值
   const activeDirRef = useRef(activeDir)
   activeDirRef.current = activeDir
@@ -26,7 +28,7 @@ export default function BuySignalsArea() {
   // 提取扫描时间中的 HH:MM 部分
   const scanTimeShort = scanMeta.scan_time
     ? scanMeta.scan_time.length >= 16
-      ? scanMeta.scan_time.slice(11, 16)
+      ? scanMeta.scan_time.slice(5, 16)  // "2026-06-12 02:52:17" → "06-12 02:52"
       : scanMeta.scan_time
     : ''
 
@@ -102,7 +104,7 @@ export default function BuySignalsArea() {
   return (
     <>
       {/* 扫描时间指示器 */}
-      {scanTimeShort && (
+      {cacheTimeFull && (
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           padding: '6px 8px', marginBottom: 6,
@@ -110,7 +112,7 @@ export default function BuySignalsArea() {
           border: '1px solid rgba(78, 205, 196, 0.15)',
         }}>
           <span style={{ fontSize: 12, color: '#4ecdc4' }}>
-            ⏱ 缓存时间: <strong>{scanTimeShort}</strong>
+            ⏱ 缓存时间: <strong>{cacheTimeFull}</strong>
           </span>
           <span style={{ fontSize: 11, color: '#888' }}>
             {scanMeta.stocks_scanned || 0}只扫描 · {Object.values(groups).flat().length}个信号
