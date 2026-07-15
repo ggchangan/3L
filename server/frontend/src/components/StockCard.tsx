@@ -42,7 +42,8 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
   const isBuy = s.signal === 'buy'
   const chartId = `${chartPrefix}chart_${idx}`
   const modeParam = mode ? `&mode=${mode}` : ''
-  const chartUrl = `/api/stock-chart?code=${s.code}${modeParam}`
+  const slParam = (s.stop_loss !== undefined && s.stop_loss !== null) ? `&stop_loss=${s.stop_loss}` : ''
+  const chartUrl = `/api/stock-chart?code=${s.code}${modeParam}${slParam}`
   const [chartEverShown, setChartEverShown] = useState(false)
 
   // 止损

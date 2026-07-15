@@ -1,80 +1,66 @@
 """
 构建 同花顺行业板块 → 成分股 映射文件
+
+数据源：MySQL 数据库 ths_index + ths_member 表
 输出: data/3l/board_constituents.json
-      {board_name: [{code, name, industry}, ...], ...}
+     {board_name: [code, ...], last_updated: 'YYYY-MM-DD'}
+
+与 stock_industry_map.json（个股→GICS行业名）是两套体系，互不依赖。
+专供复盘页面的板块领涨股计算使用。
 """
-import os, json, time, requests, re
-os.environ['TQDM_DISABLE'] = '1'
-import akshare as ak
+import os, json, time, sys
+from backend.data_access.tushare_db import TushareDB
 from backend.core.config import DATA_DIR
 
 OUTPUT_PATH = os.path.join(DATA_DIR, 'board_constituents.json')
 
-def get_all_th_boards():
-    """获取所有同花顺行业板块名称和代码"""
-    df = ak.stock_board_industry_name_ths()
-    return df.to_dict('records')  # [{name, code}, ...]
-
-def get_industry_map():
-    """加载现有行业映射"""
-    path = os.path.join(DATA_DIR, 'stock_industry_map.json')
-    if os.path.isfile(path):
-        with open(path) as f:
-            return json.load(f)
-    return {}
-
-def get_stock_names():
-    """从 all_stocks_60d.json 加载股票名称"""
-    sp = os.path.join(DATA_DIR, 'all_stocks_60d.json')
-    if os.path.isfile(sp):
-        with open(sp) as f:
-            data = json.load(f)
-        names = {}
-        stocks = data.get('stocks', data) if isinstance(data, dict) else data
-        for sec, codes in (stocks.items() if isinstance(stocks, dict) else []):
-            for code, kls in codes.items():
-                if kls and isinstance(kls, list) and len(kls) > 0:
-                    names[code] = kls[0].get('name', '')
-        return names
-    return {}
 
 def build_mapping():
-    boards = get_all_th_boards()
-    industry_map = get_industry_map()
-    stock_names = get_stock_names()
-    
-    # 先按 ths_industry 反向建立股票索引
-    industry_to_stocks = {}
-    for code, info in industry_map.items():
-        ind = info.get('ths_industry', '')
-        if ind:
-            if ind not in industry_to_stocks:
-                industry_to_stocks[ind] = []
-            industry_to_stocks[ind].append({
-                'code': code,
-                'name': stock_names.get(code, ''),
-                'industry': ind,
-            })
-    
+    try:
+        db = TushareDB()
+    except Exception as e:
+        print(f'[ERROR] MySQL 连接失败: {e}', file=sys.stderr)
+        sys.exit(1)
+
+    # 1. 获取所有行业板块（type='I'）
+    rows = db.query_many('ths_index', where='type=%s', params=('I',))
+    board_count = len(rows)
+    print(f'THS行业板块(类型I)总数: {board_count}')
+
+    # 查询所有 ths_member 记录按 ts_code 分组
+    member_rows = db.query_many('ths_member')
+    board_to_codes = {}
+    for m in member_rows:
+        ts_code = m['ts_code']
+        con_code = m['con_code']
+        board_to_codes.setdefault(ts_code, []).append(con_code.upper().strip())
+
     result = {}
-    for board in boards:
-        name = board['name']
-        code = board['code']
-        
-        # 从 stock_industry_map 的 ths_industry 反向匹配
-        stocks = industry_to_stocks.get(name, [])
-        
-        if stocks:
-            result[name] = stocks
-            # print(f'  {name}: {len(stocks)}只')
-        else:
-            result[name] = []
-    
-    # 保存
-    with open(OUTPUT_PATH, 'w') as f:
-        json.dump({'boards': result, 'count': len(result)}, f, ensure_ascii=False, indent=2)
-    
-    print(f'\n完成: {len(result)}个板块, 输出到 {OUTPUT_PATH}')
+    matched = 0
+    for row in rows:
+        name = row['name']
+        ts_code = row['ts_code']
+        codes = board_to_codes.get(ts_code, [])
+        if codes:
+            matched += 1
+        result[name] = codes
+
+    # 2. 写入
+    output = {
+        'boards': result,
+        'count': len(result),
+        'boards_with_stocks': matched,
+        'total_stocks': sum(len(v) for v in result.values()),
+        'last_updated': time.strftime('%Y-%m-%d'),
+    }
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+        json.dump(output, f, ensure_ascii=False, indent=2)
+
+    print(f'完成: {output["count"]}个板块, 含＞0只: {matched}, 总股票条目: {output["total_stocks"]}')
+    print(f'输出: {OUTPUT_PATH}')
+    print(f'上次更新: {output["last_updated"]}')
+
 
 if __name__ == '__main__':
     build_mapping()

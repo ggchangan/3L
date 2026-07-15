@@ -277,7 +277,7 @@ def _resolve_today_candle_state(now_hour, now_min, quote, last_date_str, today_s
         }
 
 
-def generate_stock_chart(code, mode='review', triggered_signals=None):
+def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_price=None):
     """
     生成个股 K 线 SVG（60 日 K 线）
     mode=monitor: 含今日实时虚线蜡烛，不缓存；
@@ -640,6 +640,19 @@ def generate_stock_chart(code, mode='review', triggered_signals=None):
                 f'font-size="8" fill="#2196f3">'
                 f'EMA10 {e10v:.2f}</text>'
             )
+
+    # 5j3. 止损线（用户设定）
+    if stop_loss_price is not None and stop_loss_price > 0:
+        sly = py_price(stop_loss_price)
+        sv.append(
+            f'<line x1="{pl}" y1="{sly}" x2="{W - pr}" y2="{sly}" '
+            f'stroke="#ff4444" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.8"/>'
+        )
+        sv.append(
+            f'<text x="{W - pr - 4}" y="{sly - 4}" font-family="sans-serif" '
+            f'font-size="9" fill="#ff4444" font-weight="bold">'
+            f'止损 {stop_loss_price:.2f}</text>'
+        )
 
     # 5k. 今日蜡烛（盘中虚线+实时标记，收盘实心+今日标记）
     if has_today:
@@ -1332,7 +1345,7 @@ def generate_index_chart(mode='review', code=None):
     return cache_file, None
 
 
-def generate_trend_stock_chart(code, mode='review'):
+def generate_trend_stock_chart(code, mode='review', stop_loss_price=None):
     """生成趋势交易 K 线 SVG（使用 gen_trend_chart 的绘制逻辑）
     mode=monitor: 含今日实时数据叠加到K线，不缓存；
     其他mode: 仅日K线，按18:00规则缓存。
@@ -1435,5 +1448,17 @@ def generate_trend_stock_chart(code, mode='review'):
         if is_trading:
             label = '<text x="685" y="18" font-family="sans-serif" font-size="9" fill="#ffd700" opacity="0.8">📊 今日(虚线)</text>'
             svg_str = svg_str.replace('</svg>', label + '</svg>')
+
+    # 止损线（用户设定）
+    if stop_loss_price is not None and stop_loss_price > 0:
+        sl_line = (
+            f'<line x1="60" y1="160" x2="780" y2="160" '
+            f'stroke="#ff4444" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.8"/>'
+            f'<text x="776" y="156" font-family="sans-serif" '
+            f'font-size="9" fill="#ff4444" font-weight="bold">'
+            f'止损 {stop_loss_price:.2f}</text>'
+        )
+        # The y=160 is approximate; inject near </svg>
+        svg_str = svg_str.replace('</svg>', sl_line + '</svg>')
 
     return svg_str, None

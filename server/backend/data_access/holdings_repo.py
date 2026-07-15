@@ -28,7 +28,7 @@ def get_holdings(user_id: int = 1) -> list:
         user_id: 用户 ID（默认 1）
 
     Returns:
-        [{code, name, direction, target_ratio, cost_price?, stop_loss_price?, sector?}, ...]
+        [{code, name, direction, target_ratio, cost_price?, stop_loss_price?, sector?, buy_date?}, ...]
         查询失败返回空列表
     """
     try:

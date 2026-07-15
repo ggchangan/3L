@@ -48,6 +48,7 @@ export default function Holdings() {
   const [modalDirection, setModalDirection] = useState('')
   const [modalRatio, setModalRatio] = useState('')
   const [modalStopLoss, setModalStopLoss] = useState('')
+  const [modalBuyDate, setModalBuyDate] = useState('')
   const [modalSaving, setModalSaving] = useState(false)
   const [modalBuyPrice, setModalBuyPrice] = useState('')
   const [modalBuyDate, setModalBuyDate] = useState('')
@@ -616,6 +617,11 @@ export default function Holdings() {
                 >🔄 更新止损</button>
               </div>
               <div className="hint" dangerouslySetInnerHTML={{ __html: calcStopLossPct() }} />
+            </div>
+
+            <div className="form-row">
+              <label>买入日期</label>
+              <input type="date" value={modalBuyDate} onChange={e => setModalBuyDate(e.target.value)} />
             </div>
 
             <div className="btn-row">

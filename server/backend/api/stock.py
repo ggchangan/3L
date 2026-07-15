@@ -69,17 +69,24 @@ def _handle_stock_chart(h, path):
         return
     # 图表模式：monitor=含实时，其他=不实时（只用日K线）
     mode = (params.get('mode') or ['review'])[0]
+    # 可选止损价
+    stop_loss = params.get('stop_loss', [None])[0]
+    if stop_loss is not None:
+        try:
+            stop_loss = float(stop_loss)
+        except (ValueError, TypeError):
+            stop_loss = None
     # 后端自决交易系统类型，不依赖前端传 sys 参数
     trading_system = _get_stock_trading_system(code)
     if trading_system == 'trend':
-        svg_str, err = generate_trend_stock_chart(code, mode=mode)
+        svg_str, err = generate_trend_stock_chart(code, mode=mode, stop_loss_price=stop_loss)
         if err:
             h.send_json({'error': err})
             return
     else:
         # 检测信号（用于SVG图上标注）
         triggered = _detect_chart_signals(code)
-        svg_str, err = generate_stock_chart(code, mode=mode, triggered_signals=triggered)
+        svg_str, err = generate_stock_chart(code, mode=mode, triggered_signals=triggered, stop_loss_price=stop_loss)
         if err:
             h.send_json({'error': err})
             return
