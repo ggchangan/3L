@@ -11,7 +11,7 @@ import os
 from datetime import datetime
 import pytest
 
-BASE = 'http://localhost:8080'
+BASE = os.environ.get('TEST_BASE_URL', 'http://localhost:8080').rstrip('/')
 TIMEOUT = 15
 
 
@@ -70,7 +70,7 @@ class TestCoreAPI:
 
     def test_review_today(self):
         """当天复盘数据"""
-        d = api('/api/review')
+        d = api('/api/review/get')
         must_have(d, 'date', 'market', 'mainline', 'timing_signals',
                   'trading_plan', 'holdings', 'buy_signals')
         must_have(d['market'], 'score', 'position', 'bias20', 'vol_ratio')

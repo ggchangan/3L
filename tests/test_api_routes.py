@@ -94,7 +94,7 @@ EXPECTED_ROUTES_GET = [
     '/api/health',
     '/api/holdings',
     '/api/trades',
-    '/api/review',
+    '/api/review/today',
     '/api/review/dates',
     '/api/review/generate',
     '/api/stock-analysis',

@@ -120,6 +120,20 @@ def get_industry_map():
 # 4. 最强动量数据（涨停+创新高，subprocess 方式）
 # =====================================================
 
+def _parse_json_output(output):
+    """Parse the final JSON object from a command that may print progress logs."""
+    for line in reversed((output or '').splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+    raise ValueError('命令输出中没有有效JSON对象')
+
 def get_momentum_data():
     """获取动量数据，每日缓存一次。调用 fetch_momentum.py 子进程获取数据。"""
     cache_dir = _cache_dir()
@@ -134,11 +148,11 @@ def get_momentum_data():
     # 无缓存，拉取新数据
     try:
         r = subprocess.run(
-            [sys.executable, os.path.join(WWW_DIR, 'fetch_momentum.py')],
+            [sys.executable, os.path.join(WWW_DIR, 'server', 'fetch_momentum.py')],
             capture_output=True, text=True, timeout=90
         )
         if r.returncode == 0:
-            data = json.loads(r.stdout)
+            data = _parse_json_output(r.stdout)
             config.atomic_json_dump(data, cache_file)
             return data
         else:

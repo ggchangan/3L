@@ -111,8 +111,12 @@ class TestGetStockCardConceptDict:
             for i in range(1, n + 1)
         ]
 
-    def test_dict_main_lines_returns_card_with_mainline_level(self):
+    def test_dict_main_lines_returns_card_with_mainline_level(self, monkeypatch):
         """main_lines 传 dict（含 concept_mainline）→ 正常返回卡片"""
+        monkeypatch.setattr(
+            'backend.services.stock_card_service.get_industry_map',
+            lambda: {'601138': {'ths_industry': '技术硬件与设备(A股)'}},
+        )
         card = get_stock_card(
             code='601138',
             date_str='20260531',
@@ -128,7 +132,8 @@ class TestGetStockCardConceptDict:
             klines=self._make_fake_klines(),
         )
         assert card is not None
-        assert card.get('sector') == '消费电子'
+        assert card.get('sector') == '技术硬件与设备(A股)'
+        assert card.get('direction') == '消费电子'
         # mainline_level 必须存在（值依赖概念映射数据，不做硬断言）
         assert card.get('mainline_level', '__MISSING__') != '__MISSING__'
 

@@ -353,7 +353,10 @@ class TushareDB:
         conn = self._get_conn()
         try:
             with conn.cursor() as cur:
-                cur.execute(sql, params or [])
+                if params is None:
+                    cur.execute(sql)
+                else:
+                    cur.execute(sql, params)
                 return list(cur.fetchall())
         finally:
             conn.close()
@@ -363,7 +366,10 @@ class TushareDB:
         conn = self._get_conn()
         try:
             with conn.cursor() as cur:
-                cur.execute(sql, params or [])
+                if params is None:
+                    cur.execute(sql)
+                else:
+                    cur.execute(sql, params)
                 return list(cur.fetchall())
         finally:
             conn.close()

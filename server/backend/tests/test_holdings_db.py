@@ -68,7 +68,9 @@ class TestHoldingsDB:
     def test_insert_and_read_holdings(self, db):
         """插入持仓数据后应能正确读回"""
         # 清空测试数据
-        db.execute_raw("DELETE FROM holdings WHERE user_id=999")
+        old_users = db.execute_raw("SELECT id FROM users WHERE username='test_user'")
+        for old_user in old_users:
+            db.execute_raw("DELETE FROM holdings WHERE user_id=%s", [old_user['id']])
         db.execute_raw("DELETE FROM users WHERE username='test_user'")
 
         # 插入测试用户
