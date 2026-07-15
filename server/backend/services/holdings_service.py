@@ -7,6 +7,44 @@ log = get_logger(__name__)
 from datetime import datetime
 from backend.core.config import HOLDINGS_PATH, TRADES_PATH
 
+# ── 个股持仓卡片缓存（个股粒度，K线不变不重算）──
+import time as _time
+_CARD_CACHE = {}       # {code: card_data}
+_CARD_CACHE_EXPIRY = {}  # {code: expiry_timestamp}
+_CARD_CACHE_TTL = 300   # 5分钟
+
+
+def _get_cached_cards(codes):
+    """批量读取缓存，返回 {已缓存code: card}，缺失的code另行计算"""
+    now = _time.time()
+    result = {}
+    for code in codes:
+        if code in _CARD_CACHE and now < _CARD_CACHE_EXPIRY.get(code, 0):
+            result[code] = _CARD_CACHE[code]
+    return result
+
+
+def _set_cached_cards(cards):
+    """批量写入缓存"""
+    expiry = _time.time() + _CARD_CACHE_TTL
+    for code, card in cards.items():
+        _CARD_CACHE[code] = card
+        _CARD_CACHE_EXPIRY[code] = expiry
+
+
+def _invalidate_card_cache(code):
+    """个股卡片缓存失效"""
+    _CARD_CACHE.pop(code, None)
+    _CARD_CACHE_EXPIRY.pop(code, None)
+
+
+def _get_cached_card(code):
+    """获取单只个股卡片缓存，未命中返回 None"""
+    now = _time.time()
+    if code in _CARD_CACHE and now < _CARD_CACHE_EXPIRY.get(code, 0):
+        return _CARD_CACHE[code]
+    return None
+
 # ── 腾讯行情接口格式 ────────────────────────────────────
 # 请求: http://qt.gtimg.cn/q=sh603259,sz301200
 # 返回: v_pvixnGq="51.200","2.300",... 多行
@@ -94,18 +132,22 @@ def get_holdings():
         rows = _dl_holdings(user_id=1)
         if rows:
             holdings = []
+            total_ratio = 0
             for r in rows:
+                ratio = r.get('target_ratio', 0)
+                total_ratio += ratio
                 holdings.append({
                     'code': r.get('code', ''),
                     'name': r.get('name', ''),
                     'direction': r.get('direction', ''),
-                    'ratio': r.get('target_ratio', 0),
-                    'price': r.get('cost_price'),
+                    'ratio': ratio,
+                    'buy_price': float(r['cost_price']) if r.get('cost_price') is not None else None,
                     'stop_loss_price': r.get('stop_loss_price'),
                     'sector': r.get('sector', ''),
                     'buy_date': r.get('buy_date', ''),
                 })
-            return {'holdings': holdings, 'cash_ratio': 0}
+            cash_ratio = round(max(0, 100 - total_ratio), 2)
+            return {'holdings': holdings, 'cash_ratio': cash_ratio}
     except Exception:
         log.warning('get_holdings DB读取失败，回退JSON')
     # 回退：JSON
@@ -166,12 +208,38 @@ def get_holdings_with_prices():
     except Exception:
         log.warning('holdings: silent skip')
         pass
+    # 板块/结构/阶段 — 通过 StockCardService 统一获取（缓存+并行加速）
+    card_results = _get_cached_cards(codes)
+    uncached = [c for c in codes if c not in card_results]
+    if uncached:
+        try:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            from backend.services.stock_card_service import get_stock_card
+            date_str = datetime.now().strftime('%Y%m%d')
+            card_futures = {}
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                for code in uncached:
+                    fut = executor.submit(get_stock_card, code=code, date_str=date_str)
+                    card_futures[fut] = code
+                for fut in as_completed(card_futures):
+                    code = card_futures[fut]
+                    try:
+                        card_results[code] = fut.result()
+                    except Exception:
+                        card_results[code] = {}
+            _set_cached_cards(card_results)
+        except Exception:
+            pass
+
     for h in holdings:
         item = dict(h)
         code = h.get('code', '')
         price_info = prices.get(code, {})
-        item['price'] = price_info.get('price')
+        item['price'] = price_info.get('price')  # 实时行情价
         item['change'] = price_info.get('change')
+        # 保留买入价格（cost_price）不覆盖
+        if 'buy_price' not in item or item['buy_price'] is None:
+            item['buy_price'] = None
 
         # 计算止损跌幅（用实时价）
         stop_price = h.get('stop_loss_price')
@@ -185,24 +253,17 @@ def get_holdings_with_prices():
         if code in wl_dirs:
             item['direction'] = wl_dirs[code]
 
-        # 板块/结构/阶段 — 通过 StockCardService 统一获取
-        item['sector'] = ''
-        item['structure'] = '--'
-        item['stage'] = '--'
-        try:
-            from backend.services.stock_card_service import get_stock_card
-            card = get_stock_card(code=code, date_str=datetime.now().strftime('%Y%m%d'))
-            item['sector'] = card.get('sector', '') or ''
-            item['structure'] = card.get('structure', '--')
-            item['stage'] = card.get('stage', '--')
-            item['signal'] = card.get('signal', '--')
-            item['buy_point'] = card.get('buy_point', '')
-            item['fusion_type'] = card.get('fusion_type', '')
-            item['fusion_reason'] = card.get('fusion_reason', '')
-            item['triggered_signals'] = card.get('triggered_signals', [])
-            item['wave_position'] = card.get('wave_position', '')
-        except Exception:
-            pass
+        # 板块/结构/阶段 — 从并行计算的结果中取
+        card = card_results.get(code, {})
+        item['sector'] = card.get('sector', '') or ''
+        item['structure'] = card.get('structure', '--')
+        item['stage'] = card.get('stage', '--')
+        item['signal'] = card.get('signal', '--')
+        item['buy_point'] = card.get('buy_point', '')
+        item['fusion_type'] = card.get('fusion_type', '')
+        item['fusion_reason'] = card.get('fusion_reason', '')
+        item['triggered_signals'] = card.get('triggered_signals', [])
+        item['wave_position'] = card.get('wave_position', '')
 
         enriched.append(item)
 
@@ -238,7 +299,8 @@ def save_holdings(data):
                 'name': h.get('name', ''),
                 'direction': h.get('direction', ''),
                 'target_ratio': h.get('ratio', 0),
-                'cost_price': h.get('price') or None,
+                # buy_price 优先，回退 price（前端旧格式）
+                'cost_price': h.get('buy_price') or h.get('price') or None,
                 'stop_loss_price': h.get('stop_loss_price') or None,
                 'sector': h.get('sector', ''),
                 'buy_date': h.get('buy_date') or None,

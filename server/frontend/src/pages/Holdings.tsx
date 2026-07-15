@@ -6,7 +6,7 @@ import './Holdings.css'
 
 interface HoldingItem {
   name: string; code: string; ratio: number; direction: string
-  stop_loss_price: number | null; price: number | null
+  stop_loss_price: number | null; buy_price: number | null; price: number | null
   change: number | null; stop_loss_pct: number | null
   sector: string; structure: string; stage: string
   signal?: string
@@ -50,6 +50,8 @@ export default function Holdings() {
   const [modalStopLoss, setModalStopLoss] = useState('')
   const [modalBuyDate, setModalBuyDate] = useState('')
   const [modalSaving, setModalSaving] = useState(false)
+  const [modalBuyPrice, setModalBuyPrice] = useState('')
+  const [modalBuyDate, setModalBuyDate] = useState('')
   const [directions, setDirections] = useState<string[]>([])
   const [cachedPrice, setCachedPrice] = useState<number | null>(null)
 
@@ -221,7 +223,8 @@ export default function Holdings() {
 
   function openAddModal() {
     setEditIdx(-1); setSelectedStock(null); setSearchQ(''); setModalDirection('')
-    setModalRatio(''); setModalStopLoss(''); setModalBuyDate(''); setCachedPrice(null)
+    setModalRatio(''); setModalStopLoss(''); setModalBuyPrice('')
+    setModalBuyDate(new Date().toISOString().split('T')[0]); setCachedPrice(null)
     setSearchResults([]); setModalOpen(true)
     loadDirections()
   }
@@ -232,7 +235,9 @@ export default function Holdings() {
     setEditIdx(idx); setSelectedStock({ name: h.name, code: h.code })
     setSearchQ(''); setModalDirection(h.direction || '')
     setModalRatio(String(h.ratio || '')); setModalStopLoss(h.stop_loss_price ? String(h.stop_loss_price) : '')
-    setModalBuyDate(h.buy_date || ''); setCachedPrice(h.price ?? null); setSearchResults([])
+    setModalBuyPrice(h.buy_price ? String(h.buy_price) : '')
+    setModalBuyDate(h.buy_date || new Date().toISOString().split('T')[0])
+    setCachedPrice(h.price ?? null); setSearchResults([])
     setModalOpen(true)
     loadDirections()
   }
@@ -285,7 +290,8 @@ export default function Holdings() {
       const item: HoldingItem = {
         name: selectedStock.name, code: selectedStock.code,
         ratio, direction: modalDirection, stop_loss_price: slVal,
-        price: null, change: null, stop_loss_pct: null,
+        price: null, buy_price: modalBuyPrice ? parseFloat(modalBuyPrice) : null,
+        change: null, stop_loss_pct: null,
         sector: '', structure: '--', stage: '--',
         buy_date: modalBuyDate || null,
       }
@@ -554,6 +560,23 @@ export default function Holdings() {
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="form-row">
+              <label>买入日期</label>
+              <input type="date" value={modalBuyDate} onChange={e => setModalBuyDate(e.target.value)} />
+            </div>
+
+            <div className="form-row">
+              <label>买入价格 (元)</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="number" step="0.01" min="0" placeholder="0.00"
+                  value={modalBuyPrice} onChange={e => setModalBuyPrice(e.target.value)}
+                  style={{ flex: 1 }} />
+                <span style={{ fontSize: 11, color: '#888' }}>
+                  当前价: {cachedPrice !== null ? cachedPrice.toFixed(2) : '--'}
+                </span>
+              </div>
             </div>
 
             <div className="form-row">
