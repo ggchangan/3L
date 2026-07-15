@@ -18,7 +18,7 @@ def generate_panic_report_pdf():
     from backend.services.panic_monitor_service import (
         _get_holdings_analysis, _get_rising_from_bottom_v2
     )
-    from backend.core.data_layer import get_sector_daily
+    from backend.data_access.data_layer import get_sector_daily
 
     # 个股分析（直接从持仓+腾讯行情+get_stock_card获取，不依赖恐慌检测）
     holdings = _get_holdings_analysis()
@@ -155,7 +155,7 @@ def _format_md(holdings, p2t, emerging):
         sorted_cons = sorted(cons.items(), key=lambda x: x[1].get('change_pct',0), reverse=True)[:20]
         # 只对前20个概念计算领涨股（避免全量计算）
         try:
-            from backend.core.data_layer import (
+            from backend.data_access.data_layer import (
                 calc_sector_leaders, build_kline_index, get_concept_list
             )
             _kli = build_kline_index()

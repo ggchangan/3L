@@ -3,7 +3,7 @@
 """
 import json, os, re, tempfile, zipfile, shutil
 from datetime import datetime
-from backend.config import KB_BASE, TRADING_TIPS_DIR, PRIVATE_DIR, WWW_DIR, DATA_DIR
+from backend.core.config import KB_BASE, TRADING_TIPS_DIR, PRIVATE_DIR, WWW_DIR, DATA_DIR
 
 
 def get_kb_files():

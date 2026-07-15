@@ -71,9 +71,9 @@ class TestLogFiles:
         self.log_dir = tmp_path / "logs"
         self.log_dir.mkdir()
 
-        import backend.config
-        monkeypatch.setattr(backend.config, 'LOG_DIR', str(self.log_dir))
-        monkeypatch.setattr(backend.config, 'LOG_LEVEL', 'DEBUG')
+        import backend.core.config
+        monkeypatch.setattr(backend.core.config, 'LOG_DIR', str(self.log_dir))
+        monkeypatch.setattr(backend.core.config, 'LOG_LEVEL', 'DEBUG')
 
         import backend.core.logger as logger_mod
         logger_mod._initialized = False

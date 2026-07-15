@@ -4,7 +4,7 @@
 import json
 import os
 
-from backend import config
+from backend.core import config
 
 
 def get_trend_candidates():
@@ -61,7 +61,7 @@ def search_watchlist_for_trend(query):
         {'results': [{'code', 'name', 'direction', 'in_trend'}, ...]}
     """
     from backend.core.trend_candidates import _load_manual_trend
-    from backend import config
+    from backend.core import config
 
     # 读取自选股
     wl_path = config.WATCHLIST_PATH

@@ -6,7 +6,7 @@ os.environ['TQDM_DISABLE'] = '1'
 os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
 
 import akshare as ak
-from backend.core.data_layer import save_sector_daily
+from backend.data_access.data_layer import save_sector_daily
 from backend.core.update_stock_data import _df_to_kline
 
 MAX_K = 60  # 最多保留60根K线（约3个月，足够20日涨幅计算）

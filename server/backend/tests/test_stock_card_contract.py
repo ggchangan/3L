@@ -12,7 +12,7 @@ for p in [_server_root]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from backend.core.data_models import StockCardData
+from backend.models.data_models import StockCardData
 from backend.services.stock_card_service import (
     _calc_action_type, _calc_action_signal,
     _calc_action_priority, _calc_action_reason,

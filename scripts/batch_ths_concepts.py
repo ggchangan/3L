@@ -7,8 +7,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 os.environ['TQDM_DISABLE'] = '1'
 os.environ['PYTHONUNBUFFERED'] = '1'
 
-from backend.config import SECTOR_DAILY_PATH
-from backend.services.data_source import _fetch_ths_concept_snapshots, _load_concept_name_mapping
+from backend.core.config import SECTOR_DAILY_PATH
+from backend.data_access.data_source import _fetch_ths_concept_snapshots, _load_concept_name_mapping
 
 # 只拉已映射的
 name_map = _load_concept_name_mapping()

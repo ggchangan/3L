@@ -23,8 +23,8 @@ from datetime import datetime, timedelta
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(PROJECT_DIR, 'server'))
 
-from backend.config import SECTOR_DAILY_PATH
-from backend.services.data_source import (
+from backend.core.config import SECTOR_DAILY_PATH
+from backend.data_access.data_source import (
     verify_data_coverage, _last_trading_day, _is_trading_day,
     _days_between,
 )
@@ -271,7 +271,7 @@ def cmd_fix_concept_kline():
     log(f'📋  名称映射: {len(name_map)}条（同花顺 THS）')
 
     # 通过 data_layer 获取概念K线（走当前数据源：THS）
-    from backend.core.data_layer import get_concept_klines
+    from backend.data_access.data_layer import get_concept_klines
     today_klines = get_concept_klines(list(concepts.keys()))
 
     appended = 0

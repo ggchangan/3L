@@ -4,8 +4,8 @@ import json, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'server'))
 
 from datetime import datetime
-from backend.config import SECTOR_DAILY_PATH
-from backend.core.data_layer import get_concept_snapshots, load_sector_daily_uncached
+from backend.core.config import SECTOR_DAILY_PATH
+from backend.data_access.data_layer import get_concept_snapshots, load_sector_daily_uncached
 
 today = datetime.now().strftime('%Y%m%d')
 

@@ -10,7 +10,7 @@
 import json
 import pytest
 from unittest.mock import patch
-from backend.core.data_layer import get_all_stocks
+from backend.data_access.data_layer import get_all_stocks
 
 
 # ==================== 数据层集成测试 ====================
@@ -417,7 +417,7 @@ class TestMonitorIntegration:
 
         # 3L买点（模拟）
         from backend.core.buy_point_detection import scan_all_stocks
-        wl = __import__('backend.core.data_layer', fromlist=['get_watchlist']).get_watchlist()
+        wl = __import__('backend.data_access.data_layer', fromlist=['get_watchlist']).get_watchlist()
         wl_codes = set(s['code'] for s in wl)
         try:
             three_l_results = scan_all_stocks('2026-05-22', stocks_data, market_position='波中', main_lines=main_lines, watchlist_codes=wl_codes)

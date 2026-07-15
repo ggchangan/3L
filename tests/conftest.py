@@ -9,13 +9,13 @@ def pytest_configure(config):
 
 @pytest.fixture(scope='session')
 def stocks():
-    from backend.core.data_layer import get_all_stocks
+    from backend.data_access.data_layer import get_all_stocks
     return get_all_stocks()
 
 
 @pytest.fixture(scope='session')
 def watchlist():
-    from backend.core.data_layer import get_watchlist
+    from backend.data_access.data_layer import get_watchlist
     return get_watchlist()
 
 

@@ -6,7 +6,7 @@ import json
 import sys
 import os
 sys.path.insert(0, '/home/ubuntu/3l-server/server')
-os.environ['DATA_DIR'] = '/home/ubuntu/data/3l'
+os.environ.setdefault('DATA_DIR', '/home/ubuntu/data/3l')
 
 import warnings
 warnings.filterwarnings('ignore')

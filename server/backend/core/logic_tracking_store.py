@@ -15,7 +15,7 @@ class LogicTrackingStore:
 
     def __init__(self, data_path=None):
         if data_path is None:
-            from backend import config
+            from backend.core import config
             data_path = config.LOGIC_TRACKING_PATH
         self._path = data_path
         self._data = self._load()

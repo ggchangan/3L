@@ -5,9 +5,9 @@ import json
 import os
 from datetime import datetime
 
-from backend.config import DATA_DIR, atomic_json_dump
+from backend.core.config import DATA_DIR, atomic_json_dump
 
-from backend import config
+from backend.core import config
 
 # ── 恐慌阈值（基于历史回测：上证指数最近6个月） ──
 # 回测结论（2026-06-06，94个交易日）：
@@ -221,7 +221,7 @@ def _get_holdings_analysis() -> list:
     result = []
 
     try:
-        from backend.core.data_layer import get_holdings
+        from backend.data_access.data_layer import get_holdings
         from backend.services.stock_card_service import get_stock_card
         holdings = get_holdings()
     except Exception:
@@ -324,7 +324,7 @@ def _get_rising_from_bottom() -> list:
     """
     result = []
     try:
-        from backend.core.data_layer import get_sector_daily
+        from backend.data_access.data_layer import get_sector_daily
         sd = get_sector_daily()
         if not sd:
             return result
@@ -367,7 +367,7 @@ def _get_rising_from_bottom_v2() -> list:
     """
     result = []
     try:
-        from backend.core.data_layer import get_sector_daily
+        from backend.data_access.data_layer import get_sector_daily
         sd = get_sector_daily()
         if not sd:
             return result
@@ -498,7 +498,7 @@ def _is_panic_dismissed_for(trading_day: str) -> bool:
     """
     from backend.services.alarm_service import _load
     data = _load()
-    dismissed_date = None
+    today = datetime.now().strftime('%Y-%m-%d')
     for a in data.get('alarms', []):
         if a.get('stock_code') == 'PANIC' and a.get('type') == 'panic':
             if a.get('status') == 'handled':
@@ -507,15 +507,15 @@ def _is_panic_dismissed_for(trading_day: str) -> bool:
                     try:
                         da_dt = datetime.fromisoformat(da_raw)
                         dismissed_date = da_dt.strftime('%Y-%m-%d')
+                        if dismissed_date == today:
+                            return True
                     except Exception:
                         pass
                 else:
-                    # 无时间戳的老记录，按交易日判断
-                    dismissed_date = a.get('date', '')
-                    if not dismissed_date:
-                        dismissed_date = trading_day
-    if dismissed_date == trading_day:
-        return True
+                    # 无 dismissed_at 的老记录，按 date 字段判断
+                    ad = a.get('date', '')
+                    if ad and ad.replace('-', '') == trading_day.replace('-', ''):
+                        return True
     return False
 
 
@@ -554,7 +554,7 @@ def check_panic_alerts_via_realtime(indices_api_codes: dict = None) -> list:
     供 check_alerts.py 的 check_all_alerts() 调用。
     使用与 check_alerts.py 相同的腾讯API拉取模式。
     """
-    from backend.core.data_models import _last_trading_day
+    from backend.models.data_models import _last_trading_day
     import logging
     logger = logging.getLogger(__name__)
     now_ts = datetime.now().timestamp()

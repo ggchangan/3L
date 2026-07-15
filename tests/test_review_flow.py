@@ -21,7 +21,7 @@ class TestModuleImport:
 
     def test_import_data_layer(self):
         """data_layer 导入"""
-        from backend.core.data_layer import (
+        from backend.data_access.data_layer import (
             ALL_STOCKS_PATH, REVIEW_ARCHIVE_DIR, get_all_stocks,
             get_review_archive, save_review_archive
         )
@@ -58,7 +58,7 @@ class TestReviewArchiveStructure:
     @pytest.fixture(scope='class')
     def archive(self):
         """获取最近一份存档"""
-        from backend.core.data_layer import REVIEW_ARCHIVE_DIR
+        from backend.data_access.data_layer import REVIEW_ARCHIVE_DIR
         if not os.path.isdir(REVIEW_ARCHIVE_DIR):
             return None, {}
         files = sorted([f for f in os.listdir(REVIEW_ARCHIVE_DIR) if f.endswith('.json')])

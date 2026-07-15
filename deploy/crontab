@@ -3,16 +3,16 @@
 # 查看: crontab -l
 
 # ── 数据更新 ────────────────────────────
-# 收市后17:00拉原始数据（个股/指数/板块）
-0 17 * * 1-5 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data >> /home/ubuntu/3l-server/logs/update.log 2>&1
+# 交易日6:00拉上一个交易日数据（同花顺数据次日才补齐）
+0 6 * * 1-5 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data >> /home/ubuntu/3l-server/logs/update.log 2>&1
 
-# akshare概念板块数据延迟~4小时，21:00补拉一次
-0 21 * * 1-5 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data >> /home/ubuntu/3l-server/logs/update_late.log 2>&1
+# 6:30 数据源验证
+30 6 * * 1-5 cd /home/ubuntu/3l-server && bash server/scripts/run_verify.sh >> /home/ubuntu/3l-server/logs/verify.log 2>&1
 
 # ── 备份 ────────────────────────────────
 # 每日凌晨3点全量备份
 0 3 * * * cd /home/ubuntu/3l-server && bash deploy/backup.sh >> /home/ubuntu/3l-server/logs/backup.log 2>&1
 
 # ── 计划追踪 ────────────────────────────
-# 22:00 计算操作计划追踪（需要次日K线数据，所以等21:00拉完数据再跑）
+# 22:00 计算操作计划追踪
 0 22 * * 1-5 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -c "import sys,os; sys.path.insert(0,'.'); os.environ['DATA_DIR']='/home/ubuntu/data/3l'; from backend.services.plan_tracking_service import compute_tracking; r=compute_tracking(); print(f'Plan tracking: {r[\"summary\"][\"total_plans\"]}条, {r[\"summary\"][\"success_rate\"]}%')" >> /home/ubuntu/3l-server/logs/plan_tracking.log 2>&1

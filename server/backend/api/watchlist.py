@@ -93,7 +93,7 @@ def _handle_set_direction_enabled(h, path, body):
 def _handle_watchlist_boards(h, path):
     """GET: 按行业分组浏览（用于批量添加）"""
     import json, os
-    from backend.config import DATA_DIR
+    from backend.core.config import DATA_DIR
     leaders_path = os.path.join(DATA_DIR, 'industry_leaders.json')
     sp = os.path.join(DATA_DIR, 'all_stocks_60d.json')
     if not os.path.isfile(leaders_path):
@@ -165,7 +165,7 @@ def _handle_watchlist_add_stock(h, path, body):
         if not direction:
             try:
                 import os
-                from backend.config import INDUSTRY_MAP_PATH
+                from backend.core.config import INDUSTRY_MAP_PATH
                 if os.path.isfile(INDUSTRY_MAP_PATH):
                     with open(INDUSTRY_MAP_PATH) as _f:
                         _im = json.load(_f)

@@ -1,7 +1,7 @@
 """StockCardService — 统一个股卡片数据服务
 输入股票代码+上下文，输出完整的卡片数据，不再重复组装逻辑
 
-所有I/O通过 backend.core.data_layer，不直接读文件。
+所有I/O通过 backend.data_access.data_layer，不直接读文件。
 
 用法:
     from backend.services.stock_card_service import get_stock_card
@@ -14,8 +14,8 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from backend.config import MANUAL_TREND_PATH as _MANUAL_TREND_PATH, DATA_DIR
-from backend.core.data_layer import (
+from backend.core.config import MANUAL_TREND_PATH as _MANUAL_TREND_PATH, DATA_DIR
+from backend.data_access.data_layer import (
     get_stock_klines,
     get_industry_map,
 )
@@ -48,29 +48,11 @@ from backend.core.signal_detector.fusion import fusion_judge
 from backend.core.signal_detector.sell_point_detection import detect_sell_point
 from backend.core.structure_wave import judge_structure_wave
 
-# 板块K线缓存（模块级，只加载一次）
-_SECTOR_DAILY = None
-
-def _load_sector_daily():
-    global _SECTOR_DAILY
-    if _SECTOR_DAILY is not None:
-        return _SECTOR_DAILY
-    _sdp = os.path.join(DATA_DIR, 'sector_daily.json')
-    if os.path.isfile(_sdp):
-        try:
-            import json
-            with open(_sdp) as _f:
-                _SECTOR_DAILY = json.load(_f)
-        except Exception:
-            _SECTOR_DAILY = {}
-    else:
-        _SECTOR_DAILY = {}
-    return _SECTOR_DAILY
 
 def _calc_sector_chg_5d(sector):
     """计算板块5日涨跌幅（通过 data_source 抽象层获取K线）"""
     try:
-        from backend.core.data_layer import get_sector_klines
+        from backend.data_access.data_layer import get_sector_klines
         klines = get_sector_klines(sector, 'industry')
     except Exception:
         klines = []
@@ -143,12 +125,13 @@ def _calc_sector_chg(code):
     return None
 
 
-def _calc_stop_loss(klines, idx, buy_type=None, entry_idx=None):
+def _calc_stop_loss(klines, idx, buy_type=None, entry_idx=None, cost_price=None):
     """计算止损价和百分比 — 按买点类型"""
     try:
         if idx < 10 or len(klines) <= idx:
             return None, None
-        sl, sl_pct = calc_stop_loss(klines, idx, buy_type=buy_type, entry_idx=entry_idx)
+        sl, sl_pct = calc_stop_loss(klines, idx, buy_type=buy_type, entry_idx=entry_idx,
+                                     cost_price=cost_price)
         return float(sl) if sl else None, float(sl_pct) if sl_pct else None
     except Exception:
         return None, None
@@ -354,7 +337,8 @@ def _calc_action_reason(signal, structure, stage, fusion_reason,
 # ═══════════════════════════════════════════
 
 def get_stock_card(code, date_str, market_position='波中',
-                   main_lines=None, direction=None, klines=None):
+                   main_lines=None, direction=None, klines=None,
+                   cost_price=None):
     """
     获取个股卡片数据
 
@@ -389,7 +373,7 @@ def get_stock_card(code, date_str, market_position='波中',
     # 个股概念名称（for 概念主线补充判定）
     _stock_concept_names = []
     try:
-        from backend.core.data_layer import get_stock_concept_map
+        from backend.data_access.data_layer import get_stock_concept_map
         _scm = get_stock_concept_map()
         _sinfo = _scm.get(code, {})
         _stock_concept_names = _sinfo.get('concept_names', []) if isinstance(_sinfo, dict) else []
@@ -488,7 +472,7 @@ def get_stock_card(code, date_str, market_position='波中',
         # 3L 买点检测（需要全量数据）
         all_stocks = {}
         try:
-            from backend.core.data_layer import get_all_stocks
+            from backend.data_access.data_layer import get_all_stocks
             all_stocks = get_all_stocks()
         except Exception:
             all_stocks = {sector: {code: klines}}
@@ -601,7 +585,9 @@ def get_stock_card(code, date_str, market_position='波中',
         wave_stage = ''
 
     # 6. 止损（按买点类型）
-    sl_result = _calc_stop_loss(klines, idx, buy_type=buy_point if buy_point else None, entry_idx=idx if buy_point else None)
+    sl_result = _calc_stop_loss(klines, idx, buy_type=buy_point if buy_point else None,
+                                entry_idx=idx if buy_point else None,
+                                cost_price=cost_price)
     if sl_result and sl_result[0]:
         stop_loss, stop_loss_pct = sl_result
     elif signal == 'buy' and close > 0:

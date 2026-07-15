@@ -7,7 +7,7 @@
 import json
 import os
 from datetime import date
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 
 WORKBENCH_DIR = os.path.join(DATA_DIR, 'private', 'workbench')
 os.makedirs(WORKBENCH_DIR, exist_ok=True)

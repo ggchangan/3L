@@ -12,7 +12,8 @@ from datetime import datetime
 
 import requests
 
-from backend.config import CACHE_DIR, INDUSTRY_LEADERS_PATH, WWW_DIR, atomic_json_dump
+from backend.core.config import CACHE_DIR, INDUSTRY_LEADERS_PATH, WWW_DIR, atomic_json_dump
+from backend.models.data_models import is_trading_day, is_trading_session
 from backend.core.exceptions import DataError
 from backend.core.logger import get_logger
 
@@ -33,15 +34,58 @@ def get_volume_comparison():
     return get_volume_comparison()
 
 
+# ── 15分钟时段工具 ──────────────────────────────────
+
+def _get_timeslot_key(dt=None):
+    """计算当前时间的15分钟时段标识
+
+    返回格式: "YYYY-MM-DD_HH-MM" (MM 为 00/15/30/45)
+    例: 11:03 → "2026-06-12_11-00", 11:17 → "2026-06-12_11-15"
+    """
+    if dt is None:
+        dt = datetime.now()
+    slot_min = (dt.minute // 15) * 15
+    return dt.strftime('%Y-%m-%d_%H') + f'-{slot_min:02d}'
+
+
+def _should_trigger_scan(dt, current_cache_path):
+    """是否应该触发一次后台扫描
+
+    条件链：
+    1. 必须是交易时段（is_trading_session）
+    2. 当前15分钟时段没有有效缓存文件（有则跳过）
+    """
+    # 非交易时段 → 永不触发
+    if not is_trading_session(dt):
+        return False
+    # 当前时段已有缓存 → 不重复扫
+    if os.path.isfile(current_cache_path):
+        try:
+            with open(current_cache_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            sigs = data.get('signals', [])
+            if len(sigs) >= 1 and sigs[0].get('name') is not None:
+                return False
+        except Exception:
+            pass
+    return True
+
+
 def _find_latest_cache():
-    """找最近一次扫描的缓存文件（按文件名时间排序）"""
+    """找最近一次扫描的缓存文件（按文件名时间排序）
+
+    支持格式：
+    - buy_signals_YYYY-MM-DD_HH-MM.json  (15分钟粒度)
+    - buy_signals_YYYY-MM-DD_HH.json      (旧版小时粒度，兼容)
+    """
     if not os.path.isdir(CACHE_DIR):
         return None
     candidates = []
     for f in os.listdir(CACHE_DIR):
-        m = re.match(r'buy_signals_(\d{4}-\d{2}-\d{2})_(\d{2})\.json', f)
+        m = re.match(r'buy_signals_(\d{4}-\d{2}-\d{2})_(\d{2})-?(\d{2})?\.json', f)
         if m:
-            candidates.append((f, m.group(1) + ' ' + m.group(2) + ':00'))
+            minute_part = m.group(3) or '00'
+            candidates.append((f, m.group(1) + ' ' + m.group(2) + ':' + minute_part))
     if not candidates:
         return None
     candidates.sort(key=lambda x: x[1], reverse=True)
@@ -55,10 +99,20 @@ def _run_scan_sync(cache_file=None):
     try:
         r = subprocess.run(
             [sys.executable, scan_file],
-            capture_output=True, text=True, timeout=120
+            capture_output=True, text=True, timeout=900
         )
-        if r.returncode == 0:
-            data = json.loads(r.stdout)
+        # stdout 可能混有日志行，提取最后一行JSON
+        data = None
+        if r.returncode == 0 or r.stdout:
+            for line in reversed(r.stdout.strip().split('\n')):
+                line = line.strip()
+                if line.startswith('{'):
+                    try:
+                        data = json.loads(line)
+                        break
+                    except json.JSONDecodeError:
+                        continue
+        if data and isinstance(data, dict):
             if cache_file:
                 atomic_json_dump(data, cache_file)
             log.info('买点信号扫描完成 (%d条)', len(data.get('signals', [])))
@@ -71,13 +125,22 @@ def _run_scan_sync(cache_file=None):
 
 
 def get_buy_signals():
-    """买点信号 — 秒开策略：立即返回最近缓存，过期则后台自动扫描"""
+    """买点信号 — 秒开策略：立即返回缓存，过期/无缓存则后台扫描
+
+    缓存刷新策略：
+    - 交易日+交易时段(09:30-11:30/13:00-15:00)：15分钟粒度，过期就扫
+    - 其他时间：返回最后一份缓存，永不触发扫描
+    """
     os.makedirs(CACHE_DIR, exist_ok=True)
 
-    now_hour = datetime.now().strftime('%Y-%m-%d_%H')
-    current_cache = os.path.join(CACHE_DIR, f'buy_signals_{now_hour}.json')
+    now = datetime.now()
+    timeslot = _get_timeslot_key(now)
+    current_cache = os.path.join(CACHE_DIR, f'buy_signals_{timeslot}.json')
 
-    # 先试当前整点
+    # 是否触发后台扫描
+    need_scan = _should_trigger_scan(now, current_cache)
+
+    # 先试当前15分钟时段
     if os.path.isfile(current_cache):
         try:
             with open(current_cache, 'r', encoding='utf-8') as f:
@@ -85,12 +148,12 @@ def get_buy_signals():
             if isinstance(data, dict):
                 sigs = data.get('signals', [])
                 if len(sigs) >= 1 and sigs[0].get('name') is not None:
-                    log.info('买点信号缓存命中 (%d条)', len(sigs))
+                    log.info('买点信号缓存命中 (%s, %d条)', timeslot, len(sigs))
                     return data
         except Exception:
             pass
 
-    # 当前整点没有 -> 找最近一次缓存
+    # 当前时段没有有效缓存 -> 找最近一次缓存
     latest = _find_latest_cache()
     if latest:
         try:
@@ -99,15 +162,16 @@ def get_buy_signals():
             sigs = data.get('signals', [])
             if len(sigs) >= 1 and sigs[0].get('name') is not None:
                 log.info('买点信号返回最近缓存 (%s)', os.path.basename(latest))
-                # 后台刷新（不阻塞）— 无论缓存多旧都不在API里同步扫描
-                _start_background_scan(current_cache)
+                if need_scan:
+                    _start_background_scan(current_cache)
                 return data
         except Exception:
             pass
 
-    # 完全没有缓存 -> 后台扫描 + 返回空
-    log.info('买点信号无缓存，启动后台扫描')
-    _start_background_scan(current_cache)
+    # 完全没有缓存
+    if need_scan:
+        log.info('买点信号无缓存，启动后台扫描')
+        _start_background_scan(current_cache)
     return {'signals': [], 'scan_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'stocks_scanned': 0}
 
 
@@ -237,7 +301,7 @@ def get_leader_dashboard():
     上区：关注的行业（持仓sector+涨幅前3+手动）
     下区：龙头异动（领涨领跌+龙头切换）
     '''
-    from backend.config import (
+    from backend.core.config import (
         WATCHED_INDUSTRIES_PATH, INDUSTRY_LEADERS_PATH,
         CACHE_DIR, HOLDINGS_PATH
     )
@@ -537,8 +601,8 @@ def get_leader_dashboard():
     concept_anomalies = {'surge': [], 'plunge': []}
     try:
         # 计算关注的概念列表（借鉴波谷追踪的筛选逻辑）
-        from backend.core.data_layer import get_stock_concept_map, get_concept_list
-        from backend.core.data_layer import get_watchlist
+        from backend.data_access.data_layer import get_stock_concept_map, get_concept_list
+        from backend.data_access.data_layer import get_watchlist
         watchlist_data = get_watchlist()
         watchlist_codes = set(s.get('code', '') for s in watchlist_data)
         stock_concept = get_stock_concept_map()
@@ -554,7 +618,7 @@ def get_leader_dashboard():
         tracked_codes = {c for c, cnt in concept_counts.items() if cnt >= 6}
         tracked_names = {concept_list.get(c, {}).get('name', c) for c in tracked_codes}
         # 读取手动添加的追踪概念
-        from backend.config import WATCHED_INDUSTRIES_PATH
+        from backend.core.config import WATCHED_INDUSTRIES_PATH
         watched_concepts_path = os.path.join(os.path.dirname(WATCHED_INDUSTRIES_PATH), 'watched_concepts.json')
         if os.path.isfile(watched_concepts_path):
             with open(watched_concepts_path) as f:
@@ -610,7 +674,7 @@ def get_leader_dashboard():
 
 def add_watched_industry(industry_name):
     '''手动添加关注行业'''
-    from backend.config import WATCHED_INDUSTRIES_PATH
+    from backend.core.config import WATCHED_INDUSTRIES_PATH
     import os
     industries = []
     if os.path.isfile(WATCHED_INDUSTRIES_PATH):
@@ -629,7 +693,7 @@ def add_watched_industry(industry_name):
 
 def remove_watched_industry(industry_name):
     '''移除手动关注行业'''
-    from backend.config import WATCHED_INDUSTRIES_PATH
+    from backend.core.config import WATCHED_INDUSTRIES_PATH
     import os
     if not os.path.isfile(WATCHED_INDUSTRIES_PATH):
         return False

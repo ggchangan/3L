@@ -130,13 +130,17 @@ class SectorRankingItem:
 # ════════════════════════════════════════════════════════════
 
 def _last_trading_day() -> str:
-    """返回最后一个交易日 YYYYMMDD（周末回退到周五，不计节假日）"""
-    d = datetime.now()
-    for _ in range(7):
-        if d.weekday() < 5:
-            return d.strftime('%Y%m%d')
-        d -= timedelta(days=1)
-    return d.strftime('%Y%m%d')
+    """返回最后一个交易日 YYYYMMDD（含节假日，实质调用 data_source 的交易日历）"""
+    try:
+        from backend.data_access.data_source import get_last_completed_trading_day
+        return get_last_completed_trading_day()
+    except Exception:
+        d = datetime.now()
+        for _ in range(7):
+            if d.weekday() < 5:
+                return d.strftime('%Y%m%d')
+            d -= timedelta(days=1)
+        return d.strftime('%Y%m%d')
 
 
 def is_trading_day(date_str: str) -> bool:
@@ -153,6 +157,24 @@ def is_trading_day(date_str: str) -> bool:
         return dt.weekday() < 5
     except (ValueError, IndexError):
         return False
+
+
+def is_trading_session(dt=None):
+    """判断给定时间是否为A股交易时段
+
+    条件：交易日 + 盘中时段 (09:30-11:30 或 13:00-15:00)
+    午休 11:30-13:00、盘前、盘后、非交易日均返回 False。
+
+    Args:
+        dt: datetime 对象，默认当前时间
+    """
+    if dt is None:
+        dt = datetime.now()
+    date_str = dt.strftime('%Y-%m-%d')
+    if not is_trading_day(date_str):
+        return False
+    t = dt.hour * 60 + dt.minute
+    return (9 * 60 + 30 <= t < 11 * 60 + 30) or (13 * 60 <= t < 15 * 60)
 
 
 def dict_to_kline(d: dict) -> Kline:

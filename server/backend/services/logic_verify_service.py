@@ -18,8 +18,8 @@ def _get_store():
 
 def _get_stock_klines(code):
     """从 all_stocks_60d.json 获取个股K线数据"""
-    from backend import config
-    path = config.ALL_STOCKS_PATH
+    from backend.core import config
+    path = os.path.join(config.DATA_DIR, 'all_stocks_60d.json')
     if not os.path.isfile(path):
         return None
 

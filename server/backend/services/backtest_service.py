@@ -1,7 +1,7 @@
 """个股回测服务 — 封装回测逻辑供 API 及其他模块调用"""
 
-from backend import config
-from backend.core.data_layer import get_all_stocks, resolve_stock
+from backend.core import config
+from backend.data_access.data_layer import get_all_stocks, resolve_stock
 from backend.core.buy_point_detection import (
     detect_buy_point, find_idx, _volume_ratio,
     gen_trade_chart_svg, compute_trade_stats, simulate_trade,

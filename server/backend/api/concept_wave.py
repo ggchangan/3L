@@ -6,7 +6,7 @@ from backend.core.logger import get_logger
 log = get_logger(__name__)
 
 from backend.services.concept_wave_service import judge_concept_wave, compute_chart_annotations
-from backend.core.data_layer import (
+from backend.data_access.data_layer import (
     get_sector_daily, get_concept_list, get_stock_concept_map,
     get_watchlist, get_index_klines,
 )
@@ -235,7 +235,7 @@ def _make_response(handler, path):
 def _build_reasoning_chain(name, score, related_codes):
     """构建推理链数据"""
     from backend.services.review_compute_service import judge_peak_valley
-    from backend.core.data_layer import get_index_klines
+    from backend.data_access.data_layer import get_index_klines
 
     chain = {'market': {}, 'concept_analysis': {}, 'stock_signals': []}
     try:

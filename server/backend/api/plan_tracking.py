@@ -41,7 +41,7 @@ def _handle_annotate(h, path, body):
     """
     try:
         data = json.loads(body)
-        from backend.config import DATA_DIR
+        from backend.core.config import DATA_DIR
         import os
         db_path = os.path.join(DATA_DIR, 'private', 'plan_tracking.db')
         result = annotate_plan(

@@ -10,7 +10,7 @@ log = get_logger(__name__)
 def _handle_health(h, path):
     """动态健康检查：验证数据源/缓存/磁盘"""
     import os, shutil, time
-    from backend import config
+    from backend.core import config
     DATA_DIR = os.environ.get('DATA_DIR', config.DATA_DIR)
     checks = {}
 

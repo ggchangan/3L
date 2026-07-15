@@ -12,7 +12,7 @@ import re
 import requests
 from datetime import date, datetime, timedelta
 
-from backend.config import DATA_DIR
+from backend.core.config import DATA_DIR
 from backend.services.alarm_service import (
     get_active_alarms,
     mark_alarm_triggered,
@@ -129,7 +129,7 @@ def _auto_dismiss_index_alarm(code: str):
 
 def _is_non_trading_day() -> bool:
     """判断当前是否为非交易日（复用 data_models.is_trading_day）"""
-    from backend.core.data_models import is_trading_day
+    from backend.models.data_models import is_trading_day
     today_str = datetime.now().strftime('%Y-%m-%d')
     return not is_trading_day(today_str)
 
@@ -149,9 +149,7 @@ INDEX_CODES = {
 # 指数报警去重缓存：{(code, condition): triggered_timestamp}
 _index_alert_cache: dict = {}
 
-INDEX_DATA_PATH = os.path.join(
-    os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'index_sh_data.json'
-)
+INDEX_DATA_PATH = os.path.join(DATA_DIR, 'index_sh_data.json')
 
 
 def _read_index_data() -> dict:
@@ -213,9 +211,7 @@ def _check_index_dedup(code: str, condition: str, alarm_type: str) -> bool:
 
 def _is_index_dismissed(code: str) -> bool:
     """检查指数报警是否已被标记为已处理（handle=永久沉默）"""
-    alarms_path = os.path.join(
-        os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'private', 'alarms.json'
-    )
+    alarms_path = os.path.join(DATA_DIR, 'private', 'alarms.json')
     try:
         with open(alarms_path) as f:
             data = json.load(f)
@@ -335,9 +331,7 @@ def _save_index_alarm(code: str, name: str, alarm_type: str, msg: str):
     if result.get('id'):
         # 直接更新 triggered_at 并附带 msg
         import json, os
-        alarms_path = os.path.join(
-            os.environ.get('DATA_DIR', '/home/ubuntu/data/3l'), 'private', 'alarms.json'
-        )
+        alarms_path = os.path.join(DATA_DIR, 'private', 'alarms.json')
         try:
             with open(alarms_path) as f:
                 data = json.load(f)
@@ -361,11 +355,8 @@ def _sync_holdings_to_alarms():
     """
 
     try:
-        holdings_path = os.path.join(DATA_DIR, 'private', 'holdings.json')
-        if not os.path.exists(holdings_path):
-            return
-        with open(holdings_path) as f:
-            hdata = json.load(f)
+        from backend.services.holdings_service import get_holdings
+        hdata = get_holdings()
         items = hdata.get('holdings', []) if isinstance(hdata, dict) else hdata
         if not isinstance(items, list):
             return

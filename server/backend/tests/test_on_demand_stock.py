@@ -102,29 +102,29 @@ class TestGetDirection:
     """行业→方向映射"""
 
     def test_known_semiconductor(self):
-        with patch('backend.core.data_layer.get_industry_map', return_value={
+        with patch('backend.data_access.data_layer.get_industry_map', return_value={
             '688981': {'ths_industry': '半导体'},
         }):
             assert _get_direction('688981') == '半导体'
 
     def test_known_robot(self):
-        with patch('backend.core.data_layer.get_industry_map', return_value={
+        with patch('backend.data_access.data_layer.get_industry_map', return_value={
             '300124': {'ths_industry': '机器人'},
         }):
             assert _get_direction('300124') == '机器人'
 
     def test_unknown_returns_qita(self):
-        with patch('backend.core.data_layer.get_industry_map', return_value={
+        with patch('backend.data_access.data_layer.get_industry_map', return_value={
             '600000': {'ths_industry': '银行'},
         }):
             assert _get_direction('600000') == '其他'
 
     def test_no_industry_map_entry(self):
-        with patch('backend.core.data_layer.get_industry_map', return_value={}):
+        with patch('backend.data_access.data_layer.get_industry_map', return_value={}):
             assert _get_direction('999999') == '其他'
 
     def test_info_is_not_dict(self):
-        with patch('backend.core.data_layer.get_industry_map', return_value={
+        with patch('backend.data_access.data_layer.get_industry_map', return_value={
             '600000': '浦发银行',
         }):
             assert _get_direction('600000') == '其他'
@@ -182,7 +182,7 @@ class TestGetOrFetchStockData:
     def test_already_in_main_data(self):
         """股票已在主数据文件中，直接返回"""
         mock_stocks = {'半导体': {'688981': [{'date': '20260101', 'close': 50}]}}
-        with patch('backend.core.data_layer.get_all_stocks', return_value=mock_stocks):
+        with patch('backend.data_access.data_layer.get_all_stocks', return_value=mock_stocks):
             klines, direction, name = get_or_fetch_stock_data('688981')
             assert direction == '半导体'
             assert klines[0]['close'] == 50
@@ -193,7 +193,7 @@ class TestGetOrFetchStockData:
         cache_file = tmp_path / 'stock_on_demand_cache.json'
 
         patches = [
-            patch('backend.core.data_layer.get_all_stocks', return_value={}),
+            patch('backend.data_access.data_layer.get_all_stocks', return_value={}),
             patch('backend.core.on_demand_stock.ON_DEMAND_CACHE_PATH', str(cache_file)),
             patch('backend.core.on_demand_stock._fetch_klines_akshare', return_value=[
                 {'date': f'202601{i:02d}', 'open': 10, 'close': 11,
@@ -221,7 +221,7 @@ class TestGetOrFetchStockData:
         """K线不足30条时不缓存、不注入"""
         cache_file = tmp_path / 'stock_on_demand_cache.json'
         patches = [
-            patch('backend.core.data_layer.get_all_stocks', return_value={}),
+            patch('backend.data_access.data_layer.get_all_stocks', return_value={}),
             patch('backend.core.on_demand_stock.ON_DEMAND_CACHE_PATH', str(cache_file)),
             patch('backend.core.on_demand_stock._fetch_klines_akshare', return_value=[
                 {'date': '20260101', 'open': 10, 'close': 11,

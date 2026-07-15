@@ -38,7 +38,7 @@ fi
 # 创建空配置文件（如果不存在）
 mkdir -p /data/private /data/cache /data/charts
 [ -f /data/private/watchlist.json ] || echo '[]' > /data/private/watchlist.json
-[ -f /data/private/holdings.json ] || echo '{"update_date":"","holdings":[]}' > /data/private/holdings.json
+# holdings.json 已废弃，持仓数据全走 MySQL holdings 表
 [ -f /data/private/trades.json ] || echo '[]' > /data/private/trades.json
 [ -f /data/private/journal_entries.json ] || echo '[]' > /data/private/journal_entries.json
 [ -f /data/private/manual_trend_stocks.json ] || echo '[]' > /data/private/manual_trend_stocks.json

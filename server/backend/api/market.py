@@ -11,7 +11,7 @@ def _handle_market(h, path):
     """实时计算大盘周期数据（读本地K线）
     支持 ?code=000001 参数指定指数，默认中证全指(000985)
     """
-    from backend.core.data_layer import get_index_klines, INDEX_CODE
+    from backend.data_access.data_layer import get_index_klines, INDEX_CODE
     from backend.services.review_compute_service import judge_peak_valley, fetch_market_quote
     try:
         params = parse_query(path)
@@ -22,8 +22,8 @@ def _handle_market(h, path):
         today_quote = fetch_market_quote()
         market_cycle = judge_peak_valley(index_klines)
         if index_klines:
-            last = index_klines[-1]
-            prev = index_klines[-2] if len(index_klines) >= 2 else None
+            last = index_klines[0]
+            prev = index_klines[1] if len(index_klines) >= 2 else None
             market_cycle['price'] = f"{last['close']:.2f}"
             if prev:
                 chg_pct = (last['close'] - prev['close']) / prev['close'] * 100

@@ -9,12 +9,17 @@
 """
 import json, os, sys, shutil, subprocess
 from datetime import datetime
-from backend.config import (
+from backend.core.config import (
     REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
     WWW_DIR, PRIVATE_DIR, SCRIPTS_DIR, MOMENTUM_CACHE_PREFIX,
-    CHARTS_DIR, ALL_STOCKS_PATH, DATA_DIR, INDUSTRY_MAP_PATH, MAINLINES_CACHE_PATH,
+    CHARTS_DIR, DATA_DIR, INDUSTRY_MAP_PATH, MAINLINES_CACHE_PATH,
+    BOARD_CONSTITUENTS_PATH,
 )
-from backend import config
+from backend.core import config
+
+# ── 局部路径常量（旧JSON已迁移至DB，保留供 fallback 读取）──
+ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
+
 from backend.core.exceptions import DataError
 from backend.core.logger import get_logger
 
@@ -122,27 +127,14 @@ def load_review_data(date_str, existing, ww_dir):
     Returns: (holdings, buy_signals, all_stocks)
     """
     from backend.services.direction_service import get_active as get_active_dirs
-    from backend.core.data_layer import get_all_stocks
+    from backend.data_access.data_layer import get_all_stocks, get_holdings
 
-    holdings_file = os.path.join(DATA_DIR, 'private', 'holdings.json')
-    live_holdings = []
-    if os.path.isfile(holdings_file):
-        try:
-            with open(holdings_file) as f:
-                hdata = json.load(f)
-            live_holdings = hdata.get('holdings', [])
-        except Exception:
-            log.warning('review: silent skip')
-            pass
+    # 从 DB 读取持仓（user_id=1 默认用户）
+    live_holdings = get_holdings(1)
     holdings = live_holdings or existing.get('holdings', []) or existing.get('stocks', {}).get('stocks', [])
 
     buy_signals = []
-
-    # 盈利模式1检查
     all_stocks = get_all_stocks()
-    from backend.core.buy_point_detection import check_profit_model1_on_signals, check_trend_stock_on_signals
-    buy_signals = check_profit_model1_on_signals(buy_signals, all_stocks, date_str)
-    buy_signals = check_trend_stock_on_signals(buy_signals, all_stocks, date_str)
 
     return holdings, buy_signals, all_stocks
 
@@ -153,8 +145,9 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
     """扫描/过滤买点信号
 
     始终按当前已启用方向过滤 buy_signals，
-    按 holdings_codes + 启用方向自选股限定扫描范围，
-    必要时才执行全量扫描（buy_signals 为空时）。
+    按 holdings_codes + 启用方向自选股限定扫描范围。
+
+    直接使用 get_stock_card（权威源）判定，不再依赖 format_buy_signals 预过滤。
 
     Returns: (buy_signals, all_stocks_60d)
     """
@@ -168,121 +161,114 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
     if holdings_codes:
         wl_codes |= holdings_codes
 
-    # 已有信号 → 按当前启用方向过滤后返回（排除禁用方向的历史数据）
-    if buy_signals:
-        if wl_codes:
-            before = len(buy_signals)
-            buy_signals = [s for s in buy_signals if s.get('code', '') in wl_codes]
-            if len(buy_signals) < before:
-                print(f"[3L复盘] 方向过滤: 移除 {before - len(buy_signals)} 个禁用方向信号")
-        return buy_signals, all_stocks_60d
+    if not wl_codes:
+        return [], all_stocks_60d
 
+    # ── 加载 K线缓存 ──
+    if all_stocks_60d is None:
+        if os.path.isfile(all_stocks_path):
+            with open(all_stocks_path) as f:
+                as60_data = json.load(f)
+            all_stocks_60d = as60_data.get('stocks', {})
+
+    if not all_stocks_60d:
+        return [], all_stocks_60d
+
+    # ── 方向映射 ──
+    wl_dir_map = {s['code']: s.get('direction', '') for s in wl}
+
+    # ── 用 get_stock_card 逐一扫描 ──
+    from backend.services.stock_card_service import get_stock_card
+    seen = set()
+    ml_names = [l['name'] for l in mainline_data.get('lines', [])]
+    scan_date = date_str.replace('-', '')
+
+    for code in wl_codes:
+        # 找该股票的K线
+        kls = None
+        for sec, ss in all_stocks_60d.items():
+            if code in ss:
+                kls = ss[code]
+                break
+        if not kls or len(kls) < 30:
+            continue
+
+        direction = wl_dir_map.get(code, '')
+        try:
+            card = get_stock_card(
+                code=code, date_str=scan_date,
+                market_position=market_cycle.get('position', ''),
+                main_lines=ml_names,
+                direction=direction,
+                klines=kls,
+            )
+        except Exception:
+            continue
+
+        if card.get('signal') != 'buy':
+            continue
+        if card.get('buy_point') in ('', None):
+            continue
+        if code in seen:
+            continue
+
+        seen.add(code)
+        # 直接保存完整卡片格式，generate_buy_signals_review 直接复用无需再调
+        buy_signals.append({
+            'code': card['code'],
+            'name': card['name'],
+            'sector': card['sector'],
+            'direction': direction,
+            'price': card['price'],
+            'change': card['change'],
+            'score': card['score'],
+            'buy_point': card['buy_point'],
+            'stop_loss': card['stop_loss'],
+            'stop_loss_pct': card['stop_loss_pct'],
+            'structure': card['structure'],
+            'stage': card['stage'],
+            'signal': card['signal'],
+            'profit_model1': card['profit_model1'],
+            'trend_stock': card.get('trend_stock', False),
+            'trading_system': card['trading_system'],
+            'trading_reason': card.get('trading_reason', ''),
+            'trend_buy_type': card.get('trend_buy_type', ''),
+            'trend_bias': card.get('trend_bias', ''),
+            'mainline_level': card.get('mainline_level', ''),
+            'flags': '',
+            'vol_analysis': card.get('vol_analysis', '--'),
+            'triggered_signals': card.get('triggered_signals', []),
+            'fusion_type': card.get('fusion_type', ''),
+            'fusion_reason': card.get('fusion_reason', ''),
+            'wave_position': card.get('wave_position', ''),
+            'action_type': card.get('action_type', '持有'),
+            'action_signal': card.get('action_signal', ''),
+            'action_priority': card.get('action_priority', '中'),
+            'action_reason': card.get('action_reason', ''),
+            'ema': card.get('ema', ''),
+        })
+
+    print(f"[3L复盘] StockCard扫描: {len(buy_signals)} 个买点信号")
+
+    # ── 盈利模式1 + 趋势股补充扫描 ──
     try:
-        from backend.core.buy_point_detection import format_buy_signals
-
-        if all_stocks_60d is None:
-            if os.path.isfile(all_stocks_path):
-                with open(all_stocks_path) as f:
-                    as60_data = json.load(f)
-                all_stocks_60d = as60_data.get('stocks', {})
-
-        if not all_stocks_60d:
-            return [], all_stocks_60d
-
-        latest_date = ''
-        for sec, stocks in all_stocks_60d.items():
-            for code, kls in stocks.items():
-                if kls and kls[-1]['date'] > latest_date:
-                    latest_date = kls[-1]['date']
-
-        today_yyyymmdd = date_str.replace('-', '')
-
-        latest_date = ''
-        for sec, stocks in all_stocks_60d.items():
-            for code, kls in stocks.items():
-                if kls and kls[-1]['date'] > latest_date:
-                    latest_date = kls[-1]['date']
-
-        scan_date = latest_date if latest_date else today_yyyymmdd
-        ml_names = [l['name'] for l in mainline_data.get('lines', [])]
-        # wl/wl_codes 已在函数顶部按方向过滤过，直接使用
-        scan_result = format_buy_signals(scan_date, all_stocks_60d, ml_names,
-                                          top_n=20,
-                                          market_position=market_cycle.get('position', ''),
-                                          watchlist_codes=wl_codes)
-
-        seen = set()
-        # 建立 code → watchlist 方向映射（用已过滤的 wl）
-        wl_dir_map = {}
-        for w in wl:
-            code = w.get('code', '')
-            if code:
-                wl_dir_map[code] = w.get('direction', '')
-        for key in ['zhongji_main', 'zhongji_nonmain', 'tupo_main', 'tupo_nonmain']:
-            for s in scan_result.get(key, []):
+        from backend.core.buy_point_detection import check_profit_model1_on_signals, check_trend_stock_on_signals
+        pm1 = check_profit_model1_on_signals([], all_stocks_60d, date_str)
+        trend = check_trend_stock_on_signals([], all_stocks_60d, date_str)
+        extra = pm1 + trend
+        if extra:
+            for s in extra:
                 if s['code'] not in seen:
                     seen.add(s['code'])
-                    wl_dir = wl_dir_map.get(s['code'], '')
-                    buy_signals.append({
-                        'name': s.get('name', s['code']),
-                        'code': s['code'],
-                        'sector': s['sector'],
-                        'direction': wl_dir,  # 从 watchlist 取方向，不用 scan 的 sector
-                        'buy_point': '中继买点' if key.startswith('zhongji') else '突破买点',
-                        'price': s.get('close', 0), 'change': s['gain'],
-                        'score': s['score'],
-                        'flags': s['flags'],
-                        'profit_model1': False,
-                    })
-        print(f"[3L复盘] 全量扫描: {len(buy_signals)} 个买点信号")
-    except Exception as e:
-        print(f"[3L复盘] 全量扫描跳过: {e}")
-
-    # ── 趋势股乖离率买点扫描 ──
-    try:
-        from backend.core.trend_trading import detect_trend_buy
-        from backend.core.data_layer import _load_json
-        from backend.config import MANUAL_TREND_PATH
-        manual = _load_json(MANUAL_TREND_PATH, [])
-        trend_codes = set(manual)
-        if trend_codes and wl_codes:
-            trend_wl_codes = trend_codes & wl_codes
-            for code in trend_wl_codes:
-                if code in seen:
-                    continue
-                kls = None
-                for sec, ss in all_stocks_60d.items():
-                    if code in ss:
-                        kls = ss[code]
-                        break
-                if not kls or len(kls) < 30:
-                    continue
-                date_clean = date_str.replace('-', '')
-                wl_dir = wl_dir_map.get(code, '')
-                sec_name = kls[0].get('ths_industry', kls[0].get('sector', '')) if kls else ''
-                data = {sec_name or '': {code: kls}}
-                tb = detect_trend_buy(code, date_clean, data, ml_names)
-                if tb and tb.get('has_buy'):
-                    seen.add(code)
-                    cur_close = kls[-1]['close']
-                    cur_change = round((kls[-1]['close'] - kls[-2]['close']) / kls[-2]['close'] * 100, 2) if len(kls) >= 2 else 0
-                    name = kls[0].get('name', code) if kls else code
-                    buy_signals.append({
-                        'name': name, 'code': code, 'sector': sec_name,
-                        'direction': wl_dir,
-                        'buy_point': tb.get('buy_type', 'BIAS5乖离率买入'),
-                        'price': cur_close, 'change': cur_change,
-                        'score': 5, 'flags': '', 'profit_model1': False,
-                    })
-                    print(f'[3L复盘] 趋势股买点: {name}({code}) - {tb.get("buy_type", "乖离率买入")}')
-        if manual:
-            added = len([s for s in buy_signals if s.get('code') in trend_codes])
-            if added:
-                print(f'[3L复盘] 趋势股扫描: 新增 {added} 个乖离率买点')
-    except Exception as e:
-        print(f'[3L复盘] 趋势股扫描跳过: {e}')
+                    buy_signals.append(s)
+            print(f"[3L复盘] 补充扫描: {len(extra)} 个额外信号 (盈利模式1+趋势股)")
+    except Exception as _e:
+        print(f"[3L复盘] 补充扫描跳过: {_e}")
 
     return buy_signals, all_stocks_60d
+
+
+
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -301,7 +287,7 @@ def generate_daily_review(date_str=None):
     )
     from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
     from backend.core.scan_buy_signals import get_main_lines
-    from backend.core.data_layer import get_watchlist
+    from backend.data_access.data_layer import get_watchlist
 
     if not is_trading_day(date_str):
         print(f"[3L复盘] ⚠️ {date_str} 非A股交易日，跳过")
@@ -329,14 +315,14 @@ def generate_daily_review(date_str=None):
         index_klines = [k for k in index_klines if k['date'] <= date_str]
     today_quote = fetch_market_quote()
 
-    print(f"[3L复盘] K线数据: 共{len(index_klines)}天, 最新={index_klines[-1]['date'] if index_klines else '无'}")
+    print(f"[3L复盘] K线数据: 共{len(index_klines)}天, 最新={index_klines[0]['date'] if index_klines else '无'}")
 
     # ① 大盘周期判定
     print("[3L复盘] ① 判定大盘周期(V5)...")
     market_cycle = judge_peak_valley(index_klines)
     if index_klines:
-        last = index_klines[-1]
-        prev = index_klines[-2] if len(index_klines) >= 2 else None
+        last = index_klines[0]
+        prev = index_klines[1] if len(index_klines) >= 2 else None
         market_cycle['price'] = f"{last['close']:.2f}"
         if prev:
             chg_pct = (last['close'] - prev['close']) / prev['close'] * 100
@@ -568,7 +554,7 @@ def compute_review_real_time(date_str=None):
     )
     from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
     from backend.core.scan_buy_signals import get_main_lines
-    from backend.core.data_layer import get_watchlist, get_all_stocks, get_index_klines, get_concept_list, get_stock_concept_map
+    from backend.data_access.data_layer import get_watchlist, get_all_stocks, get_index_klines, get_concept_list, get_stock_concept_map
 
     print(f"[3L复盘实时] 计算 {date_str} 复盘数据...")
 
@@ -582,8 +568,8 @@ def compute_review_real_time(date_str=None):
     # ① 大盘周期判定
     market_cycle = judge_peak_valley(index_klines)
     if index_klines:
-        last = index_klines[-1]
-        prev = index_klines[-2] if len(index_klines) >= 2 else None
+        last = index_klines[0]
+        prev = index_klines[1] if len(index_klines) >= 2 else None
         market_cycle['price'] = f"{last['close']:.2f}"
         if prev:
             chg_pct = (last['close'] - prev['close']) / prev['close'] * 100
@@ -604,23 +590,18 @@ def compute_review_real_time(date_str=None):
 
     # ③ 扫描买点信号（只扫持仓股 + 启用方向自选股）
     all_stocks = get_all_stocks()
-    all_stocks_60d = all_stocks.get('stocks', {}) if isinstance(all_stocks, dict) else {}
+    # get_all_stocks() 返回 {方向: {code: [kline,...]}, 'last_updated': '...'}
+    # 过滤掉非 dict 字段（如 last_updated）
+    all_stocks_60d = {k: v for k, v in all_stocks.items()
+                      if isinstance(v, dict)} if isinstance(all_stocks, dict) else {}
     if not all_stocks_60d:
         if os.path.isfile(ALL_STOCKS_PATH):
             with open(ALL_STOCKS_PATH) as _f:
                 all_stocks_60d = json.load(_f).get('stocks', {})
 
     # 先加载持仓股，合并到扫描范围
-    holdings_file = os.path.join(DATA_DIR, 'private', 'holdings.json')
-    holdings = []
-    if os.path.isfile(holdings_file):
-        try:
-            with open(holdings_file) as f:
-                hdata = json.load(f)
-            holdings = hdata.get('holdings', [])
-        except Exception:
-            log.warning('review: silent skip')
-            pass
+    from backend.data_access.data_layer import get_holdings
+    holdings = get_holdings(1)
 
     buy_signals, all_stocks_60d = scan_buy_signals_if_needed(
         [], all_stocks_60d,
@@ -693,37 +674,73 @@ def compute_review_real_time(date_str=None):
 
     # ── 板块领涨股（为每个行业/概念板块加 leaders 字段） ──
     try:
-        # 绕过缓存，直接读文件（get_all_stocks缓存可能为空）
-        if os.path.isfile(ALL_STOCKS_PATH):
-            with open(ALL_STOCKS_PATH) as _f:
-                _all_raw = json.load(_f)
-            _all_60d = _all_raw.get('stocks', {})
-        else:
-            _all_60d = all_stocks_60d
-
-        if os.path.isfile(INDUSTRY_MAP_PATH):
-            with open(INDUSTRY_MAP_PATH) as _f:
-                _ind_map_raw = json.load(_f)
-            _ind_to_stocks = {}
-            for _code, _info in _ind_map_raw.items():
-                _ind = _info.get('ths_industry', '')
-                if _ind:
-                    _ind_to_stocks.setdefault(_ind, []).append(_code)
-
+        # 从数据库 ths_index + ths_member 直接查行业→成分股映射
+        _board_data = {}
+        _stock_names = {}
         _kline_index = {}
-        for _dir, _ss in _all_60d.items():
-            for _code, _kls in _ss.items():
-                _kline_index[_code] = _kls
+        try:
+            from backend.data_access.tushare_db import TushareDB
+            _tdb = TushareDB()
 
-        _wl = get_watchlist()
-        _wl_list = _wl.get('stocks', _wl) if isinstance(_wl, dict) else _wl
-        _wl_codes = set(s.get('code', '') for s in _wl_list if isinstance(s, dict) and s.get('code'))
+            # 行业→成分股映射（单条 JOIN 查询，毫秒级）
+            try:
+                _conn = _tdb._get_conn()
+                _cur = _conn.cursor()
+                _cur.execute("""
+                    SELECT ti.name, tm.con_code
+                    FROM ths_member tm
+                    JOIN ths_index ti ON tm.ts_code = ti.ts_code
+                    WHERE ti.type = 'I'
+                """)
+                for _r in _cur.fetchall():
+                    vals = list(_r.values())
+                    _board_data.setdefault(vals[0], []).append(vals[1].upper().strip())
+                _cur.close()
+                _conn.close()
+            except Exception:
+                pass
 
-        def _calc_stock_leaders(stock_codes, kline_index, wl_codes, top_n=5):
+            # 股票名称从 stock_basic 取
+            try:
+                _sb_rows = _tdb.query_many('stock_basic')
+                for _r in _sb_rows:
+                    _stock_names[_r['ts_code']] = _r.get('name', '')
+            except Exception:
+                pass
+
+            _conn = _tdb._get_conn()
+            _cur = _conn.cursor()
+            _cur.execute("SELECT DISTINCT trade_date FROM stock_daily ORDER BY trade_date DESC LIMIT 5")
+            _recent_dates = sorted([list(r.values())[0] for r in _cur.fetchall()])
+            _cur.close()
+            _conn.close()
+
+            if _recent_dates:
+                _rows = _tdb.query_many('stock_daily',
+                    where='trade_date IN (%s)' % ','.join(['%s'] * len(_recent_dates)),
+                    params=_recent_dates)
+                for _r in _rows:
+                    _tc = _r['ts_code']
+                    if _tc not in _kline_index:
+                        _kline_index[_tc] = []
+                    _kline_index[_tc].append({
+                        'date': str(_r['trade_date']),
+                        'close': float(_r['close']),
+                        'open': float(_r['open']),
+                        'high': float(_r['high']),
+                        'low': float(_r['low']),
+                        'volume': float(_r['vol']),
+                    })
+                # 按日期升序
+                for _tc in _kline_index:
+                    _kline_index[_tc].sort(key=lambda x: x['date'])
+        except Exception as _e:
+            print(f'[3L复盘] 数据库加载K线失败: {_e}')
+            import traceback; traceback.print_exc()
+
+        def _calc_stock_leaders(stock_codes, kline_index, stock_names, top_n=5):
             _candidates = []
             for _c in stock_codes:
-                if _c not in wl_codes:
-                    continue
                 _kls = kline_index.get(_c)
                 if not _kls or len(_kls) < 5:
                     continue
@@ -732,11 +749,7 @@ def compute_review_real_time(date_str=None):
                 _close_5d = _kls[-5]['close'] if len(_kls) >= 5 else _close_now
                 _chg_1d = round((_close_now - _close_1d) / _close_1d * 100, 1)
                 _chg_5d = round((_close_now - _close_5d) / _close_5d * 100, 1)
-                _name = ''
-                for _d, _ss in _all_60d.items():
-                    if _c in _ss and len(_ss[_c]) > 0:
-                        _name = _ss[_c][0].get('name', _c)
-                        break
+                _name = stock_names.get(_c, _c)
                 _tag = '🏆领涨' if _chg_5d >= 5 else ('💪中军' if _chg_1d > 0 else '')
                 _candidates.append({
                     'code': _c, 'name': _name or _c,
@@ -750,8 +763,8 @@ def compute_review_real_time(date_str=None):
         if mainline_data.get('all_ranked'):
             for _entry in mainline_data['all_ranked']:
                 _sname = _entry.get('name', '')
-                _codes = _ind_to_stocks.get(_sname, [])
-                _entry['leaders'] = _calc_stock_leaders(_codes, _kline_index, _wl_codes)
+                _codes = _board_data.get(_sname, [])
+                _entry['leaders'] = _calc_stock_leaders(_codes, _kline_index, _stock_names)
 
         _cm = mainline_data.get('concept_mainline', {})
         if _cm.get('all_ranked'):
@@ -763,7 +776,7 @@ def compute_review_real_time(date_str=None):
                         _ccode = _cc
                         break
                 _concept_stocks = _concept_list.get(_ccode, {}).get('stocks', []) if _ccode else []
-                _entry['leaders'] = _calc_stock_leaders(_concept_stocks, _kline_index, _wl_codes)
+                _entry['leaders'] = _calc_stock_leaders(_concept_stocks, _kline_index, _stock_names)
     except Exception as e:
         print(f'[3L复盘] ⚠️ 板块领涨股计算失败: {e}')
         import traceback; traceback.print_exc()
@@ -771,7 +784,7 @@ def compute_review_real_time(date_str=None):
     # ── 检查板块数据时效性 ──
     _data_stale = False
     try:
-        from backend.core.data_layer import get_sector_daily
+        from backend.data_access.data_layer import get_sector_daily
         _sd = get_sector_daily()
         _lu = _sd.get('last_updated', '') if isinstance(_sd, dict) else ''
         _today_yyyymmdd = date_str.replace('-', '')

@@ -2,7 +2,7 @@
 """最终对比：旧版(EMA20) vs 新版(EMA10/窗11/0.55/4.0) + 各阶段收益"""
 import json, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'server'))
-os.environ['DATA_DIR'] = '/home/ubuntu/data/3l'
+os.environ.setdefault('DATA_DIR', '/home/ubuntu/data/3l')
 DATA_DIR = os.environ['DATA_DIR']
 from threel_core.ema_utils import ema_list, _reg_slope, get_stage
 

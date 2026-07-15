@@ -16,7 +16,7 @@ log = get_logger(__name__)
 from mootdx.quotes import Quotes
 
 sys.path.insert(0, '/home/ubuntu/3l-server')
-from backend.core.data_layer import CACHE_DIR as DL_CACHE_DIR, REVIEW_ARCHIVE_DIR, REVIEW_CHARTS_DIR, INDUSTRY_LEADERS_PATH, SCRIPTS_DIR
+from backend.data_access.data_layer import CACHE_DIR as DL_CACHE_DIR, REVIEW_ARCHIVE_DIR, REVIEW_CHARTS_DIR, INDUSTRY_LEADERS_PATH, SCRIPTS_DIR
 
 CACHE_DIR = DL_CACHE_DIR
 os.makedirs(CACHE_DIR, exist_ok=True)

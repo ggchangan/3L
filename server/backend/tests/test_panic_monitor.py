@@ -214,7 +214,7 @@ class TestRisingFromBottom:
     def test_detects_emerging_industries_and_concepts(self):
         """v2 应同时检测 industies 和 concepts 中的底部突起方向"""
         from backend.services.panic_monitor_service import _get_rising_from_bottom_v2
-        with patch('backend.core.data_layer.get_sector_daily',
+        with patch('backend.data_access.data_layer.get_sector_daily',
                    return_value=self.MOCK_PUSH2TEST):
             result = _get_rising_from_bottom_v2()
         # result[0] 是 header，后面才是数据
@@ -225,7 +225,7 @@ class TestRisingFromBottom:
     def test_sorted_by_change_desc(self):
         """按涨幅降序排列"""
         from backend.services.panic_monitor_service import _get_rising_from_bottom_v2
-        with patch('backend.core.data_layer.get_sector_daily',
+        with patch('backend.data_access.data_layer.get_sector_daily',
                    return_value=self.MOCK_PUSH2TEST):
             result = _get_rising_from_bottom_v2()
         items = [r for r in result if not r.get('_is_header')]
@@ -236,7 +236,7 @@ class TestRisingFromBottom:
     def test_max_10_items(self):
         """最多返回10条"""
         from backend.services.panic_monitor_service import _get_rising_from_bottom_v2
-        with patch('backend.core.data_layer.get_sector_daily',
+        with patch('backend.data_access.data_layer.get_sector_daily',
                    return_value=self.MOCK_PUSH2TEST):
             result = _get_rising_from_bottom_v2()
         assert len(result) <= 10
@@ -244,7 +244,7 @@ class TestRisingFromBottom:
     def test_excludes_sectors_below_threshold(self):
         """跌幅方向不出现在结果中"""
         from backend.services.panic_monitor_service import _get_rising_from_bottom_v2
-        with patch('backend.core.data_layer.get_sector_daily',
+        with patch('backend.data_access.data_layer.get_sector_daily',
                    return_value=self.MOCK_PUSH2TEST):
             result = _get_rising_from_bottom_v2()
         names = [r['name'] for r in result if not r.get('_is_header')]
@@ -254,7 +254,7 @@ class TestRisingFromBottom:
     def test_empty_when_no_push2test(self):
         """无数据时返回空列表"""
         from backend.services.panic_monitor_service import _get_rising_from_bottom_v2
-        with patch('backend.core.data_layer.get_sector_daily',
+        with patch('backend.data_access.data_layer.get_sector_daily',
                    return_value={}):
             result = _get_rising_from_bottom_v2()
         assert result == []

@@ -416,7 +416,7 @@ class TestGetStockCardIntegration:
             return {'半导体': {'999999': old_klines}, '其他': {}}
 
         monkeypatch.setattr(
-            'backend.core.data_layer.get_all_stocks',
+            'backend.data_access.data_layer.get_all_stocks',
             mock_get_all_stocks
         )
 

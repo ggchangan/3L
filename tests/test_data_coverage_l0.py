@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'server'))
 
-from backend.services.data_source import (
+from backend.data_access.data_source import (
     verify_data_coverage,
     _last_trading_day,
     _is_weekend,
@@ -28,7 +28,7 @@ from backend.services.data_source import (
 
 def _get_sector_data():
     """加载 sector_daily.json（不走缓存）"""
-    from backend.config import SECTOR_DAILY_PATH
+    from backend.core.config import SECTOR_DAILY_PATH
     path = SECTOR_DAILY_PATH
     if not os.path.isfile(path):
         return None
@@ -227,12 +227,12 @@ class TestEdgeCases:
                           and '结构' in c.get('detail', '')]
         # 逻辑上如果今天是周末，应该有跳过标记
         if datetime.now().weekday() >= 5:
-            from backend.services.data_source import _is_weekend
+            from backend.data_access.data_source import _is_weekend
             assert _is_weekend(), "今天应该是非交易日"
 
     def test_missing_data_graceful(self):
         """数据文件不存在时不会崩溃"""
-        from backend.services.data_source import verify_data_coverage
+        from backend.data_access.data_source import verify_data_coverage
         # 暂时不改文件路径，只验证函数本身不抛异常
         result = verify_data_coverage()
         assert 'error' not in result or not result.get('error')

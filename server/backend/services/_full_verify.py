@@ -7,7 +7,7 @@ os.environ['TQDM_DISABLE'] = '1'
 print('=' * 60)
 print('1. verify_data_sources（50项检查）')
 print('=' * 60)
-from backend.services.data_source import verify_data_sources
+from backend.data_access.data_source import verify_data_sources
 r1 = verify_data_sources(verbose=False)
 pass1 = sum(1 for c in r1['checks'] if c['pass'])
 fail1 = sum(1 for c in r1['checks'] if not c['pass'])
@@ -20,7 +20,7 @@ print()
 print('=' * 60)
 print('2. L0 覆盖度验证（21项）')
 print('=' * 60)
-from backend.services.data_source import verify_data_coverage
+from backend.data_access.data_source import verify_data_coverage
 r2 = verify_data_coverage(verbose=False)
 print(f'  通过: {r2["pass_count"]}/{len(r2["checks"])}  失败: {r2["fail_count"]}  警告: {r2["warn_count"]}')
 for c in r2['checks']:
@@ -31,12 +31,12 @@ print()
 print('=' * 60)
 print('3. data_models 合约验证')
 print('=' * 60)
-from backend.core.data_models import (
+from backend.models.data_models import (
     SectorPush2Test, ThsIndustrySnapshot, Push2TestConceptSnapshot,
 )
 
 # 测试概念数据通过合约正确读取
-from backend.core.data_layer import get_sector_push2test
+from backend.data_access.data_layer import get_sector_push2test
 spt = get_sector_push2test()
 print(f'  SectorPush2Test 类型: {type(spt).__name__}')
 print(f'  industries 类型: {type(spt.industries).__name__}, 条目: {len(spt.industries)}')

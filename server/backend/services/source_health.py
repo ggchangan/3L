@@ -12,7 +12,7 @@ import json, os, sys
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from backend.config import SOURCE_HEALTH_PATH
+from backend.core.config import SOURCE_HEALTH_PATH
 
 _DEFAULT_HEALTH = {
     'status': 'UNKNOWN',

@@ -64,7 +64,7 @@ class TestGetIndustryBoards:
         boards = _dummy_boards_data(2)
         with patch('backend.services.market_service._fetch_with_timeout',
                    return_value=boards):
-            with patch('backend.config.atomic_json_dump'):
+            with patch('backend.core.config.atomic_json_dump'):
                 result = market_service.get_industry_boards()
 
         assert result == {'data': boards, 'count': 2}
@@ -80,7 +80,7 @@ class TestGetIndustryBoards:
         boards = _dummy_boards_data(3)
         mock_fetch.return_value = boards
 
-        with patch('backend.config.atomic_json_dump') as mock_dump:
+        with patch('backend.core.config.atomic_json_dump') as mock_dump:
             result = market_service.get_industry_boards()
 
         assert result == {'data': boards, 'count': 3}
@@ -120,7 +120,7 @@ class TestGetIndustryBoards:
                     mock_file.side_effect = PermissionError('denied')
                     boards = _dummy_boards_data(1)
                     mock_fetch.return_value = boards
-                    with patch('backend.config.atomic_json_dump'):
+                    with patch('backend.core.config.atomic_json_dump'):
                         result = market_service.get_industry_boards()
 
         assert result == {'data': boards, 'count': 1}
@@ -837,7 +837,7 @@ class TestAnalysisServiceWithMock:
 
     def test_search_by_pinyin_initials(self):
         """拼音首字母搜索"""
-        from backend.core.data_layer import resolve_stock
+        from backend.data_access.data_layer import resolve_stock
         # 用已有的测试数据 mock stocks
         mock_stocks = {'半导体': {'688999': [{'name': '测试A', 'date': '20250103', 'close': 10}]}}
         result = resolve_stock('csa', stocks=mock_stocks)

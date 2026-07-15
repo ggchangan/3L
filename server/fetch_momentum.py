@@ -2,7 +2,7 @@
 """Generate momentum data (limit up + new highs) for the review page."""
 import json, sys, os, datetime
 
-from backend.core.data_layer import ALL_STOCKS_PATH, INDUSTRY_MAP_PATH, SCRIPTS_DIR
+from backend.data_access.data_layer import ALL_STOCKS_PATH, INDUSTRY_MAP_PATH, SCRIPTS_DIR
 
 sys.path.insert(0, SCRIPTS_DIR)
 
