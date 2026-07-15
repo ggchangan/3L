@@ -57,7 +57,14 @@ def get_holdings(user_id: int = 1) -> list:
                     if r.get('sector'):
                         item['sector'] = r['sector']
                     if r.get('buy_date') is not None:
-                        item['buy_date'] = str(r['buy_date']).replace('-', '')  # DATE→YYYYMMDD
+                        from datetime import date as _date
+                        if isinstance(r['buy_date'], _date):
+                            item['buy_date'] = r['buy_date'].isoformat()  # date→YYYY-MM-DD
+                        else:
+                            bp = str(r['buy_date'])
+                            if '-' not in bp and len(bp) == 8:
+                                bp = f'{bp[:4]}-{bp[4:6]}-{bp[6:]}'
+                            item['buy_date'] = bp
                     result.append(item)
                 return result
         finally:

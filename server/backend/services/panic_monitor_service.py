@@ -498,7 +498,7 @@ def _is_panic_dismissed_for(trading_day: str) -> bool:
     """
     from backend.services.alarm_service import _load
     data = _load()
-    dismissed_date = None
+    today = datetime.now().strftime('%Y-%m-%d')
     for a in data.get('alarms', []):
         if a.get('stock_code') == 'PANIC' and a.get('type') == 'panic':
             if a.get('status') == 'handled':
@@ -507,15 +507,15 @@ def _is_panic_dismissed_for(trading_day: str) -> bool:
                     try:
                         da_dt = datetime.fromisoformat(da_raw)
                         dismissed_date = da_dt.strftime('%Y-%m-%d')
+                        if dismissed_date == today:
+                            return True
                     except Exception:
                         pass
                 else:
-                    # 无时间戳的老记录，按交易日判断
-                    dismissed_date = a.get('date', '')
-                    if not dismissed_date:
-                        dismissed_date = trading_day
-    if dismissed_date == trading_day:
-        return True
+                    # 无 dismissed_at 的老记录，按 date 字段判断
+                    ad = a.get('date', '')
+                    if ad and ad.replace('-', '') == trading_day.replace('-', ''):
+                        return True
     return False
 
 

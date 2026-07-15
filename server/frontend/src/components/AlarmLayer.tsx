@@ -346,7 +346,8 @@ export default function AlarmLayer() {
             const handled = isHandledAlarm(a)
             // 构造含类型的消息：优先用后端msg，否则拼接"股票名 + 报警类型"
             let typeLabel = {price:'止损', deviation:'异动', market:'大盘', market_critical:'系统风险', panic:'恐慌'}[a.type] || ''
-            const msg = a.msg || (a.stock ? `${a.stock} ${typeLabel}` : `报警 #${i+1}`)
+            let msg = (a.msg || (a.stock ? `${a.stock} ${typeLabel}` : `报警 #${i+1}`))
+            msg = msg.replace(/^[🟢🔴🟡🔔ℹ️🟠]\s*/, '') // 去除后端msg中的emoji前缀（前端已渲染ic图标）
             return (
               <div key={a.id || i} style={{
                 display: 'flex', gap: 8, alignItems: 'center', padding: '6px 10px',
