@@ -18,7 +18,13 @@ def get_watchlist():
     """获取自选股列表"""
     if os.path.isfile(WATCHLIST_PATH):
         with open(WATCHLIST_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+        if isinstance(data, dict):
+            stocks = data.get('stocks', [])
+            data['count'] = len(stocks) if isinstance(stocks, list) else 0
+            return data
+        if isinstance(data, list):
+            return {'stocks': data, 'count': len(data)}
     return {'stocks': [], 'count': 0}
 
 

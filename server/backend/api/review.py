@@ -7,6 +7,20 @@ from backend.services.review_service import run_daily_review, generate_review, s
 from backend.core.exceptions import APIError
 
 
+def _empty_review():
+    return {
+        'date': '',
+        'market': {
+            'score': 0, 'position': '未知', 'bias20': 0, 'vol_ratio': 0,
+        },
+        'mainline': {},
+        'timing_signals': {},
+        'trading_plan': {},
+        'holdings': [],
+        'buy_signals': [],
+    }
+
+
 def _handle_review_today(h, path):
     """纯实时计算复盘数据（不读存档）"""
     import json
@@ -60,9 +74,18 @@ def _handle_review_get(h, path):
     try:
         with open(config.REVIEW_DATA_PATH, 'r', encoding='utf-8') as f:
             data = json.load(f)
+        if not isinstance(data, dict):
+            raise TypeError('review data must be an object')
+        defaults = _empty_review()
+        market = data.get('market')
+        if not isinstance(market, dict):
+            market = {}
+        data['market'] = {**defaults['market'], **market}
+        for key, value in defaults.items():
+            data.setdefault(key, value)
         h.send_json(data)
-    except:
-        h.send_json({'market': {}, 'mainline': {}, 'timing_signals': []})
+    except (OSError, json.JSONDecodeError, TypeError):
+        h.send_json(_empty_review())
 
 
 def register_routes(routes):

@@ -430,7 +430,7 @@ def generate_daily_review(date_str=None):
             with open(mom_cache) as _f:
                 review['momentum'] = json.load(_f)
         else:
-            mom_script = os.path.join(WWW_DIR, 'fetch_momentum.py')
+            mom_script = os.path.join(WWW_DIR, 'server', 'fetch_momentum.py')
             if os.path.isfile(mom_script):
                 r = subprocess.run([sys.executable, mom_script], capture_output=True, text=True, timeout=90)
                 if r.returncode == 0:
@@ -951,7 +951,7 @@ def run_daily_review():
     run_script('Step1 更新数据+扫买点',
         [sys.executable, f'{SCRIPTS_DIR}/update_stock_data.py'], cwd=WWW_DIR)
     run_script('Step3a 中证全指图',
-        [sys.executable, os.path.join(WWW_DIR, 'gen_index_chart.py')])
+        [sys.executable, os.path.join(WWW_DIR, 'server', 'gen_index_chart.py')])
     try:
         shutil.copy2(os.path.join(CHARTS_DIR, 'sz000985.svg'),
                      os.path.join(CHARTS_DIR, 'zzqz_v2.svg'))
@@ -964,9 +964,9 @@ def run_daily_review():
     if os.path.isfile(mom_cache):
         os.remove(mom_cache)
     run_script('Step4a 拉取动量数据',
-        [sys.executable, os.path.join(WWW_DIR, 'fetch_momentum.py')])
+        [sys.executable, os.path.join(WWW_DIR, 'server', 'fetch_momentum.py')])
     run_script('Step4b 生成复盘',
-        [sys.executable, os.path.join(WWW_DIR, 'generate_review_data.py'), DATE])
+        [sys.executable, os.path.join(WWW_DIR, 'server', 'generate_review_data.py'), DATE])
 
     return {'status': 'ok', 'date': DATE, 'logs': logs}
 

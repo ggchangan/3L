@@ -148,8 +148,9 @@ class TestReviewArchiveViaAPI:
         import urllib.request
         import json
         try:
+            base = os.environ.get('TEST_BASE_URL', 'http://localhost:8080').rstrip('/')
             resp = urllib.request.urlopen(
-                'http://localhost:8080/api/review', timeout=10)
+                f'{base}/api/review/get', timeout=10)
             d = json.loads(resp.read().decode())
             assert 'market' in d
             assert 'momentum' in d
