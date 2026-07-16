@@ -8,6 +8,7 @@ from backend.core.buy_point_detection import (
 )
 from backend.core.ema_utils import get_structure, get_stage, ema_list
 from backend.core.trend_trading import decide_system_with_detail, simulate_trend_trade
+from threel_core.parameters import PARAMETER_VERSION, TREND_PARAMETERS
 
 
 
@@ -104,7 +105,7 @@ def run_backtest(code_q, days=60, stocks=None, market_position='波中', main_li
             cur_close = kls[i]['close']
             if ema5[i] and ema5[i] > 0:
                 bias5 = (cur_close - ema5[i]) / ema5[i] * 100
-                if bias5 < 2:
+                if bias5 <= TREND_PARAMETERS['bias5_buy_max']:
                     trade = simulate_trend_trade(kls, i)
                     if trade:
                         hold_days = trade['hold_days']
@@ -177,6 +178,7 @@ def run_backtest(code_q, days=60, stocks=None, market_position='波中', main_li
     has_chart = gen_trade_chart_svg(kls, all_signals, stock_name, resolved_code, chart_abs)
 
     return {
+        'parameter_version': PARAMETER_VERSION,
         'code': resolved_code,
         'name': stock_name,
         'direction': stock_direction,
