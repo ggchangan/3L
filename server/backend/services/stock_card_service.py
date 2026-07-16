@@ -631,7 +631,8 @@ def get_stock_card(code, date_str, market_position='波中',
     card = {
         'code': code,
         'name': name,
-        'sector': sector,
+        'industry': sector,
+        'sector': sector,  # 兼容旧版 API，新增代码统一读取 industry
         'direction': direction or '',
         'price': close,
         'change': change,
@@ -686,7 +687,8 @@ def _empty_card(code, name, sector, direction, reason):
     return {
         'code': code,
         'name': name,
-        'sector': sector,
+        'industry': sector,
+        'sector': sector,  # 兼容旧版 API，新增代码统一读取 industry
         'direction': direction or '',
         'price': 0,
         'change': 0,

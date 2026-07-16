@@ -29,13 +29,47 @@ log = get_logger(__name__)
 # 存储层
 # ═══════════════════════════════════════════════════════════════
 
-def load_review_data():
-    """加载复盘内存缓存数据"""
+def load_current_review():
+    """加载当前复盘缓存；接口层应通过此入口获得统一响应契约。"""
     if os.path.isfile(REVIEW_DATA_PATH):
-        with open(REVIEW_DATA_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {'date': '', 'market': {}, 'mainline': {}, 'timing_signals': {},
-            'trading_plan': {}, 'holdings': [], 'buy_signals': []}
+        try:
+            with open(REVIEW_DATA_PATH, 'r', encoding='utf-8') as f:
+                return normalize_review_response(json.load(f), source='cache')
+        except (OSError, json.JSONDecodeError, TypeError):
+            log.warning('当前复盘缓存不可读，返回空复盘契约', exc_info=True)
+    return normalize_review_response({}, source='cache')
+
+
+def normalize_review_response(data, source='cache'):
+    """补齐复盘公共契约，并为历史数据提供无损兼容。"""
+    result = dict(data) if isinstance(data, dict) else {}
+    result.setdefault('date', '')
+    result.setdefault('market', {})
+    result.setdefault('mainline', {})
+    result.setdefault('timing_signals', {})
+    result.setdefault('trading_plan', {})
+    result.setdefault('holdings', [])
+    result.setdefault('buy_signals', [])
+
+    # industry 是行业的唯一语义字段；sector 暂时保留给旧前端和历史存档。
+    for key in ('holdings', 'buy_signals', 'holdings_review', 'buy_signals_review'):
+        items = result.get(key)
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if isinstance(item, dict):
+                industry = item.get('industry') or item.get('sector') or item.get('ths_industry') or ''
+                item.setdefault('industry', industry)
+                item.setdefault('sector', industry)
+
+    result.setdefault('data_dates', {})
+    result.setdefault('data_freshness', {})
+    result['response_meta'] = {
+        'source': source,
+        'computed_live': source == 'live',
+        'contract_version': 2,
+    }
+    return result
 
 
 def save_review_data(data):
@@ -217,6 +251,7 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
         buy_signals.append({
             'code': card['code'],
             'name': card['name'],
+            'industry': card.get('industry', card['sector']),
             'sector': card['sector'],
             'direction': direction,
             'price': card['price'],
@@ -793,11 +828,33 @@ def compute_review_real_time(date_str=None):
     except:
         pass
 
+    _stock_date = all_stocks.get('last_updated', '') if isinstance(all_stocks, dict) else ''
+    _index_date = market_cycle.get('data_date', '')
+    _sector_date = _lu if '_lu' in locals() else ''
+    _requested_date = date_str.replace('-', '')
+
+    def _freshness(value):
+        normalized = str(value or '').replace('-', '')
+        if not normalized:
+            return 'unknown'
+        return 'current' if normalized >= _requested_date else 'stale'
+
     review = {
         'date': date_str,
         'market': {**market_cycle, 'date': date_str},
         'mainline': mainline_data,
         'data_stale': _data_stale,
+        'data_dates': {
+            'requested': date_str,
+            'index': _index_date,
+            'stocks': _stock_date,
+            'sectors': _sector_date,
+        },
+        'data_freshness': {
+            'index': _freshness(_index_date),
+            'stocks': _freshness(_stock_date),
+            'sectors': _freshness(_sector_date),
+        },
         'timing_signals': timing_signals,
         'trading_plan': trading_plan,
         'holdings': holdings,
@@ -808,7 +865,7 @@ def compute_review_real_time(date_str=None):
         'opportunity_map': opp_map,
     }
 
-    return review
+    return normalize_review_response(review, source='live')
 
 
 def generate_daily_achievements_pdf(date_str):
