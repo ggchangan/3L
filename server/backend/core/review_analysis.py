@@ -89,6 +89,8 @@ def generate_holdings_review(holdings, stocks, buy_signals,
         if manual_sl is not None:
             stop_loss = float(manual_sl)
             stop_loss_pct = round((card['price'] - stop_loss) / card['price'] * 100, 2) if card['price'] and card['price'] > 0 else None
+        decision = dict(card.get('decision', {}))
+        decision.update({'stop_loss': stop_loss, 'stop_loss_pct': stop_loss_pct})
 
         result.append({
             'code': card['code'],
@@ -114,6 +116,7 @@ def generate_holdings_review(holdings, stocks, buy_signals,
             'mainline_level': card.get('mainline_level', ''),
             'stop_loss': stop_loss,
             'stop_loss_pct': stop_loss_pct,
+            'decision': decision,
             # 融合判定字段
             'triggered_signals': card.get('triggered_signals', []),
             'fusion_type': card.get('fusion_type', ''),
@@ -218,6 +221,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             "mainline_level": card.get('mainline_level', ''),
             "stop_loss": card['stop_loss'],
             "stop_loss_pct": card['stop_loss_pct'],
+            "decision": card.get('decision', {}),
             "structure": card['structure'],
             "stage": card['stage'],
             "signal": card['signal'],

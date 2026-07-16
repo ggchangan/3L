@@ -16,11 +16,24 @@ from backend.models.data_models import StockCardData
 from backend.services.stock_card_service import (
     _calc_action_type, _calc_action_signal,
     _calc_action_priority, _calc_action_reason,
+    build_trade_decision,
 )
 import pytest
 
 
 class TestStockCardDataContract:
+
+    def test_trade_decision_is_the_authoritative_contract(self):
+        decision = build_trade_decision(
+            signal='buy', structure='上涨趋势', stage='上行',
+            buy_point='缩量回踩', stop_loss=9.5, stop_loss_pct=5.0,
+        )
+
+        assert decision.to_dict() == {
+            'action': '买入', 'signal': '买点', 'priority': '高',
+            'reason': '上涨趋势·上行', 'stop_loss': 9.5,
+            'stop_loss_pct': 5.0, 'version': 'trade-decision-v1',
+        }
 
     def test_can_instantiate(self):
         """验证 StockCardData 可以正常实例化"""

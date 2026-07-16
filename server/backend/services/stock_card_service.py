@@ -47,6 +47,7 @@ from backend.core.trend_trading import (
 from backend.core.signal_detector.fusion import fusion_judge
 from backend.core.signal_detector.sell_point_detection import detect_sell_point
 from backend.core.structure_wave import judge_structure_wave
+from backend.models.data_models import TradeDecision
 
 
 def _calc_sector_chg_5d(sector):
@@ -330,6 +331,23 @@ def _calc_action_reason(signal, structure, stage, fusion_reason,
         '区间中段': f'{structure}·{stage}，方向未明',
     }
     return _stage_reason.get(stage, f'{structure}·{stage}')
+
+
+def build_trade_decision(*, signal, structure, stage, fusion_type='',
+                         fusion_reason='', triggered_signals=None, buy_point='',
+                         stop_loss=None, stop_loss_pct=None):
+    """唯一交易决策入口；卡片、复盘和分析只消费该结果。"""
+    triggered_signals = triggered_signals or []
+    return TradeDecision(
+        action=_calc_action_type(signal, stage, fusion_type),
+        signal=_calc_action_signal(signal, stage, fusion_type, triggered_signals),
+        priority=_calc_action_priority(signal, stage, fusion_type),
+        reason=_calc_action_reason(
+            signal, structure, stage, fusion_reason, triggered_signals, buy_point,
+        ),
+        stop_loss=stop_loss,
+        stop_loss_pct=stop_loss_pct,
+    )
 
 
 # ═══════════════════════════════════════════
@@ -620,12 +638,17 @@ def get_stock_card(code, date_str, market_position='波中',
         _display_stage = _raw_stage
 
     # 7d. 操作建议（由卡片统一推导，外部不重复计算）
-    action_type = _calc_action_type(signal, _raw_stage, fusion_type)
-    action_signal = _calc_action_signal(signal, _raw_stage, fusion_type, triggered_signals)
-    action_priority = _calc_action_priority(signal, _raw_stage, fusion_type)
-    action_reason = _calc_action_reason(signal, struct_info.get('structure', '--'),
-                                         _raw_stage,
-                                         fusion_reason, triggered_signals, buy_point)
+    decision = build_trade_decision(
+        signal=signal,
+        structure=struct_info.get('structure', '--'),
+        stage=_raw_stage,
+        fusion_type=fusion_type,
+        fusion_reason=fusion_reason,
+        triggered_signals=triggered_signals,
+        buy_point=buy_point,
+        stop_loss=stop_loss,
+        stop_loss_pct=stop_loss_pct,
+    )
 
     # 8. 构建卡片
     card = {
@@ -669,10 +692,11 @@ def get_stock_card(code, date_str, market_position='波中',
         'fusion_reason': fusion_reason,
         'wave_position': wave_position,
         # 操作建议（卡片统一推导）
-        'action_type': action_type,
-        'action_signal': action_signal,
-        'action_priority': action_priority,
-        'action_reason': action_reason,
+        'decision': decision.to_dict(),
+        'action_type': decision.action,
+        'action_signal': decision.signal,
+        'action_priority': decision.priority,
+        'action_reason': decision.reason,
         'conclusion': '',
         'tags': [],
     }
@@ -684,6 +708,10 @@ def get_stock_card(code, date_str, market_position='波中',
 
 def _empty_card(code, name, sector, direction, reason):
     """返回空卡片（数据不足时）"""
+    decision = build_trade_decision(
+        signal='hold', structure='--', stage='--',
+        fusion_reason=reason,
+    )
     return {
         'code': code,
         'name': name,
@@ -724,10 +752,11 @@ def _empty_card(code, name, sector, direction, reason):
         'fusion_type': '',
         'fusion_reason': '',
         'wave_position': '',
-        'action_type': '持有',
-        'action_signal': '',
-        'action_priority': '中',
-        'action_reason': '--',
+        'decision': decision.to_dict(),
+        'action_type': decision.action,
+        'action_signal': decision.signal,
+        'action_priority': decision.priority,
+        'action_reason': decision.reason,
         'conclusion': reason,
         'tags': [],
     }

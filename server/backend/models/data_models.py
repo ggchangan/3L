@@ -224,6 +224,24 @@ def push2test_dict_to_snapshot(d: dict) -> Push2TestConceptSnapshot:
 
 
 @dataclass
+class TradeDecision:
+    """交易动作的唯一输出合约。
+
+    StockCard 对外仍平铺旧字段，但所有消费者应优先读取 decision。
+    """
+    action: str
+    signal: str
+    priority: str
+    reason: str
+    stop_loss: Optional[float] = None
+    stop_loss_pct: Optional[float] = None
+    version: str = 'trade-decision-v1'
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
 class StockCardData:
     """个股卡片统一数据合约 — get_stock_card() 输出
 
@@ -283,3 +301,4 @@ class StockCardData:
     vs_sector_5d: Optional[float]   # 个股vs板块5日对比
     conclusion: str              # 结论文字
     tags: list                   # 标签列表
+    decision: Optional[TradeDecision] = None  # 权威交易决策；平铺字段仅用于兼容

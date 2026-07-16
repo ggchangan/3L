@@ -139,6 +139,15 @@ export interface BuySignalsData {
 }
 
 export interface BuySignalItem {
+  decision?: {
+    action: string
+    signal: string
+    priority: string
+    reason: string
+    stop_loss?: number | null
+    stop_loss_pct?: number | null
+    version: string
+  }
   code: string
   name: string
   signal: 'buy' | 'sell' | 'hold'
