@@ -48,7 +48,6 @@ export default function Holdings() {
   const [modalDirection, setModalDirection] = useState('')
   const [modalRatio, setModalRatio] = useState('')
   const [modalStopLoss, setModalStopLoss] = useState('')
-  const [modalBuyDate, setModalBuyDate] = useState('')
   const [modalSaving, setModalSaving] = useState(false)
   const [modalBuyPrice, setModalBuyPrice] = useState('')
   const [modalBuyDate, setModalBuyDate] = useState('')

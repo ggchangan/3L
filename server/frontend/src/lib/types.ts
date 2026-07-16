@@ -264,6 +264,9 @@ export type IndustryMap = Record<string, { ths_industry?: string }>
 /** 复盘数据结构 */
 export interface ReviewData {
   date?: string
+  data_dates?: { requested?: string; index?: string; stocks?: string; sectors?: string }
+  data_freshness?: { index?: 'current' | 'stale' | 'unknown'; stocks?: 'current' | 'stale' | 'unknown'; sectors?: 'current' | 'stale' | 'unknown' }
+  response_meta?: { source: 'cache' | 'live'; computed_live: boolean; contract_version: number }
   market?: {
     price?: number | string
     change?: number

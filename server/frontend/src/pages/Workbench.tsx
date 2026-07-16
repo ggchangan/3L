@@ -70,7 +70,7 @@ export default function Workbench() {
   // 加载数据
   useEffect(() => {
     loadLog(date)
-    fetch('/api/review/today')
+    fetch('/api/review/current')
       .then(r => r.json())
       .then(d => setReviewSummary({
         market: d.market?.position || '--',

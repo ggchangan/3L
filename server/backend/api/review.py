@@ -3,7 +3,10 @@ from . import parse_query
 from backend.core.logger import get_logger
 log = get_logger(__name__)
 
-from backend.services.review_service import run_daily_review, generate_review, save_review, compute_review_real_time
+from backend.services.review_service import (
+    run_daily_review, generate_review, save_review, compute_review_real_time,
+    load_current_review,
+)
 from backend.core.exceptions import APIError
 
 
@@ -22,7 +25,7 @@ def _empty_review():
 
 
 def _handle_review_today(h, path):
-    """纯实时计算复盘数据（不读存档）"""
+    """兼容旧接口：等价于 /api/review/live。"""
     import json
     try:
         data = compute_review_real_time()
@@ -68,31 +71,22 @@ def _handle_review_dates(h, path):
 
 
 def _handle_review_get(h, path):
-    """返回当前复盘数据"""
-    import json
-    from backend.core import config
+    """兼容旧接口：等价于 /api/review/current。"""
     try:
-        with open(config.REVIEW_DATA_PATH, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        if not isinstance(data, dict):
-            raise TypeError('review data must be an object')
-        defaults = _empty_review()
-        market = data.get('market')
-        if not isinstance(market, dict):
-            market = {}
-        data['market'] = {**defaults['market'], **market}
-        for key, value in defaults.items():
-            data.setdefault(key, value)
+        data = load_current_review()
+        data['market'] = {**_empty_review()['market'], **data.get('market', {})}
         h.send_json(data)
-    except (OSError, json.JSONDecodeError, TypeError):
-        h.send_json(_empty_review())
+    except (OSError, ValueError, TypeError):
+        h.send_json(load_current_review())
 
 
 def register_routes(routes):
     routes.exact('/api/cron/daily-review', func=_handle_cron_daily_review)
     routes.exact('/api/review/today', func=_handle_review_today)
+    routes.exact('/api/review/live', func=_handle_review_today)
     routes.exact('/api/review/generate', func=_handle_review_generate)
     routes.exact('/api/review/get', func=_handle_review_get)
+    routes.exact('/api/review/current', func=_handle_review_get)
     routes.exact('/api/review/dates', func=_handle_review_dates)
     # POST 路由在 server.py 的 do_POST 中直接处理，保持兼容
     return routes
