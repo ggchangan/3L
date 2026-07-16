@@ -26,3 +26,10 @@ def test_live_review_contract_marks_computation_source():
     assert review['response_meta']['computed_live'] is True
     assert review['holdings'] == []
     assert review['buy_signals'] == []
+
+
+def test_archive_review_contract_marks_archive_source():
+    review = normalize_review_response({'date': '2026-07-15'}, source='archive')
+
+    assert review['response_meta']['source'] == 'archive'
+    assert review['response_meta']['computed_live'] is False

@@ -37,6 +37,9 @@ def load_current_review():
                 return normalize_review_response(json.load(f), source='cache')
         except (OSError, json.JSONDecodeError, TypeError):
             log.warning('当前复盘缓存不可读，返回空复盘契约', exc_info=True)
+    archive = get_latest_archive()
+    if archive:
+        return normalize_review_response(archive, source='archive')
     return normalize_review_response({}, source='cache')
 
 
