@@ -48,6 +48,7 @@ from backend.core.signal_detector.fusion import fusion_judge
 from backend.core.signal_detector.sell_point_detection import detect_sell_point
 from backend.core.structure_wave import judge_structure_wave
 from backend.models.data_models import TradeDecision
+from threel_core.parameters import PARAMETER_VERSION
 
 
 def _calc_sector_chg_5d(sector):
@@ -347,6 +348,7 @@ def build_trade_decision(*, signal, structure, stage, fusion_type='',
         ),
         stop_loss=stop_loss,
         stop_loss_pct=stop_loss_pct,
+        parameter_version=PARAMETER_VERSION,
     )
 
 

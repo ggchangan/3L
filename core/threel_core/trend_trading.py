@@ -16,6 +16,7 @@
 import os, json
 
 from .ema_utils import ema_list, get_structure
+from .parameters import TREND_PARAMETERS
 
 
 def ema_slope(values, n_days=5):
@@ -36,7 +37,7 @@ def is_5day_trend(klines, idx):
     if len(ema5) < 6:
         return False
     slope = ema_slope(ema5, 5)
-    return slope > 2.0
+    return slope > TREND_PARAMETERS['ema5_slope_min']
 
 
 def is_10day_trend(klines, idx):
@@ -51,7 +52,7 @@ def is_10day_trend(klines, idx):
     if len(ema10) < 6:
         return False
     slope = ema_slope(ema10, 5)
-    return slope > 1.5
+    return slope > TREND_PARAMETERS['ema10_slope_min']
 
 
 # ==================== 乖离率位置判断 ====================
@@ -66,13 +67,11 @@ def get_bias5_zone(klines, idx):
         return ('--', 0)
     close = klines[idx]['close']
     bias5 = (close - ema5[-1]) / ema5[-1] * 100
-    if bias5 < 0:
+    if bias5 <= TREND_PARAMETERS['bias5_buy_max']:
         return ('买入', round(bias5, 2))
-    elif bias5 <= 2:
-        return ('买入', round(bias5, 2))
-    elif bias5 <= 8:
+    elif bias5 <= TREND_PARAMETERS['bias5_hold_max']:
         return ('持有', round(bias5, 2))
-    elif bias5 <= 12:
+    elif bias5 <= TREND_PARAMETERS['bias5_warning_max']:
         return ('警戒', round(bias5, 2))
     else:
         return ('卖出', round(bias5, 2))
@@ -88,11 +87,11 @@ def get_bias10_zone(klines, idx):
         return ('--', 0)
     close = klines[idx]['close']
     bias10 = (close - ema10[-1]) / ema10[-1] * 100
-    if bias10 < 3:
+    if bias10 < TREND_PARAMETERS['bias10_buy_max']:
         return ('买入', round(bias10, 2))
-    elif bias10 <= 10:
+    elif bias10 <= TREND_PARAMETERS['bias10_hold_max']:
         return ('持有', round(bias10, 2))
-    elif bias10 <= 15:
+    elif bias10 <= TREND_PARAMETERS['bias10_warning_max']:
         return ('警戒', round(bias10, 2))
     else:
         return ('卖出', round(bias10, 2))
@@ -108,8 +107,9 @@ def check_stop_loss(buy_price, cur_price):
     if buy_price <= 0:
         return (False, '')
     cur_ret = (cur_price - buy_price) / buy_price * 100
-    if cur_ret < -5:
-        return (True, f'浮亏{cur_ret:.2f}%触发-5%止损')
+    threshold = TREND_PARAMETERS['hard_stop_loss_pct']
+    if cur_ret < -threshold:
+        return (True, f'浮亏{cur_ret:.2f}%触发-{threshold:g}%止损')
     return (False, '')
 
 
@@ -125,7 +125,9 @@ def check_trailing_take_profit(buy_price, cur_price, peak_price):
         return (False, '')
     peak_ret = (peak_price - buy_price) / buy_price * 100
     cur_ret = (cur_price - buy_price) / buy_price * 100
-    if peak_ret > 5 and (peak_ret - cur_ret) > 10:
+    activation = TREND_PARAMETERS['trailing_profit_activation_pct']
+    drawdown = TREND_PARAMETERS['trailing_drawdown_pct']
+    if peak_ret > activation and (peak_ret - cur_ret) > drawdown:
         return (True, f'跟踪止盈(峰值{peak_ret:.1f}%，回落至{cur_ret:.1f}%)')
     return (False, '')
 

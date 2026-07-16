@@ -147,6 +147,7 @@ export interface BuySignalItem {
     stop_loss?: number | null
     stop_loss_pct?: number | null
     version: string
+    parameter_version: string
   }
   code: string
   name: string

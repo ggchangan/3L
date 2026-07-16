@@ -236,6 +236,7 @@ class TradeDecision:
     stop_loss: Optional[float] = None
     stop_loss_pct: Optional[float] = None
     version: str = 'trade-decision-v1'
+    parameter_version: str = ''
 
     def to_dict(self):
         return asdict(self)

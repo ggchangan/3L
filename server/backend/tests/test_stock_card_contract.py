@@ -33,6 +33,7 @@ class TestStockCardDataContract:
             'action': '买入', 'signal': '买点', 'priority': '高',
             'reason': '上涨趋势·上行', 'stop_loss': 9.5,
             'stop_loss_pct': 5.0, 'version': 'trade-decision-v1',
+            'parameter_version': '3l-2026.07.1',
         }
 
     def test_can_instantiate(self):

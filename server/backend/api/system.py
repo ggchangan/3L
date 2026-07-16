@@ -79,6 +79,13 @@ def _handle_update(h, path, body):
         raise APIError(f"系统模块异常: {e}") from e
 
 
+def _handle_parameters(h, path):
+    """返回当前生效参数、知识来源和回测口径。"""
+    from threel_core.parameters import get_parameter_manifest
+    h.send_json(get_parameter_manifest())
+
+
 def register_routes(routes):
     routes.exact('/api/health', func=_handle_health)
+    routes.exact('/api/system/parameters', func=_handle_parameters)
     return routes
