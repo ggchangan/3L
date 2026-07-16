@@ -7,7 +7,6 @@ from backend.data_access.data_layer import get_all_stocks, get_watchlist, resolv
 from backend.core.buy_point_detection import (
     detect_buy_point,
     detect_huicai_buy_point, find_idx,
-    _find_support_levels,
 )
 from backend.core.trend_trading import detect_trend_buy
 from backend.core.scan_buy_signals import get_full_mainlines
@@ -77,7 +76,7 @@ def _analyze(code, direction, name, stocks, wl_codes):
     from backend.data_access.data_layer import get_all_stocks as _get_all
     from backend.core.buy_point_detection import (
         detect_buy_point, check_trend_stock, check_profit_model1,
-        detect_huicai_buy_point, find_idx, _find_support_levels,
+        detect_huicai_buy_point, find_idx,
     )
     from backend.core.trend_trading import detect_trend_buy
     from backend.core.scan_buy_signals import get_full_mainlines
@@ -127,6 +126,7 @@ def _analyze(code, direction, name, stocks, wl_codes):
         'trading_system': card.get('trading_system', '3l'),
         'trading_reason': card.get('trading_reason', ''),
         'signal': card.get('signal', 'hold'),
+        'decision': card.get('decision', {}),
         'stop_loss': card.get('stop_loss'),
         'stop_loss_pct': card.get('stop_loss_pct'),
         'mainline_level': card.get('mainline_level', ''),
@@ -176,13 +176,9 @@ def _calc_risk_reward(result, code, kls, today_fmt):
             pass
 
     if _last_idx >= 10:
-        _support = _find_support_levels(kls, _last_idx)
-        if _support is not None:
-            cur_close = kls[-1]['close']
-            _sl = round(_support * 0.98, 2)
-            result['stop_loss'] = _sl
-            result['stop_loss_pct'] = round((cur_close - _sl) / cur_close * 100, 2)
-
+        cur_close = kls[-1]['close']
+        # 止损只使用 TradeDecision 的结果；此处仅补充盈亏比。
+        if result.get('stop_loss') is not None:
             # 盈亏比：找最近压力位
             _highs = [k['high'] for k in kls[:_last_idx + 1]]
             _resistance = None
