@@ -4,6 +4,30 @@
    ═══════════════════════════════════════ */
 
 /* Tables */
+.review-cache-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+  color: #888;
+  font-size: 12px;
+}
+
+.review-cache-bar button {
+  border: 1px solid #2a2a4a;
+  border-radius: 6px;
+  padding: 4px 10px;
+  color: #4ecdc4;
+  background: #16213e;
+  cursor: pointer;
+}
+
+.review-cache-bar button:disabled {
+  color: #666;
+  cursor: wait;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

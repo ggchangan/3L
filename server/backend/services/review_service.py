@@ -7,7 +7,7 @@
 
 不再通过 subprocess 调用 generate_review_data.py，改为直接 import。
 """
-import json, os, sys, shutil, subprocess
+import json, os, sys, shutil, subprocess, threading, time
 from datetime import datetime
 from backend.core.config import (
     REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
@@ -24,6 +24,15 @@ from backend.core.exceptions import DataError
 from backend.core.logger import get_logger
 
 log = get_logger(__name__)
+
+REVIEW_CACHE_MAX_AGE_SECONDS = int(os.environ.get('REVIEW_CACHE_MAX_AGE_SECONDS', '600'))
+_review_refresh_lock = threading.RLock()
+_review_refresh_state = {
+    'status': 'idle',
+    'started_at': '',
+    'completed_at': '',
+    'error': '',
+}
 
 # ═══════════════════════════════════════════════════════════════
 # 存储层
@@ -79,6 +88,68 @@ def save_review_data(data):
     """保存复盘数据到文件"""
     os.makedirs(os.path.dirname(REVIEW_DATA_PATH), exist_ok=True)
     config.atomic_json_dump(data, REVIEW_DATA_PATH, indent=2)
+
+
+def get_review_refresh_status():
+    """返回后台刷新状态与缓存时效，不暴露线程对象。"""
+    with _review_refresh_lock:
+        state = dict(_review_refresh_state)
+    try:
+        mtime = os.path.getmtime(REVIEW_DATA_PATH)
+        age_seconds = max(0, int(time.time() - mtime))
+        state.update({
+            'cache_exists': True,
+            'cache_updated_at': datetime.fromtimestamp(mtime).isoformat(timespec='seconds'),
+            'cache_age_seconds': age_seconds,
+            'cache_stale': age_seconds >= REVIEW_CACHE_MAX_AGE_SECONDS,
+        })
+    except OSError:
+        state.update({
+            'cache_exists': False,
+            'cache_updated_at': '',
+            'cache_age_seconds': None,
+            'cache_stale': True,
+        })
+    return state
+
+
+def request_review_refresh(force=False):
+    """单飞启动后台复盘计算；并发请求共享同一个任务。"""
+    status = get_review_refresh_status()
+    with _review_refresh_lock:
+        if _review_refresh_state['status'] == 'running':
+            return {'started': False, **get_review_refresh_status()}
+        if not force and status['cache_exists'] and not status['cache_stale']:
+            return {'started': False, **status}
+        _review_refresh_state.update({
+            'status': 'running',
+            'started_at': datetime.now().isoformat(timespec='seconds'),
+            'completed_at': '',
+            'error': '',
+        })
+
+    def _worker():
+        try:
+            data = compute_review_real_time()
+            data['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
+            save_review_data(data)
+            with _review_refresh_lock:
+                _review_refresh_state.update({
+                    'status': 'completed',
+                    'completed_at': datetime.now().isoformat(timespec='seconds'),
+                    'error': '',
+                })
+        except Exception as exc:
+            log.exception('后台复盘计算失败')
+            with _review_refresh_lock:
+                _review_refresh_state.update({
+                    'status': 'failed',
+                    'completed_at': datetime.now().isoformat(timespec='seconds'),
+                    'error': str(exc),
+                })
+
+    threading.Thread(target=_worker, daemon=True, name='review-refresh').start()
+    return {'started': True, **get_review_refresh_status()}
 
 
 def get_archive_dates():

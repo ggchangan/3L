@@ -6,6 +6,7 @@ log = get_logger(__name__)
 from backend.services.review_service import (
     run_daily_review, generate_review, save_review, compute_review_real_time,
     load_current_review,
+    get_review_refresh_status, request_review_refresh,
 )
 from backend.core.exceptions import APIError
 
@@ -74,10 +75,21 @@ def _handle_review_get(h, path):
     """兼容旧接口：等价于 /api/review/current。"""
     try:
         data = load_current_review()
+        refresh = request_review_refresh(force=False)
         data['market'] = {**_empty_review()['market'], **data.get('market', {})}
+        data['refresh_status'] = refresh
         h.send_json(data)
     except (OSError, ValueError, TypeError):
         h.send_json(load_current_review())
+
+
+def _handle_review_refresh(h, path):
+    """立即返回，由后台单飞任务重新生成缓存。"""
+    h.send_json(request_review_refresh(force=True))
+
+
+def _handle_review_status(h, path):
+    h.send_json(get_review_refresh_status())
 
 
 def register_routes(routes):
@@ -87,6 +99,8 @@ def register_routes(routes):
     routes.exact('/api/review/generate', func=_handle_review_generate)
     routes.exact('/api/review/get', func=_handle_review_get)
     routes.exact('/api/review/current', func=_handle_review_get)
+    routes.exact('/api/review/refresh', func=_handle_review_refresh)
+    routes.exact('/api/review/status', func=_handle_review_status)
     routes.exact('/api/review/dates', func=_handle_review_dates)
     # POST 路由在 server.py 的 do_POST 中直接处理，保持兼容
     return routes

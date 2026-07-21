@@ -1,4 +1,8 @@
 """复盘 API v2 契约：统一接口语义、行业字段和数据时效。"""
+import threading
+import time
+
+import backend.services.review_service as review_service
 from backend.services.review_service import normalize_review_response
 
 
@@ -33,3 +37,36 @@ def test_archive_review_contract_marks_archive_source():
 
     assert review['response_meta']['source'] == 'archive'
     assert review['response_meta']['computed_live'] is False
+
+
+def test_background_refresh_is_single_flight(monkeypatch):
+    entered = threading.Event()
+    release = threading.Event()
+    saved = []
+
+    def fake_compute():
+        entered.set()
+        assert release.wait(timeout=2)
+        return {'date': '2026-07-21'}
+
+    monkeypatch.setattr(review_service, 'compute_review_real_time', fake_compute)
+    monkeypatch.setattr(review_service, 'save_review_data', saved.append)
+    with review_service._review_refresh_lock:
+        review_service._review_refresh_state.update({
+            'status': 'idle', 'started_at': '', 'completed_at': '', 'error': '',
+        })
+
+    first = review_service.request_review_refresh(force=True)
+    assert entered.wait(timeout=1)
+    second = review_service.request_review_refresh(force=True)
+    assert first['started'] is True
+    assert second['started'] is False
+
+    release.set()
+    for _ in range(50):
+        if review_service.get_review_refresh_status()['status'] == 'completed':
+            break
+        time.sleep(0.01)
+    assert review_service.get_review_refresh_status()['status'] == 'completed'
+    assert saved[0]['date'] == '2026-07-21'
+    assert saved[0]['cache_generated_at']

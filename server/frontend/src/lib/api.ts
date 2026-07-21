@@ -94,11 +94,31 @@ export function fetchStockSummary(code: string): Promise<Record<string, unknown>
 
 /** 复盘相关 API */
 export function fetchReviewToday(): Promise<ReviewData> {
-  return fetchJson<ReviewData>('/api/review/live')
+  return fetchJson<ReviewData>('/api/review/current')
 }
 
 export function fetchReviewLive(): Promise<ReviewData> {
   return fetchJson<ReviewData>('/api/review/live')
+}
+
+export function refreshReview(): Promise<ReviewRefreshStatus> {
+  return fetchJson<ReviewRefreshStatus>('/api/review/refresh')
+}
+
+export function fetchReviewStatus(): Promise<ReviewRefreshStatus> {
+  return fetchJson<ReviewRefreshStatus>('/api/review/status')
+}
+
+export interface ReviewRefreshStatus {
+  status: 'idle' | 'running' | 'completed' | 'failed'
+  started?: boolean
+  started_at?: string
+  completed_at?: string
+  error?: string
+  cache_exists?: boolean
+  cache_updated_at?: string
+  cache_age_seconds?: number | null
+  cache_stale?: boolean
 }
 
 export function fetchReviewDates(): Promise<{ dates: string[] }> {
