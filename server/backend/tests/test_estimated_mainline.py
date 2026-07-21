@@ -39,7 +39,7 @@ def test_mainline_uses_close_snapshot_for_estimated_20d_ranking(monkeypatch, tmp
     })
     monkeypatch.setattr(data_layer, 'get_sector_daily', lambda: {'last_updated': '20260720'})
     monkeypatch.setattr(data_layer, 'get_ths_daily_update_confirmation', lambda: {
-        'industry_names': ['A', 'B'],
+        'industry_names': ['A', 'B', 'C'],
     })
     monkeypatch.setattr(data_layer, 'get_sector_close_snapshot', lambda: {
         'date': '20260721',
@@ -53,6 +53,7 @@ def test_mainline_uses_close_snapshot_for_estimated_20d_ranking(monkeypatch, tmp
     monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='I': {
         'A': _klines(100, 100),
         'B': _klines(95, 100),
+        'C': _klines(1, 1000),
         '已停用历史行业': _klines(1, 1000),
     })
 
@@ -66,6 +67,7 @@ def test_mainline_uses_close_snapshot_for_estimated_20d_ranking(monkeypatch, tmp
     assert result['all_ranked'][0]['chg_20d'] == 10.0
     assert result['all_ranked'][0]['estimate_applied'] is True
     assert result['calibration']['status'] == 'pending'
+    assert not (tmp_path / 'history.json').exists()
 
 
 def test_official_mainline_completes_estimate_calibration(monkeypatch, tmp_path):
@@ -101,6 +103,7 @@ def test_official_mainline_completes_estimate_calibration(monkeypatch, tmp_path)
 
     estimated = review_compute_service.get_mainline_data('2026-07-21')
     assert estimated['calibration']['status'] == 'pending'
+    assert not (tmp_path / 'history.json').exists()
 
     cache_path.unlink()
     state.update(sector_date='20260721', official=True)
@@ -111,6 +114,8 @@ def test_official_mainline_completes_estimate_calibration(monkeypatch, tmp_path)
     assert confirmed['calibration']['top10_overlap'] == 2
     saved = json.loads((tmp_path / 'calibration.json').read_text())
     assert saved['2026-07-21']['status'] == 'completed'
+    history = json.loads((tmp_path / 'history.json').read_text())
+    assert history['2026-07-21']['top10'] == [item['name'] for item in confirmed['all_ranked']]
 
 
 def test_stale_snapshot_never_marks_mainline_as_estimated(monkeypatch, tmp_path):
@@ -142,6 +147,7 @@ def test_stale_snapshot_never_marks_mainline_as_estimated(monkeypatch, tmp_path)
     assert result['ranking_status'] == 'stale'
     assert result['calibration'] is None
     assert result['all_ranked'][0]['estimate_applied'] is False
+    assert not (tmp_path / 'history.json').exists()
 
 
 def test_concept_mainline_estimates_only_when_concept_coverage_is_ready(monkeypatch, tmp_path):
@@ -153,8 +159,11 @@ def test_concept_mainline_estimates_only_when_concept_coverage_is_ready(monkeypa
         'stage': '上涨', 'vl_score': 1, 'volume_ratio': 1,
     })
     monkeypatch.setattr(data_layer, 'get_sector_daily', lambda: {'last_updated': '20260720'})
-    monkeypatch.setattr(data_layer, 'get_tracked_concept_names', lambda min_related_stocks=6: {'C'})
-    monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='N': {'C': _klines()})
+    monkeypatch.setattr(data_layer, 'get_tracked_concept_names', lambda min_related_stocks=6: {'C', 'D'})
+    monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='N': {
+        'C': _klines(),
+        'D': _klines(1, 1000),
+    })
     monkeypatch.setattr(data_layer, 'get_sector_close_snapshot', lambda: {
         'date': '20260721',
         'coverage': {'concept': {'ready': True, 'ratio': 0.85}},
@@ -170,6 +179,8 @@ def test_concept_mainline_estimates_only_when_concept_coverage_is_ready(monkeypa
     assert result['ranking_status'] == 'estimated'
     assert result['estimate_coverage'] == 0.85
     assert result['all_ranked'][0]['estimate_applied'] is True
+    assert [item['name'] for item in result['all_ranked']] == ['C']
+    assert not (tmp_path / 'history.json').exists()
 
 
 def test_live_sector_parser_skips_dash_values_without_discarding_snapshot(monkeypatch):

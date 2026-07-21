@@ -424,6 +424,9 @@ def get_mainline_data(date_str):
             if not klines or str(klines[-1].get('date', '')).replace('-', '') != effective_sector_date:
                 continue
             estimate_snap = estimate_snapshots.get(name)
+            # 当日预估榜必须使用同一时点的数据；未命中收盘快照的行业不参与排名。
+            if estimate_active and estimate_snap is None:
+                continue
             confirmed_snap = confirmed_snapshots.get(name) if not estimate_active else None
             if confirmed_snap is not None and str(confirmed_snap.date).replace('-', '') != effective_sector_date:
                 confirmed_snap = None
@@ -504,20 +507,20 @@ def get_mainline_data(date_str):
         json.dump(result, _f)
     print(f"[3L复盘] 主线数据已缓存 {date_str}")
 
-    # 保存当日 top10 到历史记录（用于持续性跟踪）
-    try:
-        top10_names = [l['name'] for l in (main_lines + secondary_lines)]
-        history = {}
-        if os.path.isfile(MAINLINE_HISTORY_PATH):
-            with open(MAINLINE_HISTORY_PATH) as _fh:
-                history = json.load(_fh)
-        # 只保留当天及之前的历史（防止future覆盖）
-        history = {k: v for k, v in history.items() if k <= date_str}
-        history[date_str] = {'top10': top10_names}
-        with open(MAINLINE_HISTORY_PATH, 'w') as _fh:
-            json.dump(history, _fh, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"[3L复盘] ⚠️ 历史记录保存失败: {e}")
+    # 只有正式板块日线才进入持续性历史；预估/过期排名由缓存和校准记录承载。
+    if ranking_status == 'confirmed':
+        try:
+            top10_names = [l['name'] for l in (main_lines + secondary_lines)]
+            history = {}
+            if os.path.isfile(MAINLINE_HISTORY_PATH):
+                with open(MAINLINE_HISTORY_PATH) as _fh:
+                    history = json.load(_fh)
+            # 只保留当天及之前的历史（防止future覆盖）
+            history = {k: v for k, v in history.items() if k <= date_str}
+            history[date_str] = {'top10': top10_names}
+            config.atomic_json_dump(history, MAINLINE_HISTORY_PATH, indent=2)
+        except Exception as e:
+            print(f"[3L复盘] ⚠️ 历史记录保存失败: {e}")
 
     return result
 
@@ -564,6 +567,9 @@ def get_concept_mainline_data(date_str):
                 continue
             # chg_1d：优先 _push2test，次选K线计算
             estimate_snap = estimate_snapshots.get(name)
+            # 与行业榜一致，预估状态下只允许收盘快照覆盖的概念参与排名。
+            if estimate_active and estimate_snap is None:
+                continue
             snap = push2test_cons.get(name) if not estimate_active else None
             if snap is not None and str(snap.date).replace('-', '') != sector_date:
                 snap = None
@@ -612,27 +618,29 @@ def get_concept_mainline_data(date_str):
     main_lines = scores[:5]
     secondary_lines = scores[5:10]
 
+    ranking_status = 'estimated' if estimate_active else 'confirmed' if sector_date >= target_date else 'stale'
+
     # 写入历史（共享同一份 mainline_history.json，标记 concept_ 前缀）
-    try:
-        top10_names = [l['name'] for l in (main_lines + secondary_lines)]
-        history = {}
-        if os.path.isfile(MAINLINE_HISTORY_PATH):
-            with open(MAINLINE_HISTORY_PATH) as _fh:
-                history = json.load(_fh)
-        key = f'concept_{date_str}'
-        history = {k: v for k, v in history.items() if k.split('_')[-1] <= date_str}
-        history[key] = {'top10': top10_names}
-        with open(MAINLINE_HISTORY_PATH, 'w') as _fh:
-            json.dump(history, _fh, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"[3L复盘] ⚠️ 概念历史记录保存失败: {e}")
+    if ranking_status == 'confirmed':
+        try:
+            top10_names = [l['name'] for l in (main_lines + secondary_lines)]
+            history = {}
+            if os.path.isfile(MAINLINE_HISTORY_PATH):
+                with open(MAINLINE_HISTORY_PATH) as _fh:
+                    history = json.load(_fh)
+            key = f'concept_{date_str}'
+            history = {k: v for k, v in history.items() if k.split('_')[-1] <= date_str}
+            history[key] = {'top10': top10_names}
+            config.atomic_json_dump(history, MAINLINE_HISTORY_PATH, indent=2)
+        except Exception as e:
+            print(f"[3L复盘] ⚠️ 概念历史记录保存失败: {e}")
 
     # 持续性
     persistence = track_mainline_persistence(date_str, main_lines, prefix='concept_')
 
     return {
         'date': date_str,
-        'ranking_status': 'estimated' if estimate_active else 'confirmed' if sector_date >= target_date else 'stale',
+        'ranking_status': ranking_status,
         'ranking_date': target_date if estimate_active else sector_date,
         'base_date': sector_date,
         'estimate_coverage': round(float(concept_coverage.get('ratio', 0)), 4) if estimate_active else None,
