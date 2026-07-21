@@ -84,6 +84,14 @@ def get_all_stocks_from_db(codes_list, limit=60):
     return result
 
 
+INDEX_TS_CODE_MAP = {
+    '000001': '000001.SH',
+    '000688': '000688.SH',
+    '000985': '000985.CSI',
+    '399006': '399006.SZ',
+}
+
+
 def get_index_data_from_db(index_codes):
     """从DB获取多个指数的K线数据
 
@@ -99,7 +107,10 @@ def get_index_data_from_db(index_codes):
         return {}
     result = {}
     for code, name in index_codes.items():
-        ts = f"{code}.SH" if code != '399006' else f"{code}.SZ"
+        ts = INDEX_TS_CODE_MAP.get(code)
+        if not ts:
+            log.warning('未知指数代码，跳过 DB 读取: %s', code)
+            continue
         klines = db.get_index_klines(ts, limit=500)
         if klines:
             result[code] = {'name': name, 'klines': klines}
@@ -150,7 +161,10 @@ def save_index_klines_to_db(index_data):
         return 0
     total = 0
     for code, info in index_data.items():
-        ts = f"{code}.SH" if code != '399006' else f"{code}.SZ"
+        ts = INDEX_TS_CODE_MAP.get(code)
+        if not ts:
+            log.warning('未知指数代码，跳过 DB 写入: %s', code)
+            continue
         klines = info.get('klines', [])
         rows = []
         for k in klines:
@@ -513,7 +527,7 @@ def tushare_fetch_daily_incremental():
 
     # index_daily
     try:
-        for ts_code in ['000001.SH', '000688.SH', '000985.SH', '399006.SZ']:
+        for ts_code in INDEX_TS_CODE_MAP.values():
             try:
                 # 按指数代码分别检查最新日期，避免 000001.SH 写入后其他指数被误跳过
                 cur_latest = db.get_last_trade_date('index_daily')
@@ -530,6 +544,8 @@ def tushare_fetch_daily_incremental():
                     rows = db.upsert_many('index_daily', df)
                     log.info('  index_daily[%s]: 写入 %d 条', ts_code, rows)
                     total_rows += rows
+                else:
+                    log.warning('  index_daily[%s]: Tushare 返回空数据 (%s)', ts_code, trade_date)
                 time.sleep(0.6)
             except Exception as e:
                 log.warning('  index_daily[%s] 失败: %s', ts_code, e)
@@ -1408,6 +1424,23 @@ def verify_data_sources(verbose=True):
             print(f'  {tag} {name}: {detail}')
         checks.append({'check': name, 'pass': passed, 'detail': detail})
 
+    # 每个指数必须独立检查，避免其他指数的最新日期掩盖单一指数断更。
+    try:
+        db = _get_tushare_db()
+        for code, ts_code in INDEX_TS_CODE_MAP.items():
+            rows = db.execute_raw(
+                'SELECT MAX(trade_date) as latest FROM index_daily WHERE ts_code=%s',
+                [ts_code],
+            ) if db else []
+            latest = rows[0]['latest'] if rows else None
+            _check(
+                f'指数[{code}]新鲜度',
+                bool(latest and latest >= latest_trade_day),
+                f'latest={latest}, expected>={latest_trade_day}, ts_code={ts_code}',
+            )
+    except Exception as e:
+        _check('指数逐代码新鲜度', False, f'异常: {type(e).__name__}: {e}')
+
     # ════ 1. 实时源验证 ════
     # 1a. THS live（行业主源）
     try:
@@ -2209,4 +2242,3 @@ def get_realtime_kline_tencent(code, cached_klines=None):
         pass
 
     return klines
-

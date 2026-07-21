@@ -12,6 +12,10 @@ from unittest.mock import patch, MagicMock
 from backend.data_access import data_source as ds
 
 
+def test_index_ts_code_mapping_uses_csi_for_000985():
+    assert ds.INDEX_TS_CODE_MAP['000985'] == '000985.CSI'
+
+
 class TestGetAllStocksFromDB:
     """data_source.get_all_stocks_from_db() — 批量K线+名称"""
 
@@ -95,6 +99,7 @@ class TestGetIndexDataFromDB:
         assert '000985' in result
         assert result['000985']['name'] == '中证全指'
         assert len(result['000985']['klines']) == 1
+        assert any(c.args[0] == '000985.CSI' for c in mock_db.get_index_klines.call_args_list)
 
     @patch('backend.data_access.data_source._get_tushare_db')
     def test_empty_db_returns_empty(self, mock_get_db):
@@ -151,4 +156,4 @@ class TestSaveIndexKlines:
         mock_db.upsert_many_from_dicts.assert_called_once()
         args = mock_db.upsert_many_from_dicts.call_args
         assert args[0][0] == 'index_daily'
-        assert args[0][1][0]['ts_code'] == '000985.SH'
+        assert args[0][1][0]['ts_code'] == '000985.CSI'

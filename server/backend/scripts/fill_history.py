@@ -200,7 +200,7 @@ def fill_index_daily(db: TushareDB, api, start=DEFAULT_START, end=DEFAULT_END):
     index_codes = [
         '000001.SH',  # 上证指数
         '000688.SH',  # 科创50
-        '000985.SH',  # 中证全指(用 000985.CSI 或 000985.SH)
+        '000985.CSI', # 中证全指（中证指数公司）
         '399006.SZ',  # 创业板指
     ]
     total = 0

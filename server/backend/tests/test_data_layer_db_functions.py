@@ -47,6 +47,12 @@ class TestDataLayerDbFunctions:
         from backend.data_access.data_layer import tushare_fetch_daily_incremental
         assert callable(tushare_fetch_daily_incremental)
 
+    def test_verify_script_imports_current_data_source(self):
+        script = os.path.join(os.path.dirname(__file__), '..', '..', 'scripts', 'run_verify.sh')
+        source = open(script).read()
+        assert 'backend.data_access.data_source import verify_data_sources' in source
+        assert 'backend.services.data_source' not in source
+
     @patch('backend.data_access.data_source.get_ths_index_names')
     def test_get_ths_index_names_default(self, mock_source):
         """默认参数为 'I'（行业）"""
@@ -160,7 +166,7 @@ class TestTushareIncrementalIndexDaily:
                 return [{'latest': '20260617'}]
             elif '000688.SH' in str(params):
                 return [{'latest': '20260616'}]
-            elif '000985.SH' in str(params):
+            elif '000985.CSI' in str(params):
                 return [{'latest': '20260617'}]
             elif '399006.SZ' in str(params):
                 return [{'latest': '20260616'}]
@@ -195,4 +201,28 @@ class TestTushareIncrementalIndexDaily:
         for c in calls:
             sql, params = c
             assert params is not None and len(params) == 1
-            assert params[0] in ['000001.SH', '000688.SH', '000985.SH', '399006.SZ']
+            assert params[0] in ['000001.SH', '000688.SH', '000985.CSI', '399006.SZ']
+
+    @patch('backend.data_access.data_source.datetime')
+    @patch('backend.data_access.data_source.get_last_completed_trading_day')
+    @patch('backend.data_access.data_source._get_tushare_db')
+    def test_empty_index_response_is_logged(self, mock_db, mock_ltd, mock_dt, caplog):
+        """指数接口返回空表时必须告警，不能静默断更。"""
+        import pandas as pd
+        import sys
+
+        mock_ltd.return_value = '20260617'
+        mock_dt.now.return_value.weekday.return_value = 2
+        db = MagicMock()
+        db.get_last_trade_date.return_value = '20260617'
+        db.execute_raw.return_value = [{'latest': '20260616'}]
+        mock_db.return_value = db
+        api = MagicMock()
+        api.index_daily.return_value = pd.DataFrame()
+        tushare = MagicMock(pro_api=MagicMock(return_value=api))
+
+        from backend.data_access.data_source import tushare_fetch_daily_incremental
+        with patch.dict(sys.modules, {'tushare': tushare}):
+            tushare_fetch_daily_incremental()
+
+        assert 'Tushare 返回空数据' in caplog.text
