@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react'
 import MarketCycle from '../components/MarketCycle'
 import MainlineSection from '../components/MainlineSection'
 import HistoryReview from '../components/HistoryReview'
+import ReviewDataStatus from '../components/ReviewDataStatus'
 
 // ====== MarketCycle ======
 describe('MarketCycle', () => {
@@ -32,5 +33,34 @@ describe('HistoryReview', () => {
     render(<HistoryReview dates={['2026-05-22', '2026-05-21']} currentDate="2026-05-22" />)
     expect(screen.getByText('2026-05-21')).toBeTruthy()
     expect(screen.queryByText('2026-05-22')).toBeNull()
+  })
+})
+
+// ====== ReviewDataStatus ======
+describe('ReviewDataStatus', () => {
+  it('显示已确认数据和待补齐的板块日期', () => {
+    render(
+      <ReviewDataStatus
+        data_dates={{ stocks: '20260721', index: '20260721', sectors: '20260718' }}
+        data_freshness={{ stocks: 'current', index: 'current', sectors: 'stale' }}
+      />,
+    )
+
+    expect(screen.getByText('个股 07-21 · 已确认')).toBeTruthy()
+    expect(screen.getByText('指数 07-21 · 已确认')).toBeTruthy()
+    expect(screen.getByText('板块 07-18 · 待补齐')).toBeTruthy()
+    expect(screen.getByText(/次日 06:00 自动校准/)).toBeTruthy()
+  })
+
+  it('板块已确认时不显示校准提示', () => {
+    render(
+      <ReviewDataStatus
+        data_dates={{ stocks: '2026-07-21', index: '2026-07-21', sectors: '2026-07-21' }}
+        data_freshness={{ stocks: 'current', index: 'current', sectors: 'current' }}
+      />,
+    )
+
+    expect(screen.getByText('板块 07-21 · 已确认')).toBeTruthy()
+    expect(screen.queryByText(/次日 06:00 自动校准/)).toBeNull()
   })
 })

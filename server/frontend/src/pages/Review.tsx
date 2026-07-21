@@ -7,6 +7,7 @@ import MainlineSection from '../components/MainlineSection'
 import HoldingsReview from '../components/HoldingsReview'
 import BuySignalsReview from '../components/BuySignalsReview'
 import TradingPlan from '../components/TradingPlan'
+import ReviewDataStatus from '../components/ReviewDataStatus'
 import type { ReviewData } from '../lib/types'
 import './Review.css'
 
@@ -95,6 +96,12 @@ export default function Review() {
             {refreshStatus?.status === 'running' ? '更新中' : '重新计算'}
           </button>
         </div>
+        {data && (
+          <ReviewDataStatus
+            data_dates={data.data_dates}
+            data_freshness={data.data_freshness}
+          />
+        )}
       </div>
 
       <div className="container">
