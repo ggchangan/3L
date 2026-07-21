@@ -306,17 +306,21 @@ def get_sector_daily():
 
     industries/concepts 格式: {name: [{date, open, close, high, low, volume}, ...]}
     """
-    def _load_from_db():
-        industries = get_ths_industry_klines(ths_type='I', limit=120)
-        concepts = get_ths_industry_klines(ths_type='N', limit=120)
-        confirmation = get_ths_daily_update_confirmation()
+    def _load_klines():
         return {
-            'last_updated': confirmation.get('confirmed_date', ''),
-            'coverage': confirmation.get('industry_coverage', 0),
-            'industries': industries,
-            'concepts': concepts,
+            'industries': get_ths_industry_klines(ths_type='I', limit=120),
+            'concepts': get_ths_industry_klines(ths_type='N', limit=120),
         }
-    return cache.get('sector_daily', _load_from_db, ttl=60)
+    klines = cache.get('sector_daily_klines', _load_klines, ttl=60)
+    # 权威日期文件很小，每次直读，确保 Web 进程立即看到 cron 进程的更新。
+    confirmation = get_ths_daily_update_confirmation()
+    if not confirmation:
+        confirmation = bootstrap_ths_daily_update_confirmation()
+    return {
+        'last_updated': confirmation.get('confirmed_date', ''),
+        'coverage': confirmation.get('industry_coverage', 0),
+        **klines,
+    }
 
 
 def get_sector_push2test():
@@ -849,11 +853,16 @@ def get_ths_daily_update_confirmation():
     return _fn()
 
 
+def bootstrap_ths_daily_update_confirmation():
+    """旧环境升级时从近期稳定历史数据初始化权威状态。"""
+    from backend.data_access.data_source import bootstrap_ths_daily_update_confirmation as _fn
+    return _fn()
+
+
 def save_ths_daily_update_confirmation(target_date, coverage):
     """保存通过门禁的权威板块状态。"""
     from backend.data_access.data_source import save_ths_daily_update_confirmation as _fn
     result = _fn(target_date, coverage)
-    cache.invalidate('sector_daily')
     return result
 
 

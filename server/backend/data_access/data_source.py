@@ -362,23 +362,24 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> di
         baseline_date = ''
         if count_rows:
             baseline_date = max(count_rows, key=lambda row: int(row['board_count']))['trade_date']
-        baseline_target = baseline_date or target_date
-        active_rows = db.execute_raw(
-            """SELECT DISTINCT ti.name
-               FROM ths_daily td
-               JOIN ths_index ti ON td.ts_code=ti.ts_code
-               WHERE ti.type='I' AND td.trade_date=%s""",
-            [baseline_target],
-        )
-        active_industries = {
-            row['name'] for row in active_rows if row['name'] in requested_industries
-        }
+        if baseline_date:
+            active_rows = db.execute_raw(
+                """SELECT DISTINCT ti.name
+                   FROM ths_daily td
+                   JOIN ths_index ti ON td.ts_code=ti.ts_code
+                   WHERE ti.type='I' AND td.trade_date=%s""",
+                [baseline_date],
+            )
+            active_industries = {
+                row['name'] for row in active_rows if row['name'] in requested_industries
+            }
     expected = active_industries | requested_concepts
+    query_names = requested_industries | requested_concepts
 
     covered_industries = set()
     covered_concepts = set()
-    if expected:
-        names = sorted(expected)
+    if query_names:
+        names = sorted(query_names)
         placeholders = ','.join(['%s'] * len(names))
         rows = db.execute_raw(
             f"""SELECT DISTINCT ti.name, ti.type
@@ -422,6 +423,56 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> di
 def get_ths_daily_update_confirmation() -> dict:
     """读取上一次通过门禁的权威板块状态。"""
     return _load_json(SECTOR_UPDATE_STATE_PATH, {})
+
+
+def bootstrap_ths_daily_update_confirmation() -> dict:
+    """为旧环境从近期稳定历史数据生成一次性权威状态。
+
+    至少需要两个规模接近的历史交易日；全新库的单日部分写入不得自证完整。
+    """
+    state = get_ths_daily_update_confirmation()
+    if state:
+        return state
+    db = _get_tushare_db()
+    if not db:
+        return {}
+    count_rows = db.execute_raw(
+        """SELECT td.trade_date, COUNT(DISTINCT td.ts_code) AS board_count
+           FROM ths_daily td
+           JOIN ths_index ti ON td.ts_code=ti.ts_code
+           WHERE ti.type='I'
+           GROUP BY td.trade_date
+           ORDER BY td.trade_date DESC
+           LIMIT 20"""
+    )
+    if len(count_rows or []) < 2:
+        return {}
+    max_count = max(int(row['board_count']) for row in count_rows)
+    stable_rows = [
+        row for row in count_rows
+        if max_count >= 80 and int(row['board_count']) / max_count >= 0.95
+    ]
+    if len(stable_rows) < 2:
+        return {}
+    # SQL 已按日期倒序，取符合稳定规模的最新日。
+    confirmed_date = stable_rows[0]['trade_date']
+    rows = db.execute_raw(
+        """SELECT DISTINCT ti.name
+           FROM ths_daily td
+           JOIN ths_index ti ON td.ts_code=ti.ts_code
+           WHERE ti.type='I' AND td.trade_date=%s""",
+        [confirmed_date],
+    )
+    industry_names = sorted({row['name'] for row in rows if row.get('name')})
+    if len(industry_names) < 80:
+        return {}
+    coverage = {
+        'industry_names': industry_names,
+        'industry': {'ratio': len(industry_names) / max_count},
+        'concept': {'ratio': 0},
+    }
+    save_ths_daily_update_confirmation(str(confirmed_date), coverage)
+    return get_ths_daily_update_confirmation()
 
 
 def save_ths_daily_update_confirmation(target_date: str, coverage: dict) -> None:
