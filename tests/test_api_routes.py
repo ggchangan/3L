@@ -98,6 +98,8 @@ EXPECTED_ROUTES_GET = [
     '/api/review/today',
     '/api/review/live',
     '/api/review/current',
+    '/api/review/refresh',
+    '/api/review/status',
     '/api/review/dates',
     '/api/review/generate',
     '/api/stock-analysis',

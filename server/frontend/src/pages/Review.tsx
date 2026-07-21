@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
-import { fetchReviewToday } from '../lib/api'
+import { fetchReviewToday, fetchReviewStatus, refreshReview } from '../lib/api'
+import type { ReviewRefreshStatus } from '../lib/api'
 import NavBar, { BottomNav } from '../components/NavBar'
 import MarketCycle from '../components/MarketCycle'
 import MainlineSection from '../components/MainlineSection'
@@ -15,6 +16,7 @@ export default function Review() {
   const [data, setData] = useState<ReviewData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [refreshStatus, setRefreshStatus] = useState<ReviewRefreshStatus | null>(null)
 
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -25,19 +27,24 @@ export default function Review() {
     setError('')
     fetchReviewToday().then(reviewData => {
       setData({
-        mainline: reviewData.mainline,
-        trading_plan: reviewData.trading_plan,
+        ...reviewData,
         holdings_review: reviewData.holdings_review || reviewData.holdings || [],
         buy_signals_review: reviewData.buy_signals_review || [],
-        direction_order: reviewData.direction_order || [],
-        opportunity_map: reviewData.opportunity_map,
       })
+      setRefreshStatus(reviewData.refresh_status || null)
       setLoading(false)
     }).catch(err => {
       setError(err.message || '加载复盘数据失败')
       setData({})
       setLoading(false)
     })
+  }, [])
+
+  const handleRefresh = useCallback(() => {
+    setError('')
+    refreshReview()
+      .then(setRefreshStatus)
+      .catch(err => setError(err.message || '启动复盘更新失败'))
   }, [])
 
   useEffect(() => {
@@ -53,6 +60,18 @@ export default function Review() {
     }
   }, [loadData])
 
+  useEffect(() => {
+    if (refreshStatus?.status !== 'running') return
+    const timer = window.setInterval(() => {
+      fetchReviewStatus().then(status => {
+        setRefreshStatus(status)
+        if (status.status === 'completed') loadData()
+        if (status.status === 'failed') setError(status.error || '后台复盘更新失败')
+      }).catch(() => {})
+    }, 2000)
+    return () => window.clearInterval(timer)
+  }, [refreshStatus?.status, loadData])
+
   return (
     <>
       <NavBar />
@@ -62,11 +81,25 @@ export default function Review() {
         <div className="date-badge" id="todayDate">
           {todayStr} 星期{WDS[weekday]}
         </div>
+        <div className="review-cache-bar">
+          <span>
+            {refreshStatus?.status === 'running'
+              ? '后台正在更新复盘…'
+              : refreshStatus?.status === 'failed'
+                ? '更新失败，当前展示上次结果'
+                : data?.cache_generated_at
+                  ? `数据生成于 ${data.cache_generated_at.replace('T', ' ')}`
+                  : '当前展示最近一次复盘结果'}
+          </span>
+          <button type="button" onClick={handleRefresh} disabled={refreshStatus?.status === 'running'}>
+            {refreshStatus?.status === 'running' ? '更新中' : '重新计算'}
+          </button>
+        </div>
       </div>
 
       <div className="container">
         {loading ? (
-          <div className="empty">正在实时计算复盘数据...</div>
+          <div className="empty">正在读取复盘缓存...</div>
         ) : error ? (
           <div className="empty" style={{ color: '#e94560' }}>{error}</div>
         ) : (
@@ -145,7 +178,7 @@ export default function Review() {
       </div>
 
       <BottomNav />
-      <div className="footer">3L 交易体系 · 每日复盘 · 实时计算</div>
+      <div className="footer">3L 交易体系 · 每日复盘 · 后台更新</div>
     </>
   )
 }
