@@ -35,6 +35,11 @@
 
 **DB 是唯一权威源。** Tushare 负责灌数据进 DB，`update_stock_data.py` 负责从 DB 读数据做缓存重建和业务计算。不再依赖中间 HTTP API 做数据获取。
 
+> 2026-07-22 实现核查：正式日线、行业/概念映射及 confirmed 主线均已遵循该原则。
+> `get_sector_push2test()` 只是历史兼容名，实际读取 `ths_daily`，新代码统一改称
+> `get_sector_daily_snapshot()`。PR #120 为当日 estimated 主线新增了东方财富收盘辅助
+> 快照；它不写权威表或正式历史，但属于本原则之外的显式辅助源，不能标记成 Tushare/THS。
+
 ### 2.2 方案选择
 
 | 候选方案 | 优点 | 缺点 | 结论 |

@@ -318,7 +318,7 @@ def update_sectors():
 
 
 # ════════════════════════════════════════════════════════════════
-# 行业映射（push2test.eastmoney.com → 申万二级行业）
+# 行业映射（Tushare/MySQL ths_member + ths_index）
 # ════════════════════════════════════════════════════════════════
 
 def _normalize_industry(name):

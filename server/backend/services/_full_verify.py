@@ -32,13 +32,13 @@ print('=' * 60)
 print('3. data_models 合约验证')
 print('=' * 60)
 from backend.models.data_models import (
-    SectorPush2Test, ThsIndustrySnapshot, Push2TestConceptSnapshot,
+    SectorDailySnapshot, ThsIndustrySnapshot, ThsConceptSnapshot,
 )
 
 # 测试概念数据通过合约正确读取
-from backend.data_access.data_layer import get_sector_push2test
-spt = get_sector_push2test()
-print(f'  SectorPush2Test 类型: {type(spt).__name__}')
+from backend.data_access.data_layer import get_sector_daily_snapshot
+spt = get_sector_daily_snapshot()
+print(f'  SectorDailySnapshot 类型: {type(spt).__name__}')
 print(f'  industries 类型: {type(spt.industries).__name__}, 条目: {len(spt.industries)}')
 print(f'  concepts 类型: {type(spt.concepts).__name__}, 条目: {len(spt.concepts)}')
 

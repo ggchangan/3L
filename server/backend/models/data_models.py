@@ -47,11 +47,11 @@ class ThsIndustrySnapshot:
 
 
 @dataclass
-class Push2TestConceptSnapshot:
-    """概念板块当日涨跌幅快照 — 来自 push2test
+class ThsConceptSnapshot:
+    """概念板块日涨跌幅快照 — 从 THS 日线表派生。
 
-    概念数据目前只能从 push2test 获取（同花顺无批量概念接口）。
-    字段比行业少（无上涨家数/领涨股）。
+    数据来自 MySQL ``ths_daily``，与行业快照同属 Tushare/同花顺数据层。
+    字段比行业摘要少（无上涨家数/领涨股）。
     """
     date: str          # YYYYMMDD
     change_pct: float  # 涨跌幅%
@@ -80,14 +80,13 @@ class SectorKlineData:
 
 
 @dataclass
-class SectorPush2Test:
-    """get_sector_push2test() 的返回值格式
+class SectorDailySnapshot:
+    """get_sector_daily_snapshot() 的返回值格式。
 
-    行业数据来自同花顺 THS，概念数据来自 push2test。
-    Returns: {industries: {name: ThsIndustrySnapshot}, concepts: {name: Push2TestConceptSnapshot}}
+    行业与概念均从 MySQL ``ths_daily`` 派生，不代表东财 push2test 数据源。
     """
     industries: Dict[str, ThsIndustrySnapshot] = field(default_factory=dict)
-    concepts: Dict[str, Push2TestConceptSnapshot] = field(default_factory=dict)
+    concepts: Dict[str, ThsConceptSnapshot] = field(default_factory=dict)
 
     def get_change_pct(self, name: str, default: Optional[float] = None) -> Optional[float]:
         """获取指定板块的当日涨跌幅"""
@@ -100,11 +99,16 @@ class SectorPush2Test:
         return default
 
 
+# 旧名称仅用于兼容历史调用方；新代码统一使用 THS 语义名称。
+Push2TestConceptSnapshot = ThsConceptSnapshot
+SectorPush2Test = SectorDailySnapshot
+
+
 # ════════════════════════════════════════════════════════════
 # 数据模型（旧格式兼容 — 已由 ThsIndustrySnapshot 替代）
 # ════════════════════════════════════════════════════════════
 
-# ChangePctSnapshot 保留但使用 ThsIndustrySnapshot / Push2TestConceptSnapshot 替代
+# ChangePctSnapshot 保留但使用 ThsIndustrySnapshot / ThsConceptSnapshot 替代
 
 
 # ════════════════════════════════════════════════════════════
@@ -204,9 +208,9 @@ def ths_dict_to_snapshot(d: dict) -> ThsIndustrySnapshot:
     )
 
 
-def push2test_dict_to_snapshot(d: dict) -> Push2TestConceptSnapshot:
-    """push2test概念dict → Push2TestConceptSnapshot"""
-    return Push2TestConceptSnapshot(
+def ths_concept_dict_to_snapshot(d: dict) -> ThsConceptSnapshot:
+    """THS概念dict → ThsConceptSnapshot。"""
+    return ThsConceptSnapshot(
         date=str(d.get('date', '')),
         change_pct=float(d.get('change_pct', 0)),
         close=float(d.get('close', 0)),
@@ -216,6 +220,11 @@ def push2test_dict_to_snapshot(d: dict) -> Push2TestConceptSnapshot:
         volume=int(float(d.get('volume', 0) or 0)),
         prev_close=float(d.get('prev_close', 0)),
     )
+
+
+def push2test_dict_to_snapshot(d: dict) -> ThsConceptSnapshot:
+    """兼容旧名称；新代码使用 ths_concept_dict_to_snapshot()。"""
+    return ths_concept_dict_to_snapshot(d)
 
 
 # ════════════════════════════════════════════════════════════

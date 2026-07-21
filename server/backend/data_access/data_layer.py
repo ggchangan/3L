@@ -323,26 +323,26 @@ def get_sector_daily():
     }
 
 
-def get_sector_push2test():
-    """从 ths_daily 计算当日涨跌幅快照（替代 JSON _push2test 字段）
+def get_sector_daily_snapshot():
+    """从 ``ths_daily`` 计算最近交易日的板块涨跌幅快照。
 
     Returns:
-        SectorPush2Test(industries={name: ThsIndustrySnapshot, ...},
-                        concepts={name: Push2TestConceptSnapshot, ...})
+        SectorDailySnapshot(industries={name: ThsIndustrySnapshot, ...},
+                            concepts={name: ThsConceptSnapshot, ...})
     """
-    from backend.models.data_models import SectorPush2Test, ThsIndustrySnapshot, Push2TestConceptSnapshot
+    from backend.models.data_models import SectorDailySnapshot, ThsIndustrySnapshot, ThsConceptSnapshot
     try:
         from backend.data_access.data_source import _get_tushare_db
         db = _get_tushare_db()
         if not db:
-            return SectorPush2Test()
+            return SectorDailySnapshot()
 
         # 取最新2个交易日
         dates = db.execute_raw(
             "SELECT DISTINCT trade_date FROM ths_daily ORDER BY trade_date DESC LIMIT 2"
         )
         if not dates or len(dates) < 2:
-            return SectorPush2Test()
+            return SectorDailySnapshot()
         t1, t0 = dates[0]['trade_date'], dates[1]['trade_date']
 
         # 查 ths_index 获取 name → (ts_code, type) 映射
@@ -393,7 +393,7 @@ def get_sector_push2test():
                     amount=float(today_rec['amount']) if today_rec.get('amount') else None,
                 )
             else:
-                concepts[name] = Push2TestConceptSnapshot(
+                concepts[name] = ThsConceptSnapshot(
                     date=t1,
                     change_pct=round(pct, 2),
                     close=float(today_rec['close']) if today_rec['close'] else 0,
@@ -404,10 +404,15 @@ def get_sector_push2test():
                     prev_close=float(today_rec['pre_close']) if today_rec['pre_close'] else 0,
                 )
 
-        return SectorPush2Test(industries=industries, concepts=concepts)
+        return SectorDailySnapshot(industries=industries, concepts=concepts)
     except Exception as e:
-        log.warning('get_sector_push2test DB计算失败(%s)，返回空', e)
-        return SectorPush2Test()
+        log.warning('get_sector_daily_snapshot DB计算失败(%s)，返回空', e)
+        return SectorDailySnapshot()
+
+
+def get_sector_push2test():
+    """兼容旧接口名；数据实际来自 ``ths_daily``，新代码禁止继续使用该名称。"""
+    return get_sector_daily_snapshot()
 
 
 def get_sector_klines(sector_name, sector_type='industry'):

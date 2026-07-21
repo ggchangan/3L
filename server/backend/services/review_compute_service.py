@@ -398,7 +398,7 @@ def get_mainline_data(date_str):
 
     target_date = str(date_str).replace('-', '')
     from backend.data_access.data_layer import (
-        get_sector_close_snapshot, get_sector_daily, get_sector_push2test,
+        get_sector_close_snapshot, get_sector_daily, get_sector_daily_snapshot,
         get_ths_daily_update_confirmation,
     )
     sector_state = get_sector_daily()
@@ -421,8 +421,8 @@ def get_mainline_data(date_str):
         else 'confirmed' if sector_date and effective_sector_date >= target_date
         else 'stale'
     )
-    push2test_data = get_sector_push2test()
-    confirmed_snapshots = push2test_data.industries if hasattr(push2test_data, 'industries') else {}
+    daily_snapshot = get_sector_daily_snapshot()
+    confirmed_snapshots = daily_snapshot.industries if hasattr(daily_snapshot, 'industries') else {}
     estimate_snapshots = close_snapshot.get('industries', {}) if estimate_active else {}
 
     # 从 DB（ths_daily）获取行业K线数据
@@ -562,10 +562,10 @@ def get_concept_mainline_data(date_str):
     if not concepts_data or not tracked_concepts or not sector_date:
         return {'lines': [], 'secondary': [], 'all_ranked': [], 'persistence': []}
 
-    # 从 _push2test 获取当日涨跌幅（同 get_mainline_data 一致）
-    from backend.data_access.data_layer import get_sector_push2test
-    push2test_data = get_sector_push2test()
-    push2test_cons = push2test_data.concepts if hasattr(push2test_data, 'concepts') else {}
+    # 从 THS 日快照获取已确认涨跌幅（同 get_mainline_data 一致）
+    from backend.data_access.data_layer import get_sector_daily_snapshot
+    daily_snapshot = get_sector_daily_snapshot()
+    confirmed_concepts = daily_snapshot.concepts if hasattr(daily_snapshot, 'concepts') else {}
     close_snapshot = get_sector_close_snapshot()
     concept_coverage = close_snapshot.get('coverage', {}).get('concept', {})
     estimate_active = (
@@ -588,12 +588,12 @@ def get_concept_mainline_data(date_str):
                 continue
             if len(klines) < 20:
                 continue
-            # chg_1d：优先 _push2test，次选K线计算
+            # chg_1d：优先 THS 日快照，次选K线计算
             estimate_snap = estimate_snapshots.get(name)
             # 与行业榜一致，预估状态下只允许收盘快照覆盖的概念参与排名。
             if estimate_active and estimate_snap is None:
                 continue
-            snap = push2test_cons.get(name) if not estimate_active else None
+            snap = confirmed_concepts.get(name) if not estimate_active else None
             if snap is not None and str(snap.date).replace('-', '') != sector_date:
                 snap = None
             if estimate_snap is not None:

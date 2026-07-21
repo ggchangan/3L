@@ -5,6 +5,23 @@ from unittest.mock import patch
 import pytest
 
 
+def test_sector_snapshot_names_expose_ths_canonical_contract(monkeypatch):
+    from backend.data_access import data_layer
+    from backend.models.data_models import (
+        Push2TestConceptSnapshot,
+        SectorDailySnapshot,
+        SectorPush2Test,
+        ThsConceptSnapshot,
+    )
+
+    assert SectorPush2Test is SectorDailySnapshot
+    assert Push2TestConceptSnapshot is ThsConceptSnapshot
+
+    expected = SectorDailySnapshot()
+    monkeypatch.setattr(data_layer, 'get_sector_daily_snapshot', lambda: expected)
+    assert data_layer.get_sector_push2test() is expected
+
+
 def _klines(start_close=100.0, end_close=100.0, include_target=False):
     rows = []
     for day in range(1, 21):
@@ -47,7 +64,7 @@ def test_mainline_uses_close_snapshot_for_estimated_20d_ranking(monkeypatch, tmp
         'industries': {'A': {'change_pct': 10.0}, 'B': {'change_pct': 0.0}},
     })
     monkeypatch.setattr(
-        data_layer, 'get_sector_push2test',
+        data_layer, 'get_sector_daily_snapshot',
         lambda: type('Snapshot', (), {'industries': {}})(),
     )
     monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='I': {
@@ -93,7 +110,7 @@ def test_official_mainline_completes_estimate_calibration(monkeypatch, tmp_path)
         'industries': {'A': {'change_pct': 10.0}, 'B': {'change_pct': 0.0}},
     })
     monkeypatch.setattr(
-        data_layer, 'get_sector_push2test',
+        data_layer, 'get_sector_daily_snapshot',
         lambda: type('Snapshot', (), {'industries': {}})(),
     )
     monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='I': {
@@ -166,7 +183,7 @@ def test_stale_snapshot_never_marks_mainline_as_estimated(monkeypatch, tmp_path)
         'industries': {'A': {'change_pct': 10.0}},
     })
     monkeypatch.setattr(
-        data_layer, 'get_sector_push2test',
+        data_layer, 'get_sector_daily_snapshot',
         lambda: type('Snapshot', (), {'industries': {}})(),
     )
     monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='I': {'A': _klines()})
@@ -199,7 +216,7 @@ def test_concept_mainline_estimates_only_when_concept_coverage_is_ready(monkeypa
         'concepts': {'C': {'change_pct': 8.0}},
     })
     monkeypatch.setattr(
-        data_layer, 'get_sector_push2test',
+        data_layer, 'get_sector_daily_snapshot',
         lambda: type('Snapshot', (), {'concepts': {}})(),
     )
 
@@ -233,7 +250,7 @@ def test_live_sector_parser_skips_dash_values_without_discarding_snapshot(monkey
 
     with patch.object(data_source, '_last_trading_day', return_value='20260721'), \
          patch('requests.get', side_effect=[Response(item) for item in responses]):
-        result = data_source._fetch_live_sector_ranking('20260721')
+        result = data_source._fetch_eastmoney_close_ranking('20260721')
 
     assert result['last_updated'] == '20260721'
     assert set(result['industries']) == {'有效行业'}
@@ -256,7 +273,7 @@ def test_close_snapshot_requires_industry_coverage_before_atomic_save(monkeypatc
         'concepts': {},
     }
     monkeypatch.setattr(data_source, 'SECTOR_CLOSE_SNAPSHOT_PATH', str(path))
-    monkeypatch.setattr(data_source, '_fetch_live_sector_ranking', lambda target: raw)
+    monkeypatch.setattr(data_source, '_fetch_eastmoney_close_ranking', lambda target: raw)
 
     with pytest.raises(Exception, match='覆盖不足'):
         data_source.fetch_sector_close_snapshot('20260721', names, [])
@@ -280,7 +297,7 @@ def test_close_snapshot_atomically_saves_covered_industries_and_concept_aliases(
         },
     }
     monkeypatch.setattr(data_source, 'SECTOR_CLOSE_SNAPSHOT_PATH', str(path))
-    monkeypatch.setattr(data_source, '_fetch_live_sector_ranking', lambda target: raw)
+    monkeypatch.setattr(data_source, '_fetch_eastmoney_close_ranking', lambda target: raw)
 
     result = data_source.fetch_sector_close_snapshot('20260721', names, ['5G'])
 

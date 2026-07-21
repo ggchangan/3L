@@ -174,7 +174,7 @@ def test_concept_mainline_only_ranks_tracked_concepts_on_authoritative_date(monk
     monkeypatch.setattr(data_layer, 'get_sector_daily', lambda: {'last_updated': '20260720'})
     monkeypatch.setattr(data_layer, 'get_sector_close_snapshot', lambda: {})
     monkeypatch.setattr(
-        data_layer, 'get_sector_push2test',
+        data_layer, 'get_sector_daily_snapshot',
         lambda: type('Snapshot', (), {'concepts': {}})(),
     )
     monkeypatch.setattr(
