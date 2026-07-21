@@ -587,25 +587,28 @@ def _get_trade_date_cache():
 
 
 def get_last_completed_trading_day():
-    """获取上一个已完成交易日 YYYYMMDD（考虑春节/国庆等节假日）
+    """获取最近一个已完成交易日 YYYYMMDD（考虑节假日）。
 
-    使用同花顺交易日历精确判断，适用于cron在交易日6:00运行的场景。
-    此时当日交易未开始，目标日期是上一个已完成交易日。
+    A 股收盘后（15:30 起）当天已经是完成的交易日；收盘前仍返回上一
+    交易日。这样同一个入口既适用于早晨补数，也适用于收盘后的当日更新。
     """
     cache = _get_trade_date_cache()
-    d = datetime.now() - timedelta(days=1)
+    now = datetime.now()
+    include_today = (now.hour, now.minute) >= (15, 30)
+    d = now if include_today else now - timedelta(days=1)
     for _ in range(21):
         ds = d.strftime('%Y-%m-%d')
-        if ds in cache:
+        # MySQL trade_cal 通常保存 YYYYMMDD，akshare 回退通常是 YYYY-MM-DD。
+        if ds in cache or d.strftime('%Y%m%d') in cache:
             return d.strftime('%Y%m%d')
         d -= timedelta(days=1)
     # fallback: 周末判断
-    d = datetime.now() - timedelta(days=1)
+    d = now if include_today else now - timedelta(days=1)
     for _ in range(14):
         if d.weekday() < 5:
             return d.strftime('%Y%m%d')
         d -= timedelta(days=1)
-    return datetime.now().strftime('%Y%m%d')
+    return now.strftime('%Y%m%d')
 
 
 def _last_trading_day():
