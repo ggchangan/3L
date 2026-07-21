@@ -127,44 +127,134 @@ def test_full_phase_refreshes_review_after_sector_update(tmp_path):
     refresh.assert_called_once_with('20260721')
 
 
-def test_confirmed_sector_date_requires_coverage_and_never_fakes_today():
-    from backend.data_access.data_layer import _confirmed_sector_date
-
-    assert _confirmed_sector_date({}) == ('', 0.0)
-    industries = {
-        'A': [{'date': '20260720'}, {'date': '20260721'}],
-        'B': [{'date': '20260720'}, {'date': '20260721'}],
-        'C': [{'date': '20260720'}],
-    }
-    assert _confirmed_sector_date(industries, min_coverage=0.95) == ('20260720', 1.0)
-
-
-def test_confirmed_sector_date_ignores_inactive_historical_boards():
-    from backend.data_access.data_layer import _confirmed_sector_date
-
-    industries = {
-        'A': [{'date': '20260612'}, {'date': '20260720'}, {'date': '20260721'}],
-        'B': [{'date': '20260612'}, {'date': '20260720'}, {'date': '20260721'}],
-        '已停用旧板块': [{'date': '20260612'}],
-    }
-
-    assert _confirmed_sector_date(industries) == ('20260721', 1.0)
-
-
 def test_sector_update_coverage_rejects_partial_target_date():
     from backend.data_access import data_source
 
     db = type('FakeDB', (), {})()
-    db.execute_raw = lambda sql, params=None: (
-        [{'name': 'A', 'type': 'I'}, {'name': 'B', 'type': 'I'}]
-        if "WHERE ti.type='I'" in sql
-        else [{'name': 'A', 'type': 'I'}]
-    )
+    db.execute_raw = lambda sql, params=None: [{'name': 'A', 'type': 'I'}]
     requested = [('A', 'industry'), ('B', 'industry')]
-    with patch.object(data_source, '_get_tushare_db', return_value=db):
+    confirmation = {'confirmed_date': '20260720', 'industry_names': ['A', 'B']}
+    with patch.object(data_source, '_get_tushare_db', return_value=db), \
+         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value=confirmation):
         result = data_source.get_ths_daily_update_coverage(requested, '20260721')
 
     assert result['ready'] is False
     assert result['industry']['covered'] == 1
     assert result['industry']['expected'] == 2
     assert result['missing'] == ['B']
+
+
+def test_partial_sector_rows_never_become_next_day_baseline():
+    from backend.data_access import data_source
+
+    db = type('FakeDB', (), {})()
+    db.execute_raw = lambda sql, params=None: [
+        {'name': 'A', 'type': 'I'},
+        {'name': 'B', 'type': 'I'},
+    ]
+    requested = [(name, 'industry') for name in ('A', 'B', 'C')]
+    confirmation = {
+        'confirmed_date': '20260720',
+        'industry_names': ['A', 'B', 'C'],
+    }
+    with patch.object(data_source, '_get_tushare_db', return_value=db), \
+         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value=confirmation):
+        first = data_source.get_ths_daily_update_coverage(requested, '20260721')
+        second = data_source.get_ths_daily_update_coverage(requested, '20260722')
+
+    assert first['ready'] is False
+    assert second['ready'] is False
+    assert first['industry']['expected'] == second['industry']['expected'] == 3
+    assert first['industry_names'] == second['industry_names'] == ['A', 'B', 'C']
+
+
+def test_same_count_sector_member_replacement_is_not_complete():
+    from backend.data_access import data_source
+
+    db = type('FakeDB', (), {})()
+    db.execute_raw = lambda sql, params=None: [
+        {'name': 'A', 'type': 'I'},
+        {'name': 'B', 'type': 'I'},
+        {'name': 'X', 'type': 'I'},
+    ]
+    requested = [(name, 'industry') for name in ('A', 'B', 'C', 'X')]
+    confirmation = {'confirmed_date': '20260720', 'industry_names': ['A', 'B', 'C']}
+    with patch.object(data_source, '_get_tushare_db', return_value=db), \
+         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value=confirmation):
+        result = data_source.get_ths_daily_update_coverage(requested, '20260721')
+
+    assert result['ready'] is False
+    assert result['industry']['covered'] == 2
+    assert result['industry']['expected'] == 3
+    assert result['missing'] == ['C']
+    assert result['industry_names'] == ['A', 'B', 'C', 'X']
+
+
+def test_sector_coverage_bootstraps_from_largest_recent_day():
+    from backend.data_access import data_source
+
+    names = [f'I{i:03d}' for i in range(80)]
+
+    class FakeDB:
+        def execute_raw(self, sql, params=None):
+            if 'COUNT(DISTINCT td.ts_code)' in sql:
+                return [
+                    {'trade_date': '20260720', 'board_count': 80},
+                    {'trade_date': '20260719', 'board_count': 75},
+                ]
+            if "ti.type='I' AND td.trade_date=%s" in sql:
+                assert params == ['20260720']
+                return [{'name': name} for name in names]
+            return [{'name': name, 'type': 'I'} for name in names]
+
+    requested = [(name, 'industry') for name in names]
+    with patch.object(data_source, '_get_tushare_db', return_value=FakeDB()), \
+         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value={}):
+        result = data_source.get_ths_daily_update_coverage(requested, '20260721')
+
+    assert result['ready'] is True
+    assert result['bootstrap'] is True
+    assert result['industry']['expected'] == 80
+
+
+def test_sector_confirmation_is_saved_and_loaded_atomically(tmp_path):
+    from backend.data_access import data_source
+
+    state_path = tmp_path / 'computed' / 'sector_update_state.json'
+    coverage = {
+        'industry_names': ['A', 'B'],
+        'industry': {'ratio': 1.0},
+        'concept': {'ratio': 0.95},
+    }
+    with patch.object(data_source, 'SECTOR_UPDATE_STATE_PATH', str(state_path)):
+        data_source.save_ths_daily_update_confirmation('20260721', coverage)
+        state = data_source.get_ths_daily_update_confirmation()
+
+    assert state['confirmed_date'] == '20260721'
+    assert state['industry_names'] == ['A', 'B']
+    assert state['industry_coverage'] == 1.0
+    assert state['concept_coverage'] == 0.95
+    assert not (tmp_path / 'computed' / 'sector_update_state.json.tmp').exists()
+
+
+def test_sector_update_advances_confirmation_only_after_gate_passes():
+    from backend.core import update_stock_data
+
+    coverage = {
+        'ready': True,
+        'industry': {'expected': 1, 'covered': 1},
+        'concept': {'expected': 0, 'covered': 0},
+        'missing': [],
+        'industry_names': ['A'],
+    }
+    with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
+         patch.object(update_stock_data, 'datetime') as current_time, \
+         patch.object(update_stock_data, 'get_tracked_concept_names', return_value=set()), \
+         patch.object(update_stock_data, 'get_ths_index_names', return_value=[('A', '881001.TI')]), \
+         patch.object(update_stock_data, 'fetch_ths_daily_klines_akshare', return_value=(1, 1)), \
+         patch.object(update_stock_data, 'get_ths_daily_update_coverage', return_value=coverage), \
+         patch.object(update_stock_data, 'save_ths_daily_update_confirmation') as save:
+        current_time.now.return_value.weekday.return_value = 0
+        assert update_stock_data.update_sectors() == (1, 0)
+
+    save.assert_called_once_with('20260721', coverage)

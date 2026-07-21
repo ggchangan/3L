@@ -309,37 +309,14 @@ def get_sector_daily():
     def _load_from_db():
         industries = get_ths_industry_klines(ths_type='I', limit=120)
         concepts = get_ths_industry_klines(ths_type='N', limit=120)
-        last_date, coverage = _confirmed_sector_date(industries)
+        confirmation = get_ths_daily_update_confirmation()
         return {
-            'last_updated': last_date,
-            'coverage': coverage,
+            'last_updated': confirmation.get('confirmed_date', ''),
+            'coverage': confirmation.get('industry_coverage', 0),
             'industries': industries,
             'concepts': concepts,
         }
     return cache.get('sector_daily', _load_from_db, ttl=60)
-
-
-def _confirmed_sector_date(industries, min_coverage=0.95):
-    """返回达到覆盖率门槛的最近行业日期，空数据不得伪造为今天。"""
-    if not industries:
-        return ('', 0.0)
-    counts = {}
-    for klines in industries.values():
-        for row in klines or []:
-            date = str(row.get('date', '')).replace('-', '')
-            if date:
-                counts[date] = counts.get(date, 0) + 1
-    dates = sorted(counts, reverse=True)
-    if not dates:
-        return ('', 0.0)
-    latest = dates[0]
-    previous = dates[1] if len(dates) > 1 else latest
-    reference_count = max(counts[latest], counts[previous])
-    for date in (latest, previous):
-        coverage = counts[date] / reference_count if reference_count else 0.0
-        if coverage >= min_coverage:
-            return (date, coverage)
-    return ('', 0.0)
 
 
 def get_sector_push2test():
@@ -864,6 +841,20 @@ def get_ths_daily_update_coverage(names_to_update, target_date):
     """检查目标日期的行业/追踪概念覆盖率。"""
     from backend.data_access.data_source import get_ths_daily_update_coverage as _fn
     return _fn(names_to_update, target_date)
+
+
+def get_ths_daily_update_confirmation():
+    """读取上次通过门禁的权威板块状态。"""
+    from backend.data_access.data_source import get_ths_daily_update_confirmation as _fn
+    return _fn()
+
+
+def save_ths_daily_update_confirmation(target_date, coverage):
+    """保存通过门禁的权威板块状态。"""
+    from backend.data_access.data_source import save_ths_daily_update_confirmation as _fn
+    result = _fn(target_date, coverage)
+    cache.invalidate('sector_daily')
+    return result
 
 
 

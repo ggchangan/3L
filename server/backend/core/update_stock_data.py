@@ -43,6 +43,7 @@ from backend.data_access.data_layer import (
     build_concept_maps_from_db,
     tushare_fetch_daily_incremental,
     get_ths_daily_update_coverage,
+    save_ths_daily_update_confirmation,
 )
 
 CACHE_DIR = os.path.join(DATA_DIR, '.cache')
@@ -309,6 +310,7 @@ def update_sectors():
     if not coverage.get('ready'):
         missing = coverage.get('missing', [])[:10]
         raise RuntimeError(f'板块数据覆盖不足，缺失示例: {missing}')
+    save_ths_daily_update_confirmation(today, coverage)
 
     log(f'📈  板块: 行业{ind_saved}个, 概念{con_saved}个 (K线已写入DB)')
     return (ind_saved, con_saved)
