@@ -9,7 +9,7 @@
 """
 
 import json, os, sys, tempfile, time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional
 
@@ -35,6 +35,7 @@ CONCEPT_DATA_SOURCE = 'ths'
 SOURCES_EM_CONCEPT_MAP = os.path.join(DATA_DIR, 'sources', 'em', 'concept_map.json')
 CONCEPT_NAME_MAPPING_PATH = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.json')
 SECTOR_UPDATE_STATE_PATH = os.path.join(DATA_DIR, 'computed', 'sector_update_state.json')
+SECTOR_CLOSE_SNAPSHOT_PATH = os.path.join(DATA_DIR, 'computed', 'sector_close_snapshot.json')
 
 # TushareDB 全局实例（懒加载）
 _TUSHARE_DB = None
@@ -451,6 +452,26 @@ def bootstrap_ths_daily_update_confirmation() -> dict:
     return get_ths_daily_update_confirmation()
 
 
+def _save_json_atomic(path: str, data: dict) -> None:
+    """在目标文件同目录持久化 JSON，避免读取到半写入状态。"""
+    state_dir = os.path.dirname(path)
+    os.makedirs(state_dir, exist_ok=True)
+    tmp_path = ''
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode='w', encoding='utf-8', dir=state_dir,
+            prefix=f'.{os.path.basename(path)}.', suffix='.tmp', delete=False,
+        ) as f:
+            tmp_path = f.name
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
 def save_ths_daily_update_confirmation(target_date: str, coverage: dict) -> None:
     """仅在门禁通过后推进权威日期；失败写入永远不能成为基线。"""
     state = {
@@ -460,22 +481,7 @@ def save_ths_daily_update_confirmation(target_date: str, coverage: dict) -> None
         'concept_coverage': coverage.get('concept', {}).get('ratio', 0),
         'confirmed_at': datetime.now().isoformat(timespec='seconds'),
     }
-    state_dir = os.path.dirname(SECTOR_UPDATE_STATE_PATH)
-    os.makedirs(state_dir, exist_ok=True)
-    tmp_path = ''
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode='w', encoding='utf-8', dir=state_dir,
-            prefix='.sector_update_state.', suffix='.tmp', delete=False,
-        ) as f:
-            tmp_path = f.name
-            json.dump(state, f, ensure_ascii=False, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, SECTOR_UPDATE_STATE_PATH)
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+    _save_json_atomic(SECTOR_UPDATE_STATE_PATH, state)
 
 
 def _convert_board_kline(df):
@@ -814,7 +820,24 @@ def _fetch_live_sector_ranking(date_str):
     直接调东财实时接口，不依赖静态文件。失败时回退读当前快照源文件（由 CONCEPT_DATA_SOURCE 配置驱动）。
     返回 {last_updated, industries: {name: {date, change_pct, close, ...}},
            concepts: {...}}"""
-    today = _last_trading_day()
+    snapshot_date = _last_trading_day()
+
+    def _number(value, default=None):
+        try:
+            if value in (None, '', '-', '--'):
+                return default
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _quote_date(value):
+        try:
+            # 东财 f124 为 Unix 秒，按 A 股时区转换交易日。
+            utc_time = datetime.fromtimestamp(int(value), timezone.utc)
+            return (utc_time + timedelta(hours=8)).strftime('%Y%m%d')
+        except (TypeError, ValueError, OSError, OverflowError):
+            return ''
+
     try:
         import requests
         url = 'https://push2test.eastmoney.com/api/qt/clist/get'
@@ -823,31 +846,39 @@ def _fetch_live_sector_ranking(date_str):
             'Referer': 'https://quote.eastmoney.com/',
         }
         ut = 'bd1d9ddb04089700cf9c27f6f7426281'
-        result = {'last_updated': today, 'industries': {}, 'concepts': {}}
+        result = {'last_updated': snapshot_date, 'industries': {}, 'concepts': {}}
         for sector_type, fs in [('industries', 'm:90+t:2'), ('concepts', 'm:90+t:3')]:
             params = {
                 'pn': '1', 'pz': '2000', 'po': '1', 'np': '1',
                 'ut': ut, 'fltt': '2', 'invt': '2',
-                'fs': fs, 'fields': 'f2,f3,f14,f15,f16,f17,f18,f5',
+                'fs': fs, 'fields': 'f2,f3,f14,f15,f16,f17,f18,f5,f124',
             }
             r = requests.get(url, params=params, headers=headers, timeout=20)
-            items = r.json().get('data', {}).get('diff', [])
+            payload = r.json().get('data') or {}
+            items = payload.get('diff') or []
+            if isinstance(items, dict):
+                items = list(items.values())
             for item in items:
                 name = (item.get('f14') or '').strip()
-                # 归一化：去掉Ⅱ/Ⅲ/D等东财后缀
-                clean = name.replace('Ⅱ', '').replace('Ⅲ', '').replace('D', '').strip()
+                # 归一化：去掉Ⅱ/Ⅲ分级后缀；不能删除 LED 等正常名称中的 D。
+                clean = name.replace('Ⅱ', '').replace('Ⅲ', '').strip()
                 if not clean:
                     continue
-                close = float(item.get('f2', 0) or 0)
+                change_pct = _number(item.get('f3'))
+                if change_pct is None:
+                    continue
+                close = _number(item.get('f2'), 0) or 0
+                quote_date = _quote_date(item.get('f124'))
                 result[sector_type][clean] = {
-                    'date': today,
+                    'date': quote_date or snapshot_date,
+                    'timestamp_verified': bool(quote_date),
                     'close': round(close, 2),
-                    'change_pct': round(float(item.get('f3', 0) or 0), 2),
-                    'open': round(float(item.get('f17', close) or close), 2),
-                    'high': round(float(item.get('f15', close) or close), 2),
-                    'low': round(float(item.get('f16', close) or close), 2),
-                    'volume': int(float(item.get('f5', 0) or 0)),
-                    'prev_close': round(float(item.get('f18', 0) or 0), 2),
+                    'change_pct': round(change_pct, 2),
+                    'open': round(_number(item.get('f17'), close) or close, 2),
+                    'high': round(_number(item.get('f15'), close) or close, 2),
+                    'low': round(_number(item.get('f16'), close) or close, 2),
+                    'volume': int(_number(item.get('f5'), 0) or 0),
+                    'prev_close': round(_number(item.get('f18'), 0) or 0, 2),
                 }
             log.info('push2test live [%s]: %d个板块', sector_type, len(result[sector_type]))
         log.info('push2test live 排行获取成功 (行业%d个, 概念%d个)',
@@ -856,6 +887,95 @@ def _fetch_live_sector_ranking(date_str):
     except Exception as e:
         log.warning('push2test live 失败, 回退 %s: %s', _get_snapshot_source_label(), e)
         return _load_json(_get_snapshot_source_path())
+
+
+def _normalize_close_snapshot_name(name: str) -> str:
+    """对实时源与系统板块名做保守归一化，用于概念别名匹配。"""
+    import re
+    value = str(name or '').lower().strip()
+    value = value.replace('Ⅱ', '').replace('Ⅲ', '')
+    value = re.sub(r'[·\s_\-()（）]', '', value)
+    for suffix in ('概念', '板块', '成份股', '样本股', '股票'):
+        value = value.replace(suffix, '')
+    return value
+
+
+def fetch_sector_close_snapshot(
+    target_date: str,
+    industry_names: list,
+    concept_names: list,
+) -> dict:
+    """拉取并持久化收盘快照，仅返回能匹配系统权威名称的板块。"""
+    target_date = str(target_date or '').replace('-', '')
+    raw = _fetch_live_sector_ranking(target_date)
+    raw_date = str((raw or {}).get('last_updated', '')).replace('-', '')
+    if raw_date != target_date:
+        raise DataSourceError(f'板块快照日期不匹配: {raw_date or "无"} != {target_date}')
+
+    requested_industries = {str(name) for name in industry_names if name}
+    requested_concepts = {str(name) for name in concept_names if name}
+    raw_industries = (raw or {}).get('industries', {}) or {}
+    raw_concepts = (raw or {}).get('concepts', {}) or {}
+
+    industries = {
+        name: raw_industries[name]
+        for name in sorted(requested_industries)
+        if name in raw_industries
+        and str(raw_industries[name].get('date', '')).replace('-', '') == target_date
+        and raw_industries[name].get('timestamp_verified') is True
+    }
+    concept_aliases = {}
+    for live_name in raw_concepts:
+        normalized = _normalize_close_snapshot_name(live_name)
+        if normalized and normalized not in concept_aliases:
+            concept_aliases[normalized] = live_name
+    concepts = {}
+    for name in sorted(requested_concepts):
+        live_name = name if name in raw_concepts else concept_aliases.get(
+            _normalize_close_snapshot_name(name)
+        )
+        if (
+            live_name
+            and str(raw_concepts[live_name].get('date', '')).replace('-', '') == target_date
+            and raw_concepts[live_name].get('timestamp_verified') is True
+        ):
+            concepts[name] = {**raw_concepts[live_name], 'source_name': live_name}
+
+    def _coverage(expected, covered, threshold):
+        total = len(expected)
+        count = len(covered)
+        ratio = count / total if total else 0.0
+        return {
+            'expected': total,
+            'covered': count,
+            'ratio': ratio,
+            'threshold': threshold,
+            'ready': total >= 80 and ratio >= threshold,
+        }
+
+    snapshot = {
+        'date': target_date,
+        'source': 'eastmoney_close',
+        'generated_at': datetime.now().isoformat(timespec='seconds'),
+        'industries': industries,
+        'concepts': concepts,
+        'coverage': {
+            'industry': _coverage(requested_industries, industries, 0.85),
+            'concept': _coverage(requested_concepts, concepts, 0.85),
+        },
+    }
+    if not snapshot['coverage']['industry']['ready']:
+        stats = snapshot['coverage']['industry']
+        raise DataSourceError(
+            f'实时行业快照覆盖不足: {stats["covered"]}/{stats["expected"]}'
+        )
+    _save_json_atomic(SECTOR_CLOSE_SNAPSHOT_PATH, snapshot)
+    return snapshot
+
+
+def get_sector_close_snapshot() -> dict:
+    """读取最近一次通过行业覆盖门禁的收盘快照。"""
+    return _load_json(SECTOR_CLOSE_SNAPSHOT_PATH, {})
 
 def _fetch_em_concept_map():
     return _load_json(SOURCES_EM_CONCEPT_MAP)

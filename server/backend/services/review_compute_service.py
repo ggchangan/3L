@@ -13,6 +13,7 @@ ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
 
 MAINLINE_FULL_CACHE = os.path.join(DATA_DIR, '.cache', 'mainline_full.json')
 MAINLINE_HISTORY_PATH = os.path.join(DATA_DIR, 'mainline_history.json')
+MAINLINE_CALIBRATION_PATH = os.path.join(DATA_DIR, 'computed', 'mainline_calibration.json')
 
 # ═══════════════════════════════════════════════════════════════
 # 工具函数
@@ -307,6 +308,59 @@ def classify_opportunity(is_mainline, is_secondary, stage, vl_score):
 # ② 动量主线
 # ═══════════════════════════════════════════════════════════════
 
+def _record_mainline_calibration(date_str, ranked, is_estimated, coverage=0.0):
+    """保存收盘预估 Top10，正式板块日线到齐后记录排名差异。"""
+    try:
+        records = {}
+        if os.path.isfile(MAINLINE_CALIBRATION_PATH):
+            with open(MAINLINE_CALIBRATION_PATH, encoding='utf-8') as f:
+                records = json.load(f)
+        top10 = [item['name'] for item in ranked[:10]]
+        if is_estimated:
+            record = {
+                'status': 'pending',
+                'date': date_str,
+                'estimated_top10': top10,
+                'estimate_coverage': round(float(coverage or 0), 4),
+                'estimated_at': datetime.now().isoformat(timespec='seconds'),
+            }
+            records[date_str] = record
+        else:
+            previous = records.get(date_str, {})
+            estimated_top10 = previous.get('estimated_top10', [])
+            if not estimated_top10:
+                return None
+            estimated_rank = {name: i + 1 for i, name in enumerate(estimated_top10)}
+            confirmed_rank = {name: i + 1 for i, name in enumerate(top10)}
+            common = [name for name in top10 if name in estimated_rank]
+            record = {
+                **previous,
+                'status': 'completed',
+                'confirmed_top10': top10,
+                'entered': [name for name in top10 if name not in estimated_rank],
+                'exited': [name for name in estimated_top10 if name not in confirmed_rank],
+                'rank_changes': [
+                    {
+                        'name': name,
+                        'estimated_rank': estimated_rank[name],
+                        'confirmed_rank': confirmed_rank[name],
+                        'change': estimated_rank[name] - confirmed_rank[name],
+                    }
+                    for name in common
+                ],
+                'top5_overlap': len(set(estimated_top10[:5]) & set(top10[:5])),
+                'top10_overlap': len(common),
+                'calibrated_at': datetime.now().isoformat(timespec='seconds'),
+            }
+            records[date_str] = record
+        os.makedirs(os.path.dirname(MAINLINE_CALIBRATION_PATH), exist_ok=True)
+        config.atomic_json_dump(records, MAINLINE_CALIBRATION_PATH, indent=2)
+        return record
+    except Exception as exc:
+        print(f'[3L复盘] ⚠️ 主线校准记录失败: {exc}')
+        return None
+
+
 def get_mainline_data(date_str):
     """三梯队：前5=主线，6~10=次级主线，其余=非主线（当天文件缓存）"""
     # 检查当天缓存（数据源已经是 DB，不再检查文件 mtime）
@@ -320,10 +374,34 @@ def get_mainline_data(date_str):
         except Exception:
             pass
 
-    # 从 _push2test 获取当日涨跌幅（data_layer 唯一入口）
-    from backend.data_access.data_layer import get_sector_push2test
+    target_date = str(date_str).replace('-', '')
+    from backend.data_access.data_layer import (
+        get_sector_close_snapshot, get_sector_daily, get_sector_push2test,
+        get_ths_daily_update_confirmation,
+    )
+    sector_state = get_sector_daily()
+    sector_date = str(sector_state.get('last_updated', '')).replace('-', '')
+    effective_sector_date = min(sector_date, target_date) if sector_date else target_date
+    confirmation = get_ths_daily_update_confirmation()
+    active_industries = set(confirmation.get('industry_names', []))
+
+    close_snapshot = get_sector_close_snapshot()
+    snapshot_date = str(close_snapshot.get('date', '')).replace('-', '')
+    industry_coverage = close_snapshot.get('coverage', {}).get('industry', {})
+    estimate_active = (
+        bool(sector_date)
+        and sector_date < target_date
+        and snapshot_date == target_date
+        and industry_coverage.get('ready') is True
+    )
+    ranking_status = (
+        'estimated' if estimate_active
+        else 'confirmed' if sector_date and effective_sector_date >= target_date
+        else 'stale'
+    )
     push2test_data = get_sector_push2test()
-    push2test_inds = push2test_data.industries if hasattr(push2test_data, 'industries') else {}
+    confirmed_snapshots = push2test_data.industries if hasattr(push2test_data, 'industries') else {}
+    estimate_snapshots = close_snapshot.get('industries', {}) if estimate_active else {}
 
     # 从 DB（ths_daily）获取行业K线数据
     from backend.data_access.data_layer import get_ths_industry_klines
@@ -337,11 +415,22 @@ def get_mainline_data(date_str):
     scores = []
     for name, klines in industries_data.items():
         try:
-            if len(klines) < 1:
+            if active_industries and name not in active_industries:
                 continue
-            # chg_1d：优先 _push2test（cron存），次选K线计算
-            snap = push2test_inds.get(name)
-            chg_1d = snap.change_pct if snap is not None else None
+            klines = [
+                row for row in klines
+                if str(row.get('date', '')).replace('-', '') <= effective_sector_date
+            ]
+            if not klines or str(klines[-1].get('date', '')).replace('-', '') != effective_sector_date:
+                continue
+            estimate_snap = estimate_snapshots.get(name)
+            confirmed_snap = confirmed_snapshots.get(name) if not estimate_active else None
+            if confirmed_snap is not None and str(confirmed_snap.date).replace('-', '') != effective_sector_date:
+                confirmed_snap = None
+            if estimate_snap is not None:
+                chg_1d = estimate_snap.get('change_pct')
+            else:
+                chg_1d = confirmed_snap.change_pct if confirmed_snap is not None else None
             if chg_1d is None:
                 # 从K线计算（兜底）
                 if len(klines) >= 2:
@@ -350,8 +439,11 @@ def get_mainline_data(date_str):
                     chg_1d = 0
             else:
                 chg_1d = float(chg_1d)
-            # chg_20d：只有足够历史K线才计算
-            if len(klines) >= 20:
+            estimate_applied = estimate_snap is not None and len(klines) >= 19
+            if estimate_applied:
+                estimated_close = float(klines[-1]['close']) * (1 + chg_1d / 100)
+                chg_20d = (estimated_close / float(klines[-19]['close']) - 1) * 100
+            elif len(klines) >= 20:
                 chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
             else:
                 chg_20d = 0  # 历史不足，不参与20日排名
@@ -367,6 +459,7 @@ def get_mainline_data(date_str):
                 'stage': stage,
                 'vl_score': vl_score,
                 'volume_ratio': volume_ratio,
+                'estimate_applied': estimate_applied,
             })
         except Exception:
             continue
@@ -388,12 +481,22 @@ def get_mainline_data(date_str):
 
     result = {
         'date': date_str,
+        'ranking_status': ranking_status,
+        'ranking_date': target_date if estimate_active else effective_sector_date,
+        'base_date': effective_sector_date,
+        'estimate_coverage': round(float(industry_coverage.get('ratio', 0)), 4) if estimate_active else None,
         'lines': main_lines,
         'secondary': secondary_lines,
         'industries': daily_rankings,
         'all_ranked': scores,
         'persistence': track_mainline_persistence(date_str, main_lines, prefix=''),
     }
+    result['calibration'] = (
+        _record_mainline_calibration(
+            date_str, scores, estimate_active, industry_coverage.get('ratio', 0)
+        )
+        if ranking_status in ('estimated', 'confirmed') else None
+    )
 
     # 写入缓存
     os.makedirs(os.path.dirname(MAINLINE_FULL_CACHE), exist_ok=True)
@@ -422,12 +525,14 @@ def get_mainline_data(date_str):
 def get_concept_mainline_data(date_str):
     """概念主线排名 — 与 get_mainline_data 相同逻辑，但用概念板块数据"""
     from backend.data_access.data_layer import (
-        get_sector_daily, get_ths_industry_klines, get_tracked_concept_names,
+        get_sector_close_snapshot, get_sector_daily, get_ths_industry_klines,
+        get_tracked_concept_names,
     )
     from backend.services.concept_wave_service import judge_concept_wave as _judge_wave
     concepts_data = get_ths_industry_klines(ths_type='N')
     tracked_concepts = get_tracked_concept_names(min_related_stocks=6)
     sector_date = str(get_sector_daily().get('last_updated', '')).replace('-', '')
+    target_date = str(date_str).replace('-', '')
     if not concepts_data or not tracked_concepts or not sector_date:
         return {'lines': [], 'secondary': [], 'all_ranked': [], 'persistence': []}
 
@@ -435,6 +540,14 @@ def get_concept_mainline_data(date_str):
     from backend.data_access.data_layer import get_sector_push2test
     push2test_data = get_sector_push2test()
     push2test_cons = push2test_data.concepts if hasattr(push2test_data, 'concepts') else {}
+    close_snapshot = get_sector_close_snapshot()
+    concept_coverage = close_snapshot.get('coverage', {}).get('concept', {})
+    estimate_active = (
+        sector_date < target_date
+        and str(close_snapshot.get('date', '')).replace('-', '') == target_date
+        and concept_coverage.get('ready') is True
+    )
+    estimate_snapshots = close_snapshot.get('concepts', {}) if estimate_active else {}
 
     scores = []
     for name, klines in concepts_data.items():
@@ -449,15 +562,25 @@ def get_concept_mainline_data(date_str):
                 continue
             if len(klines) < 20:
                 continue
-            chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
             # chg_1d：优先 _push2test，次选K线计算
-            snap = push2test_cons.get(name)
-            if snap is not None:
+            estimate_snap = estimate_snapshots.get(name)
+            snap = push2test_cons.get(name) if not estimate_active else None
+            if snap is not None and str(snap.date).replace('-', '') != sector_date:
+                snap = None
+            if estimate_snap is not None:
+                chg_1d = float(estimate_snap.get('change_pct', 0))
+            elif snap is not None:
                 chg_1d = float(snap.change_pct)
             elif len(klines) >= 2:
                 chg_1d = (klines[-1]['close'] / klines[-2]['close'] - 1) * 100
             else:
                 chg_1d = 0
+            estimate_applied = estimate_snap is not None and len(klines) >= 19
+            if estimate_applied:
+                estimated_close = float(klines[-1]['close']) * (1 + chg_1d / 100)
+                chg_20d = (estimated_close / float(klines[-19]['close']) - 1) * 100
+            else:
+                chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
             # 阶段判定
             wave = _judge_wave(klines)
             stage = wave.get('stage', '--')
@@ -470,6 +593,7 @@ def get_concept_mainline_data(date_str):
                 'stage': stage,
                 'vl_score': vl_score,
                 'volume_ratio': volume_ratio,
+                'estimate_applied': estimate_applied,
             })
         except Exception:
             continue
@@ -508,6 +632,10 @@ def get_concept_mainline_data(date_str):
 
     return {
         'date': date_str,
+        'ranking_status': 'estimated' if estimate_active else 'confirmed' if sector_date >= target_date else 'stale',
+        'ranking_date': target_date if estimate_active else sector_date,
+        'base_date': sector_date,
+        'estimate_coverage': round(float(concept_coverage.get('ratio', 0)), 4) if estimate_active else None,
         'lines': main_lines,
         'secondary': secondary_lines,
         'all_ranked': scores,

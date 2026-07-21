@@ -1,6 +1,6 @@
 import type { ReviewData } from '../lib/types'
 
-type Props = Pick<ReviewData, 'data_dates' | 'data_freshness'>
+type Props = Pick<ReviewData, 'data_dates' | 'data_freshness' | 'mainline'>
 
 const LABELS = {
   stocks: '个股',
@@ -14,7 +14,7 @@ function formatDate(value?: string) {
   return `${normalized.slice(4, 6)}-${normalized.slice(6, 8)}`
 }
 
-export default function ReviewDataStatus({ data_dates, data_freshness }: Props) {
+export default function ReviewDataStatus({ data_dates, data_freshness, mainline }: Props) {
   if (!data_dates && !data_freshness) return null
 
   const items = (['stocks', 'index', 'sectors'] as const).map(key => {
@@ -32,6 +32,7 @@ export default function ReviewDataStatus({ data_dates, data_freshness }: Props) 
     }
   })
   const sectorsPending = data_freshness?.sectors === 'stale'
+  const mainlineEstimated = mainline?.ranking_status === 'estimated'
 
   return (
     <div className={`review-data-status${sectorsPending ? ' warning' : ''}`} role="status">
@@ -42,8 +43,17 @@ export default function ReviewDataStatus({ data_dates, data_freshness }: Props) 
             {item.label} {item.date} · {item.statusText}
           </span>
         ))}
+        {mainlineEstimated && (
+          <span className="review-data-chip stale">
+            主线 {formatDate(mainline?.ranking_date)} · 当日预估
+          </span>
+        )}
       </div>
-      {sectorsPending && (
+      {mainlineEstimated ? (
+        <div className="review-data-status-note">
+          主线已用当日收盘快照预估，将于次日 06:00 用正式板块日线校准并记录排名差异。
+        </div>
+      ) : sectorsPending && (
         <div className="review-data-status-note">
           主线排名暂沿用上一交易日板块日线，将于次日 06:00 自动校准。
         </div>

@@ -293,11 +293,19 @@ export interface ReviewData {
     bias20_chg_3d?: number
   }
   mainline?: {
+    ranking_status?: 'confirmed' | 'estimated' | 'stale'
+    ranking_date?: string
+    base_date?: string
+    estimate_coverage?: number | null
+    calibration?: MainlineCalibration | null
     lines?: LineItem[]
     secondary?: LineItem[]
     persistence?: { name: string; days: number; status: string }[]
     all_ranked?: LineItem[]
     concept_mainline?: {
+      ranking_status?: 'confirmed' | 'estimated' | 'stale'
+      ranking_date?: string
+      base_date?: string
       lines?: LineItem[]
       secondary?: LineItem[]
       persistence?: { name: string; days: number; status: string }[]
@@ -336,4 +344,16 @@ export interface LineItem {
   opportunity?: string
   is_mainline?: boolean
   is_secondary?: boolean
+  estimate_applied?: boolean
+}
+
+export interface MainlineCalibration {
+  status: 'pending' | 'completed'
+  estimated_top10?: string[]
+  confirmed_top10?: string[]
+  estimate_coverage?: number
+  entered?: string[]
+  exited?: string[]
+  top5_overlap?: number
+  top10_overlap?: number
 }

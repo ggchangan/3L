@@ -3,6 +3,17 @@ import { fetchReviewByDate } from '../lib/api'
 import type { LineItem } from '../lib/types'
 
 interface MainlineData {
+  ranking_status?: 'confirmed' | 'estimated' | 'stale'
+  ranking_date?: string
+  base_date?: string
+  estimate_coverage?: number | null
+  calibration?: {
+    status: 'pending' | 'completed'
+    top5_overlap?: number
+    top10_overlap?: number
+    entered?: string[]
+    exited?: string[]
+  } | null
   lines?: LineItem[]
   secondary?: LineItem[]
   persistence?: { name: string; days: number; status: string }[]
@@ -152,6 +163,22 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
         >💡 概念主线</button>
       </div>
 
+      {activeData?.ranking_status === 'estimated' && (
+        <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#ffd166', background: 'rgba(255,209,102,0.1)' }}>
+          当日预估 · 收盘快照覆盖 {((activeData.estimate_coverage || 0) * 100).toFixed(1)}% · 次日 06:00 用正式板块日线校准
+        </div>
+      )}
+      {activeData?.ranking_status === 'stale' && (
+        <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#aaa', background: 'rgba(255,255,255,0.04)' }}>
+          当日快照覆盖不足，暂沿用 {activeData.base_date || activeData.ranking_date || '上一交易日'} 已确认排名
+        </div>
+      )}
+      {activeData?.ranking_status === 'confirmed' && activeData.calibration?.status === 'completed' && (
+        <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#4ecdc4', background: 'rgba(78,205,196,0.08)' }}>
+          已完成次日校准 · Top5 重合 {activeData.calibration.top5_overlap ?? 0}/5 · Top10 重合 {activeData.calibration.top10_overlap ?? 0}/10
+        </div>
+      )}
+
       {/* 轮动提醒 */}
       {rotationNote && (
         <div style={{
@@ -215,7 +242,9 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
                 }}>
                   <span style={{ fontWeight: 600, minWidth: 80 }}>{item.name}</span>
                   <span style={{ color: chgColor(c), fontSize: 11 }}>
-                    今日{c > 0 ? '+' : ''}{c.toFixed(1)}%
+                    {activeData?.ranking_status === 'estimated' && !item.estimate_applied
+                      ? '今日--'
+                      : `今日${c > 0 ? '+' : ''}${c.toFixed(1)}%`}
                   </span>
                   <span style={{ color: item.chg_20d >= 0 ? '#ff4444' : '#44aa44', fontSize: 11 }}>
                     20日+{item.chg_20d.toFixed(1)}%
@@ -331,7 +360,9 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
                     {l.chg_20d >= 0 ? '+' : ''}{l.chg_20d.toFixed(1)}%
                   </td>
                   <td style={{ color: chgColor(l.chg_1d), fontSize: 12 }}>
-                    {chgSign(l.chg_1d)}{(l.chg_1d ?? 0).toFixed(1)}%
+                    {activeData?.ranking_status === 'estimated' && !l.estimate_applied
+                      ? '--'
+                      : `${chgSign(l.chg_1d)}${(l.chg_1d ?? 0).toFixed(1)}%`}
                   </td>
                   <td style={{ color: STAGE_COLORS[stage] || '#888', fontSize: 11 }}>
                     {stageIcon} {stage}
