@@ -8,7 +8,7 @@
     )
 """
 
-import json, os, sys, time
+import json, os, sys, tempfile, time
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional
@@ -34,6 +34,7 @@ SOURCES_THS_SECTOR_DAILY = os.path.join(DATA_DIR, 'sources', 'ths', 'sector_dail
 CONCEPT_DATA_SOURCE = 'ths'
 SOURCES_EM_CONCEPT_MAP = os.path.join(DATA_DIR, 'sources', 'em', 'concept_map.json')
 CONCEPT_NAME_MAPPING_PATH = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.json')
+SECTOR_UPDATE_STATE_PATH = os.path.join(DATA_DIR, 'computed', 'sector_update_state.json')
 
 # TushareDB 全局实例（懒加载）
 _TUSHARE_DB = None
@@ -333,8 +334,8 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
 def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> dict:
     """检查本次板块更新在目标日期的覆盖率。
 
-    行业只统计历史上实际有 K 线的活跃板块，避免 ``ths_index`` 中大量无法
-    通过当前数据源获取的分类稀释覆盖率；概念统计本次明确追踪的名称。
+    行业以上一次通过门禁的板块集合为基线，失败日的部分写入不会缩小
+    下一日分母；概念统计本次明确追踪的名称。
     """
     db = _get_tushare_db()
     if not db:
@@ -342,22 +343,18 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> di
 
     requested_industries = {name for name, kind in names_to_update if kind == 'industry'}
     requested_concepts = {name for name, kind in names_to_update if kind == 'concept'}
-    active_rows = db.execute_raw(
-        """SELECT DISTINCT ti.name, ti.type
-           FROM ths_daily td
-           JOIN ths_index ti ON td.ts_code=ti.ts_code
-           WHERE ti.type IN ('I', 'N')"""
-    )
-    active_industries = {
-        row['name'] for row in active_rows
-        if row.get('type') == 'I' and row['name'] in requested_industries
-    }
+    confirmation = get_ths_daily_update_confirmation()
+    if not confirmation:
+        confirmation = bootstrap_ths_daily_update_confirmation()
+    active_industries = set(confirmation.get('industry_names', [])) & requested_industries
+    bootstrap = not active_industries
     expected = active_industries | requested_concepts
+    query_names = requested_industries | requested_concepts
 
     covered_industries = set()
     covered_concepts = set()
-    if expected:
-        names = sorted(expected)
+    if query_names:
+        names = sorted(query_names)
         placeholders = ','.join(['%s'] * len(names))
         rows = db.execute_raw(
             f"""SELECT DISTINCT ti.name, ti.type
@@ -383,6 +380,9 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> di
         }
 
     industry = _stats(active_industries, covered_industries, 0.95)
+    if bootstrap and industry['expected'] < 80:
+        industry['ready'] = False
+        industry['bootstrap_minimum'] = 80
     concept = _stats(requested_concepts, covered_concepts, 0.90)
     concepts_ready = concept['ready'] if requested_concepts else True
     return {
@@ -390,7 +390,92 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> di
         'industry': industry,
         'concept': concept,
         'missing': industry['missing'] + concept['missing'],
+        'industry_names': sorted(active_industries | covered_industries),
+        'bootstrap': bootstrap,
     }
+
+
+def get_ths_daily_update_confirmation() -> dict:
+    """读取上一次通过门禁的权威板块状态。"""
+    return _load_json(SECTOR_UPDATE_STATE_PATH, {})
+
+
+def bootstrap_ths_daily_update_confirmation() -> dict:
+    """为旧环境从近期稳定历史数据生成一次性权威状态。
+
+    至少需要两个规模接近的历史交易日；全新库的单日部分写入不得自证完整。
+    """
+    state = get_ths_daily_update_confirmation()
+    if state:
+        return state
+    db = _get_tushare_db()
+    if not db:
+        return {}
+    count_rows = db.execute_raw(
+        """SELECT td.trade_date, COUNT(DISTINCT td.ts_code) AS board_count
+           FROM ths_daily td
+           JOIN ths_index ti ON td.ts_code=ti.ts_code
+           WHERE ti.type='I'
+           GROUP BY td.trade_date
+           ORDER BY td.trade_date DESC
+           LIMIT 20"""
+    )
+    if len(count_rows or []) < 2:
+        return {}
+    max_count = max(int(row['board_count']) for row in count_rows)
+    stable_rows = [
+        row for row in count_rows
+        if max_count >= 80 and int(row['board_count']) / max_count >= 0.95
+    ]
+    if len(stable_rows) < 2:
+        return {}
+    # 优先取板块数最多的稳定日；同规模时 SQL 倒序保证取最新日。
+    baseline_row = max(stable_rows, key=lambda row: int(row['board_count']))
+    confirmed_date = baseline_row['trade_date']
+    rows = db.execute_raw(
+        """SELECT DISTINCT ti.name
+           FROM ths_daily td
+           JOIN ths_index ti ON td.ts_code=ti.ts_code
+           WHERE ti.type='I' AND td.trade_date=%s""",
+        [confirmed_date],
+    )
+    industry_names = sorted({row['name'] for row in rows if row.get('name')})
+    if len(industry_names) < 80:
+        return {}
+    coverage = {
+        'industry_names': industry_names,
+        'industry': {'ratio': len(industry_names) / max_count},
+        'concept': {'ratio': 0},
+    }
+    save_ths_daily_update_confirmation(str(confirmed_date), coverage)
+    return get_ths_daily_update_confirmation()
+
+
+def save_ths_daily_update_confirmation(target_date: str, coverage: dict) -> None:
+    """仅在门禁通过后推进权威日期；失败写入永远不能成为基线。"""
+    state = {
+        'confirmed_date': target_date,
+        'industry_names': coverage.get('industry_names', []),
+        'industry_coverage': coverage.get('industry', {}).get('ratio', 0),
+        'concept_coverage': coverage.get('concept', {}).get('ratio', 0),
+        'confirmed_at': datetime.now().isoformat(timespec='seconds'),
+    }
+    state_dir = os.path.dirname(SECTOR_UPDATE_STATE_PATH)
+    os.makedirs(state_dir, exist_ok=True)
+    tmp_path = ''
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode='w', encoding='utf-8', dir=state_dir,
+            prefix='.sector_update_state.', suffix='.tmp', delete=False,
+        ) as f:
+            tmp_path = f.name
+            json.dump(state, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, SECTOR_UPDATE_STATE_PATH)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 def _convert_board_kline(df):
