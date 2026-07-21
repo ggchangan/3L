@@ -142,6 +142,26 @@ def get_watchlist_by_direction():
     return get_watchlist_by_direction()
 
 
+def get_tracked_concept_names(min_related_stocks=6):
+    """返回达到自选股关联门槛的概念集合，供更新和排名共用。"""
+    concept_list = get_concept_list()
+    stock_concept_map = get_stock_concept_map()
+    watchlist_codes = {item.get('code', '') for item in get_watchlist()}
+    tracked = set()
+    for concept_code, info in concept_list.items():
+        name = info.get('name', '')
+        if not name:
+            continue
+        related = sum(
+            1 for stock_code, stock_info in stock_concept_map.items()
+            if stock_code in watchlist_codes
+            and concept_code in stock_info.get('concept_codes', [])
+        )
+        if related >= min_related_stocks:
+            tracked.add(name)
+    return tracked
+
+
 def get_industry_map():
     """返回行业映射（缓存60s）"""
     return cache.get('industry_map', _threel_get_industry_map, ttl=60)

@@ -150,5 +150,44 @@ class TestGetStockCardConceptDict:
         assert card.get('mainline_level', '__MISSING__') != '__MISSING__'
 
 
+def test_concept_mainline_only_ranks_tracked_concepts_on_authoritative_date(monkeypatch, tmp_path):
+    """未追踪或目标日期未到齐的概念不能混入概念主线。"""
+    from backend.data_access import data_layer
+    from backend.services import concept_wave_service, review_compute_service
+
+    def klines(last_date):
+        rows = [
+            {'date': f'202606{i:02d}', 'close': 100 + i, 'volume': 1000}
+            for i in range(1, 21)
+        ]
+        rows.append({'date': last_date, 'close': 125, 'volume': 1000})
+        return rows
+
+    monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='I': {
+        '追踪且已到齐': klines('20260720'),
+        '追踪但滞后': klines('20260719'),
+        '未追踪概念': klines('20260720'),
+    })
+    monkeypatch.setattr(data_layer, 'get_tracked_concept_names', lambda min_related_stocks=6: {
+        '追踪且已到齐', '追踪但滞后',
+    })
+    monkeypatch.setattr(data_layer, 'get_sector_daily', lambda: {'last_updated': '20260720'})
+    monkeypatch.setattr(
+        data_layer, 'get_sector_push2test',
+        lambda: type('Snapshot', (), {'concepts': {}})(),
+    )
+    monkeypatch.setattr(
+        concept_wave_service, 'judge_concept_wave',
+        lambda rows: {'stage': '上行', 'vl_score': 1, 'volume_ratio': 1},
+    )
+    monkeypatch.setattr(
+        review_compute_service, 'MAINLINE_HISTORY_PATH',
+        str(tmp_path / 'mainline_history.json'),
+    )
+
+    result = review_compute_service.get_concept_mainline_data('2026-07-21')
+
+    assert [item['name'] for item in result['all_ranked']] == ['追踪且已到齐']
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

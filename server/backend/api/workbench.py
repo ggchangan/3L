@@ -13,9 +13,9 @@ from backend.core.exceptions import APIError
 
 def _handle_suggestions(h, path):
     """GET /api/workbench/suggestions — 从复盘拉取操作建议（实时计算）"""
-    from backend.services.review_service import compute_review_real_time
+    from backend.services.review_service import compute_review_serialized
     try:
-        review = compute_review_real_time()
+        review = compute_review_serialized()
         trading_plan = review.get('trading_plan', {})
     except Exception:
         log.warning('工作台数据加载失败，返回空')

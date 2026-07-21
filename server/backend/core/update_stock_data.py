@@ -28,6 +28,7 @@ from backend.data_access.data_layer import (
     fetch_stock_klines_from_db,
     get_stock_names_from_db,
     get_stock_daily_latest_date,
+    get_tracked_concept_names,
 )
 from backend.data_access.data_layer import (
     get_concept_list,
@@ -264,23 +265,7 @@ def update_sectors():
 
     # ── 确定追踪中的概念 ──
     try:
-        _concept_list = get_concept_list()
-        _stock_concept_map = get_stock_concept_map()
-        wl = get_watchlist()
-        wl_codes = set(s.get('code', '') for s in wl)
-
-        tracked_concepts = set()
-        for code, cinfo in _concept_list.items():
-            name = cinfo.get('name', '')
-            if not name:
-                continue
-            related = 0
-            for scode, sinfo in _stock_concept_map.items():
-                if code in sinfo.get('concept_codes', []) and scode in wl_codes:
-                    related += 1
-            if related >= 6:
-                tracked_concepts.add(name)
-
+        tracked_concepts = get_tracked_concept_names(min_related_stocks=6)
         log(f'📋  追踪概念: {len(tracked_concepts)}个（自选股关联≥6只）')
     except Exception as e:
         log(f'⚠️  计算追踪概念失败: {e}，回退到全量更新')

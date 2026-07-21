@@ -50,6 +50,20 @@ def review_refresh_file_lock():
         finally:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
+
+def get_completed_review_date():
+    """返回最近已完成交易日，避免开盘前按自然日覆盖校准缓存。"""
+    from backend.data_access.data_source import get_last_completed_trading_day
+
+    target = get_last_completed_trading_day()
+    return datetime.strptime(target, '%Y%m%d').strftime('%Y-%m-%d')
+
+
+def compute_review_serialized(date_str=None):
+    """统一的外部实时计算入口，完整持有跨进程锁。"""
+    with review_refresh_file_lock():
+        return compute_review_real_time(date_str or get_completed_review_date())
+
 # ═══════════════════════════════════════════════════════════════
 # 存储层
 # ═══════════════════════════════════════════════════════════════
@@ -147,7 +161,7 @@ def request_review_refresh(force=False):
     def _worker():
         try:
             with review_refresh_file_lock():
-                data = compute_review_real_time()
+                data = compute_review_real_time(get_completed_review_date())
                 data['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
                 save_review_data(data)
             with _review_refresh_lock:

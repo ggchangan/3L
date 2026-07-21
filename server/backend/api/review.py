@@ -4,7 +4,7 @@ from backend.core.logger import get_logger
 log = get_logger(__name__)
 
 from backend.services.review_service import (
-    run_daily_review, generate_review, save_review, compute_review_real_time,
+    run_daily_review, generate_review, save_review, compute_review_serialized,
     load_current_review,
     get_review_refresh_status, request_review_refresh,
 )
@@ -29,7 +29,7 @@ def _handle_review_today(h, path):
     """兼容旧接口：等价于 /api/review/live。"""
     import json
     try:
-        data = compute_review_real_time()
+        data = compute_review_serialized()
         h.send_json(data)
     except Exception as e:
         raise APIError(f"复盘模块异常: {e}") from e
