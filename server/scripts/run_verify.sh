@@ -4,7 +4,7 @@ TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -c "
 import sys, os
 sys.path.insert(0, '.')
 os.environ['DATA_DIR'] = '/home/ubuntu/data/3l'
-from backend.services.data_source import verify_data_sources
+from backend.data_access.data_source import verify_data_sources
 r = verify_data_sources(verbose=False)
 checks = r.get('checks', [])
 pass_count = sum(1 for c in checks if c['pass'])
