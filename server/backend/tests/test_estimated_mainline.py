@@ -118,6 +118,35 @@ def test_official_mainline_completes_estimate_calibration(monkeypatch, tmp_path)
     assert history['2026-07-21']['top10'] == [item['name'] for item in confirmed['all_ranked']]
 
 
+def test_completed_calibration_cannot_regress_to_pending(monkeypatch, tmp_path):
+    from backend.services import review_compute_service
+
+    monkeypatch.setattr(review_compute_service, 'DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(
+        review_compute_service,
+        'MAINLINE_CALIBRATION_PATH',
+        str(tmp_path / 'calibration.json'),
+    )
+    estimated = [{'name': 'A'}, {'name': 'B'}]
+    confirmed = [{'name': 'B'}, {'name': 'A'}]
+
+    review_compute_service._record_mainline_calibration(
+        '2026-07-21', estimated, is_estimated=True, coverage=0.9,
+    )
+    completed = review_compute_service._record_mainline_calibration(
+        '2026-07-21', confirmed, is_estimated=False,
+    )
+    late_estimate = review_compute_service._record_mainline_calibration(
+        '2026-07-21', [{'name': 'C'}], is_estimated=True, coverage=1.0,
+    )
+
+    assert completed['status'] == 'completed'
+    assert late_estimate == completed
+    saved = json.loads((tmp_path / 'calibration.json').read_text())
+    assert saved['2026-07-21']['status'] == 'completed'
+    assert saved['2026-07-21']['estimated_top10'] == ['A', 'B']
+
+
 def test_stale_snapshot_never_marks_mainline_as_estimated(monkeypatch, tmp_path):
     from backend.data_access import data_layer
     from backend.services import concept_wave_service, review_compute_service

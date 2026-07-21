@@ -3,7 +3,8 @@ review_compute_service.py — 复盘计算层
 大盘周期判定、动量主线计算、量价择时分析、交易计划生成
 所有函数接收数据为参数，不直接依赖文件 I/O（可测试）
 """
-import json, os, sys, requests, math
+import json, os, sys, requests, math, threading
+from contextlib import contextmanager
 from datetime import datetime
 
 from backend.core import config
@@ -14,6 +15,23 @@ ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
 MAINLINE_FULL_CACHE = os.path.join(DATA_DIR, '.cache', 'mainline_full.json')
 MAINLINE_HISTORY_PATH = os.path.join(DATA_DIR, 'mainline_history.json')
 MAINLINE_CALIBRATION_PATH = os.path.join(DATA_DIR, 'computed', 'mainline_calibration.json')
+_MAINLINE_STATE_LOCK = threading.RLock()
+
+
+@contextmanager
+def _mainline_state_lock():
+    """跨线程/进程串行化主线历史与校准记录的完整读改写事务。"""
+    import fcntl
+
+    lock_path = os.path.join(DATA_DIR, '.cache', 'mainline_state.lock')
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    with _MAINLINE_STATE_LOCK:
+        with open(lock_path, 'a+', encoding='utf-8') as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 # ═══════════════════════════════════════════════════════════════
 # 工具函数
@@ -311,51 +329,55 @@ def classify_opportunity(is_mainline, is_secondary, stage, vl_score):
 def _record_mainline_calibration(date_str, ranked, is_estimated, coverage=0.0):
     """保存收盘预估 Top10，正式板块日线到齐后记录排名差异。"""
     try:
-        records = {}
-        if os.path.isfile(MAINLINE_CALIBRATION_PATH):
-            with open(MAINLINE_CALIBRATION_PATH, encoding='utf-8') as f:
-                records = json.load(f)
-        top10 = [item['name'] for item in ranked[:10]]
-        if is_estimated:
-            record = {
-                'status': 'pending',
-                'date': date_str,
-                'estimated_top10': top10,
-                'estimate_coverage': round(float(coverage or 0), 4),
-                'estimated_at': datetime.now().isoformat(timespec='seconds'),
-            }
-            records[date_str] = record
-        else:
-            previous = records.get(date_str, {})
-            estimated_top10 = previous.get('estimated_top10', [])
-            if not estimated_top10:
-                return None
-            estimated_rank = {name: i + 1 for i, name in enumerate(estimated_top10)}
-            confirmed_rank = {name: i + 1 for i, name in enumerate(top10)}
-            common = [name for name in top10 if name in estimated_rank]
-            record = {
-                **previous,
-                'status': 'completed',
-                'confirmed_top10': top10,
-                'entered': [name for name in top10 if name not in estimated_rank],
-                'exited': [name for name in estimated_top10 if name not in confirmed_rank],
-                'rank_changes': [
-                    {
-                        'name': name,
-                        'estimated_rank': estimated_rank[name],
-                        'confirmed_rank': confirmed_rank[name],
-                        'change': estimated_rank[name] - confirmed_rank[name],
-                    }
-                    for name in common
-                ],
-                'top5_overlap': len(set(estimated_top10[:5]) & set(top10[:5])),
-                'top10_overlap': len(common),
-                'calibrated_at': datetime.now().isoformat(timespec='seconds'),
-            }
-            records[date_str] = record
-        os.makedirs(os.path.dirname(MAINLINE_CALIBRATION_PATH), exist_ok=True)
-        config.atomic_json_dump(records, MAINLINE_CALIBRATION_PATH, indent=2)
-        return record
+        with _mainline_state_lock():
+            records = {}
+            if os.path.isfile(MAINLINE_CALIBRATION_PATH):
+                with open(MAINLINE_CALIBRATION_PATH, encoding='utf-8') as f:
+                    records = json.load(f)
+            top10 = [item['name'] for item in ranked[:10]]
+            if is_estimated:
+                previous = records.get(date_str, {})
+                # 正式校准一旦完成，迟到的收盘任务不能把状态降回 pending。
+                if previous.get('status') == 'completed':
+                    return previous
+                record = {
+                    'status': 'pending',
+                    'date': date_str,
+                    'estimated_top10': top10,
+                    'estimate_coverage': round(float(coverage or 0), 4),
+                    'estimated_at': datetime.now().isoformat(timespec='seconds'),
+                }
+                records[date_str] = record
+            else:
+                previous = records.get(date_str, {})
+                estimated_top10 = previous.get('estimated_top10', [])
+                if not estimated_top10:
+                    return None
+                estimated_rank = {name: i + 1 for i, name in enumerate(estimated_top10)}
+                confirmed_rank = {name: i + 1 for i, name in enumerate(top10)}
+                common = [name for name in top10 if name in estimated_rank]
+                record = {
+                    **previous,
+                    'status': 'completed',
+                    'confirmed_top10': top10,
+                    'entered': [name for name in top10 if name not in estimated_rank],
+                    'exited': [name for name in estimated_top10 if name not in confirmed_rank],
+                    'rank_changes': [
+                        {
+                            'name': name,
+                            'estimated_rank': estimated_rank[name],
+                            'confirmed_rank': confirmed_rank[name],
+                            'change': estimated_rank[name] - confirmed_rank[name],
+                        }
+                        for name in common
+                    ],
+                    'top5_overlap': len(set(estimated_top10[:5]) & set(top10[:5])),
+                    'top10_overlap': len(common),
+                    'calibrated_at': datetime.now().isoformat(timespec='seconds'),
+                }
+                records[date_str] = record
+            config.atomic_json_dump(records, MAINLINE_CALIBRATION_PATH, indent=2)
+            return record
     except Exception as exc:
         print(f'[3L复盘] ⚠️ 主线校准记录失败: {exc}')
         return None
@@ -510,15 +532,16 @@ def get_mainline_data(date_str):
     # 只有正式板块日线才进入持续性历史；预估/过期排名由缓存和校准记录承载。
     if ranking_status == 'confirmed':
         try:
-            top10_names = [l['name'] for l in (main_lines + secondary_lines)]
-            history = {}
-            if os.path.isfile(MAINLINE_HISTORY_PATH):
-                with open(MAINLINE_HISTORY_PATH) as _fh:
-                    history = json.load(_fh)
-            # 只保留当天及之前的历史（防止future覆盖）
-            history = {k: v for k, v in history.items() if k <= date_str}
-            history[date_str] = {'top10': top10_names}
-            config.atomic_json_dump(history, MAINLINE_HISTORY_PATH, indent=2)
+            with _mainline_state_lock():
+                top10_names = [l['name'] for l in (main_lines + secondary_lines)]
+                history = {}
+                if os.path.isfile(MAINLINE_HISTORY_PATH):
+                    with open(MAINLINE_HISTORY_PATH) as _fh:
+                        history = json.load(_fh)
+                # 只保留当天及之前的历史（防止future覆盖）
+                history = {k: v for k, v in history.items() if k <= date_str}
+                history[date_str] = {'top10': top10_names}
+                config.atomic_json_dump(history, MAINLINE_HISTORY_PATH, indent=2)
         except Exception as e:
             print(f"[3L复盘] ⚠️ 历史记录保存失败: {e}")
 
@@ -623,15 +646,16 @@ def get_concept_mainline_data(date_str):
     # 写入历史（共享同一份 mainline_history.json，标记 concept_ 前缀）
     if ranking_status == 'confirmed':
         try:
-            top10_names = [l['name'] for l in (main_lines + secondary_lines)]
-            history = {}
-            if os.path.isfile(MAINLINE_HISTORY_PATH):
-                with open(MAINLINE_HISTORY_PATH) as _fh:
-                    history = json.load(_fh)
-            key = f'concept_{date_str}'
-            history = {k: v for k, v in history.items() if k.split('_')[-1] <= date_str}
-            history[key] = {'top10': top10_names}
-            config.atomic_json_dump(history, MAINLINE_HISTORY_PATH, indent=2)
+            with _mainline_state_lock():
+                top10_names = [l['name'] for l in (main_lines + secondary_lines)]
+                history = {}
+                if os.path.isfile(MAINLINE_HISTORY_PATH):
+                    with open(MAINLINE_HISTORY_PATH) as _fh:
+                        history = json.load(_fh)
+                key = f'concept_{date_str}'
+                history = {k: v for k, v in history.items() if k.split('_')[-1] <= date_str}
+                history[key] = {'top10': top10_names}
+                config.atomic_json_dump(history, MAINLINE_HISTORY_PATH, indent=2)
         except Exception as e:
             print(f"[3L复盘] ⚠️ 概念历史记录保存失败: {e}")
 
