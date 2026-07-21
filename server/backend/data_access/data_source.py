@@ -813,9 +813,9 @@ def _call_with_failover(data_type, args, chain, fallback=None):
     log.warning('%s: 所有数据源均不可用', data_type)
     raise DataUnavailableError(data_type)
 
-# --- 实时排行获取函数（push2test API + 文件回退） ---
-def _fetch_live_sector_ranking(date_str):
-    """从 push2test 实时获取板块排行（chg_1d 取自 f3 字段）
+# --- 东财收盘辅助快照（只供当日预估，不属于 THS 权威日线） ---
+def _fetch_eastmoney_close_ranking(date_str):
+    """从东方财富实时接口获取收盘板块排行（chg_1d 取自 f3 字段）。
     
     直接调东财实时接口，不依赖静态文件。失败时回退读当前快照源文件（由 CONCEPT_DATA_SOURCE 配置驱动）。
     返回 {last_updated, industries: {name: {date, change_pct, close, ...}},
@@ -880,13 +880,17 @@ def _fetch_live_sector_ranking(date_str):
                     'volume': int(_number(item.get('f5'), 0) or 0),
                     'prev_close': round(_number(item.get('f18'), 0) or 0, 2),
                 }
-            log.info('push2test live [%s]: %d个板块', sector_type, len(result[sector_type]))
-        log.info('push2test live 排行获取成功 (行业%d个, 概念%d个)',
+            log.info('Eastmoney close [%s]: %d个板块', sector_type, len(result[sector_type]))
+        log.info('Eastmoney close 排行获取成功 (行业%d个, 概念%d个)',
                  len(result['industries']), len(result['concepts']))
         return result
     except Exception as e:
-        log.warning('push2test live 失败, 回退 %s: %s', _get_snapshot_source_label(), e)
+        log.warning('Eastmoney close 失败, 回退 %s: %s', _get_snapshot_source_label(), e)
         return _load_json(_get_snapshot_source_path())
+
+
+# 兼容旧的内部测试/诊断名称；新代码应显式标注真实数据源。
+_fetch_live_sector_ranking = _fetch_eastmoney_close_ranking
 
 
 def _normalize_close_snapshot_name(name: str) -> str:
@@ -907,7 +911,7 @@ def fetch_sector_close_snapshot(
 ) -> dict:
     """拉取并持久化收盘快照，仅返回能匹配系统权威名称的板块。"""
     target_date = str(target_date or '').replace('-', '')
-    raw = _fetch_live_sector_ranking(target_date)
+    raw = _fetch_eastmoney_close_ranking(target_date)
     raw_date = str((raw or {}).get('last_updated', '')).replace('-', '')
     if raw_date != target_date:
         raise DataSourceError(f'板块快照日期不匹配: {raw_date or "无"} != {target_date}')
@@ -1188,7 +1192,7 @@ DATA_SOURCE_CHAINS = {
     'sector_ranking': [
         ('tushare', lambda date: _fetch_tushare_sector_ranking(date)),
         ('ths_live', lambda date: _fetch_ths_live_sector_ranking(date)),
-        ('live', lambda date: _fetch_live_sector_ranking(date)),
+        ('eastmoney_live', lambda date: _fetch_eastmoney_close_ranking(date)),
         ('legacy_sector', lambda date: _fetch_legacy_sector_ranking(date)),
         ('snapshot_sector', lambda date: _fetch_ths_sector_ranking(date)),
     ],
@@ -1225,24 +1229,26 @@ def get_concept_map():
 
 
 # ════════════════════════════════════════════════════════
-# 新增：_push2test 读取唯一入口
-# 所有业务代码必须通过此函数获取当日涨跌幅快照
-# 不直接读 sector_daily.json 的 _push2test 字段
+# 旧 _push2test 文件字段兼容入口（正式业务已迁移到 ths_daily DB）
 # ════════════════════════════════════════════════════════
-def get_sector_push2test():
-    """获取当日涨跌幅快照（_push2test 字段）
+def get_legacy_sector_snapshot():
+    """读取旧 ``sector_daily.json`` 中的兼容快照字段。
 
     返回: {industries: {name: {change_pct, date, up_count, down_count, ...}},
             concepts: {name: {change_pct, date, ...}}}
 
-    这是读取 _push2test 的唯一入口。
-    所有业务代码（get_mainline_data 等）必须通过此函数获取，
-    不得直接调 data_layer.load_sector_daily_uncached() 读原始文件。
+    仅供旧文件迁移/诊断；正式业务快照通过 data_layer 的
+    ``get_sector_daily_snapshot()`` 从 ``ths_daily`` 读取。
     """
     data = _load_json(SECTOR_DAILY_PATH)
     if not isinstance(data, dict):
         return {}
     return data.get('_push2test', {})
+
+
+def get_sector_push2test():
+    """兼容旧内部名称；新代码使用 get_legacy_sector_snapshot()。"""
+    return get_legacy_sector_snapshot()
 
 
 # 合并数据内存缓存（TTL=1秒，避免同一批请求反复读6MB文件）
@@ -1838,8 +1844,8 @@ def verify_data_sources(verbose=True):
     # ════ 3. 一致性验证（THS live vs _push2test）════
     try:
         # 实时源是THS，比对 _push2test 字段（其中存的是THS数据）
-        from backend.data_access.data_layer import get_sector_push2test
-        p2_data = get_sector_push2test()
+        from backend.data_access.data_layer import get_sector_daily_snapshot
+        p2_data = get_sector_daily_snapshot()
         if (hasattr(p2_data, 'industries') and p2_data.industries
                 and 'ths_real_chg' in dir() and ths_real_chg):
             matched = 0
@@ -1850,43 +1856,43 @@ def verify_data_sources(verbose=True):
                 if snap is not None and live_chg is not None:
                     if abs(snap.change_pct - live_chg) < 0.5:
                         matched += 1
-            _check('THS实时vs_push2test change_pct一致性(采样前30)',
+            _check('THS实时vs日快照 change_pct一致性(采样前30)',
                    matched >= 20 or _is_trading_time() == False,
                    '%d/30采样偏差<0.5%%' % matched)
         else:
-            _check('THS实时vs_push2test一致性', True, '跳过(数据不可比)')
+            _check('THS实时vs日快照一致性', True, '跳过(数据不可比)')
     except Exception as e:
         _check('一致性验证', False, '异常: %s' % e)
 
     # ════ 4. data_layer 合约验证 ════
     try:
         from backend.data_access.data_layer import (
-            get_sector_push2test, get_sector_daily, get_sector_klines,
+            get_sector_daily_snapshot, get_sector_daily, get_sector_klines,
         )
 
-        # 4a. get_sector_push2test 合约
-        p2 = get_sector_push2test()
+        # 4a. get_sector_daily_snapshot 合约
+        p2 = get_sector_daily_snapshot()
         ind_count = len(p2.industries) if hasattr(p2, 'industries') else 0
         p2_has_industries = ind_count >= 80
-        _check('data_layer.get_sector_push2test 行业数>=80',
+        _check('data_layer.get_sector_daily_snapshot 行业数>=80',
                p2_has_industries, 'actual=%d' % ind_count)
 
-        # 电子化学品在 push2test 中
+        # 电子化学品在 THS 日快照中
         ec_in_p2 = hasattr(p2, 'industries') and '电子化学品' in p2.industries
-        _check('data_layer.get_sector_push2test 含电子化学品',
+        _check('data_layer.get_sector_daily_snapshot 含电子化学品',
                ec_in_p2, 'exists=%s' % ec_in_p2)
 
         # 电子化学品 chg 正确（类型化对象）
         if ec_in_p2:
             ec_snap = p2.industries['电子化学品']
             ec_chg_ok = ec_snap.change_pct is not None and -20 < ec_snap.change_pct < 20
-            _check('data_layer.push2test 电子化学品.chg类型化',
+            _check('data_layer.daily_snapshot 电子化学品.chg类型化',
                    ec_chg_ok, 'change_pct=%s' % ec_snap.change_pct)
             ec_up_ok = ec_snap.up_count is not None
-            _check('data_layer.push2test 电子化学品.up_count存在',
+            _check('data_layer.daily_snapshot 电子化学品.up_count存在',
                    ec_up_ok, 'up_count=%s' % ec_snap.up_count)
             ec_leader_ok = bool(ec_snap.leader)
-            _check('data_layer.push2test 电子化学品.leader存在',
+            _check('data_layer.daily_snapshot 电子化学品.leader存在',
                    ec_leader_ok, 'leader=%s' % ec_snap.leader)
 
         # 4b. get_sector_daily 合约
