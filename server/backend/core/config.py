@@ -118,6 +118,12 @@ TUSHARE_TOKEN = _env('TUSHARE_TOKEN', '')
 TUSHARE_TOKEN_HIGH = _env('TUSHARE_TOKEN_HIGH', '') or TUSHARE_TOKEN
 TUSHARE_PROXY_URL = _env('TUSHARE_PROXY_URL', '')
 
+# 板块数据源按“逻辑提供方（provider）”选择；同一 provider 下可以有多个
+# 获取通道（transport）。默认使用同花顺口径，Tushare 只是 THS 数据的首选
+# 获取通道，不应被当成另一套板块口径。
+SECTOR_DATA_PROVIDER = _env('SECTOR_DATA_PROVIDER', 'ths').strip().lower()
+SECTOR_AUXILIARY_PROVIDER = _env('SECTOR_AUXILIARY_PROVIDER', 'eastmoney').strip().lower()
+
 # MySQL 数据库配置
 MYSQL_HOST = _env('MYSQL_HOST', 'localhost')
 MYSQL_PORT = int(_env('MYSQL_PORT', '3306'))

@@ -17,6 +17,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from backend.core.config import (
     STOCK_CONCEPT_MAP_PATH,
+    SECTOR_DATA_PROVIDER,
+    SECTOR_AUXILIARY_PROVIDER,
 )
 from backend.services.source_health import (
     report_success, report_failure, is_source_available, get_all_health
@@ -31,7 +33,8 @@ DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
 SECTOR_DAILY_PATH = os.path.join(DATA_DIR, 'sector_daily.json')
 SOURCES_EM_SECTOR_DAILY = os.path.join(DATA_DIR, 'sources', 'em', 'sector_daily.json')
 SOURCES_THS_SECTOR_DAILY = os.path.join(DATA_DIR, 'sources', 'ths', 'sector_daily.json')
-CONCEPT_DATA_SOURCE = 'ths'
+# 兼容旧调用方；新代码统一使用 SECTOR_DATA_PROVIDER。
+CONCEPT_DATA_SOURCE = SECTOR_DATA_PROVIDER
 SOURCES_EM_CONCEPT_MAP = os.path.join(DATA_DIR, 'sources', 'em', 'concept_map.json')
 CONCEPT_NAME_MAPPING_PATH = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.json')
 SECTOR_UPDATE_STATE_PATH = os.path.join(DATA_DIR, 'computed', 'sector_update_state.json')
@@ -794,7 +797,7 @@ def _load_json(path, default=None):
     except Exception:
         return default if default is not None else {}
 
-def _call_with_failover(data_type, args, chain, fallback=None):
+def _call_with_failover(data_type, args, chain, fallback=None, accept=None):
     for source_name, fetch_fn in chain:
         if not is_source_available(source_name):
             continue
@@ -802,6 +805,9 @@ def _call_with_failover(data_type, args, chain, fallback=None):
             data = fetch_fn(*args)
             if data is None:
                 continue  # None 表示"没找到"→尝试下一个源
+            if accept is not None and not accept(data):
+                log.info('%s -> %s 返回数据不满足当前请求，继续同源切换', data_type, source_name)
+                continue
             report_success(source_name)
             return data
         except Exception as e:
@@ -910,6 +916,8 @@ def fetch_sector_close_snapshot(
     concept_names: list,
 ) -> dict:
     """拉取并持久化收盘快照，仅返回能匹配系统权威名称的板块。"""
+    if _ACTIVE_AUXILIARY_PROVIDER == 'disabled':
+        raise DataSourceError('板块辅助 provider 已禁用')
     target_date = str(target_date or '').replace('-', '')
     raw = _fetch_eastmoney_close_ranking(target_date)
     raw_date = str((raw or {}).get('last_updated', '')).replace('-', '')
@@ -979,6 +987,8 @@ def fetch_sector_close_snapshot(
 
 def get_sector_close_snapshot() -> dict:
     """读取最近一次通过行业覆盖门禁的收盘快照。"""
+    if _ACTIVE_AUXILIARY_PROVIDER == 'disabled':
+        return {}
     return _load_json(SECTOR_CLOSE_SNAPSHOT_PATH, {})
 
 def _fetch_em_concept_map():
@@ -992,17 +1002,19 @@ def _fetch_ths_live_sector_ranking(date_str):
     返回值格式与 _fetch_em_sector_ranking 一致。
     """
     try:
+        live_date = _last_trading_day()
+        if date_str and str(date_str) != live_date:
+            return None
         os.environ['TQDM_DISABLE'] = '1'
         import akshare as ak
         df = ak.stock_board_industry_summary_ths()
-        today = _last_trading_day()
         industries = {}
         for _, row in df.iterrows():
             name = str(row.get('板块', '')).strip()
             chg = row.get('涨跌幅', None)
             if name and chg is not None:
                 industries[name] = {
-                    'date': today,
+                    'date': live_date,
                     'change_pct': round(float(chg), 2),
                     'up_count': int(row.get('上涨家数', 0) or 0),
                     'down_count': int(row.get('下跌家数', 0) or 0),
@@ -1011,7 +1023,7 @@ def _fetch_ths_live_sector_ranking(date_str):
                     'leader_chg': round(float(row.get('领涨股-涨跌幅', 0) or 0), 2),
                 }
         log.info('THS live: 行业%d个（同花顺主源）', len(industries))
-        return {'last_updated': today, 'industries': industries, 'concepts': {}}
+        return {'last_updated': live_date, 'industries': industries, 'concepts': {}}
     except Exception as e:
         log.warning('THS live 失败: %s', e)
         return None
@@ -1022,22 +1034,24 @@ def _fetch_ths_live_sector_ranking(date_str):
 
 def _fetch_ths_sector_ranking(date_str):
     data = _load_json(SOURCES_THS_SECTOR_DAILY)
-    result = {}
+    result = {'last_updated': '', 'industries': {}, 'concepts': {}}
     for key in ['industries', 'concepts']:
         container = data.get(key, {})
         for name, klines in container.items():
             if klines and len(klines) >= 2:
-                latest = klines[-1]
-                prev = klines[-2]
-                if latest['date'] == date_str or date_str == '':
-                    prev_close = prev['close']
-                    if prev_close > 0:
-                        result[name] = {
-                            'date': latest['date'],
-                            'change_pct': round((latest['close'] - prev_close) / prev_close * 100, 2),
-                            'close': latest['close'],
-                        }
-    return result
+                eligible = [row for row in klines if not date_str or row.get('date', '') <= date_str]
+                if len(eligible) < 2:
+                    continue
+                latest, prev = eligible[-1], eligible[-2]
+                prev_close = prev['close']
+                if prev_close > 0:
+                    result[key][name] = {
+                        'date': latest['date'],
+                        'change_pct': round((latest['close'] - prev_close) / prev_close * 100, 2),
+                        'close': latest['close'],
+                    }
+                    result['last_updated'] = max(result['last_updated'], latest['date'])
+    return result if result['industries'] or result['concepts'] else None
 
 def _fetch_ths_sector_klines(sector_name, sector_type):
     data = _load_json(SOURCES_THS_SECTOR_DAILY)
@@ -1168,6 +1182,16 @@ def _fetch_tushare_sector_ranking(date_str):
         return None
 
 
+def _fetch_confirmed_ths_sector_ranking(date_str):
+    """读取最近一次通过覆盖门禁的 THS 数据，不用其他 provider 补洞。"""
+    confirmed_date = get_ths_daily_update_confirmation().get('confirmed_date', '')
+    if not confirmed_date:
+        return None
+    if date_str and str(confirmed_date) > str(date_str):
+        return None
+    return _fetch_tushare_sector_ranking(str(confirmed_date))
+
+
 def _fetch_tushare_daily_basic(ts_code, trade_date):
     """从 TushareDB 读取个股每日指标（PE/PB/市值）
 
@@ -1188,30 +1212,130 @@ def _fetch_tushare_daily_basic(ts_code, trade_date):
 
 
 # ====== 调用链定义 ======
-DATA_SOURCE_CHAINS = {
-    'sector_ranking': [
-        ('tushare', lambda date: _fetch_tushare_sector_ranking(date)),
-        ('ths_live', lambda date: _fetch_ths_live_sector_ranking(date)),
-        ('eastmoney_live', lambda date: _fetch_eastmoney_close_ranking(date)),
-        ('legacy_sector', lambda date: _fetch_legacy_sector_ranking(date)),
-        ('snapshot_sector', lambda date: _fetch_ths_sector_ranking(date)),
+# provider 是业务口径，transport 是获取通道。故障切换默认只能发生在同一
+# provider 内；跨 provider 必须通过配置显式整源切换，禁止逐条补洞或混算。
+SECTOR_RANKING_CHAINS = {
+    'ths': [
+        ('tushare_ths_db', lambda date: _fetch_tushare_sector_ranking(date)),
+        ('ths_live_akshare', lambda date: _fetch_ths_live_sector_ranking(date)),
+        ('tushare_ths_confirmed', lambda date: _fetch_confirmed_ths_sector_ranking(date)),
+        ('ths_snapshot', lambda date: _fetch_ths_sector_ranking(date)),
     ],
+    'eastmoney': [
+        ('eastmoney_live', lambda date: _fetch_eastmoney_close_ranking(date)),
+    ],
+}
+
+SECTOR_TRANSPORT_PROVIDERS = {
+    'tushare_ths_db': 'ths',
+    'ths_live_akshare': 'ths',
+    'tushare_ths_confirmed': 'ths',
+    'ths_snapshot': 'ths',
+    'eastmoney_live': 'eastmoney',
+}
+
+REQUIRED_SECTOR_CAPABILITIES = frozenset({'ranking', 'klines', 'concept_map'})
+SECTOR_PROVIDER_CAPABILITIES = {
+    'ths': REQUIRED_SECTOR_CAPABILITIES,
+    # 东财目前只实现了排行/快照，不能作为主 provider，否则会与 THS K 线混算。
+    'eastmoney': frozenset({'ranking'}),
+}
+
+
+def _validate_primary_sector_provider(provider):
+    capabilities = SECTOR_PROVIDER_CAPABILITIES.get(provider)
+    missing = REQUIRED_SECTOR_CAPABILITIES - (capabilities or frozenset())
+    if missing:
+        raise RuntimeError(
+            f'板块主 provider 不完整: provider={provider}, missing={sorted(missing)}'
+        )
+    return provider
+
+
+def _validate_auxiliary_sector_provider(provider):
+    if provider not in {'eastmoney', 'disabled'}:
+        raise RuntimeError(f'未知或未实现的板块辅助 provider: {provider}')
+    return provider
+
+
+def _sector_ranking_chain(provider):
+    """构造单一 provider 的板块排行链，并拒绝跨口径配置。"""
+    if provider not in SECTOR_RANKING_CHAINS:
+        raise RuntimeError(f'未知板块 provider: {provider}')
+    chain = SECTOR_RANKING_CHAINS[provider]
+    mismatched = [
+        name for name, _ in chain
+        if SECTOR_TRANSPORT_PROVIDERS.get(name) != provider
+    ]
+    if mismatched:
+        raise RuntimeError(
+            f'板块数据源配置跨 provider: provider={provider}, transports={mismatched}'
+        )
+    return chain
+
+_ACTIVE_SECTOR_PROVIDER = _validate_primary_sector_provider(SECTOR_DATA_PROVIDER)
+_ACTIVE_AUXILIARY_PROVIDER = _validate_auxiliary_sector_provider(
+    SECTOR_AUXILIARY_PROVIDER
+)
+
+DATA_SOURCE_CHAINS = {
+    'sector_ranking': _sector_ranking_chain(_ACTIVE_SECTOR_PROVIDER),
     'sector_klines': [
         ('tushare', lambda name, type_: _fetch_tushare_sector_klines(name, type_)),
         ('ths_sector', lambda name, type_: _fetch_ths_sector_klines(name, type_)),
     ],
     'concept_map': [
-        ('em_sector', lambda: _fetch_em_concept_map()),
-        ('legacy_sector', lambda: _load_json(STOCK_CONCEPT_MAP_PATH)),
+        ('tushare_ths_map', lambda: _load_json(STOCK_CONCEPT_MAP_PATH)),
     ],
 }
+
+
+def get_sector_source_policy():
+    """返回当前板块 provider 策略，供健康检查和运维页面展示。"""
+    provider = _ACTIVE_SECTOR_PROVIDER
+    return {
+        'provider': provider,
+        'auxiliary_provider': _ACTIVE_AUXILIARY_PROVIDER,
+        'transports': [name for name, _ in _sector_ranking_chain(provider)],
+        'authoritative_cross_provider_merge': False,
+        'intraday_estimate': {
+            'enabled': _ACTIVE_AUXILIARY_PROVIDER != 'disabled',
+            'provider': (
+                _ACTIVE_AUXILIARY_PROVIDER
+                if _ACTIVE_AUXILIARY_PROVIDER != 'disabled'
+                else None
+            ),
+            'cross_provider_composite': (
+                _ACTIVE_AUXILIARY_PROVIDER not in {'disabled', provider}
+            ),
+            'status': (
+                'legacy_pending_ths_migration'
+                if _ACTIVE_AUXILIARY_PROVIDER == 'eastmoney'
+                else 'disabled'
+            ),
+        },
+    }
 
 # ====== 公开API ======
 def get_sector_rankings(sector_type='industry', date_str=None):
     if date_str is None:
         date_str = datetime.now().strftime('%Y%m%d')
     chain = DATA_SOURCE_CHAINS['sector_ranking']
-    result = _call_with_failover(f'sector_ranking_{sector_type}', (date_str,), chain)
+    key = 'industries' if sector_type == 'industry' else 'concepts'
+
+    def _contains_requested_type(data):
+        if not isinstance(data, dict):
+            return bool(data)
+        if 'industries' in data or 'concepts' in data:
+            return bool(data.get(key))
+        return bool(data)
+
+    result = _call_with_failover(
+        f'sector_ranking_{sector_type}',
+        (date_str,),
+        chain,
+        accept=_contains_requested_type,
+    )
     if isinstance(result, dict):
         if sector_type == 'industry':
             return result.get('industries', result) if 'industries' in result else result
@@ -1318,6 +1442,7 @@ def get_merged_sector_data():
 def get_data_source_status():
     health = get_all_health()
     return {
+        'sector_policy': get_sector_source_policy(),
         'sources': health.get('sources', {}),
         'transitions': health.get('transitions', [])[-20:],
         'summary': {
