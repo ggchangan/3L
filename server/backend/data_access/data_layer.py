@@ -321,8 +321,7 @@ def get_sector_daily():
 
 def _confirmed_sector_date(industries, min_coverage=0.95):
     """返回达到覆盖率门槛的最近行业日期，空数据不得伪造为今天。"""
-    total = len(industries)
-    if not total:
+    if not industries:
         return ('', 0.0)
     counts = {}
     for klines in industries.values():
@@ -330,11 +329,17 @@ def _confirmed_sector_date(industries, min_coverage=0.95):
             date = str(row.get('date', '')).replace('-', '')
             if date:
                 counts[date] = counts.get(date, 0) + 1
-    confirmed = [date for date, count in counts.items() if count / total >= min_coverage]
-    if not confirmed:
+    dates = sorted(counts, reverse=True)
+    if not dates:
         return ('', 0.0)
-    last_date = max(confirmed)
-    return (last_date, counts[last_date] / total)
+    latest = dates[0]
+    previous = dates[1] if len(dates) > 1 else latest
+    reference_count = max(counts[latest], counts[previous])
+    for date in (latest, previous):
+        coverage = counts[date] / reference_count if reference_count else 0.0
+        if coverage >= min_coverage:
+            return (date, coverage)
+    return ('', 0.0)
 
 
 def get_sector_push2test():

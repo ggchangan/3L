@@ -139,13 +139,25 @@ def test_confirmed_sector_date_requires_coverage_and_never_fakes_today():
     assert _confirmed_sector_date(industries, min_coverage=0.95) == ('20260720', 1.0)
 
 
+def test_confirmed_sector_date_ignores_inactive_historical_boards():
+    from backend.data_access.data_layer import _confirmed_sector_date
+
+    industries = {
+        'A': [{'date': '20260612'}, {'date': '20260720'}, {'date': '20260721'}],
+        'B': [{'date': '20260612'}, {'date': '20260720'}, {'date': '20260721'}],
+        '已停用旧板块': [{'date': '20260612'}],
+    }
+
+    assert _confirmed_sector_date(industries) == ('20260721', 1.0)
+
+
 def test_sector_update_coverage_rejects_partial_target_date():
     from backend.data_access import data_source
 
     db = type('FakeDB', (), {})()
     db.execute_raw = lambda sql, params=None: (
         [{'name': 'A', 'type': 'I'}, {'name': 'B', 'type': 'I'}]
-        if 'WHERE ti.type IN' in sql
+        if "WHERE ti.type='I'" in sql
         else [{'name': 'A', 'type': 'I'}]
     )
     requested = [('A', 'industry'), ('B', 'industry')]

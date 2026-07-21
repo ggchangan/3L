@@ -346,7 +346,14 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> di
         """SELECT DISTINCT ti.name, ti.type
            FROM ths_daily td
            JOIN ths_index ti ON td.ts_code=ti.ts_code
-           WHERE ti.type IN ('I', 'N')"""
+           WHERE ti.type='I'
+             AND td.trade_date=(
+                 SELECT MAX(td2.trade_date)
+                 FROM ths_daily td2
+                 JOIN ths_index ti2 ON td2.ts_code=ti2.ts_code
+                 WHERE ti2.type='I' AND td2.trade_date < %s
+             )""",
+        [target_date],
     )
     active_industries = {
         row['name'] for row in active_rows
