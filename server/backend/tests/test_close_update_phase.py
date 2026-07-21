@@ -2,6 +2,12 @@ from datetime import datetime
 from unittest.mock import patch
 
 
+class TradingDayAfterClose(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2026, 7, 21, 17, 30)
+
+
 def test_last_completed_trading_day_includes_today_after_close():
     from backend.data_access import data_source
 
@@ -31,7 +37,8 @@ def test_last_completed_trading_day_uses_previous_day_before_close():
 def test_close_phase_waits_until_stocks_and_all_indices_are_ready():
     from backend.core import update_stock_data
 
-    with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
+    with patch.object(update_stock_data, 'datetime', TradingDayAfterClose), \
+         patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
          patch.object(update_stock_data, '_fetch_tushare_daily_incremental'), \
          patch.object(update_stock_data, '_daily_data_freshness', return_value={
              'ready': False,
@@ -68,7 +75,8 @@ def test_close_phase_refreshes_review_after_daily_data_is_ready():
         'stock_date': '20260721',
         'missing_indices': [],
     }
-    with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
+    with patch.object(update_stock_data, 'datetime', TradingDayAfterClose), \
+         patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
          patch.object(update_stock_data, '_fetch_tushare_daily_incremental'), \
          patch.object(update_stock_data, '_daily_data_freshness', return_value=freshness), \
          patch.object(update_stock_data, '_ensure_all_stock_codes'), \
@@ -76,6 +84,9 @@ def test_close_phase_refreshes_review_after_daily_data_is_ready():
          patch.object(update_stock_data, 'update_concept_maps'), \
          patch.object(update_stock_data, 'update_stocks'), \
          patch.object(update_stock_data, 'update_index'), \
+         patch.object(update_stock_data, 'refresh_sector_close_snapshot', return_value={
+             'coverage': {'industry': {'covered': 280, 'expected': 319, 'ratio': 0.878}},
+         }), \
          patch.object(update_stock_data, '_refresh_review_cache') as refresh:
         assert update_stock_data.run_close_phase() is True
         refresh.assert_called_once_with('20260721')
@@ -123,6 +134,27 @@ def test_full_phase_refreshes_review_after_sector_update(tmp_path):
          patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
          patch.object(update_stock_data, '_refresh_review_cache') as refresh:
         update_stock_data.run_full_phase()
+
+    refresh.assert_called_once_with('20260721')
+
+
+def test_close_phase_keeps_review_available_when_sector_snapshot_fails():
+    from backend.core import update_stock_data
+
+    freshness = {'ready': True, 'stock_date': '20260721', 'missing_indices': []}
+    with patch.object(update_stock_data, 'datetime', TradingDayAfterClose), \
+         patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
+         patch.object(update_stock_data, '_fetch_tushare_daily_incremental'), \
+         patch.object(update_stock_data, '_daily_data_freshness', return_value=freshness), \
+         patch.object(update_stock_data, '_ensure_all_stock_codes'), \
+         patch.object(update_stock_data, 'update_industry_map'), \
+         patch.object(update_stock_data, 'update_concept_maps'), \
+         patch.object(update_stock_data, 'update_stocks'), \
+         patch.object(update_stock_data, 'update_index'), \
+         patch.object(update_stock_data, 'refresh_sector_close_snapshot', side_effect=RuntimeError('暂时不可用')), \
+         patch.object(update_stock_data, '_clear_mainline_cache'), \
+         patch.object(update_stock_data, '_refresh_review_cache') as refresh:
+        assert update_stock_data.run_close_phase() is True
 
     refresh.assert_called_once_with('20260721')
 

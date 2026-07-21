@@ -44,6 +44,7 @@ from backend.data_access.data_layer import (
     tushare_fetch_daily_incremental,
     get_ths_daily_update_coverage,
     save_ths_daily_update_confirmation,
+    refresh_sector_close_snapshot,
 )
 
 CACHE_DIR = os.path.join(DATA_DIR, '.cache')
@@ -457,6 +458,14 @@ def _refresh_review_cache(target_date):
     log('✅  当日复盘缓存已生成')
 
 
+def _clear_mainline_cache():
+    """删除依赖板块日期/快照的主线计算缓存。"""
+    cache_path = os.path.join(DATA_DIR, '.cache', 'mainline_full.json')
+    if os.path.isfile(cache_path):
+        os.remove(cache_path)
+        log(f'🧹  已清除过期缓存: {os.path.basename(cache_path)}')
+
+
 def run_close_phase():
     """收盘阶段：只更新当日可获得的数据，并生成复盘缓存。
 
@@ -490,6 +499,17 @@ def run_close_phase():
     update_stocks()
     log('━━━ 指数更新 ━━━')
     update_index()
+    try:
+        snapshot = refresh_sector_close_snapshot(target_date)
+        stats = snapshot.get('coverage', {}).get('industry', {})
+        log(
+            '📊  收盘板块快照: '
+            f'{stats.get("covered", 0)}/{stats.get("expected", 0)} '
+            f'({stats.get("ratio", 0):.1%})'
+        )
+    except Exception as exc:
+        log(f'⚠️  收盘板块快照未就绪，复盘将降级使用已确认主线: {exc}')
+    _clear_mainline_cache()
     _refresh_review_cache(target_date)
     return True
 
@@ -535,13 +555,7 @@ def run_full_phase():
         raise  # 非零退出码让cron感知
 
     # 板块数据更新后，清除依赖的主线缓存（避免页面读到过期数据）
-    _cache_files = [
-        os.path.join(DATA_DIR, '.cache', 'mainline_full.json'),
-    ]
-    for _cf in _cache_files:
-        if os.path.isfile(_cf):
-            os.remove(_cf)
-            log(f'🧹  已清除过期缓存: {os.path.basename(_cf)}')
+    _clear_mainline_cache()
 
     from backend.data_access.data_source import get_last_completed_trading_day
     _refresh_review_cache(get_last_completed_trading_day())

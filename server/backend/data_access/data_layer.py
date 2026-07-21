@@ -859,6 +859,23 @@ def bootstrap_ths_daily_update_confirmation():
     return _fn()
 
 
+def refresh_sector_close_snapshot(target_date):
+    """拉取当日收盘板块快照，供预估主线使用。"""
+    from backend.data_access.data_source import fetch_sector_close_snapshot as _fn
+    confirmation = get_ths_daily_update_confirmation()
+    industry_names = confirmation.get('industry_names', [])
+    if len(industry_names) < 80:
+        raise RuntimeError('权威行业基线未就绪，不生成收盘预估快照')
+    concept_names = sorted(get_tracked_concept_names(min_related_stocks=6))
+    return _fn(target_date, industry_names, concept_names)
+
+
+def get_sector_close_snapshot():
+    """读取已通过覆盖门禁的当日收盘板块快照。"""
+    from backend.data_access.data_source import get_sector_close_snapshot as _fn
+    return _fn()
+
+
 def save_ths_daily_update_confirmation(target_date, coverage):
     """保存通过门禁的权威板块状态。"""
     from backend.data_access.data_source import save_ths_daily_update_confirmation as _fn

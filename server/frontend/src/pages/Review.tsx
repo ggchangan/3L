@@ -100,6 +100,7 @@ export default function Review() {
           <ReviewDataStatus
             data_dates={data.data_dates}
             data_freshness={data.data_freshness}
+            mainline={data.mainline}
           />
         )}
       </div>

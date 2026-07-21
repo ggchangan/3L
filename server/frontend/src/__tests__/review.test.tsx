@@ -63,4 +63,22 @@ describe('ReviewDataStatus', () => {
     expect(screen.getByText('板块 07-21 · 已确认')).toBeTruthy()
     expect(screen.queryByText(/次日 06:00 自动校准/)).toBeNull()
   })
+
+  it('板块待补齐时展示当日预估主线', () => {
+    render(
+      <ReviewDataStatus
+        data_dates={{ stocks: '20260721', index: '20260721', sectors: '20260720' }}
+        data_freshness={{ stocks: 'current', index: 'current', sectors: 'stale' }}
+        mainline={{
+          ranking_status: 'estimated',
+          ranking_date: '20260721',
+          estimate_coverage: 0.878,
+        }}
+      />,
+    )
+
+    expect(screen.getByText('主线 07-21 · 当日预估')).toBeTruthy()
+    expect(screen.getByText(/收盘快照预估/)).toBeTruthy()
+    expect(screen.queryByText(/暂沿用上一交易日/)).toBeNull()
+  })
 })
