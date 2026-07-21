@@ -421,10 +421,14 @@ def get_mainline_data(date_str):
 
 def get_concept_mainline_data(date_str):
     """概念主线排名 — 与 get_mainline_data 相同逻辑，但用概念板块数据"""
-    from backend.data_access.data_layer import get_ths_industry_klines
+    from backend.data_access.data_layer import (
+        get_sector_daily, get_ths_industry_klines, get_tracked_concept_names,
+    )
     from backend.services.concept_wave_service import judge_concept_wave as _judge_wave
     concepts_data = get_ths_industry_klines(ths_type='N')
-    if not concepts_data:
+    tracked_concepts = get_tracked_concept_names(min_related_stocks=6)
+    sector_date = str(get_sector_daily().get('last_updated', '')).replace('-', '')
+    if not concepts_data or not tracked_concepts or not sector_date:
         return {'lines': [], 'secondary': [], 'all_ranked': [], 'persistence': []}
 
     # 从 _push2test 获取当日涨跌幅（同 get_mainline_data 一致）
@@ -435,6 +439,14 @@ def get_concept_mainline_data(date_str):
     scores = []
     for name, klines in concepts_data.items():
         try:
+            if name not in tracked_concepts:
+                continue
+            klines = [
+                row for row in klines
+                if str(row.get('date', '')).replace('-', '') <= sector_date
+            ]
+            if not klines or str(klines[-1].get('date', '')).replace('-', '') != sector_date:
+                continue
             if len(klines) < 20:
                 continue
             chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100

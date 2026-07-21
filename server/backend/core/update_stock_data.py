@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-唯一数据更新脚本 — 17:00 cron 运行
+唯一数据更新脚本 — 支持收盘当日更新与次日完整更新
 范围 = 个股K线 + 中证全指 + 行业/概念板块日K线
 所有文件I/O通过 backend.data_access.data_layer 完成
 
 用法:
-    python3 scripts/update_stock_data.py
+    python -m backend.core.update_stock_data --phase close
+    python -m backend.core.update_stock_data --phase full
 """
 
-import json, os, sys, time
+import argparse, json, os, sys, time
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -27,6 +28,7 @@ from backend.data_access.data_layer import (
     fetch_stock_klines_from_db,
     get_stock_names_from_db,
     get_stock_daily_latest_date,
+    get_tracked_concept_names,
 )
 from backend.data_access.data_layer import (
     get_concept_list,
@@ -40,6 +42,7 @@ from backend.data_access.data_layer import (
     build_industry_map_from_db,
     build_concept_maps_from_db,
     tushare_fetch_daily_incremental,
+    get_ths_daily_update_coverage,
 )
 
 CACHE_DIR = os.path.join(DATA_DIR, '.cache')
@@ -262,23 +265,7 @@ def update_sectors():
 
     # ── 确定追踪中的概念 ──
     try:
-        _concept_list = get_concept_list()
-        _stock_concept_map = get_stock_concept_map()
-        wl = get_watchlist()
-        wl_codes = set(s.get('code', '') for s in wl)
-
-        tracked_concepts = set()
-        for code, cinfo in _concept_list.items():
-            name = cinfo.get('name', '')
-            if not name:
-                continue
-            related = 0
-            for scode, sinfo in _stock_concept_map.items():
-                if code in sinfo.get('concept_codes', []) and scode in wl_codes:
-                    related += 1
-            if related >= 6:
-                tracked_concepts.add(name)
-
+        tracked_concepts = get_tracked_concept_names(min_related_stocks=6)
         log(f'📋  追踪概念: {len(tracked_concepts)}个（自选股关联≥6只）')
     except Exception as e:
         log(f'⚠️  计算追踪概念失败: {e}，回退到全量更新')
@@ -310,6 +297,18 @@ def update_sectors():
         import traceback
         for line in traceback.format_exc().splitlines():
             log(f'  {line}')
+
+    coverage = get_ths_daily_update_coverage(names_to_update, today)
+    ind_cov = coverage.get('industry', {})
+    con_cov = coverage.get('concept', {})
+    log(
+        '📋  板块目标日覆盖: '
+        f'行业{ind_cov.get("covered", 0)}/{ind_cov.get("expected", 0)}, '
+        f'概念{con_cov.get("covered", 0)}/{con_cov.get("expected", 0)}'
+    )
+    if not coverage.get('ready'):
+        missing = coverage.get('missing', [])[:10]
+        raise RuntimeError(f'板块数据覆盖不足，缺失示例: {missing}')
 
     log(f'📈  板块: 行业{ind_saved}个, 概念{con_saved}个 (K线已写入DB)')
     return (ind_saved, con_saved)
@@ -400,7 +399,101 @@ def _fetch_tushare_daily_incremental():
     tushare_fetch_daily_incremental()
 
 
-def main():
+def _ensure_all_stock_codes():
+    """确保搜索使用的全量 A 股代码表存在。"""
+    if os.path.isfile(ALL_CODES_PATH):
+        return
+    log('📋  生成 all_stock_codes.json（全量A股代码表）...')
+    try:
+        import akshare as ak
+        df = ak.stock_info_a_code_name()
+        codes = dict(zip(df['code'], df['name']))
+        with open(ALL_CODES_PATH, 'w', encoding='utf-8') as f:
+            json.dump(codes, f, ensure_ascii=False)
+        log(f'✅  已生成 ({len(codes)}只)')
+    except Exception as e:
+        log(f'⚠️  生成失败: {e}')
+
+
+def _daily_data_freshness(target_date):
+    """检查收盘复盘必需的个股和全部指数是否已到目标交易日。"""
+    stock_date = str(get_stock_daily_latest_date() or '').replace('-', '')
+    index_data = get_index_data()
+    indices = index_data.get('indices', {})
+    index_dates = {}
+    for code, info in indices.items():
+        klines = info.get('klines', [])
+        index_dates[code] = str(klines[0].get('date', '') if klines else '').replace('-', '')
+
+    expected_index_codes = {'000001', '000688', '000985', '399006'}
+    missing_indices = sorted(
+        code for code in expected_index_codes
+        if index_dates.get(code, '') < target_date
+    )
+    ready = stock_date >= target_date and not missing_indices
+    return {
+        'ready': ready,
+        'target_date': target_date,
+        'stock_date': stock_date,
+        'index_dates': index_dates,
+        'missing_indices': missing_indices,
+    }
+
+
+def _refresh_review_cache(target_date):
+    """同步生成复盘缓存，保证命令退出前页面已经可用。"""
+    from backend.services.review_service import (
+        compute_review_real_time, review_refresh_file_lock, save_review_data,
+    )
+
+    date_str = datetime.strptime(target_date, '%Y%m%d').strftime('%Y-%m-%d')
+    log(f'━━━ 生成当日复盘缓存 ({date_str}) ━━━')
+    with review_refresh_file_lock():
+        review = compute_review_real_time(date_str)
+        review['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
+        save_review_data(review)
+    log('✅  当日复盘缓存已生成')
+
+
+def run_close_phase():
+    """收盘阶段：只更新当日可获得的数据，并生成复盘缓存。
+
+    返回 True 表示个股和全部指数均已到目标交易日；False 表示数据源尚未
+    就绪，调用方可以稍后重试。板块完整日线留给次日完整阶段更新。
+    """
+    from backend.data_access.data_source import get_last_completed_trading_day
+
+    target_date = get_last_completed_trading_day()
+    log(f'🌆 收盘更新目标交易日: {target_date}')
+    if target_date != datetime.now().strftime('%Y%m%d'):
+        log('⏭️  今天不是交易日，跳过收盘更新')
+        return True
+    _fetch_tushare_daily_incremental()
+
+    freshness = _daily_data_freshness(target_date)
+    if not freshness['ready']:
+        log(
+            '⏳ 当日数据尚未到齐: '
+            f'个股={freshness["stock_date"] or "无"}, '
+            f'缺少指数={freshness["missing_indices"]}'
+        )
+        return False
+
+    _ensure_all_stock_codes()
+    log('━━━ 行业映射 ━━━')
+    update_industry_map()
+    log('━━━ 概念映射 ━━━')
+    update_concept_maps()
+    log('━━━ 个股更新 ━━━')
+    update_stocks()
+    log('━━━ 指数更新 ━━━')
+    update_index()
+    _refresh_review_cache(target_date)
+    return True
+
+
+def run_full_phase():
+    """原有完整管线，供次日 06:00 补齐板块数据。"""
     t0 = time.time()
 
     # 全局关闭 tqdm 进度条（在 akshare 首次导入前生效）
@@ -410,18 +503,7 @@ def main():
     # ── Tushare 增量拉取（先确保 stock_daily / index_daily 有最新数据）──
     _fetch_tushare_daily_incremental()
 
-    # 确保 all_stock_codes.json 存在（搜索用）
-    if not os.path.isfile(ALL_CODES_PATH):
-        log('📋  生成 all_stock_codes.json（全量A股代码表）...')
-        try:
-            import akshare as ak
-            df = ak.stock_info_a_code_name()
-            codes = dict(zip(df['code'], df['name']))
-            with open(ALL_CODES_PATH, 'w', encoding='utf-8') as f:
-                json.dump(codes, f, ensure_ascii=False)
-            log(f'✅  已生成 ({len(codes)}只)')
-        except Exception as e:
-            log(f'⚠️  生成失败: {e}')
+    _ensure_all_stock_codes()
 
     # 行业映射（全量更新，～1-2秒）
     log('━━━ 行业映射 ━━━')
@@ -459,11 +541,46 @@ def main():
             os.remove(_cf)
             log(f'🧹  已清除过期缓存: {os.path.basename(_cf)}')
 
+    from backend.data_access.data_source import get_last_completed_trading_day
+    _refresh_review_cache(get_last_completed_trading_day())
+
     elapsed = time.time() - t0
     log(f'{"━"*30}')
     log(f'📊 汇总: 个股{s1[0]+s1[1]}只变动 | 指数{s2[0]}条新增 | 板块{s3[0]+s3[1]}只变动')
     log(f'⏱️  总耗时 {elapsed:.1f}s')
 
 
+def main(argv=None):
+    parser = argparse.ArgumentParser(description='3L 数据更新管线')
+    parser.add_argument(
+        '--phase', choices=('close', 'full'), default='full',
+        help='close=收盘后当日复盘；full=次日完整更新（默认）',
+    )
+    parser.add_argument('--max-attempts', type=int, default=1, help='close 阶段最大尝试次数')
+    parser.add_argument('--retry-interval', type=int, default=900, help='重试间隔秒数')
+    args = parser.parse_args(argv)
+
+    os.environ['TQDM_DISABLE'] = '1'
+    os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
+
+    if args.phase == 'full':
+        run_full_phase()
+        return 0
+
+    attempts = max(1, args.max_attempts)
+    for attempt in range(1, attempts + 1):
+        log(f'收盘更新尝试 {attempt}/{attempts}')
+        try:
+            if run_close_phase():
+                return 0
+        except Exception as exc:
+            log(f'⚠️  收盘更新异常，将按计划重试: {type(exc).__name__}: {exc}')
+        if attempt < attempts:
+            log(f'将在 {args.retry_interval} 秒后重试')
+            time.sleep(max(0, args.retry_interval))
+    log('🚨 达到最大重试次数，当日数据仍未到齐')
+    return 2
+
+
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

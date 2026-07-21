@@ -832,12 +832,12 @@ def compute_tracking(force=False, db_path=None) -> dict:
         # 没有workbench数据，用已有的db数据
         return get_tracking(db_path)
 
-    from backend.services.review_service import compute_review_real_time
+    from backend.services.review_service import compute_review_serialized
     from backend.data_access.data_layer import get_all_stocks, get_stock_klines
 
     for date_str in dates:
         try:
-            review_data = compute_review_real_time(date_str)
+            review_data = compute_review_serialized(date_str)
         except Exception:
             continue
         trading_plan = review_data.get('trading_plan', {})

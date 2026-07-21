@@ -330,6 +330,69 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
     return (written, len(names_list))
 
 
+def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> dict:
+    """检查本次板块更新在目标日期的覆盖率。
+
+    行业只统计历史上实际有 K 线的活跃板块，避免 ``ths_index`` 中大量无法
+    通过当前数据源获取的分类稀释覆盖率；概念统计本次明确追踪的名称。
+    """
+    db = _get_tushare_db()
+    if not db:
+        return {'ready': False, 'industry': {}, 'concept': {}, 'missing': []}
+
+    requested_industries = {name for name, kind in names_to_update if kind == 'industry'}
+    requested_concepts = {name for name, kind in names_to_update if kind == 'concept'}
+    active_rows = db.execute_raw(
+        """SELECT DISTINCT ti.name, ti.type
+           FROM ths_daily td
+           JOIN ths_index ti ON td.ts_code=ti.ts_code
+           WHERE ti.type IN ('I', 'N')"""
+    )
+    active_industries = {
+        row['name'] for row in active_rows
+        if row.get('type') == 'I' and row['name'] in requested_industries
+    }
+    expected = active_industries | requested_concepts
+
+    covered_industries = set()
+    covered_concepts = set()
+    if expected:
+        names = sorted(expected)
+        placeholders = ','.join(['%s'] * len(names))
+        rows = db.execute_raw(
+            f"""SELECT DISTINCT ti.name, ti.type
+                FROM ths_daily td
+                JOIN ths_index ti ON td.ts_code=ti.ts_code
+                WHERE td.trade_date=%s AND ti.name IN ({placeholders})""",
+            [target_date, *names],
+        )
+        covered_industries = {row['name'] for row in rows if row.get('type') == 'I'}
+        covered_concepts = {row['name'] for row in rows if row.get('type') == 'N'}
+
+    def _stats(names, covered, threshold):
+        total = len(names)
+        count = len(names & covered)
+        ratio = count / total if total else 1.0
+        return {
+            'expected': total,
+            'covered': count,
+            'ratio': ratio,
+            'threshold': threshold,
+            'ready': total > 0 and ratio >= threshold,
+            'missing': sorted(names - covered),
+        }
+
+    industry = _stats(active_industries, covered_industries, 0.95)
+    concept = _stats(requested_concepts, covered_concepts, 0.90)
+    concepts_ready = concept['ready'] if requested_concepts else True
+    return {
+        'ready': industry['ready'] and concepts_ready,
+        'industry': industry,
+        'concept': concept,
+        'missing': industry['missing'] + concept['missing'],
+    }
+
+
 def _convert_board_kline(df):
     """akshare 行业/概念板块 DataFrame → [{date, open, close, high, low, volume}]
     """
@@ -587,25 +650,28 @@ def _get_trade_date_cache():
 
 
 def get_last_completed_trading_day():
-    """获取上一个已完成交易日 YYYYMMDD（考虑春节/国庆等节假日）
+    """获取最近一个已完成交易日 YYYYMMDD（考虑节假日）。
 
-    使用同花顺交易日历精确判断，适用于cron在交易日6:00运行的场景。
-    此时当日交易未开始，目标日期是上一个已完成交易日。
+    A 股收盘后（15:30 起）当天已经是完成的交易日；收盘前仍返回上一
+    交易日。这样同一个入口既适用于早晨补数，也适用于收盘后的当日更新。
     """
     cache = _get_trade_date_cache()
-    d = datetime.now() - timedelta(days=1)
+    now = datetime.now()
+    include_today = (now.hour, now.minute) >= (15, 30)
+    d = now if include_today else now - timedelta(days=1)
     for _ in range(21):
         ds = d.strftime('%Y-%m-%d')
-        if ds in cache:
+        # MySQL trade_cal 通常保存 YYYYMMDD，akshare 回退通常是 YYYY-MM-DD。
+        if ds in cache or d.strftime('%Y%m%d') in cache:
             return d.strftime('%Y%m%d')
         d -= timedelta(days=1)
     # fallback: 周末判断
-    d = datetime.now() - timedelta(days=1)
+    d = now if include_today else now - timedelta(days=1)
     for _ in range(14):
         if d.weekday() < 5:
             return d.strftime('%Y%m%d')
         d -= timedelta(days=1)
-    return datetime.now().strftime('%Y%m%d')
+    return now.strftime('%Y%m%d')
 
 
 def _last_trading_day():

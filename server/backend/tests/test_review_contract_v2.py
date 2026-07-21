@@ -44,12 +44,14 @@ def test_background_refresh_is_single_flight(monkeypatch):
     release = threading.Event()
     saved = []
 
-    def fake_compute():
+    def fake_compute(date_str):
+        assert date_str == '2026-07-21'
         entered.set()
         assert release.wait(timeout=2)
         return {'date': '2026-07-21'}
 
     monkeypatch.setattr(review_service, 'compute_review_real_time', fake_compute)
+    monkeypatch.setattr(review_service, 'get_completed_review_date', lambda: '2026-07-21')
     monkeypatch.setattr(review_service, 'save_review_data', saved.append)
     with review_service._review_refresh_lock:
         review_service._review_refresh_state.update({
@@ -70,3 +72,12 @@ def test_background_refresh_is_single_flight(monkeypatch):
     assert review_service.get_review_refresh_status()['status'] == 'completed'
     assert saved[0]['date'] == '2026-07-21'
     assert saved[0]['cache_generated_at']
+
+
+def test_completed_review_date_uses_last_completed_trading_day(monkeypatch):
+    monkeypatch.setattr(
+        'backend.data_access.data_source.get_last_completed_trading_day',
+        lambda: '20260720',
+    )
+
+    assert review_service.get_completed_review_date() == '2026-07-20'

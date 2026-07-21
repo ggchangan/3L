@@ -8,6 +8,7 @@
 不再通过 subprocess 调用 generate_review_data.py，改为直接 import。
 """
 import json, os, sys, shutil, subprocess, threading, time
+from contextlib import contextmanager
 from datetime import datetime
 from backend.core.config import (
     REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
@@ -33,6 +34,35 @@ _review_refresh_state = {
     'completed_at': '',
     'error': '',
 }
+
+
+@contextmanager
+def review_refresh_file_lock():
+    """跨进程串行化复盘计算，避免 cron 与 Web 同时写缓存。"""
+    import fcntl
+
+    lock_path = os.path.join(DATA_DIR, '.cache', 'review_refresh.lock')
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    with open(lock_path, 'a+', encoding='utf-8') as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def get_completed_review_date():
+    """返回最近已完成交易日，避免开盘前按自然日覆盖校准缓存。"""
+    from backend.data_access.data_source import get_last_completed_trading_day
+
+    target = get_last_completed_trading_day()
+    return datetime.strptime(target, '%Y%m%d').strftime('%Y-%m-%d')
+
+
+def compute_review_serialized(date_str=None):
+    """统一的外部实时计算入口，完整持有跨进程锁。"""
+    with review_refresh_file_lock():
+        return compute_review_real_time(date_str or get_completed_review_date())
 
 # ═══════════════════════════════════════════════════════════════
 # 存储层
@@ -130,9 +160,10 @@ def request_review_refresh(force=False):
 
     def _worker():
         try:
-            data = compute_review_real_time()
-            data['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
-            save_review_data(data)
+            with review_refresh_file_lock():
+                data = compute_review_real_time(get_completed_review_date())
+                data['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
+                save_review_data(data)
             with _review_refresh_lock:
                 _review_refresh_state.update({
                     'status': 'completed',
