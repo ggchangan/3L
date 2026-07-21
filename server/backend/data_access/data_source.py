@@ -344,35 +344,10 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> di
     requested_industries = {name for name, kind in names_to_update if kind == 'industry'}
     requested_concepts = {name for name, kind in names_to_update if kind == 'concept'}
     confirmation = get_ths_daily_update_confirmation()
+    if not confirmation:
+        confirmation = bootstrap_ths_daily_update_confirmation()
     active_industries = set(confirmation.get('industry_names', [])) & requested_industries
     bootstrap = not active_industries
-    if bootstrap:
-        # 迁移/首次建库：从最近20个原始交易日选择规模最大的日期，避免
-        # 单日残缺写入成为基线，也避开很久以前已经停用的历史板块。
-        count_rows = db.execute_raw(
-            """SELECT td.trade_date, COUNT(DISTINCT td.ts_code) AS board_count
-               FROM ths_daily td
-               JOIN ths_index ti ON td.ts_code=ti.ts_code
-               WHERE ti.type='I' AND td.trade_date < %s
-               GROUP BY td.trade_date
-               ORDER BY td.trade_date DESC
-               LIMIT 20""",
-            [target_date],
-        )
-        baseline_date = ''
-        if count_rows:
-            baseline_date = max(count_rows, key=lambda row: int(row['board_count']))['trade_date']
-        if baseline_date:
-            active_rows = db.execute_raw(
-                """SELECT DISTINCT ti.name
-                   FROM ths_daily td
-                   JOIN ths_index ti ON td.ts_code=ti.ts_code
-                   WHERE ti.type='I' AND td.trade_date=%s""",
-                [baseline_date],
-            )
-            active_industries = {
-                row['name'] for row in active_rows if row['name'] in requested_industries
-            }
     expected = active_industries | requested_concepts
     query_names = requested_industries | requested_concepts
 
@@ -454,8 +429,9 @@ def bootstrap_ths_daily_update_confirmation() -> dict:
     ]
     if len(stable_rows) < 2:
         return {}
-    # SQL 已按日期倒序，取符合稳定规模的最新日。
-    confirmed_date = stable_rows[0]['trade_date']
+    # 优先取板块数最多的稳定日；同规模时 SQL 倒序保证取最新日。
+    baseline_row = max(stable_rows, key=lambda row: int(row['board_count']))
+    confirmed_date = baseline_row['trade_date']
     rows = db.execute_raw(
         """SELECT DISTINCT ti.name
            FROM ths_daily td

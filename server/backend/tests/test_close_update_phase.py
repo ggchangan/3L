@@ -194,31 +194,26 @@ def test_same_count_sector_member_replacement_is_not_complete():
     assert result['industry_names'] == ['A', 'B', 'C', 'X']
 
 
-def test_sector_coverage_bootstraps_from_largest_recent_day():
+def test_sector_coverage_uses_shared_safe_legacy_bootstrap():
     from backend.data_access import data_source
 
     names = [f'I{i:03d}' for i in range(80)]
-
-    class FakeDB:
-        def execute_raw(self, sql, params=None):
-            if 'COUNT(DISTINCT td.ts_code)' in sql:
-                return [
-                    {'trade_date': '20260720', 'board_count': 80},
-                    {'trade_date': '20260719', 'board_count': 75},
-                ]
-            if "ti.type='I' AND td.trade_date=%s" in sql:
-                assert params == ['20260720']
-                return [{'name': name} for name in names]
-            return [{'name': name, 'type': 'I'} for name in names]
+    db = type('FakeDB', (), {})()
+    db.execute_raw = lambda sql, params=None: [
+        {'name': name, 'type': 'I'} for name in names
+    ]
+    confirmation = {'confirmed_date': '20260720', 'industry_names': names}
 
     requested = [(name, 'industry') for name in names]
-    with patch.object(data_source, '_get_tushare_db', return_value=FakeDB()), \
-         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value={}):
+    with patch.object(data_source, '_get_tushare_db', return_value=db), \
+         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value={}), \
+         patch.object(data_source, 'bootstrap_ths_daily_update_confirmation', return_value=confirmation) as bootstrap:
         result = data_source.get_ths_daily_update_coverage(requested, '20260721')
 
     assert result['ready'] is True
-    assert result['bootstrap'] is True
+    assert result['bootstrap'] is False
     assert result['industry']['expected'] == 80
+    bootstrap.assert_called_once_with()
 
 
 def test_sector_coverage_does_not_bootstrap_from_target_day_itself():
@@ -251,10 +246,10 @@ def test_legacy_sector_state_bootstraps_only_from_repeated_stable_history(tmp_pa
         def execute_raw(self, sql, params=None):
             if 'COUNT(DISTINCT td.ts_code)' in sql:
                 return [
-                    {'trade_date': '20260720', 'board_count': 80},
-                    {'trade_date': '20260719', 'board_count': 79},
+                    {'trade_date': '20260720', 'board_count': 79},
+                    {'trade_date': '20260719', 'board_count': 80},
                 ]
-            assert params == ['20260720']
+            assert params == ['20260719']
             return [{'name': name} for name in names]
 
     state_path = tmp_path / 'computed' / 'sector_update_state.json'
@@ -262,7 +257,7 @@ def test_legacy_sector_state_bootstraps_only_from_repeated_stable_history(tmp_pa
          patch.object(data_source, '_get_tushare_db', return_value=FakeDB()):
         state = data_source.bootstrap_ths_daily_update_confirmation()
 
-    assert state['confirmed_date'] == '20260720'
+    assert state['confirmed_date'] == '20260719'
     assert state['industry_names'] == names
 
 
