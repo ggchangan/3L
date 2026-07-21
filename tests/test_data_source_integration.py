@@ -122,13 +122,11 @@ class TestL1DataSourceFailover:
 
     @pytest.mark.network
     def test_get_sector_rankings_ths_live_first(self):
-        """get_sector_rankings: THS live排在首位"""
+        """get_sector_rankings: Tushare/THS DB 优先于 THS 实时通道"""
         from backend.data_access.data_source import DATA_SOURCE_CHAINS
         chain = DATA_SOURCE_CHAINS['sector_ranking']
         names = [name for name, _ in chain]
-        assert 'ths_live' in names, "链中缺少ths_live"
-        assert names.index('ths_live') < names.index('legacy_sector'), \
-            f"ths_live应排在legacy之前，实际顺序={names}"
+        assert names[:2] == ['tushare_ths_db', 'ths_live_akshare']
 
     @pytest.mark.network
     def test_get_sector_rankings_returns_industry_data(self):
