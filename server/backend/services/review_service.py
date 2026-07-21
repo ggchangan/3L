@@ -8,6 +8,7 @@
 不再通过 subprocess 调用 generate_review_data.py，改为直接 import。
 """
 import json, os, sys, shutil, subprocess, threading, time
+from contextlib import contextmanager
 from datetime import datetime
 from backend.core.config import (
     REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
@@ -33,6 +34,21 @@ _review_refresh_state = {
     'completed_at': '',
     'error': '',
 }
+
+
+@contextmanager
+def review_refresh_file_lock():
+    """跨进程串行化复盘计算，避免 cron 与 Web 同时写缓存。"""
+    import fcntl
+
+    lock_path = os.path.join(DATA_DIR, '.cache', 'review_refresh.lock')
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    with open(lock_path, 'a+', encoding='utf-8') as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 # ═══════════════════════════════════════════════════════════════
 # 存储层
@@ -130,9 +146,10 @@ def request_review_refresh(force=False):
 
     def _worker():
         try:
-            data = compute_review_real_time()
-            data['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
-            save_review_data(data)
+            with review_refresh_file_lock():
+                data = compute_review_real_time()
+                data['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
+                save_review_data(data)
             with _review_refresh_lock:
                 _review_refresh_state.update({
                     'status': 'completed',

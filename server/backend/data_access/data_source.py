@@ -330,6 +330,69 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
     return (written, len(names_list))
 
 
+def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> dict:
+    """检查本次板块更新在目标日期的覆盖率。
+
+    行业只统计历史上实际有 K 线的活跃板块，避免 ``ths_index`` 中大量无法
+    通过当前数据源获取的分类稀释覆盖率；概念统计本次明确追踪的名称。
+    """
+    db = _get_tushare_db()
+    if not db:
+        return {'ready': False, 'industry': {}, 'concept': {}, 'missing': []}
+
+    requested_industries = {name for name, kind in names_to_update if kind == 'industry'}
+    requested_concepts = {name for name, kind in names_to_update if kind == 'concept'}
+    active_rows = db.execute_raw(
+        """SELECT DISTINCT ti.name, ti.type
+           FROM ths_daily td
+           JOIN ths_index ti ON td.ts_code=ti.ts_code
+           WHERE ti.type IN ('I', 'N')"""
+    )
+    active_industries = {
+        row['name'] for row in active_rows
+        if row.get('type') == 'I' and row['name'] in requested_industries
+    }
+    expected = active_industries | requested_concepts
+
+    covered_industries = set()
+    covered_concepts = set()
+    if expected:
+        names = sorted(expected)
+        placeholders = ','.join(['%s'] * len(names))
+        rows = db.execute_raw(
+            f"""SELECT DISTINCT ti.name, ti.type
+                FROM ths_daily td
+                JOIN ths_index ti ON td.ts_code=ti.ts_code
+                WHERE td.trade_date=%s AND ti.name IN ({placeholders})""",
+            [target_date, *names],
+        )
+        covered_industries = {row['name'] for row in rows if row.get('type') == 'I'}
+        covered_concepts = {row['name'] for row in rows if row.get('type') == 'N'}
+
+    def _stats(names, covered, threshold):
+        total = len(names)
+        count = len(names & covered)
+        ratio = count / total if total else 1.0
+        return {
+            'expected': total,
+            'covered': count,
+            'ratio': ratio,
+            'threshold': threshold,
+            'ready': total > 0 and ratio >= threshold,
+            'missing': sorted(names - covered),
+        }
+
+    industry = _stats(active_industries, covered_industries, 0.95)
+    concept = _stats(requested_concepts, covered_concepts, 0.90)
+    concepts_ready = concept['ready'] if requested_concepts else True
+    return {
+        'ready': industry['ready'] and concepts_ready,
+        'industry': industry,
+        'concept': concept,
+        'missing': industry['missing'] + concept['missing'],
+    }
+
+
 def _convert_board_kline(df):
     """akshare 行业/概念板块 DataFrame → [{date, open, close, high, low, volume}]
     """

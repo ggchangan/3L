@@ -41,6 +41,7 @@ from backend.data_access.data_layer import (
     build_industry_map_from_db,
     build_concept_maps_from_db,
     tushare_fetch_daily_incremental,
+    get_ths_daily_update_coverage,
 )
 
 CACHE_DIR = os.path.join(DATA_DIR, '.cache')
@@ -312,6 +313,18 @@ def update_sectors():
         for line in traceback.format_exc().splitlines():
             log(f'  {line}')
 
+    coverage = get_ths_daily_update_coverage(names_to_update, today)
+    ind_cov = coverage.get('industry', {})
+    con_cov = coverage.get('concept', {})
+    log(
+        '📋  板块目标日覆盖: '
+        f'行业{ind_cov.get("covered", 0)}/{ind_cov.get("expected", 0)}, '
+        f'概念{con_cov.get("covered", 0)}/{con_cov.get("expected", 0)}'
+    )
+    if not coverage.get('ready'):
+        missing = coverage.get('missing', [])[:10]
+        raise RuntimeError(f'板块数据覆盖不足，缺失示例: {missing}')
+
     log(f'📈  板块: 行业{ind_saved}个, 概念{con_saved}个 (K线已写入DB)')
     return (ind_saved, con_saved)
 
@@ -444,13 +457,16 @@ def _daily_data_freshness(target_date):
 
 def _refresh_review_cache(target_date):
     """同步生成复盘缓存，保证命令退出前页面已经可用。"""
-    from backend.services.review_service import compute_review_real_time, save_review_data
+    from backend.services.review_service import (
+        compute_review_real_time, review_refresh_file_lock, save_review_data,
+    )
 
     date_str = datetime.strptime(target_date, '%Y%m%d').strftime('%Y-%m-%d')
     log(f'━━━ 生成当日复盘缓存 ({date_str}) ━━━')
-    review = compute_review_real_time(date_str)
-    review['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
-    save_review_data(review)
+    with review_refresh_file_lock():
+        review = compute_review_real_time(date_str)
+        review['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
+        save_review_data(review)
     log('✅  当日复盘缓存已生成')
 
 
@@ -464,6 +480,9 @@ def run_close_phase():
 
     target_date = get_last_completed_trading_day()
     log(f'🌆 收盘更新目标交易日: {target_date}')
+    if target_date != datetime.now().strftime('%Y%m%d'):
+        log('⏭️  今天不是交易日，跳过收盘更新')
+        return True
     _fetch_tushare_daily_incremental()
 
     freshness = _daily_data_freshness(target_date)
@@ -537,6 +556,9 @@ def run_full_phase():
             os.remove(_cf)
             log(f'🧹  已清除过期缓存: {os.path.basename(_cf)}')
 
+    from backend.data_access.data_source import get_last_completed_trading_day
+    _refresh_review_cache(get_last_completed_trading_day())
+
     elapsed = time.time() - t0
     log(f'{"━"*30}')
     log(f'📊 汇总: 个股{s1[0]+s1[1]}只变动 | 指数{s2[0]}条新增 | 板块{s3[0]+s3[1]}只变动')
@@ -563,8 +585,11 @@ def main(argv=None):
     attempts = max(1, args.max_attempts)
     for attempt in range(1, attempts + 1):
         log(f'收盘更新尝试 {attempt}/{attempts}')
-        if run_close_phase():
-            return 0
+        try:
+            if run_close_phase():
+                return 0
+        except Exception as exc:
+            log(f'⚠️  收盘更新异常，将按计划重试: {type(exc).__name__}: {exc}')
         if attempt < attempts:
             log(f'将在 {args.retry_interval} 秒后重试')
             time.sleep(max(0, args.retry_interval))
