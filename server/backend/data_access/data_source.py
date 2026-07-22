@@ -768,6 +768,25 @@ def get_last_completed_trading_day():
     return now.strftime('%Y%m%d')
 
 
+def get_previous_trading_day(reference_date=None):
+    """返回指定日期之前的上一有效交易日 YYYYMMDD。"""
+    cache = _get_trade_date_cache()
+    reference = reference_date or datetime.now().date()
+    d = reference - timedelta(days=1)
+    for _ in range(31):
+        dashed = d.strftime('%Y-%m-%d')
+        compact = d.strftime('%Y%m%d')
+        if dashed in cache or compact in cache:
+            return compact
+        d -= timedelta(days=1)
+
+    # 日历不可用时只做周末降级，不假装识别法定节假日。
+    d = reference - timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d.strftime('%Y%m%d')
+
+
 def _last_trading_day():
     """返回最后一个交易日字符串 YYYYMMDD
     优先使用交易日历（含节假日），fallback到周末判断
@@ -1471,7 +1490,8 @@ def get_sector_source_policy():
     }
 
 # ====== 公开API ======
-def get_sector_rankings(sector_type='industry', date_str=None):
+def get_sector_rankings_with_meta(sector_type='industry', date_str=None):
+    """返回板块排行及其真实数据日期/新鲜度元数据。"""
     if date_str is None:
         date_str = datetime.now().strftime('%Y%m%d')
     chain = DATA_SOURCE_CHAINS['sector_ranking']
@@ -1490,12 +1510,30 @@ def get_sector_rankings(sector_type='industry', date_str=None):
         chain,
         accept=_contains_requested_type,
     )
+    data_date = ''
+    items = result
     if isinstance(result, dict):
+        data_date = str(result.get('last_updated', '') or '')
         if sector_type == 'industry':
-            return result.get('industries', result) if 'industries' in result else result
+            items = result.get('industries', result) if 'industries' in result else result
         else:
-            return result.get('concepts', {}) if 'concepts' in result else {}
-    return result
+            items = result.get('concepts', {}) if 'concepts' in result else {}
+    if not data_date and isinstance(items, dict):
+        dates = [str(v.get('date', '')) for v in items.values() if isinstance(v, dict) and v.get('date')]
+        data_date = max(dates, default='')
+    return {
+        'data': items,
+        'data_date': data_date,
+        'requested_date': str(date_str),
+        'available': bool(items),
+        'stale': data_date != str(date_str),
+        'provider': _ACTIVE_SECTOR_PROVIDER,
+    }
+
+
+def get_sector_rankings(sector_type='industry', date_str=None):
+    """兼容入口：只返回排行数据。"""
+    return get_sector_rankings_with_meta(sector_type, date_str).get('data', {})
 
 def get_sector_klines(sector_name, sector_type='industry'):
     chain = DATA_SOURCE_CHAINS['sector_klines']

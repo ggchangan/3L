@@ -7,6 +7,7 @@ from backend.services.monitor_service import (
     get_volume_comparison, get_buy_signals, get_stop_loss_triggered,
     get_top_sectors, get_industry_leaders, get_market_leaders,
     get_leader_dashboard,
+    get_monitor_context,
 )
 from backend.core.exceptions import APIError
 
@@ -67,6 +68,10 @@ def _handle_market_leaders(h, path):
     h.send_json(get_market_leaders())
 
 
+def _handle_context(h, path):
+    h.send_json(get_monitor_context())
+
+
 def register_routes(routes):
     routes.exact('/api/monitor/volume', func=_handle_volume)
     routes.exact('/api/monitor/buy-signals', func=_handle_buy_signals)
@@ -75,4 +80,5 @@ def register_routes(routes):
     routes.exact('/api/monitor/leaders', func=_handle_industry_leaders)
     routes.exact('/api/monitor/leader-dashboard', func=_handle_leader_dashboard)
     routes.exact('/api/monitor/market-leaders', func=_handle_market_leaders)
+    routes.exact('/api/monitor/context', func=_handle_context)
     return routes

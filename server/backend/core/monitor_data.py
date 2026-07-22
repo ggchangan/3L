@@ -641,7 +641,8 @@ def _get_cached_daily_klines(code):
     if os.path.isfile(cache_file):
         try:
             with open(cache_file) as f:
-                return json.load(f)
+                cached = json.load(f)
+            return sorted(cached, key=lambda row: str(row.get('date', '')))
         except:
             pass
     
@@ -649,6 +650,10 @@ def _get_cached_daily_klines(code):
     try:
         from backend.data_access.data_layer import get_stock_klines
 
+        source_rows = sorted(
+            get_stock_klines(code[-6:]),
+            key=lambda row: str(row.get('date', '')),
+        )[-10:]
         result = [
             {
                 'date': row.get('date', ''),
@@ -657,8 +662,10 @@ def _get_cached_daily_klines(code):
                 'high': float(row.get('high', 0)),
                 'low': float(row.get('low', 0)),
             }
-            for row in get_stock_klines(code[-6:])[:10]
+            for row in source_rows
         ]
+        # data_layer/DB 的返回顺序可能不同；下游MA和涨幅函数统一消费正序K线。
+        result.sort(key=lambda row: str(row.get('date', '')))
         if result:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(result, f, ensure_ascii=False)
@@ -889,30 +896,28 @@ def get_market_leaders():
 def get_top_concept_sectors_with_5d():
     """
     获取概念板块实时排行
-    数据源：stock_board_change_em() 东方财富实时涨跌幅（0.28s）
-    纯排行，不做任何名称匹配/结构补充，用于盯盘板块监测概念Tab
+    通过统一板块入口获取当前配置的同花顺 provider 数据。
+    纯排行，不做跨 provider 名称匹配或补洞。
     """
-    import akshare as ak
-    import warnings
-    warnings.filterwarnings('ignore')
-
     try:
-        df = ak.stock_board_change_em()
+        from backend.data_access.data_source import get_sector_rankings_with_meta
+        snapshot = get_sector_rankings_with_meta('concept')
+        rankings = snapshot.get('data') or {}
         results = []
-        seen = set()
-        for _, row in df.iterrows():
-            name = str(row['板块名称']).strip()
-            if name in seen:
+        for name, row in rankings.items():
+            if not isinstance(row, dict):
                 continue
-            seen.add(name)
-            chg_str = str(row['涨跌幅']).strip()
             try:
-                chg = float(chg_str)
+                chg = float(row.get('change_pct', row.get('pct_chg', 0)) or 0)
             except (ValueError, TypeError):
                 chg = 0
-            results.append({'name': name, 'chg': round(chg, 2)})
+            results.append({'name': str(name).strip(), 'chg': round(chg, 2)})
         results.sort(key=lambda x: x['chg'], reverse=True)
-        return {'today_top5': results[:10], 'chg20d_top10': []}
+        return {
+            'today_top5': results[:10],
+            'chg20d_top10': [],
+            'meta': {k: snapshot.get(k) for k in ('data_date', 'requested_date', 'available', 'stale', 'provider')},
+        }
     except Exception:
         return {'today_top5': [], 'chg20d_top10': []}
 

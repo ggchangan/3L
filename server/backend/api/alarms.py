@@ -112,8 +112,22 @@ def _handle_list_all(h, path):
     """
     alarms = get_alarms()
     # 过滤掉从未触发过的active报警
-    filtered = [a for a in alarms if a.get('triggered_at') or a.get('status') == 'handled']
-    h.send_json({'alarms': filtered, 'count': len(filtered)})
+    filtered = [a for a in alarms if a.get('triggered_at') or a.get('status') in {'handled', 'dismissed'}]
+    cleaned = []
+    for alarm in filtered:
+        item = dict(alarm)
+        if item.get('msg'):
+            item['msg'] = str(item['msg']).lstrip('\ufffd').strip()
+        cleaned.append(item)
+    cleaned.sort(key=lambda a: str(a.get('triggered_at') or a.get('created') or ''), reverse=True)
+    cleaned.sort(key=lambda a: a.get('status') in {'handled', 'dismissed'})
+    active_count = sum(a.get('status') not in {'handled', 'dismissed'} for a in cleaned)
+    h.send_json({
+        'alarms': cleaned,
+        'count': len(cleaned),
+        'active_count': active_count,
+        'history_count': len(cleaned) - active_count,
+    })
 
 
 def _handle_remove(h, path, body):
@@ -172,6 +186,8 @@ def register_routes(routes):
     routes.exact('/api/alarms/list', func=_handle_list)
     routes.exact('/api/alarms/list-all', func=_handle_list_all)
     routes.exact('/api/alarms/remove', func=_handle_remove)
+    routes.exact('/api/alarms/dismiss', func=_handle_dismiss)
+    routes.exact('/api/alarms/reenable', func=_handle_reenable)
     routes.exact('/api/alarm-sounds', func=_handle_alarm_sounds)
     routes.exact('/api/alarm-sounds/upload', func=_handle_upload)
     return routes

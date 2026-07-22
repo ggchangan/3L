@@ -1,7 +1,7 @@
 """盯盘页 — 市场健康数据API
 
 聚合结构/阶段/量能/主线/异常事件数据，一次返回全部。
-数据来源均为现有本地文件+腾讯实时API，不新增外部依赖。
+历史指标来自统一数据层，实时行情由盯盘行情接口独立提供。
 """
 import json
 import os
@@ -21,6 +21,8 @@ def _load_index_data():
         from backend.data_access.data_layer import get_index_klines
         klines = get_index_klines('000985')
         if klines and len(klines) >= 30:
+            # 数据库统一按日期倒序返回；指标函数统一消费正序K线。
+            klines = sorted(klines, key=lambda k: str(k.get('date', '')))
             closes = [k['close'] for k in klines]
             highs = [k['high'] for k in klines]
             lows = [k['low'] for k in klines]
@@ -28,6 +30,8 @@ def _load_index_data():
             return {
                 'closes': closes, 'highs': highs, 'lows': lows, 'vols': vols,
                 'last_close': closes[-1], 'klines_count': len(klines),
+                'data_date': str(klines[-1].get('date', '')),
+                'source': 'tushare_mysql',
             }
     except Exception:
         pass
@@ -46,6 +50,7 @@ def _load_index_data():
     klines = info.get('klines', [])
     if not klines or len(klines) < 30:
         return None
+    klines = sorted(klines, key=lambda k: str(k.get('date', '')))
     closes = [k['close'] for k in klines]
     highs = [k['high'] for k in klines]
     lows = [k['low'] for k in klines]
@@ -53,6 +58,8 @@ def _load_index_data():
     return {
         'closes': closes, 'highs': highs, 'lows': lows, 'vols': vols,
         'last_close': closes[-1], 'klines_count': len(klines),
+        'data_date': str(klines[-1].get('date', '')),
+        'source': 'legacy_json',
     }
 
 
@@ -143,7 +150,7 @@ def _calc_volume_stats(index_data):
 
 def _load_mainline():
     """读主线数据"""
-    result = {'top3': [], 'gap_pct': 0}
+    result = {'top3': [], 'gap_pct': None, 'data_date': ''}
     # 尝试读 mainline_history
     mh_path = os.path.join(DATA_DIR, 'mainline_history.json')
     if os.path.isfile(mh_path):
@@ -152,14 +159,12 @@ def _load_mainline():
                 mh = json.load(f)
             dates = sorted(mh.keys(), reverse=True)
             if dates:
+                result['data_date'] = dates[0]
                 today = mh[dates[0]]
                 top10 = today.get('top10', today if isinstance(today, list) else [])
                 for i, name in enumerate(top10[:3]):
                     days = today.get(f'{name}_days', 1) if isinstance(today, dict) else 1
                     result['top3'].append({'name': name, 'days': days})
-                if len(top10) >= 5:
-                    # 估算涨幅差（从sector_daily读取TOP1 vs TOP5）
-                    result['gap_pct'] = 1.2  # 占位
         except Exception:
             pass
     return result
@@ -219,7 +224,9 @@ def get_market_health():
         'position_advice': position_advice,
         'bias20': bias20,
         'last_close': idx['last_close'],
+        'data_date': idx.get('data_date', ''),
+        'data_source': idx.get('source', ''),
         'volume': vol_stats,
         'mainline': mainline,
-        'updated': datetime.now().strftime('%H:%M'),
+        'updated': datetime.now().strftime('%H:%M:%S'),
     }

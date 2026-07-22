@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchWorkbenchPlan, getYesterdayStr, fetchActiveAlarms, fetchReviewToday } from '../lib/api'
+import { fetchWorkbenchPlan, fetchMonitorContext, fetchActiveAlarms, fetchReviewToday } from '../lib/api'
 import type { PlanItem, StoredAlarm } from '../lib/api'
 import type { BuySignalItem } from '../lib/types'
 
@@ -10,11 +10,6 @@ const ALARM_TYPE_LABELS: Record<string, string> = { price: '价格', deviation: 
 function extractCode(stock: string): string {
   const m = stock.match(/\((\d{6})\)/)
   return m ? m[1] : stock
-}
-
-/** 获取今天日期 YYYY-MM-DD */
-function getTodayStr(): string {
-  return new Date().toISOString().slice(0, 10)
 }
 
 /** 合并两个计划，按 stock 去重，today 优先 */
@@ -96,17 +91,15 @@ export default function PlanLayer() {
   const [alarms, setAlarms] = useState<StoredAlarm[]>([])
   const [holdings, setHoldings] = useState<BuySignalItem[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
-    const yst = getYesterdayStr()
-    const tdy = getTodayStr()
-
-    Promise.all([
-      fetchWorkbenchPlan(yst),
-      fetchWorkbenchPlan(tdy),
+    fetchMonitorContext().then(context => Promise.all([
+      fetchWorkbenchPlan(context.previous_trading_day),
+      fetchWorkbenchPlan(context.today),
       fetchActiveAlarms().catch(() => ({ alarms: [], count: 0 })),
       fetchReviewToday().catch(() => ({ holdings: [] })),
-    ]).then(([yData, tData, alarmData, reviewData]) => {
+    ])).then(([yData, tData, alarmData, reviewData]) => {
       const yPlan = yData.plan || { buy: [], sell: [], watch: [] }
       const tPlan = tData.plan || { buy: [], sell: [], watch: [] }
       setBuy(mergePlans(yPlan.buy || [], tPlan.buy || []))
@@ -114,8 +107,12 @@ export default function PlanLayer() {
       setWatch(mergePlans(yPlan.watch || [], tPlan.watch || []))
       setAlarms((alarmData as any).alarms || [])
       setHoldings((reviewData as any).holdings || [])
+      setLoadError('')
       setLoaded(true)
-    }).catch(() => setLoaded(true))
+    }).catch(() => {
+      setLoadError('今日计划加载失败，请稍后刷新')
+      setLoaded(true)
+    })
   }, [])
 
   // ── 分组逻辑 ──
@@ -181,11 +178,12 @@ export default function PlanLayer() {
 
   return (
     <div className="layer plan-layer">
-      <div className="layer-title" style={{ cursor: 'pointer' }} onClick={() => setCollapsed(v => !v)}>
+      <button type="button" className="layer-title collapsible-title" aria-expanded={!collapsed} onClick={() => setCollapsed(v => !v)}>
         <span className="badge-layer">②</span> 📋 今日计划
         <span className="badge" style={{ background: badgeBg }}>{badgeText}</span>
         <span className="collapse-indicator">{collapsed ? '▶' : '▼'}</span>
-      </div>
+      </button>
+      {loadError && <div className="data-error">{loadError}</div>}
       {!collapsed && (!loaded ? (
         <div className="empty">正在加载计划…</div>
       ) : (

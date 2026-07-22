@@ -4,7 +4,7 @@ import PlanLayer from '../components/PlanLayer'
 
 // 模拟 API 模块
 vi.mock('../lib/api', () => ({
-  getYesterdayStr: () => '2026-06-04',
+  fetchMonitorContext: vi.fn(),
   fetchWorkbenchPlan: vi.fn(),
   fetchActiveAlarms: vi.fn(),
   fetchReviewToday: vi.fn(),
@@ -14,6 +14,7 @@ import {
   fetchWorkbenchPlan,
   fetchActiveAlarms,
   fetchReviewToday,
+  fetchMonitorContext,
 } from '../lib/api'
 import type { PlanItem, StoredAlarm } from '../lib/api'
 
@@ -92,6 +93,10 @@ function mockAlarms(): StoredAlarm[] {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(fetchMonitorContext).mockResolvedValue({
+    today: '2026-06-05', previous_trading_day: '2026-06-04',
+    timezone: 'Asia/Shanghai', updated_at: '2026-06-05 09:00:00',
+  })
 })
 
 // ── 持仓操作（持仓股合并计划信息） ──

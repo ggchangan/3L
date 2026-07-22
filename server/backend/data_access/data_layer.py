@@ -65,16 +65,20 @@ get_all_stocks_db = _threel_get_all_stocks
 
 
 def get_stock_klines(code, direction=None, stocks=None):
-    """获取单只股票K线列表（优先从 stocks 参数找，回退DB）"""
+    """获取单只股票K线列表，统一按日期正序返回。"""
+    result = None
     if stocks is None:
         stocks = get_all_stocks()
     if direction and direction in stocks and code in stocks[direction]:
-        return stocks[direction][code]
-    for sec, codes in stocks.items():
-        if code in codes:
-            return codes[code]
-    # DB回退
-    return _threel_get_stock_klines(code)
+        result = stocks[direction][code]
+    if result is None:
+        for sec, codes in stocks.items():
+            if isinstance(codes, dict) and code in codes:
+                result = codes[code]
+                break
+    if result is None:
+        result = _threel_get_stock_klines(code)
+    return sorted(result or [], key=lambda row: str(row.get('date', '')))
 
 
 def fetch_stock_klines_from_db(codes, limit=60):
@@ -292,7 +296,7 @@ def save_index_data(data):
 
 
 def get_index_klines(code=INDEX_CODE):
-    """返回指定指数代码的K线列表"""
+    """返回指定指数代码的K线列表（保持数据层最新在前的既有合约）"""
     data = get_index_data()
     indices = data.get('indices', {})
     info = indices.get(code, {})
@@ -416,9 +420,10 @@ def get_sector_push2test():
 
 
 def get_sector_klines(sector_name, sector_type='industry'):
-    """获取单个板块历史K线数据"""
+    """获取单个板块历史K线数据（日期正序）"""
     from backend.data_access.data_source import get_sector_klines as _ds_klines
-    return _ds_klines(sector_name, sector_type)
+    rows = _ds_klines(sector_name, sector_type)
+    return sorted(rows or [], key=lambda row: str(row.get('date', '')))
 
 
 # ====== 概念快照 ======

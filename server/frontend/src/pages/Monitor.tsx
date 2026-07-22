@@ -13,8 +13,8 @@ import AlarmLayer, { pushAlarm, setFullAlarmPanel } from '../components/AlarmLay
 export default function Monitor() {
   const [updateTime, setUpdateTime] = useState('等待数据...')
   const [collapseInfo, setCollapseInfo] = useState(false)
-  const [collapseSectors, setCollapseSectors] = useState(true)
-  const [collapseBuySignals, setCollapseBuySignals] = useState(true)
+  const [sectorsExpanded, setSectorsExpanded] = useState(true)
+  const [buySignalsExpanded, setBuySignalsExpanded] = useState(true)
 
   useEffect(() => {
     const tick = () => {
@@ -32,10 +32,21 @@ export default function Monitor() {
   const shownRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
+    let active = true
+    const controller = new AbortController()
+    const pendingDelays = new Set<ReturnType<typeof setTimeout>>()
+    const delay = (ms: number) => new Promise<void>(resolve => {
+      const id = setTimeout(() => {
+        pendingDelays.delete(id)
+        resolve()
+      }, ms)
+      pendingDelays.add(id)
+    })
     const checkAlerts = async () => {
       try {
-        const r = await fetch('/api/alarms/list-all')
+        const r = await fetch('/api/alarms/list-all', { signal: controller.signal })
         const data = await r.json()
+        if (!active) return
         const alarms: any[] = data.alarms || []
 
         // 同步全部报警到报警层面板（含已处理的）
@@ -53,7 +64,8 @@ export default function Monitor() {
         // 逐个弹窗，间隔1.5秒
         ;(async () => {
           for (const a of newTriggered) {
-            await new Promise(r => setTimeout(r, 1500))
+            await delay(1500)
+            if (!active) return
             const id = a.id || `${a.stock_code}_${a.type}`
             shownRef.current.add(id)
             // 报警类型映射
@@ -71,11 +83,21 @@ export default function Monitor() {
             pushAlarm(msg, alarmType, 12000, a.id)
           }
         })()
-      } catch {}
+      } catch (error) {
+        if (active && !(error instanceof DOMException && error.name === 'AbortError')) {
+          // 下一轮继续尝试；旧数据保持不变。
+        }
+      }
     }
     checkAlerts()
     const timer = setInterval(checkAlerts, 30000)
-    return () => clearInterval(timer)
+    return () => {
+      active = false
+      controller.abort()
+      clearInterval(timer)
+      pendingDelays.forEach(clearTimeout)
+      pendingDelays.clear()
+    }
   }, [])
 
   return (
@@ -83,7 +105,7 @@ export default function Monitor() {
       <NavBar />
       <div className="header">
         <h1>📡 3L 盘中盯盘</h1>
-        <div className="update-badge" id="updateBadge">{updateTime}</div>
+        <div className="update-badge" id="updateBadge">页面时间 {updateTime}</div>
       </div>
 
       <div className="monitor-layout">
@@ -102,10 +124,10 @@ export default function Monitor() {
 
         {/* ③ 信息层 */}
         <div className="layer info-layer">
-          <div className="layer-title" style={{ cursor: 'pointer' }} onClick={() => setCollapseInfo(v => !v)}>
+          <button type="button" className="layer-title collapsible-title" aria-expanded={!collapseInfo} onClick={() => setCollapseInfo(v => !v)}>
             <span className="badge-layer">③</span> 📊 实时信息
             <span className="collapse-indicator">{collapseInfo ? '▶' : '▼'}</span>
-          </div>
+          </button>
 
           {!collapseInfo && (<>
           {/* 大盘观测 */}
@@ -115,11 +137,11 @@ export default function Monitor() {
 
           {/* 板块监测 */}  
           <div className="info-block">
-            <div className="block-title" style={{ cursor: 'pointer' }} onClick={() => setCollapseSectors(v => !v)}>
+            <button type="button" className="block-title collapsible-title" aria-expanded={sectorsExpanded} onClick={() => setSectorsExpanded(v => !v)}>
               📊 板块监测 <span className="badge">10分钟刷新</span>
-              <span className="collapse-indicator ib-toggle">{collapseSectors ? '▼' : '▶'}</span>
-            </div>
-            {collapseSectors && <div className="ib-body">
+              <span className="collapse-indicator ib-toggle">{sectorsExpanded ? '▼' : '▶'}</span>
+            </button>
+            {sectorsExpanded && <div className="ib-body">
               <SectorMonitor />
             </div>}
           </div>
@@ -131,20 +153,14 @@ export default function Monitor() {
 
           {/* 盘中机会 */}
           <div className="info-block">
-            <div className="block-title" style={{ cursor: 'pointer' }} onClick={e => {
-              const body = (e.currentTarget.parentElement?.querySelector('.ib-body') as HTMLElement)
-              if (body) {
-                body.style.display = body.style.display === 'none' ? 'block' : 'none'
-                const toggle = e.currentTarget.querySelector('.ib-toggle')
-                if (toggle) toggle.textContent = body.style.display === 'none' ? '▶' : '▼'
-              }
-            }}>
+            <button type="button" className="block-title collapsible-title" aria-expanded={buySignalsExpanded}
+              onClick={() => setBuySignalsExpanded(v => !v)}>
               🎯 盘中机会 <span className="badge">每15分钟扫描</span>
-              <span className="collapse-indicator ib-toggle">▼</span>
-            </div>
-            <div className="ib-body">
+              <span className="collapse-indicator ib-toggle">{buySignalsExpanded ? '▼' : '▶'}</span>
+            </button>
+            {buySignalsExpanded && <div className="ib-body">
               <BuySignalsArea />
-            </div>
+            </div>}
           </div>
 
           {/* 止损预警 */}

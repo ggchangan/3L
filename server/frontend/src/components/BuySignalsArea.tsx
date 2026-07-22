@@ -18,6 +18,7 @@ export default function BuySignalsArea() {
   const [scanMeta, setScanMeta] = useState<{ scan_time?: string; stocks_scanned?: number }>({})
   const [searchQ, setSearchQ] = useState('')
   const [dirOrder, setDirOrder] = useState<string[]>([])
+  const [refreshError, setRefreshError] = useState('')
 
   // 提取完整缓存时间，含日期
   const cacheTimeFull = scanMeta.scan_time
@@ -34,13 +35,25 @@ export default function BuySignalsArea() {
 
   // 初始加载 + 30s轮询（API秒回，后台缓存更新后自动刷新）
   useEffect(() => {
-    const fetchData = () => {
-      Promise.all([
+    let active = true
+    const fetchData = async () => {
+      const results = await Promise.allSettled([
         fetchBuySignals(),
         fetchIndustryBoards(),
         fetchIndustryMap(),
-        fetch('/api/directions/get').then(r => r.json()),
-      ]).then(([signalsData, boardsData, mapData, dirData]) => {
+        fetch('/api/directions/get').then(r => r.ok ? r.json() : Promise.reject(new Error('directions'))),
+      ])
+      if (!active) return
+      const signalsResult = results[0]
+      if (signalsResult.status !== 'fulfilled') {
+        setRefreshError('买点信号刷新失败，当前显示上次结果')
+        return
+      }
+      const signalsData = signalsResult.value
+      const boardsData = results[1].status === 'fulfilled' ? results[1].value : { data: [] }
+      const mapData = results[2].status === 'fulfilled' ? results[2].value : {} as IndustryMap
+      const dirData = results[3].status === 'fulfilled' ? results[3].value : { all: [] }
+      setRefreshError(results.some(r => r.status === 'rejected') ? '部分辅助数据不可用，信号已按可用数据展示' : '')
         setDirOrder(dirData.all || [])
         const boards: IndustryBoardItem[] = boardsData.data || []
         const sectorChg: Record<string, number> = {}
@@ -69,11 +82,10 @@ export default function BuySignalsArea() {
         if (dirs.length > 0 && !g[activeDirRef.current]) {
           setActiveDir(dirs[0])
         }
-      })
     }
     fetchData()
     const timer = setInterval(fetchData, 30000)
-    return () => clearInterval(timer)
+    return () => { active = false; clearInterval(timer) }
   }, [])
 
   useEffect(() => {
@@ -103,6 +115,7 @@ export default function BuySignalsArea() {
 
   return (
     <>
+      {refreshError && <div className="data-error">{refreshError}</div>}
       {/* 扫描时间指示器 */}
       {cacheTimeFull && (
         <div style={{

@@ -12,6 +12,39 @@
   gap: 12px;
 }
 
+.monitor-layout, .layer, .info-block, .mh-card { box-sizing: border-box; min-width: 0; }
+
+.collapsible-title {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.monitor-tab, .icon-button, .text-button, .toast-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.monitor-tab:focus-visible, .icon-button:focus-visible, .collapsible-title:focus-visible,
+.text-button:focus-visible, .alarm-handle-button:focus-visible, .history-toggle:focus-visible {
+  outline: 2px solid #4ecdc4;
+  outline-offset: 2px;
+}
+
+.icon-button { padding: 3px; font-size: 14px; color: #4ecdc4; }
+.text-button { font-size: 11px; color: #888; }
+.toast-close { color: #aaa; font-size: 16px; flex-shrink: 0; }
+.data-meta { color: #666; font-size: 9px; margin-top: 6px; text-align: right; }
+.data-error { color: #ffb74d; font-size: 10px; padding: 4px 0; }
+
 .layer {
   background: linear-gradient(135deg, #1a1a2e, #16213e);
   border: 1px solid #2a2a4e;
@@ -450,8 +483,16 @@
 /* Tab按钮 */
 @media (max-width: 600px) {
   .monitor-layout { padding: 10px; }
+  .layer { padding: 12px; }
+  .info-block { padding: 10px; }
   .quote-item { min-width: 80px; }
   .quote-item .qvalue { font-size: 15px; }
+  .mh-card-grid { grid-template-columns: 1fr; }
+  .signal-table, .leader-table { display: block; overflow-x: auto; }
+  .plan-row { flex-wrap: wrap; }
+  .alarm-sound-button { bottom: 64px !important; right: 8px !important; max-width: calc(100vw - 16px); }
+  .alarm-row { flex-wrap: wrap; }
+  #nav-bottom { display: none; }
 }
 
 /* 龙头观测新面板 */
@@ -467,13 +508,17 @@
 /* 市场健康卡片 */
 .mh-card-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-bottom: 8px;
 }
 
 @media (max-width: 900px) {
   .mh-card-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .monitor-layout .mh-card-grid { grid-template-columns: 1fr; }
 }
 
 .mh-card {
@@ -514,6 +559,8 @@
   color: #ddd;
   font-weight: 500;
   text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .mh-days {
@@ -533,6 +580,31 @@
   height: 50px;
   margin-top: 6px;
 }
+
+.alarm-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 10px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  border-left: 3px solid #888;
+  background: rgba(255,255,255,0.02);
+  font-size: 12px;
+}
+
+.alarm-row-history { opacity: .55; background: rgba(60,60,60,.2); }
+.alarm-message { color: #e0e0e0; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.alarm-date { color: #666; font-size: 9px; white-space: nowrap; }
+.alarm-handle-button, .history-toggle {
+  border: 1px solid #555;
+  background: #202038;
+  color: #bbb;
+  border-radius: 5px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+.history-toggle { width: 100%; margin-top: 8px; color: #777; background: transparent; }
 
 .action-btn {
   display: inline-block;

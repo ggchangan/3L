@@ -1,33 +1,28 @@
 import React, { useEffect, useState } from 'react'
 import { fetchSectors } from '../lib/api'
-import type { SectorItem } from '../lib/types'
+import type { SectorData, SectorItem } from '../lib/types'
 
 type TabType = 'industry_today' | 'industry_chg20d' | 'concept_today'
 
 export default function SectorMonitor() {
-  const [data, setData] = useState<{
-    industry: { today_top5: SectorItem[]; chg20d_top10: SectorItem[] }
-    concept: { today_top5: SectorItem[]; chg20d_top10: SectorItem[] }
-  } | null>(null)
+  const [data, setData] = useState<SectorData | null>(null)
+  const [error, setError] = useState('')
   const [tab, setTab] = useState<'industry_today' | 'industry_chg20d' | 'concept_today'>('industry_today')
   const [chartVisible, setChartVisible] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchSectors().then(d => {
-      setData({
-        industry: {
-          today_top5: d.industry?.today_top5 || d.today_top5 || [],
-          chg20d_top10: d.industry?.chg20d_top10 || d.chg20d_top10 || [],
-        },
-        concept: {
-          today_top5: d.concept?.today_top5 || [],
-          chg20d_top10: d.concept?.chg20d_top10 || [],
-        },
-      })
-    })
+    let active = true
+    const load = () => fetchSectors().then(d => {
+      if (!active) return
+      setData(d)
+      setError('')
+    }).catch(() => active && setError('板块数据刷新失败，当前显示上次结果'))
+    load()
+    const timer = setInterval(load, 10 * 60 * 1000)
+    return () => { active = false; clearInterval(timer) }
   }, [])
 
-  if (!data) return <div className="empty">加载中...</div>
+  if (!data) return <div className="empty">{error || '加载中...'}</div>
 
   const isConcept = tab === 'concept_today'
   const isChg20d = tab === 'industry_chg20d'
@@ -41,26 +36,26 @@ export default function SectorMonitor() {
 
   return (
     <>
-      {/* 导航标签 */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderBottom: '1px solid #2a2a4a', flexWrap: 'wrap' }}>
-        <div onClick={() => setTab('industry_today')} style={{
+      {error && <div className="data-error">{error}</div>}
+      <div role="tablist" style={{ display: 'flex', gap: 0, marginBottom: 12, borderBottom: '1px solid #2a2a4a', flexWrap: 'wrap' }}>
+        <button type="button" role="tab" aria-selected={tab === 'industry_today'} onClick={() => setTab('industry_today')} className="monitor-tab" style={{
           padding: '6px 14px', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap',
           color: tab === 'industry_today' ? '#ffd700' : '#888',
           borderBottom: tab === 'industry_today' ? '2px solid #ffd700' : '2px solid transparent',
           fontWeight: tab === 'industry_today' ? 'bold' : 'normal',
-        }}>🏭 行业·今日</div>
-        <div onClick={() => setTab('industry_chg20d')} style={{
+        }}>🏭 行业·今日</button>
+        <button type="button" role="tab" aria-selected={tab === 'industry_chg20d'} onClick={() => setTab('industry_chg20d')} className="monitor-tab" style={{
           padding: '6px 14px', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap',
           color: tab === 'industry_chg20d' ? '#ffd700' : '#888',
           borderBottom: tab === 'industry_chg20d' ? '2px solid #ffd700' : '2px solid transparent',
           fontWeight: tab === 'industry_chg20d' ? 'bold' : 'normal',
-        }}>🏭 行业·20日</div>
-        <div onClick={() => setTab('concept_today')} style={{
+        }}>🏭 行业·20日</button>
+        <button type="button" role="tab" aria-selected={tab === 'concept_today'} onClick={() => setTab('concept_today')} className="monitor-tab" style={{
           padding: '6px 14px', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap',
           color: tab === 'concept_today' ? '#ffd700' : '#888',
           borderBottom: tab === 'concept_today' ? '2px solid #ffd700' : '2px solid transparent',
           fontWeight: tab === 'concept_today' ? 'bold' : 'normal',
-        }}>📦 概念·今日</div>
+        }}>📦 概念·今日</button>
       </div>
 
       {/* 行业板块：带结构/阶段 */}
@@ -82,8 +77,8 @@ export default function SectorMonitor() {
                     <td style={{ fontSize: 11, color: '#aaa' }}>{b.structure || '-'}</td>
                     <td style={{ fontSize: 11 }}>{b.phase || '-'}</td>
                     <td style={{ textAlign: 'right' }}>
-                      <span onClick={() => setChartVisible(chartVisible === chartId ? null : chartId)}
-                        style={{ cursor: 'pointer', fontSize: 14, color: '#4ecdc4' }} title="查看K线">📊</span>
+                      <button type="button" className="icon-button" aria-expanded={chartVisible === chartId}
+                        onClick={() => setChartVisible(chartVisible === chartId ? null : chartId)} title="查看K线">📊</button>
                     </td>
                   </tr>
                   {chartVisible === chartId && (
@@ -121,6 +116,12 @@ export default function SectorMonitor() {
           </tbody>
         </table>
       )}
+      <div className="data-meta">
+        接口返回 {data.meta?.updated_at || '—'} · {data.meta?.source || '—'}
+        {data.meta?.concept_data_date ? ` · 概念数据日 ${data.meta.concept_data_date}` : ''}
+        {data.meta?.concept_available === false ? ' · 概念数据不可用' : ''}
+        {data.meta?.concept_stale ? '（非当日）' : ''}
+      </div>
     </>
   )
 }
