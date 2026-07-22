@@ -292,9 +292,12 @@ export type IndustryMap = Record<string, { ths_industry?: string }>
 /** 复盘数据结构 */
 export interface ReviewData {
   date?: string
+  data_status?: ReviewDataStatus
+  /** @deprecated v3 客户端使用 data_status */
   data_dates?: { requested?: string; index?: string; stocks?: string; sectors?: string }
+  /** @deprecated v3 客户端使用 data_status */
   data_freshness?: { index?: 'current' | 'stale' | 'unknown'; stocks?: 'current' | 'stale' | 'unknown'; sectors?: 'current' | 'stale' | 'unknown' }
-  response_meta?: { source: 'cache' | 'archive' | 'live'; computed_live: boolean; contract_version: number }
+  response_meta?: { source: 'cache' | 'archive' | 'live'; computed_live: boolean; contract_version: number; deprecated_fields?: string[] }
   cache_generated_at?: string
   refresh_status?: import('./api').ReviewRefreshStatus
   market?: {
@@ -315,6 +318,7 @@ export interface ReviewData {
     ranking_date?: string
     base_date?: string
     estimate_coverage?: number | null
+    estimate_coverage_detail?: EstimateCoverageDetail
     calibration?: MainlineCalibration | null
     lines?: LineItem[]
     secondary?: LineItem[]
@@ -324,6 +328,8 @@ export interface ReviewData {
       ranking_status?: 'confirmed' | 'estimated' | 'stale'
       ranking_date?: string
       base_date?: string
+      estimate_coverage?: number | null
+      estimate_coverage_detail?: EstimateCoverageDetail
       lines?: LineItem[]
       secondary?: LineItem[]
       persistence?: { name: string; days: number; status: string }[]
@@ -349,6 +355,32 @@ export interface ReviewData {
     index_chart?: string
     fund_flow?: string
   }
+}
+
+export type ReviewDataState = 'confirmed' | 'estimated' | 'stale' | 'unknown'
+
+export interface EstimateCoverageDetail {
+  covered?: number | null
+  expected?: number | null
+  ready?: boolean | null
+}
+
+export interface ReviewDataStatusItem {
+  status: ReviewDataState
+  date?: string
+  confirmed_date?: string
+  base_date?: string
+  coverage?: number | null
+  coverage_detail?: EstimateCoverageDetail
+}
+
+export interface ReviewDataStatus {
+  requested_date?: string
+  overall?: 'ready' | 'partial' | 'stale'
+  index?: ReviewDataStatusItem
+  stocks?: ReviewDataStatusItem
+  industry?: ReviewDataStatusItem
+  concept?: ReviewDataStatusItem
 }
 
 /** 主线/板块行项目 */

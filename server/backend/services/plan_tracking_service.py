@@ -162,6 +162,9 @@ def extract_plans_from_trading_plan(trading_plan: dict, date_str: str) -> list:
 
     # 2. 关注买入
     for bp in trading_plan.get('buy_priority', []):
+        # 候选和数据阻断项不是可执行计划，不进入后续胜率统计。
+        if bp.get('decision_status', 'executable') != 'executable':
+            continue
         code = bp.get('code', '')
         if not code:
             continue

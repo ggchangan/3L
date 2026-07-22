@@ -497,6 +497,11 @@ def get_mainline_data(date_str):
         'ranking_date': target_date if estimate_active else effective_sector_date,
         'base_date': effective_sector_date,
         'estimate_coverage': round(float(industry_coverage.get('ratio', 0)), 4) if estimate_active else None,
+        'estimate_coverage_detail': {
+            'covered': industry_coverage.get('covered'),
+            'expected': industry_coverage.get('expected'),
+            'ready': industry_coverage.get('ready'),
+        } if estimate_active else {},
         'lines': main_lines,
         'secondary': secondary_lines,
         'industries': daily_rankings,
@@ -655,6 +660,11 @@ def get_concept_mainline_data(date_str):
         'ranking_date': target_date if estimate_active else sector_date,
         'base_date': sector_date,
         'estimate_coverage': round(float(concept_coverage.get('ratio', 0)), 4) if estimate_active else None,
+        'estimate_coverage_detail': {
+            'covered': concept_coverage.get('covered'),
+            'expected': concept_coverage.get('expected'),
+            'ready': concept_coverage.get('ready'),
+        } if estimate_active else {},
         'lines': main_lines,
         'secondary': secondary_lines,
         'all_ranked': scores,

@@ -51,6 +51,10 @@ interface SuggestionItem {
   text?: string
   stop_loss?: number
   stop_loss_pct?: number
+  decision_status?: 'executable' | 'candidate' | 'blocked'
+  data_quality?: 'ready' | 'sector_unavailable'
+  structure?: string
+  stage?: string
 }
 
 interface SuggestionsData {
@@ -75,7 +79,7 @@ export default function Workbench() {
       .then(d => setReviewSummary({
         market: d.market?.position || '--',
         mainline: (d.mainline?.lines || []).map((l: any) => l.name).join(', ') || '--',
-        signals: d.buy_signals?.length || 0,
+        signals: d.buy_signals_review?.length || 0,
       }))
       .catch(() => {})
     // 加载复盘建议
@@ -161,19 +165,24 @@ export default function Workbench() {
       }
     })
 
-    // buy_priority → 全放买入
+    // 只有 executable 进入买入计划；候选和阻断项只能进入观察。
     suggestions.buy_priority.forEach((item, i) => {
       const id = `bp-${i}`
       if (!checkedIds.has(id)) return
       const name = item.name || ''
       const code = item.code || ''
-      newPlan.buy.push({
+      const planItem: PlanItem = {
         stock: `${name}(${code})`,
         condition: `${item.buy_point || ''} ${item.change != null ? `${item.change > 0 ? '+' : ''}${item.change}%` : ''}`,
         qty: '', status: 'pending', alert: null,
         stop_loss: item.stop_loss,
         stop_loss_pct: item.stop_loss_pct,
-      })
+      }
+      if ((item.decision_status || 'executable') === 'executable') {
+        newPlan.buy.push(planItem)
+      } else {
+        newPlan.watch.push({ ...planItem, focus: item.reason || '等待板块数据确认' })
+      }
     })
 
     // risk_items → 观察
@@ -312,7 +321,7 @@ export default function Workbench() {
               {/* 买入候选 */}
               {suggestions.buy_priority.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>🎯 买入候选</div>
+                  <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>🎯 复盘买点（仅“可执行”导入买入计划）</div>
                   {suggestions.buy_priority.map((item, i) => {
                     const id = `bp-${i}`
                     const bpColors: Record<string, string> = { '中继买点': '#ffd700', '突破买点': '#22c55e', 'BIAS5乖离率买入': '#2196f3' }
@@ -323,6 +332,9 @@ export default function Workbench() {
                         <span style={{ color: checkedIds.has(id) ? '#22c55e' : '#555', fontSize: 14 }}>{checkedIds.has(id) ? '☑' : '☐'}</span>
                         <span style={{ fontSize: 10, color: bpColor, fontWeight: 600 }}>[{item.priority}]</span>
                         <span style={{ fontSize: 12, color: '#e0e0e0' }}>{item.name || ''}({item.code || ''})</span>
+                        <span style={{ fontSize: 10, color: item.decision_status === 'executable' ? '#22c55e' : item.decision_status === 'blocked' ? '#e94560' : '#ffd700' }}>
+                          {item.decision_status === 'executable' ? '可执行' : item.decision_status === 'blocked' ? '数据阻断' : '候选观察'}
+                        </span>
                         <span style={{ fontSize: 10, color: bpColor }}>{item.buy_point || ''}</span>
                         <span style={{ fontSize: 10, color: '#888' }}>{item.structure || ''}{item.structure && item.stage ? '·' : ''}{item.stage || ''}</span>
                         {(item.stop_loss != null || item.stop_loss_pct != null) && (

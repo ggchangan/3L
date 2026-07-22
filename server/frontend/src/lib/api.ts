@@ -10,6 +10,7 @@ import type {
   IndustryBoardItem,
   IndustryMap,
   ReviewData,
+  LeaderDashboardData,
 } from './types'
 
 const BASE = '' // 同源请求，无前缀

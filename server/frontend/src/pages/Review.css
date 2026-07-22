@@ -63,14 +63,21 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
-.review-data-chip.current {
+.review-data-chip.current,
+.review-data-chip.confirmed {
   color: #4ecdc4;
   background: rgba(78, 205, 196, 0.1);
 }
 
-.review-data-chip.stale {
+.review-data-chip.stale,
+.review-data-chip.unknown {
   color: #ffd166;
   background: rgba(255, 209, 102, 0.1);
+}
+
+.review-data-chip.estimated {
+  color: #58a6ff;
+  background: rgba(88, 166, 255, 0.1);
 }
 
 .review-data-status-note {
