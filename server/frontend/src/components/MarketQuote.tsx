@@ -23,15 +23,20 @@ interface MarketHealth {
   }
   mainline: {
     top3: { name: string; days: number }[]
-    gap_pct: number
+    gap_pct: number | null
+    data_date?: string
   }
+  data_date?: string
+  data_source?: string
   updated: string
 }
 
 function fetchMarketHealth(): Promise<MarketHealth | null> {
   return fetch('/api/market-health')
-    .then(r => r.json())
-    .catch(() => null)
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      return r.json()
+    })
 }
 
 // 结构颜色
@@ -44,26 +49,41 @@ const STRUCT_COLORS: Record<string, string> = {
 export default function MarketQuote() {
   const [health, setHealth] = useState<MarketHealth | null>(null)
   const [volumeData, setVolumeData] = useState<VolumeData | null>(null)
+  const [refreshError, setRefreshError] = useState('')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef = useRef<Chart | null>(null)
 
   useEffect(() => {
+    let active = true
+    let chartTimer: ReturnType<typeof setTimeout> | null = null
     loadAll()
     const timer = setInterval(loadAll, 30000)
-    return () => clearInterval(timer)
-  }, [])
-
-  async function loadAll() {
-    const [mh, vol] = await Promise.all([
-      fetchMarketHealth(),
-      fetchVolume(),
-    ])
-    if (mh) setHealth(mh)
-    if (vol) {
-      setVolumeData(vol)
-      setTimeout(() => updateChart(vol), 50)
+    return () => {
+      active = false
+      clearInterval(timer)
+      if (chartTimer) clearTimeout(chartTimer)
+      chartRef.current?.destroy()
+      chartRef.current = null
     }
-  }
+
+    async function loadAll() {
+      const [mhResult, volResult] = await Promise.allSettled([
+        fetchMarketHealth(),
+        fetchVolume(),
+      ])
+      if (!active) return
+      if (mhResult.status === 'fulfilled' && mhResult.value) setHealth(mhResult.value)
+      if (volResult.status === 'fulfilled' && volResult.value) {
+        setVolumeData(volResult.value)
+        chartTimer = setTimeout(() => active && updateChart(volResult.value), 50)
+      }
+      setRefreshError(
+        mhResult.status === 'rejected' || volResult.status === 'rejected'
+          ? '部分市场数据刷新失败，当前显示上次结果'
+          : ''
+      )
+    }
+  }, [])
 
   function updateChart(d: VolumeData) {
     if (!canvasRef.current) return
@@ -145,11 +165,12 @@ export default function MarketQuote() {
           )}
         </span>
         <span style={{ fontSize: 12, color: '#999' }}>
-          {health?.updated ? `更新 ${health.updated}` : ''}
+          {volumeData?.update_time ? `行情 ${volumeData.update_time}` : health?.updated ? `计算 ${health.updated}` : ''}
         </span>
       </div>
 
       {/* 4 卡片网格 */}
+      {refreshError && <div className="data-error">{refreshError}</div>}
       <div className="mh-card-grid">
         {/* 卡片1：结构·阶段 */}
         <div className="mh-card">
@@ -232,16 +253,15 @@ export default function MarketQuote() {
                 <span className="mh-val" style={{ fontSize: 11, color: '#888' }}>{health.mainline.gap_pct}%</span>
               </div>
             ) : null}
+            {health?.mainline?.data_date && (
+              <div className="data-meta">确认日期 {health.mainline.data_date}</div>
+            )}
           </div>
         </div>
-
-        {/* 卡片4：异常事件（占位） */}
-        <div className="mh-card">
-          <div className="mh-card-title">⚡ 异常事件</div>
-          <div className="mh-card-body">
-            <div className="mh-empty">暂无异常</div>
-          </div>
-        </div>
+      </div>
+      <div className="data-meta">
+        指标日 {health?.data_date || '—'} · 历史 {health?.data_source || '—'} · 实时 {volumeData?.data_source?.quote || '—'}
+        {volumeData?.yesterday_unavailable ? ' · 昨日成交额不可用' : ''}
       </div>
     </>
   )

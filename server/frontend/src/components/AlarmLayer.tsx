@@ -1,13 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
-interface Alarm {
-  msg: string
-  type: string
-  ts: number
-  duration: number
-  alarmId?: string
-}
-
 interface ToastItem {
   msg: string
   type: string
@@ -25,7 +17,6 @@ interface SoundConfig {
 const ALARM_ICONS: Record<string, string> = { buy: '🟢', stop: '🔴', warn: '🟡', abnormal: '🔔', info: 'ℹ️', market: '🟠', market_critical: '🔴', panic: '🔴' }
 const ALARM_COLORS: Record<string, string> = { buy: '#22c55e', stop: '#e94560', warn: '#ffd700', abnormal: '#ff9800', info: '#2196f3', market: '#ff6b35', market_critical: '#e94560', panic: '#e94560' }
 
-const MAX_ALARMS = 20
 const MAX_VISIBLE_TOASTS = 5
 
 // ── 报警类型 → 音乐配置 key 映射 ─────────────
@@ -52,8 +43,6 @@ const PRIORITY: Record<string, number> = {
 // ── 音频播放 ────────────────────────────────
 let _soundConfig: Record<string, SoundConfig> = {}
 let _audioElements: Record<string, HTMLAudioElement> = {} // DOM 创建的 audio，不受 React JSX 影响
-let _soundLoadedListeners: (() => void)[] = []
-let _allAlarms: { msg: string; type: string }[] = []
 
 function createAudioElements() {
   for (const [type, config] of Object.entries(_soundConfig)) {
@@ -68,22 +57,14 @@ function createAudioElements() {
   }
 }
 
-async function loadSoundConfig() {
+async function loadSoundConfig(signal: AbortSignal) {
   try {
-    const r = await fetch('/api/alarm-sounds')
+    const r = await fetch('/api/alarm-sounds', { signal })
     const data = await r.json()
+    if (signal.aborted) return
     _soundConfig = data.alarms || {}
     createAudioElements()
-    _soundLoadedListeners.forEach(fn => fn())
   } catch {}
-}
-
-function onSoundLoaded(fn: () => void) {
-  if (Object.keys(_soundConfig).length > 0) {
-    fn()
-  } else {
-    _soundLoadedListeners.push(fn)
-  }
 }
 
 // 播放队列
@@ -151,19 +132,16 @@ function stopCurrent() {
 
 // ── Toast ───────────────────────────────────
 let toastCb: ((toasts: ToastItem[]) => void) | null = null
-let alarmCb: ((alarm: Alarm) => void) | null = null
 let panelCb: ((alarms: any[]) => void) | null = null
 let toastIdCounter = 0
 let activeToasts: ToastItem[] = []
 
 export function pushAlarm(msg: string, type: string = 'info', _duration: number = 5000, alarmId?: string) {
-  _allAlarms = [..._allAlarms, { msg, type }].slice(-20)
   enqueueSound(type)
   sendBrowserNotification(msg, type)
   const item: ToastItem = { msg, type, id: ++toastIdCounter, ts: Date.now(), alarmId }
   activeToasts = [item, ...activeToasts].slice(0, MAX_VISIBLE_TOASTS)
   toastCb?.(activeToasts)
-  alarmCb?.(msg, type, _duration, alarmId)
 }
 
 export function setFullAlarmPanel(alarms: any[]) {
@@ -183,25 +161,29 @@ function sendBrowserNotification(msg: string, type: string = 'info') {
   const icon = icons[type] || '⚠️'
   if (Notification.permission === 'granted') {
     new Notification(`${icon} 3L 报警`, { body: msg })
-  } else if (Notification.permission === 'default') {
-    Notification.requestPermission()
   }
 }
 
 // ── 组件 ────────────────────────────────────
 export default function AlarmLayer() {
-  const [alarms, setAlarms] = useState<Alarm[]>([])
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [panelAlarms, setPanelAlarms] = useState<any[]>([])
+  const [historyExpanded, setHistoryExpanded] = useState(false)
   const [nowPlaying, setNowPlaying] = useState<string | null>(null)
   const [soundEnabled, setSoundEnabled] = useState(false)
-  const [soundLoaded, setSoundLoaded] = useState(false)
 
   useEffect(() => {
-    loadSoundConfig()
-    onSoundLoaded(() => setSoundLoaded(true))
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission()
+    const controller = new AbortController()
+    loadSoundConfig(controller.signal)
+    return () => {
+      controller.abort()
+      stopCurrent()
+      _playQueue = []
+      for (const audio of Object.values(_audioElements)) {
+        audio.pause()
+        audio.remove()
+      }
+      _audioElements = {}
     }
   }, [])
 
@@ -213,36 +195,31 @@ export default function AlarmLayer() {
     return () => clearInterval(t)
   }, [])
 
-  toastCb = useCallback((items: ToastItem[]) => setToasts([...items]), [])
-  alarmCb = useCallback((msg: string, type: string, duration: number, alarmId?: string) => {
-    setAlarms(prev => {
-      const next = [{ msg, type, ts: Date.now(), duration: duration || 5000, alarmId }, ...prev]
-      return next.slice(0, MAX_ALARMS)
-    })
-  }, [])
-  panelCb = useCallback((alarms: any[]) => setPanelAlarms(alarms), [])
+  const handleToasts = useCallback((items: ToastItem[]) => setToasts([...items]), [])
+  const handlePanel = useCallback((items: any[]) => setPanelAlarms(items), [])
+
+  useEffect(() => {
+    toastCb = handleToasts
+    panelCb = handlePanel
+    return () => {
+      if (toastCb === handleToasts) toastCb = null
+      if (panelCb === handlePanel) panelCb = null
+    }
+  }, [handleToasts, handlePanel])
 
   const isHandledAlarm = (a: any) => a.status === 'handled' || a.status === 'dismissed'
 
-  const handleCheck = async (alarmId: string, currentlyHandled: boolean) => {
-    if (currentlyHandled) {
+  const dismissAlarm = async (alarmId: string) => {
+    setPanelAlarms(prev => prev.map(a => a.id === alarmId ? { ...a, status: 'handled' } : a))
+    try {
+      const response = await fetch('/api/alarms/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: alarmId }),
+      })
+      if (!response.ok) throw new Error('dismiss failed')
+    } catch {
       setPanelAlarms(prev => prev.map(a => a.id === alarmId ? { ...a, status: 'active' } : a))
-      try {
-        await fetch('/api/alarms/reenable', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: alarmId }),
-        })
-      } catch {}
-    } else {
-      setPanelAlarms(prev => prev.map(a => a.id === alarmId ? { ...a, status: 'handled' } : a))
-      try {
-        await fetch('/api/alarms/dismiss', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: alarmId }),
-        })
-      } catch {}
     }
   }
 
@@ -253,16 +230,15 @@ export default function AlarmLayer() {
       setSoundEnabled(false)
       _soundEnabled = false
     } else {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission()
+      }
       // 取消静音所有用 DOM 创建的 audio 元素
       for (const audio of Object.values(_audioElements)) {
         audio.muted = false
       }
       setSoundEnabled(true)
       _soundEnabled = true
-      // 补播已有的报警
-      for (const alarm of _allAlarms) {
-        enqueueSound(alarm.type)
-      }
       if (_playQueue.length > 0 && !_isPlaying) playNext()
     }
   }
@@ -278,10 +254,39 @@ export default function AlarmLayer() {
     panic: 'linear-gradient(135deg, #450a0a, #7f1d1d)',
   }
 
+  const activePanelAlarms = panelAlarms.filter(a => !isHandledAlarm(a))
+  const handledPanelAlarms = panelAlarms.filter(isHandledAlarm)
+
+  const renderPanelAlarm = (a: any, i: number, history = false) => {
+    let alarmType = 'info'
+    if (a.type === 'price') alarmType = 'stop'
+    else if (a.type === 'deviation') alarmType = 'warn'
+    else if (a.type === 'market') alarmType = 'market'
+    else if (a.type === 'market_critical') alarmType = 'market_critical'
+    else if (a.type === 'panic') alarmType = 'panic'
+    const c = ALARM_COLORS[alarmType] || '#888'
+    const ic = ALARM_ICONS[alarmType] || 'ℹ️'
+    const typeLabel = {price:'止损', deviation:'异动', market:'大盘', market_critical:'系统风险', panic:'恐慌'}[a.type] || ''
+    const rawMsg = a.msg || (a.stock ? `${a.stock} ${typeLabel}` : `报警 #${i + 1}`)
+    const msg = String(rawMsg).replace(/^\uFFFD+\s*/, '').replace(/^[🟢🔴🟡🔔ℹ️🟠]\s*/, '')
+    const alarmDate = a.triggered_at || a.handled_at || a.created || ''
+    return (
+      <div key={a.id || `${history}-${i}`} className={`alarm-row${history ? ' alarm-row-history' : ''}`}
+        style={{ borderLeftColor: history ? '#555' : c }}>
+        <span>{ic}</span>
+        <span className="alarm-message">{msg}</span>
+        {alarmDate && <span className="alarm-date">{String(alarmDate).slice(0, 16)}</span>}
+        {!history && a.id && (
+          <button type="button" className="alarm-handle-button" onClick={() => dismissAlarm(a.id)}>处理</button>
+        )}
+      </div>
+    )
+  }
+
   return (
     <>
       {/* 声音开关按钮 */}
-      <div style={{
+      <button type="button" aria-pressed={soundEnabled} className="alarm-sound-button" style={{
         position: 'fixed', bottom: 12, right: 12, zIndex: 99999,
         background: 'rgba(0,0,0,0.7)', color: soundEnabled ? '#4ecdc4' : '#aaa', fontSize: 11,
         padding: '8px 14px', borderRadius: 8, cursor: 'pointer',
@@ -291,7 +296,7 @@ export default function AlarmLayer() {
         {soundEnabled
           ? (nowPlaying ? `🔊 ${_soundConfig[SOUND_KEY_MAP[nowPlaying] || nowPlaying]?.name}` : '🔊 报警声音已开启')
           : '🔇 点此开启报警声音'}
-      </div>
+      </button>
 
       {/* Toast 弹窗 */}
       {toasts.length > 0 && (
@@ -314,7 +319,7 @@ export default function AlarmLayer() {
               }}>
                 <span style={{ fontSize: 20, lineHeight: '18px' }}>{ALARM_ICONS[t.type] || 'ℹ️'}</span>
                 <span style={{ color: '#fff', fontSize: 13.5, fontWeight: 600, flex: 1 }}>{t.msg}</span>
-                <span onClick={() => dismissToast(t.id)} style={{ color: '#888', fontSize: 15, cursor: 'pointer', flexShrink: 0 }}>×</span>
+                <button type="button" aria-label="关闭报警提示" className="toast-close" onClick={() => dismissToast(t.id)}>×</button>
               </div>
             )
           })}
@@ -325,54 +330,23 @@ export default function AlarmLayer() {
       <div className="layer alarm-layer">
         <div className="layer-title">
           <span className="badge-layer">④</span> 🔔 报警层
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: '#888', cursor: 'pointer' }}
+          <button type="button" className="text-button" style={{ marginLeft: 'auto' }}
                 onClick={() => window.location.href = '/alarm-sounds'}>
             🎵 配置音乐
-          </span>
-          <span className="badge" style={{ background: panelAlarms.length > 0 ? '#e94560' : '#555' }}>{panelAlarms.length}</span>
+          </button>
+          <span className="badge" style={{ background: activePanelAlarms.length > 0 ? '#e94560' : '#555' }}>{activePanelAlarms.length}</span>
         </div>
-        {panelAlarms.length === 0 ? (
-          <div className="empty">暂无报警</div>
-        ) : (
-          panelAlarms.map((a, i) => {
-            let alarmType = 'info'
-            if (a.type === 'price') alarmType = 'stop'
-            else if (a.type === 'deviation') alarmType = 'warn'
-            else if (a.type === 'market') alarmType = 'market'
-            else if (a.type === 'market_critical') alarmType = 'market_critical'
-            else if (a.type === 'panic') alarmType = 'panic'
-            const c = ALARM_COLORS[alarmType] || '#888'
-            const ic = ALARM_ICONS[alarmType] || 'ℹ️'
-            const handled = isHandledAlarm(a)
-            // 构造含类型的消息：优先用后端msg，否则拼接"股票名 + 报警类型"
-            let typeLabel = {price:'止损', deviation:'异动', market:'大盘', market_critical:'系统风险', panic:'恐慌'}[a.type] || ''
-            let msg = (a.msg || (a.stock ? `${a.stock} ${typeLabel}` : `报警 #${i+1}`))
-            msg = msg.replace(/^[🟢🔴🟡🔔ℹ️🟠]\s*/, '') // 去除后端msg中的emoji前缀（前端已渲染ic图标）
-            return (
-              <div key={a.id || i} style={{
-                display: 'flex', gap: 8, alignItems: 'center', padding: '6px 10px',
-                marginBottom: 4, borderRadius: 6,
-                background: handled ? 'rgba(60,60,60,0.3)' : 'rgba(255,255,255,0.02)',
-                borderLeft: `3px solid ${handled ? '#555' : c}`,
-                fontSize: 12, opacity: handled ? 0.5 : 1,
-                transition: 'all 0.3s ease',
-              }}>
-                <span>{ic}</span>
-                <span style={{
-                  color: handled ? '#888' : '#e0e0e0', flex: 1,
-                  textDecoration: handled ? 'line-through' : 'none',
-                }}>{msg}</span>
-                {a.id && (
-                  <input type="checkbox" checked={handled} onChange={() => handleCheck(a.id, handled)}
-                    style={{
-                      width: 16, height: 16, cursor: 'pointer', accentColor: c,
-                      flexShrink: 0,
-                    }}
-                  />
-                )}
-              </div>
-            )
-          })
+        {activePanelAlarms.length === 0
+          ? <div className="empty">当前没有未处理报警</div>
+          : activePanelAlarms.map((a, i) => renderPanelAlarm(a, i))}
+        {handledPanelAlarms.length > 0 && (
+          <div className="alarm-history">
+            <button type="button" className="history-toggle" aria-expanded={historyExpanded}
+              onClick={() => setHistoryExpanded(v => !v)}>
+              历史记录 {handledPanelAlarms.length} 条 {historyExpanded ? '收起' : '展开'}
+            </button>
+            {historyExpanded && handledPanelAlarms.map((a, i) => renderPanelAlarm(a, i, true))}
+          </div>
         )}
       </div>
     </>

@@ -9,6 +9,10 @@ export interface VolumeData {
   yesterday_is_estimated?: boolean
   today_curve?: { time: string; amount: number }[]
   current_time?: string
+  update_time?: string
+  is_trading?: boolean
+  yesterday_unavailable?: boolean
+  data_source?: { quote?: string; yesterday?: string; yesterday_curve?: string }
 }
 
 /** 板块监测API返回类型 */
@@ -24,6 +28,16 @@ export interface SectorData {
   /** 兼容旧版（后端 data={industry,concept} 嵌套前，fallback） */
   today_top5?: SectorItem[]
   chg20d_top10?: SectorItem[]
+  meta?: MonitorMeta
+}
+
+export interface MonitorMeta {
+  updated_at?: string
+  refresh_seconds?: number
+  source?: string
+  concept_data_date?: string
+  concept_available?: boolean
+  concept_stale?: boolean
 }
 
 export interface SectorItem {
@@ -72,6 +86,7 @@ export interface LeaderDashboardData {
     plunge: ConceptAnomalyItem[]
   }
   error?: string
+  meta?: MonitorMeta
 }
 
 export interface ConceptAnomalyItem {

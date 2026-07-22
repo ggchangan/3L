@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { fetchLeaderDashboard } from '../lib/api'
 import type { LeaderDashboardData, WatchedIndustryItem, AnomalyData, SwitchingEvent } from '../lib/types'
 
@@ -14,16 +14,25 @@ export default function LeaderMonitor() {
   const [collapsed, setCollapsed] = useState(true)
   const [collapsedWatched, setCollapsedWatched] = useState(false)
   const [manual, setManual] = useState<ManualAddState>({ showInput: false, input: '', existing: [] })
+  const [refreshError, setRefreshError] = useState('')
 
-  const load = () => {
-    setLoading(true)
+  const load = useCallback((initial = false) => {
+    if (initial) setLoading(true)
     fetchLeaderDashboard().then(d => {
       setData(d)
+      setRefreshError('')
       setLoading(false)
-    }).catch(() => setLoading(false))
-  }
+    }).catch(() => {
+      setLoading(false)
+      setRefreshError('龙头数据刷新失败，当前显示上次结果')
+    })
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load(true)
+    const timer = setInterval(() => load(false), 2 * 60 * 1000)
+    return () => clearInterval(timer)
+  }, [load])
 
   const handleAddIndustry = async () => {
     const name = manual.input.trim()
@@ -37,7 +46,7 @@ export default function LeaderMonitor() {
       })
       if (r.ok) {
         setManual({ ...manual, input: '', showInput: false })
-        load()
+        load(false)
       }
     } catch {}
   }
@@ -49,7 +58,7 @@ export default function LeaderMonitor() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ industry }),
       })
-      load()
+      load(false)
     } catch {}
   }
 
@@ -60,20 +69,22 @@ export default function LeaderMonitor() {
 
   return (
     <>
-      <div className="block-title" style={{ marginBottom: 0, cursor: 'pointer' }} onClick={() => setCollapsed(v => !v)}>
+      <button type="button" className="block-title collapsible-title" aria-expanded={!collapsed} onClick={() => setCollapsed(v => !v)}>
         🏆 龙头观测
         <span className="badge">{watched.length + (anomalies?.surge?.length || 0) + (anomalies?.plunge?.length || 0) + (anomalies?.switching?.length || 0)}</span>
         <span className="collapse-indicator">{collapsed ? '▶' : '▼'}</span>
-      </div>
+      </button>
+
+      {refreshError && <div className="data-error">{refreshError}</div>}
 
       {!collapsed && (
         <>
           {/* 区块1: 关注的行业 */}
           <div className="info-block" style={{ marginTop: 4 }}>
-            <div className="block-title-sm" style={{ cursor: 'pointer' }} onClick={() => setCollapsedWatched(v => !v)}>
+            <button type="button" className="block-title-sm collapsible-title" aria-expanded={!collapsedWatched} onClick={() => setCollapsedWatched(v => !v)}>
               📋 关注的行业 <span className="badge">{watched.length}</span>
               <span className="collapse-indicator">{collapsedWatched ? '▶' : '▼'}</span>
-            </div>
+            </button>
             {!collapsedWatched && (
               <table className="leader-table" style={{ fontSize: 11 }}>
                 <thead>
@@ -287,6 +298,12 @@ export default function LeaderMonitor() {
               )}
             </div>
           )}
+          <div className="data-meta">
+            接口返回 {data.meta?.updated_at || '—'} · {data.meta?.source || '—'}
+            {data.meta?.concept_data_date ? ` · 概念数据日 ${data.meta.concept_data_date}` : ''}
+            {data.meta?.concept_available === false ? ' · 概念数据不可用' : ''}
+            {data.meta?.concept_stale ? '（非当日）' : ''}
+          </div>
         </>
       )}
     </>

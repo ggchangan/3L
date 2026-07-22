@@ -86,7 +86,7 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
     if (vsSector !== undefined && vsSector !== null && vsSector !== '') {
       const val = typeof vsSector === 'number' ? vsSector : Number(vsSector)
       const isWeak = val < -3
-      parts.push(<span key="vs" style={{ color: isWeak ? '#ff9800' : '#888', fontSize: 10, marginLeft: 4 }}>| {isWeak ? '⚠️' : ''}比板块 {val >= 0 ? '+' : ''}{val.toFixed(1)}%{isWeak ? ' 偏弱' : ''}</span>)
+      parts.push(<span key="vs" style={{ color: isWeak ? '#ff9800' : '#888', fontSize: 10, marginLeft: 4 }}>| {isWeak ? '⚠️' : ''}5日比板块 {val >= 0 ? '+' : ''}{val.toFixed(1)}%{isWeak ? ' 偏弱' : ''}</span>)
     }
     if (s.direction) {
       parts.push(<span key="dir" style={{ color: '#555', margin: '0 4px' }}>|</span>)

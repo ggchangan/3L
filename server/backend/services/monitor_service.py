@@ -232,9 +232,34 @@ def get_top_sectors():
     from backend.core.monitor_data import get_top_sectors_with_5d, get_top_concept_sectors_with_5d
     industry = get_top_sectors_with_5d()
     concept = get_top_concept_sectors_with_5d()
+    concept_meta = concept.get('meta', {}) if isinstance(concept, dict) else {}
     return {
         'industry': industry,
         'concept': concept,
+        'meta': {
+            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'refresh_seconds': 600,
+            'source': 'ths',
+            'concept_data_date': concept_meta.get('data_date', ''),
+            'concept_available': concept_meta.get('available', False),
+            'concept_stale': concept_meta.get('stale', False),
+        },
+    }
+
+
+def get_monitor_context():
+    """返回盯盘页所需的本地日期和上一有效交易日。"""
+    from backend.data_access.data_source import get_previous_trading_day
+
+    now = datetime.now()
+    today = now.strftime('%Y-%m-%d')
+    previous = get_previous_trading_day(now.date())
+
+    return {
+        'today': today,
+        'previous_trading_day': f'{previous[:4]}-{previous[4:6]}-{previous[6:]}',
+        'timezone': 'Asia/Shanghai',
+        'updated_at': now.strftime('%Y-%m-%d %H:%M:%S'),
     }
 
 
@@ -586,6 +611,7 @@ def get_leader_dashboard():
 
     # 7. 概念板块异动 — 只显示关注的66个概念（自选股>=6只）
     concept_anomalies = {'surge': [], 'plunge': []}
+    concept_source_meta = {}
     try:
         # 计算关注的概念列表（借鉴波谷追踪的筛选逻辑）
         from backend.data_access.data_layer import get_stock_concept_map, get_concept_list
@@ -614,31 +640,26 @@ def get_leader_dashboard():
                 if isinstance(w, str):
                     tracked_names.add(w)
 
-        # 从 change_em 取实时数据，过滤出关注概念的异动
-        import akshare as ak
-        import warnings
-        warnings.filterwarnings('ignore')
-        df = ak.stock_board_change_em()
-        em_data = {}  # THS名 → chg
-        for _, row in df.iterrows():
-            em_name = str(row['板块名称']).strip()
-            chg_str = str(row['涨跌幅']).strip()
-            try:
-                chg = float(chg_str)
-            except (ValueError, TypeError):
-                continue
-            em_data[em_name] = chg
+        # 经统一板块入口读取同花顺概念数据，禁止跨 provider 拼接。
+        from backend.data_access.data_source import get_sector_rankings_with_meta
+        concept_snapshot = get_sector_rankings_with_meta('concept')
+        concept_source_meta = concept_snapshot
+        rankings = concept_snapshot.get('data') or {}
+        ths_data = {
+            name: float(row.get('change_pct', row.get('pct_chg', 0)) or 0)
+            for name, row in rankings.items()
+            if isinstance(row, dict)
+        }
 
-        # 按关注概念匹配（同花顺名 → 直接匹配 / 去掉"概念"匹配）
+        # 名称匹配只发生在同一个 THS provider 内。
         tracked_real = {}
         for tn in tracked_names:
-            if tn in em_data:
-                tracked_real[tn] = em_data[tn]
+            if tn in ths_data:
+                tracked_real[tn] = ths_data[tn]
             else:
-                # 去掉"概念"试试
                 simple = tn.replace('概念', '')
-                if simple in em_data:
-                    tracked_real[tn] = em_data[simple]
+                if simple in ths_data:
+                    tracked_real[tn] = ths_data[simple]
 
         # 领涨
         surge = [(n, c) for n, c in tracked_real.items() if c > 3]
@@ -656,6 +677,14 @@ def get_leader_dashboard():
         'watched': watched_items,
         'anomalies': anomalies,
         'concept_anomalies': concept_anomalies,
+        'meta': {
+            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'refresh_seconds': 120,
+            'source': 'ths板块 + 统一个股实时行情',
+            'concept_data_date': concept_source_meta.get('data_date', ''),
+            'concept_available': concept_source_meta.get('available', False),
+            'concept_stale': concept_source_meta.get('stale', False),
+        },
     }
 
 

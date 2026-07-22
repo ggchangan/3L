@@ -48,6 +48,17 @@ export function fetchStopLoss(): Promise<StopLossData> {
   return fetchJson<StopLossData>('/api/monitor/stop-loss')
 }
 
+export interface MonitorContext {
+  today: string
+  previous_trading_day: string
+  timezone: string
+  updated_at: string
+}
+
+export function fetchMonitorContext(): Promise<MonitorContext> {
+  return fetchJson<MonitorContext>('/api/monitor/context')
+}
+
 export function fetchWorkbenchPlan(date: string): Promise<WorkbenchPlan> {
   return fetchJson<WorkbenchPlan>(`/api/workbench/get?date=${date}`)
 }
@@ -172,9 +183,12 @@ export function fmtVol(v?: number): string {
   return v.toLocaleString()
 }
 
-/** 获取昨日日期 YYYY-MM-DD */
+/** 仅供非交易日语义场景使用；交易日继承请使用 fetchMonitorContext。 */
 export function getYesterdayStr(): string {
   const d = new Date()
   d.setDate(d.getDate() - 1)
-  return d.toISOString().slice(0, 10)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
