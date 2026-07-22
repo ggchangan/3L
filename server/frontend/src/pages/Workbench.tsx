@@ -42,6 +42,7 @@ interface SuggestionItem {
   name?: string
   code?: string
   action?: string
+  action_type?: string
   reason?: string
   priority?: string
   sector?: string
@@ -165,7 +166,7 @@ export default function Workbench() {
       }
     })
 
-    // 只有 executable 进入买入计划；候选和阻断项只能进入观察。
+    // 只有板块数据完全未覆盖的“待确认”进入观察，其余买点保持买入操作。
     suggestions.buy_priority.forEach((item, i) => {
       const id = `bp-${i}`
       if (!checkedIds.has(id)) return
@@ -178,10 +179,10 @@ export default function Workbench() {
         stop_loss: item.stop_loss,
         stop_loss_pct: item.stop_loss_pct,
       }
-      if ((item.decision_status || 'executable') === 'executable') {
-        newPlan.buy.push(planItem)
-      } else {
+      if (item.decision_status === 'blocked' || item.action_type === '待确认') {
         newPlan.watch.push({ ...planItem, focus: item.reason || '等待板块数据确认' })
+      } else {
+        newPlan.buy.push(planItem)
       }
     })
 
@@ -321,7 +322,7 @@ export default function Workbench() {
               {/* 买入候选 */}
               {suggestions.buy_priority.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>🎯 复盘买点（仅“可执行”导入买入计划）</div>
+                  <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>🎯 复盘买点（“待确认”导入观察，其余导入买入计划）</div>
                   {suggestions.buy_priority.map((item, i) => {
                     const id = `bp-${i}`
                     const bpColors: Record<string, string> = { '中继买点': '#ffd700', '突破买点': '#22c55e', 'BIAS5乖离率买入': '#2196f3' }
@@ -332,8 +333,8 @@ export default function Workbench() {
                         <span style={{ color: checkedIds.has(id) ? '#22c55e' : '#555', fontSize: 14 }}>{checkedIds.has(id) ? '☑' : '☐'}</span>
                         <span style={{ fontSize: 10, color: bpColor, fontWeight: 600 }}>[{item.priority}]</span>
                         <span style={{ fontSize: 12, color: '#e0e0e0' }}>{item.name || ''}({item.code || ''})</span>
-                        <span style={{ fontSize: 10, color: item.decision_status === 'executable' ? '#22c55e' : item.decision_status === 'blocked' ? '#e94560' : '#ffd700' }}>
-                          {item.decision_status === 'executable' ? '可执行' : item.decision_status === 'blocked' ? '数据阻断' : '候选观察'}
+                        <span style={{ fontSize: 10, color: item.action_type === '待确认' ? '#ffd700' : '#22c55e' }}>
+                          {item.action_type || '买入'}
                         </span>
                         <span style={{ fontSize: 10, color: bpColor }}>{item.buy_point || ''}</span>
                         <span style={{ fontSize: 10, color: '#888' }}>{item.structure || ''}{item.structure && item.stage ? '·' : ''}{item.stage || ''}</span>

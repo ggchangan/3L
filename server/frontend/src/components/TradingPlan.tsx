@@ -23,9 +23,6 @@ Object.entries(OPP_CFG).forEach(([k, v]) => { OPP_ORDER[k] = v.order })
 export default function TradingPlan({ plan }: Props) {
   if (!plan) return <div className="empty">暂无交易计划</div>
   const buyItems = plan.buy_priority || []
-  const executable = buyItems.filter(item => (item.decision_status || 'executable') === 'executable')
-  const candidates = buyItems.filter(item => item.decision_status === 'candidate')
-  const blocked = buyItems.filter(item => item.decision_status === 'blocked')
 
   return (
     <div className="plan-card" style={{ overflowX: 'auto' }}>
@@ -82,10 +79,8 @@ export default function TradingPlan({ plan }: Props) {
         }}
       />
 
-      {/* 关注买点：可执行、候选和数据阻断必须分开显示 */}
-      <BuyDecisionTable title={`✅ 可执行买点 (${executable.length})`} items={executable} />
-      <BuyDecisionTable title={`👀 候选观察 (${candidates.length})`} items={candidates} />
-      <BuyDecisionTable title={`⛔ 数据阻断 (${blocked.length})`} items={blocked} />
+      {/* 机会类型用于排序；“操作”始终表达买入或待确认。 */}
+      <BuyActionTable title={`🎯 关注买点 (${buyItems.length})`} items={buyItems} />
 
       {plan.risk_items?.length ? (
         <div style={{ marginTop: 12 }}>
@@ -102,17 +97,16 @@ export default function TradingPlan({ plan }: Props) {
   )
 }
 
-function BuyDecisionTable({ title, items }: { title: string; items: any[] }) {
+function BuyActionTable({ title, items }: { title: string; items: any[] }) {
   return (
     <UnifiedTable
       title={title}
       items={items}
       groupKey={g => g.opportunity || '其他'}
       renderAction={item => {
-        const status = item.decision_status || 'executable'
-        const label = status === 'executable' ? '可执行' : status === 'candidate' ? '候选' : '待确认'
-        const color = status === 'executable' ? '#22c55e' : status === 'candidate' ? '#ffd700' : '#e94560'
-        return <span style={{ color, fontWeight: 600 }}>{label}</span>
+        const action = item.action_type || '买入'
+        const color = action === '待确认' ? '#ffd700' : PRI_COLORS[item.priority] || '#22c55e'
+        return <span style={{ color, fontWeight: 600 }}>{action}</span>
       }}
       renderSignal={item => {
         const sigs = item.triggered_signals || []

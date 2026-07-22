@@ -24,8 +24,9 @@ interface StockCardProps {
 
 export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityMap }: StockCardProps) {
   const [showChart, setShowChart] = useState(false)
-  const cls = s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold'
-  const signalText = s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--'
+  const isPending = s.action_type === '待确认' || s.decision_status === 'blocked'
+  const cls = isPending ? 'hold' : s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold'
+  const signalText = isPending ? '⏳待确认' : s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--'
   // 操作文字：主操作用 action_type（买入/卖出/持有/加仓/减仓/换股）
   // action_signal 作为补充说明用小字显示
   const displayAction = s.action_type || signalText
@@ -99,7 +100,10 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
   // 结论
   let conclusion = `阶段${s.stage}，${s.structure}`
   let conclusionColor = '#aaa'
-  if (isBuy) {
+  if (isPending) {
+    conclusion = `${s.buy_point || '买点信号'}已触发，但${s.action_reason || '板块数据待补齐'}，操作暂待确认`
+    conclusionColor = '#ffd700'
+  } else if (isBuy) {
     const slText = (s.stop_loss && s.stop_loss_pct)
       ? `，建议止损${Number(s.stop_loss).toFixed(2)}（约${Number(s.stop_loss_pct).toFixed(1)}%）`
       : ''

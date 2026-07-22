@@ -949,7 +949,9 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             sig_txt = bs.get('action_signal', '')
             pri = bs.get('action_priority', '高')
             sector_unavailable = not sec_name or sec_name not in opportunity_map
-            decision_status = 'executable' if bs_opp and bs_opp != '--' else 'candidate'
+            # 板块已覆盖时，机会类型只影响排序和仓位判断，不改变“买入”操作。
+            # 只有板块数据完全未覆盖，才将操作降级为“待确认”。
+            decision_status = 'executable'
             if sector_unavailable:
                 # 3L 的板块层没有闭环时只保留个股技术信号，不生成正式买入指令。
                 at = '待确认'
@@ -1013,6 +1015,25 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         plan['risk_items'].append(f'大盘偏波谷（vl_score={vl_score}），积极寻找机会')
 
     return plan
+
+
+def apply_trading_plan_actions(buy_signals_review, trading_plan):
+    """把交易计划的数据门禁同步回买点卡片，避免同一股票出现两种操作结论。"""
+    plan_by_code = {
+        str(item.get('code', '')).split('.')[0]: item
+        for item in trading_plan.get('buy_priority', [])
+        if item.get('code')
+    }
+    for signal in buy_signals_review or []:
+        item = plan_by_code.get(str(signal.get('code', '')).split('.')[0])
+        if not item:
+            continue
+        signal['decision_status'] = item.get('decision_status', 'executable')
+        signal['data_quality'] = item.get('data_quality', 'ready')
+        signal['action_type'] = item.get('action_type', signal.get('action_type', '买入'))
+        if item.get('decision_status') == 'blocked':
+            signal['action_reason'] = item.get('opp_reason') or item.get('reason') or '板块数据待补齐'
+    return buy_signals_review
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -173,8 +173,8 @@ class TestPlanTrackingV2(unittest.TestCase):
         self.assertEqual(p['stage'], '上行')
         self.assertEqual(p['is_main'], 1)
 
-    def test_candidate_and_blocked_buy_priority_are_not_tracked_as_plans(self):
-        """非可执行买点不能污染执行计划和后续胜率统计。"""
+    def test_only_blocked_buy_priority_is_not_tracked_as_plan(self):
+        """兼容旧候选数据，但板块未覆盖的待确认买点不进入胜率统计。"""
         from backend.services.plan_tracking_service import extract_plans_from_trading_plan
         executable = _make_buy_priority(name='执行股', code='000001')
         executable['decision_status'] = 'executable'
@@ -188,7 +188,7 @@ class TestPlanTrackingV2(unittest.TestCase):
             '2026-05-28',
         )
 
-        self.assertEqual([plan['code'] for plan in plans], ['000001'])
+        self.assertEqual([plan['code'] for plan in plans], ['000001', '000002'])
 
     def test_extract_both_sources(self):
         """同时提取holdings_action和buy_priority"""

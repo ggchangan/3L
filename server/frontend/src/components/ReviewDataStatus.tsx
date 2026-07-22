@@ -57,12 +57,12 @@ export default function ReviewDataStatus({ dataStatus }: Props) {
       </div>
       {hasEstimate && (
         <div className="review-data-status-note">
-          当日预估可用于复盘；未覆盖项目已阻断交易指令。次日 06:00 将使用正式 THS 日线校准。
+          行业、概念为当日预估；未覆盖个股暂显示“待确认”。次日 06:00 使用正式 THS 日线重新计算。
         </div>
       )}
       {!hasEstimate && hasStale && (
         <div className="review-data-status-note">
-          部分数据尚未达到目标交易日，相关结论不可作为交易指令。
+          部分板块数据尚未达到复盘交易日，对应个股暂显示“待确认”。
         </div>
       )}
     </div>
