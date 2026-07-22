@@ -173,6 +173,64 @@ def test_ths_close_ranking_combines_verified_industries_and_concepts(monkeypatch
     assert result['concepts']['机器人概念']['change_pct'] == 1.2
 
 
+def test_industry_map_prefers_confirmed_mainline_universe(monkeypatch):
+    from backend.data_access import data_source
+
+    class FakeDb:
+        def execute_raw(self, sql, params=None):
+            assert "WHERE i.type = 'I'" in sql
+            return [
+                {
+                    'con_code': '603986.SH',
+                    'con_name': '兆易创新',
+                    'name': '半导体产品与设备Ⅱ(A股)',
+                },
+                {
+                    'con_code': '603986.SH',
+                    'con_name': '兆易创新',
+                    'name': '半导体',
+                },
+                {
+                    'con_code': '603986.SH',
+                    'con_name': '兆易创新',
+                    'name': '数字芯片设计',
+                },
+            ]
+
+    monkeypatch.setattr(data_source, '_get_tushare_db', lambda: FakeDb())
+    monkeypatch.setattr(
+        data_source,
+        'get_ths_daily_update_confirmation',
+        lambda: {'industry_names': ['半导体', '数字芯片设计']},
+    )
+
+    result = data_source.build_industry_map_from_db()
+
+    assert result['603986']['ths_industry'] == '数字芯片设计'
+
+
+def test_industry_map_keeps_legacy_fallback_without_confirmation(monkeypatch):
+    from backend.data_access import data_source
+
+    class FakeDb:
+        def execute_raw(self, sql, params=None):
+            return [
+                {'con_code': '600000.SH', 'con_name': '浦发银行', 'name': '银行'},
+                {'con_code': '600000.SH', 'con_name': '浦发银行', 'name': '股份制银行'},
+            ]
+
+    monkeypatch.setattr(data_source, '_get_tushare_db', lambda: FakeDb())
+    monkeypatch.setattr(
+        data_source,
+        'get_ths_daily_update_confirmation',
+        lambda: {},
+    )
+
+    result = data_source.build_industry_map_from_db()
+
+    assert result['600000']['ths_industry'] == '股份制银行'
+
+
 def test_ths_concept_snapshot_requires_explicit_target_date(monkeypatch):
     from backend.data_access import data_source
 

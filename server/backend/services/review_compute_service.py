@@ -859,7 +859,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             stage = h.get('stage', '')
             struct = h.get('structure', '')
             # 查询所属板块的机会类型
-            sec_name = h.get('sector', '')
+            sec_name = h.get('industry') or h.get('sector', '')
             sec_opp = '--'
             sec_opp_reason = ''
             if opportunity_map and sec_name:
@@ -886,6 +886,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'stop_loss': h.get('stop_loss'),
                 'stop_loss_pct': h.get('stop_loss_pct'),
                 'change': h.get('change'),
+                'industry': sec_name,
                 'sector': sec_name,
                 'opportunity': sec_opp,
                 'opp_reason': sec_opp_reason,
@@ -913,7 +914,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     if buy_signals_review:
         for bs in buy_signals_review:
             # 通过 sector 名称在 opportunity_map 中查找该股票所属方向的机会类型
-            sec_name = bs.get('sector', '')
+            sec_name = bs.get('industry') or bs.get('sector', '')
             direction = bs.get('direction', '')
             bs_opp = '--'
             opp_reason = ''
@@ -945,6 +946,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'stage': bs.get('stage', ''),
                 'stop_loss': bs.get('stop_loss'),
                 'stop_loss_pct': bs.get('stop_loss_pct'),
+                'industry': sec_name,
                 'sector': sec_name,
                 'direction': direction,
                 'opportunity': bs_opp,

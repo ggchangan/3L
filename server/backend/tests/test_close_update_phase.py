@@ -138,7 +138,7 @@ def test_full_phase_refreshes_review_after_sector_update(tmp_path):
     refresh.assert_called_once_with('20260721')
 
 
-def test_close_phase_keeps_review_available_when_sector_snapshot_fails():
+def test_close_phase_keeps_review_available_and_requests_retry_when_sector_snapshot_fails():
     from backend.core import update_stock_data
 
     freshness = {'ready': True, 'stock_date': '20260721', 'missing_indices': []}
@@ -154,7 +154,7 @@ def test_close_phase_keeps_review_available_when_sector_snapshot_fails():
          patch.object(update_stock_data, 'refresh_sector_close_snapshot', side_effect=RuntimeError('暂时不可用')), \
          patch.object(update_stock_data, '_clear_mainline_cache'), \
          patch.object(update_stock_data, '_refresh_review_cache') as refresh:
-        assert update_stock_data.run_close_phase() is True
+        assert update_stock_data.run_close_phase() is False
 
     refresh.assert_called_once_with('20260721')
 

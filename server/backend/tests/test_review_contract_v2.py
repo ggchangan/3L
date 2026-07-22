@@ -3,6 +3,7 @@ import threading
 import time
 
 import backend.services.review_service as review_service
+from backend.services.review_compute_service import generate_trading_plan
 from backend.services.review_service import normalize_review_response
 
 
@@ -81,3 +82,26 @@ def test_completed_review_date_uses_last_completed_trading_day(monkeypatch):
     )
 
     assert review_service.get_completed_review_date() == '2026-07-20'
+
+
+def test_trading_plan_joins_opportunity_by_canonical_industry():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中'},
+        mainline_data={'lines': []},
+        signals_data={},
+        existing_holdings=[],
+        buy_signals_review=[{
+            'code': '603986',
+            'name': '兆易创新',
+            'industry': '数字芯片设计',
+            'sector': '半导体产品与设备Ⅱ(A股)',
+            'action_type': '买入',
+        }],
+        opportunity_map={'数字芯片设计': '主线回调'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['industry'] == '数字芯片设计'
+    assert item['sector'] == '数字芯片设计'
+    assert item['opportunity'] == '主线回调'
+    assert item['opp_reason'] == ''

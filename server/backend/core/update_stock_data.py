@@ -461,8 +461,9 @@ def _clear_mainline_cache():
 def run_close_phase():
     """收盘阶段：只更新当日可获得的数据，并生成复盘缓存。
 
-    返回 True 表示个股和全部指数均已到目标交易日；False 表示数据源尚未
-    就绪，调用方可以稍后重试。板块完整日线留给次日完整阶段更新。
+    返回 True 表示个股、全部指数和当日板块预估快照均已就绪；False 表示
+    仍有数据源未就绪，调用方可以稍后重试。即使板块快照暂缺，也会先生成
+    一份沿用最近确认主线的降级复盘，保证页面可用。
     """
     from backend.data_access.data_source import get_last_completed_trading_day
 
@@ -491,6 +492,7 @@ def run_close_phase():
     update_stocks()
     log('━━━ 指数更新 ━━━')
     update_index()
+    snapshot_ready = False
     try:
         snapshot = refresh_sector_close_snapshot(target_date)
         stats = snapshot.get('coverage', {}).get('industry', {})
@@ -499,11 +501,12 @@ def run_close_phase():
             f'{stats.get("covered", 0)}/{stats.get("expected", 0)} '
             f'({stats.get("ratio", 0):.1%})'
         )
+        snapshot_ready = True
     except Exception as exc:
-        log(f'⚠️  收盘板块快照未就绪，复盘将降级使用已确认主线: {exc}')
+        log(f'⚠️  收盘板块快照未就绪，先生成降级复盘并继续重试: {exc}')
     _clear_mainline_cache()
     _refresh_review_cache(target_date)
-    return True
+    return snapshot_ready
 
 
 def run_full_phase():
