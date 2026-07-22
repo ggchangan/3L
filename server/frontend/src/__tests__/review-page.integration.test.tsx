@@ -16,7 +16,7 @@ import { fetchReviewToday } from '../lib/api'
 describe('Review page contract integration', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('从 v3 契约展示当日预估覆盖率和交易门禁', async () => {
+  it('从 v3 契约展示复盘交易日、预估覆盖率和操作', async () => {
     vi.mocked(fetchReviewToday).mockResolvedValue({
       date: '2026-07-22',
       data_status: {
@@ -30,9 +30,9 @@ describe('Review page contract integration', () => {
       buy_signals_review: [],
       trading_plan: {
         buy_priority: [
-          { code: '1', name: '可执行股', decision_status: 'executable' },
-          { code: '2', name: '候选股', decision_status: 'candidate' },
-          { code: '3', name: '阻断股', decision_status: 'blocked' },
+          { code: '1', name: '买入股', decision_status: 'executable', action_type: '买入' },
+          { code: '2', name: '普通买点股', decision_status: 'candidate', action_type: '买入' },
+          { code: '3', name: '待确认股', decision_status: 'blocked', action_type: '待确认' },
         ],
       },
       refresh_status: { status: 'idle' },
@@ -42,8 +42,9 @@ describe('Review page contract integration', () => {
 
     expect(await screen.findByText('行业 07-22 · 当日预估 97.8%，312/319')).toBeTruthy()
     expect(screen.getByText('概念 07-22 · 当日预估 85.3%，157/184')).toBeTruthy()
-    expect(screen.getByText('✅ 可执行买点 (1)')).toBeTruthy()
-    expect(screen.getByText('👀 候选观察 (1)')).toBeTruthy()
-    expect(screen.getByText('⛔ 数据阻断 (1)')).toBeTruthy()
+    expect(screen.getByText('复盘交易日 2026-07-22 星期三')).toBeTruthy()
+    expect(screen.getByText('🎯 关注买点 (3)')).toBeTruthy()
+    expect(screen.getAllByText('买入')).toHaveLength(2)
+    expect(screen.getByText('待确认')).toBeTruthy()
   })
 })

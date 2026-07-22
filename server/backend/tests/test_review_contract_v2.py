@@ -3,7 +3,7 @@ import threading
 import time
 
 import backend.services.review_service as review_service
-from backend.services.review_compute_service import generate_trading_plan
+from backend.services.review_compute_service import apply_trading_plan_actions, generate_trading_plan
 from backend.services.review_service import normalize_review_response
 
 
@@ -155,3 +155,43 @@ def test_trading_plan_blocks_buy_when_estimated_snapshot_misses_industry():
     assert item['decision_status'] == 'blocked'
     assert item['data_quality'] == 'sector_unavailable'
     assert item['opp_reason'] == '未覆盖行业·当日板块快照未覆盖'
+
+
+def test_trading_plan_keeps_buy_action_when_covered_industry_has_no_opportunity_label():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中'},
+        mainline_data={'ranking_status': 'estimated', 'lines': []},
+        signals_data={},
+        existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000002',
+            'name': '测试股票',
+            'industry': '已覆盖行业',
+            'action_type': '买入',
+        }],
+        opportunity_map={'已覆盖行业': '--'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['action_type'] == '买入'
+    assert item['decision_status'] == 'executable'
+    assert item['data_quality'] == 'ready'
+
+
+def test_trading_plan_action_is_synchronized_to_buy_signal_card():
+    signals = [{'code': '000001.SZ', 'action_type': '买入'}]
+    plan = {
+        'buy_priority': [{
+            'code': '000001',
+            'action_type': '待确认',
+            'decision_status': 'blocked',
+            'data_quality': 'sector_unavailable',
+            'opp_reason': '板块当日数据待补齐',
+        }],
+    }
+
+    apply_trading_plan_actions(signals, plan)
+
+    assert signals[0]['action_type'] == '待确认'
+    assert signals[0]['decision_status'] == 'blocked'
+    assert signals[0]['action_reason'] == '板块当日数据待补齐'

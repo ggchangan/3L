@@ -54,7 +54,7 @@ describe('ReviewDataStatus', () => {
     expect(screen.getByText('个股 07-21 · 正式数据')).toBeTruthy()
     expect(screen.getByText('指数 07-21 · 正式数据')).toBeTruthy()
     expect(screen.getByText('行业 07-18 · 待补齐')).toBeTruthy()
-    expect(screen.getByText(/不可作为交易指令/)).toBeTruthy()
+    expect(screen.getByText(/对应个股暂显示“待确认”/)).toBeTruthy()
   })
 
   it('行业概念均为正式数据时不显示校准提示', () => {
@@ -87,12 +87,12 @@ describe('ReviewDataStatus', () => {
 
     expect(screen.getByText('行业 07-21 · 当日预估 97.8%，312/319')).toBeTruthy()
     expect(screen.getByText('概念 07-21 · 当日预估 85.3%，157/184')).toBeTruthy()
-    expect(screen.getByText(/未覆盖项目已阻断交易指令/)).toBeTruthy()
+    expect(screen.getByText(/未覆盖个股暂显示“待确认”/)).toBeTruthy()
   })
 })
 
-describe('TradingPlan decision gate', () => {
-  it('分开展示可执行、候选和数据阻断项目', () => {
+describe('TradingPlan action semantics', () => {
+  it('在同一列表展示买入和待确认操作', () => {
     render(<TradingPlan plan={{
       buy_priority: [
         { code: '1', name: '执行股', decision_status: 'executable', action_type: '买入' },
@@ -101,11 +101,10 @@ describe('TradingPlan decision gate', () => {
       ],
     }} />)
 
-    expect(screen.getByText('✅ 可执行买点 (1)')).toBeTruthy()
-    expect(screen.getByText('👀 候选观察 (1)')).toBeTruthy()
-    expect(screen.getByText('⛔ 数据阻断 (1)')).toBeTruthy()
-    expect(screen.getByText('可执行')).toBeTruthy()
-    expect(screen.getByText('候选')).toBeTruthy()
+    expect(screen.getByText('🎯 关注买点 (3)')).toBeTruthy()
+    expect(screen.getAllByText('买入')).toHaveLength(2)
     expect(screen.getByText('待确认')).toBeTruthy()
+    expect(screen.queryByText(/可执行买点/)).toBeNull()
+    expect(screen.queryByText(/候选观察/)).toBeNull()
   })
 })

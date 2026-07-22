@@ -219,7 +219,7 @@ def generate_daily_review(date_str=None):
     from backend.services.review_compute_service import (
         is_trading_day, fetch_index_klines,
         judge_peak_valley, get_mainline_data, get_concept_mainline_data, track_mainline_persistence,
-        generate_trading_plan, get_buy_sell_signals, load_market_data_for_profit_check,
+        generate_trading_plan, apply_trading_plan_actions, get_buy_sell_signals, load_market_data_for_profit_check,
     )
     from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
     from backend.core.scan_buy_signals import get_main_lines
@@ -333,10 +333,19 @@ def generate_daily_review(date_str=None):
         direction_map=_dir_map,
     )
 
+    # 构建行业/概念 → 机会类型映射。机会类型用于排序；未覆盖行业才触发待确认。
+    opp_map = {}
+    for entry in mainline_data.get('all_ranked', []):
+        opp_map[entry['name']] = entry.get('opportunity', '--')
+    for entry in concept_mainline_data.get('all_ranked', []):
+        opp_map[entry['name']] = entry.get('opportunity', '--')
+
     # ④ 每日交易计划
     print("[3L复盘] ④ 生成交易计划...")
     trading_plan = generate_trading_plan(market_cycle, mainline_data, timing_signals, holdings,
-                                         holdings_review=holdings_review, buy_signals_review=buy_signals_review)
+                                         holdings_review=holdings_review, buy_signals_review=buy_signals_review,
+                                         opportunity_map=opp_map)
+    apply_trading_plan_actions(buy_signals_review, trading_plan)
 
     # 组装
     review = {
@@ -481,7 +490,7 @@ def compute_review_real_time(date_str=None):
     from backend.services.review_compute_service import (
         is_trading_day,
         judge_peak_valley, get_mainline_data, get_concept_mainline_data, track_mainline_persistence,
-        generate_trading_plan, get_buy_sell_signals, load_market_data_for_profit_check,
+        generate_trading_plan, apply_trading_plan_actions, get_buy_sell_signals, load_market_data_for_profit_check,
     )
     from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
     from backend.core.scan_buy_signals import get_main_lines
@@ -590,6 +599,7 @@ def compute_review_real_time(date_str=None):
     trading_plan = generate_trading_plan(market_cycle, mainline_data, timing_signals, holdings,
                                          holdings_review=holdings_review, buy_signals_review=buy_signals_review,
                                          opportunity_map=opp_map)
+    apply_trading_plan_actions(buy_signals_review, trading_plan)
 
     # 写入主线缓存（供趋势候选页读，含行业+概念主线）
     _cm = mainline_data.get('concept_mainline', {})

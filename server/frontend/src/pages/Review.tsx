@@ -20,8 +20,10 @@ export default function Review() {
   const [refreshStatus, setRefreshStatus] = useState<ReviewRefreshStatus | null>(null)
 
   const now = new Date()
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  const weekday = now.getDay()
+  const fallbackDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const reviewDate = data?.date || fallbackDate
+  const [reviewYear, reviewMonth, reviewDay] = reviewDate.split('-').map(Number)
+  const weekday = new Date(reviewYear, reviewMonth - 1, reviewDay, 12).getDay()
 
   const loadData = useCallback(() => {
     setLoading(true)
@@ -80,7 +82,7 @@ export default function Review() {
         <h1>📋 3L 每日复盘</h1>
         <div className="sub">② 主线 · ③ 量价择时</div>
         <div className="date-badge" id="todayDate">
-          {todayStr} 星期{WDS[weekday]}
+          复盘交易日 {reviewDate} 星期{WDS[weekday]}
         </div>
         <div className="review-cache-bar">
           <span>
@@ -129,7 +131,7 @@ export default function Review() {
                   <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 主线/次级主线 排名</span>
                 </div>
                 <div id="mainlineContainer">
-                  <MainlineSection data={data.mainline} dates={[]} currentDate={todayStr} />
+                  <MainlineSection data={data.mainline} dates={[]} currentDate={reviewDate} />
                 </div>
               </div>
             )}
