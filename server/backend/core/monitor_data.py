@@ -187,12 +187,13 @@ def get_volume_comparison():
         last_snap = max(yesterday_snaps, key=lambda s: s.get('time', ''))
         yesterday_total_amount = last_snap.get('amount_yuan', last_snap.get('amount', last_snap.get('volume', 0)))
         is_estimated = False
-    elif yesterday_date and yesterday_info.get('volume', 0) > 0:
-        # 无快照 → 用腾讯volume估算（手×均价）
-        vol = yesterday_info['volume']
-        avg_price = current_price if current_price > 0 else 6500
-        yesterday_total_amount = vol * avg_price * 100  # 手→股 × 均价
-        is_estimated = True
+    elif yesterday_info and yesterday_info.get('amount', 0) > 0:
+        yesterday_total_amount = yesterday_info['amount']
+        is_estimated = False
+
+    # 指数成交量不能乘以指数点位估算全市场成交额。缺少昨日快照/确认成交额时
+    # 明确降级为不可用，避免返回看似精确但量纲错误的金额和同比。
+    yesterday_unavailable = yesterday_total_amount <= 0
 
     today_total_amount = today_curve[-1]['amount'] if today_curve else 0
 
@@ -207,6 +208,7 @@ def get_volume_comparison():
         'today_curve': today_curve,
         'yesterday_curve': [],  # 不再返回昨日分钟曲线（数据不可靠）
         'yesterday_is_estimated': is_estimated,
+        'yesterday_unavailable': yesterday_unavailable,
         'current_price': current_price,
         'current_change': current_change,
         'current_time': current_time,
