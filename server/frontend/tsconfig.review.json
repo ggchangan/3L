@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vite/client"]
+  },
+  "files": [
+    "src/lib/types.ts",
+    "src/components/ReviewDataStatus.tsx",
+    "src/components/TradingPlan.tsx",
+    "src/pages/Workbench.tsx"
+  ],
+  "include": [],
+  "references": []
+}

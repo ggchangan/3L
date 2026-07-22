@@ -1,4 +1,4 @@
-"""复盘 API v2 契约：统一接口语义、行业字段和数据时效。"""
+"""复盘 API v3 契约：统一接口语义、行业字段和数据时效。"""
 import threading
 import time
 
@@ -15,12 +15,12 @@ def test_cached_review_contract_is_completed_without_losing_legacy_sector():
 
     assert review['holdings_review'][0]['industry'] == '银行'
     assert review['holdings_review'][0]['sector'] == '银行'
-    assert review['data_dates'] == {}
-    assert review['data_freshness'] == {}
+    assert review['data_status']['overall'] == 'stale'
     assert review['response_meta'] == {
         'source': 'cache',
         'computed_live': False,
-        'contract_version': 2,
+        'contract_version': 3,
+        'deprecated_fields': ['holdings', 'buy_signals', 'data_dates', 'data_freshness', 'data_stale'],
     }
 
 
@@ -29,8 +29,32 @@ def test_live_review_contract_marks_computation_source():
 
     assert review['response_meta']['source'] == 'live'
     assert review['response_meta']['computed_live'] is True
-    assert review['holdings'] == []
-    assert review['buy_signals'] == []
+    assert review['holdings_review'] == []
+    assert review['buy_signals_review'] == []
+
+
+def test_estimated_sector_status_is_ready_without_pretending_to_be_confirmed():
+    review = normalize_review_response({
+        'date': '2026-07-22',
+        'data_dates': {
+            'requested': '2026-07-22', 'index': '20260722',
+            'stocks': '20260722', 'sectors': '20260721',
+        },
+        'mainline': {
+            'ranking_status': 'estimated', 'ranking_date': '20260722',
+            'base_date': '20260721', 'estimate_coverage': 0.9781,
+            'concept_mainline': {
+                'ranking_status': 'estimated', 'ranking_date': '20260722',
+                'base_date': '20260721', 'estimate_coverage': 0.8533,
+            },
+        },
+    })
+
+    assert review['data_status']['overall'] == 'ready'
+    assert review['data_status']['industry']['status'] == 'estimated'
+    assert review['data_status']['industry']['confirmed_date'] == '20260721'
+    assert review['data_status']['concept']['coverage'] == 0.8533
+    assert review['data_stale'] is False
 
 
 def test_archive_review_contract_marks_archive_source():

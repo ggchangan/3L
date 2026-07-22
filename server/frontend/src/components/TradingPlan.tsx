@@ -22,6 +22,10 @@ Object.entries(OPP_CFG).forEach(([k, v]) => { OPP_ORDER[k] = v.order })
 
 export default function TradingPlan({ plan }: Props) {
   if (!plan) return <div className="empty">暂无交易计划</div>
+  const buyItems = plan.buy_priority || []
+  const executable = buyItems.filter(item => (item.decision_status || 'executable') === 'executable')
+  const candidates = buyItems.filter(item => item.decision_status === 'candidate')
+  const blocked = buyItems.filter(item => item.decision_status === 'blocked')
 
   return (
     <div className="plan-card" style={{ overflowX: 'auto' }}>
@@ -78,45 +82,10 @@ export default function TradingPlan({ plan }: Props) {
         }}
       />
 
-      {/* 关注买点 */}
-      <UnifiedTable
-        title="🎯 关注买点"
-        items={plan.buy_priority}
-        groupKey={g => g.opportunity || '其他'}
-        renderAction={item => {
-          const c = PRI_COLORS[item.priority] || '#888'
-          return <span style={{ color: c, fontWeight: 600 }}>{item.action_type || '买入'}</span>
-        }}
-        renderSignal={item => {
-          const sig = item.signal || item.buy_point || ''
-          const sigs = item.triggered_signals || []
-          const ft = item.fusion_type || ''
-          return (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-              {sig ? <span style={{ color: '#aaa', fontSize: 10 }}>{sig}</span> : null}
-              {(sigs.length > 0) && sigs.slice(0,2).map((s: any, i: number) => {
-                const c = s.direction === 'bullish' ? '#4ecdc4' : s.direction === 'bearish' ? '#e94560' : '#ffd700'
-                return <span key={i} style={{fontSize:9,color:c,background:'rgba(255,255,255,0.05)',padding:'1px 4px',borderRadius:3}}>{s.name}</span>
-              })}
-              {ft && (
-                <span style={{fontSize:9,color:'#58a6ff',background:'rgba(88,166,255,0.1)',padding:'1px 4px',borderRadius:3}}>
-                  {({strong_buy:'强买',signal_buy:'买入',conflict_bearish:'⚠️',signal_sell:'卖出',conflict_bullish:'等确认',buy_point_only:'买点',bearish_watch:'偏空',bullish_wait:'等待',balance:'平衡'})[ft] || ft}
-                </span>
-              )}
-            </div>
-          )
-        }}
-        renderExtra={item => null}
-        rightCol={item => {
-          const chg = item.change || 0
-          const chgStr = <span style={{color: chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginRight: 6}}>{(chg >= 0 ? '+' : '')}{chg}%</span>
-          const tags: React.ReactNode[] = [chgStr]
-          if (item.is_main) tags.push(<span key="m" className="tag red" style={{fontSize:9}}>主线</span>)
-          if (item.profit_model1) tags.push(<span key="p" className="tag" style={{background:'#e94560',fontSize:9,padding:'1px 4px'}}>🏆</span>)
-          if (item.trend_stock) tags.push(<span key="t" className="tag" style={{background:'#2196f3',fontSize:9,padding:'1px 4px'}}>📈</span>)
-          return <>{tags}</>
-        }}
-      />
+      {/* 关注买点：可执行、候选和数据阻断必须分开显示 */}
+      <BuyDecisionTable title={`✅ 可执行买点 (${executable.length})`} items={executable} />
+      <BuyDecisionTable title={`👀 候选观察 (${candidates.length})`} items={candidates} />
+      <BuyDecisionTable title={`⛔ 数据阻断 (${blocked.length})`} items={blocked} />
 
       {plan.risk_items?.length ? (
         <div style={{ marginTop: 12 }}>
@@ -130,6 +99,41 @@ export default function TradingPlan({ plan }: Props) {
         </div>
       ) : null}
     </div>
+  )
+}
+
+function BuyDecisionTable({ title, items }: { title: string; items: any[] }) {
+  return (
+    <UnifiedTable
+      title={title}
+      items={items}
+      groupKey={g => g.opportunity || '其他'}
+      renderAction={item => {
+        const status = item.decision_status || 'executable'
+        const label = status === 'executable' ? '可执行' : status === 'candidate' ? '候选' : '待确认'
+        const color = status === 'executable' ? '#22c55e' : status === 'candidate' ? '#ffd700' : '#e94560'
+        return <span style={{ color, fontWeight: 600 }}>{label}</span>
+      }}
+      renderSignal={item => {
+        const sigs = item.triggered_signals || []
+        return (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+            <span style={{ color: '#aaa', fontSize: 10 }}>{item.signal || item.buy_point || ''}</span>
+            {sigs.slice(0, 2).map((s: any, i: number) => (
+              <span key={i} style={{fontSize:9,color:s.direction === 'bullish' ? '#4ecdc4' : s.direction === 'bearish' ? '#e94560' : '#ffd700',background:'rgba(255,255,255,0.05)',padding:'1px 4px',borderRadius:3}}>{s.name}</span>
+            ))}
+          </div>
+        )
+      }}
+      renderExtra={() => null}
+      rightCol={item => {
+        const chg = item.change || 0
+        return <>
+          <span style={{color: chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginRight: 6}}>{chg >= 0 ? '+' : ''}{chg}%</span>
+          {item.is_main && <span className="tag red" style={{fontSize:9}}>主线</span>}
+        </>
+      }}
+    />
   )
 }
 

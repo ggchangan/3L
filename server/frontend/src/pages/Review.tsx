@@ -29,7 +29,7 @@ export default function Review() {
     fetchReviewToday().then(reviewData => {
       setData({
         ...reviewData,
-        holdings_review: reviewData.holdings_review || reviewData.holdings || [],
+        holdings_review: reviewData.holdings_review || [],
         buy_signals_review: reviewData.buy_signals_review || [],
       })
       setRefreshStatus(reviewData.refresh_status || null)
@@ -98,9 +98,7 @@ export default function Review() {
         </div>
         {data && (
           <ReviewDataStatus
-            data_dates={data.data_dates}
-            data_freshness={data.data_freshness}
-            mainline={data.mainline}
+            dataStatus={data.data_status}
           />
         )}
       </div>

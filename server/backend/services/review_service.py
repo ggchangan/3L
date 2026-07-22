@@ -7,8 +7,7 @@
 
 不再通过 subprocess 调用 generate_review_data.py，改为直接 import。
 """
-import json, os, sys, shutil, subprocess, threading, time
-from contextlib import contextmanager
+import json, os, sys, shutil, subprocess
 from datetime import datetime
 from backend.core.config import (
     REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
@@ -23,219 +22,15 @@ ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
 
 from backend.core.exceptions import DataError
 from backend.core.logger import get_logger
+from backend.services.review_contract import build_review_data_status, normalize_review_response
+from backend.services.review_cache_service import (
+    _review_refresh_lock, _review_refresh_state, compute_review_serialized,
+    get_archive, get_archive_dates, get_completed_review_date, get_latest_archive,
+    get_mainline_archive, get_review_refresh_status, load_current_review,
+    request_review_refresh, review_refresh_file_lock, save_review, save_review_data,
+)
 
 log = get_logger(__name__)
-
-REVIEW_CACHE_MAX_AGE_SECONDS = int(os.environ.get('REVIEW_CACHE_MAX_AGE_SECONDS', '600'))
-_review_refresh_lock = threading.RLock()
-_review_refresh_state = {
-    'status': 'idle',
-    'started_at': '',
-    'completed_at': '',
-    'error': '',
-}
-
-
-@contextmanager
-def review_refresh_file_lock():
-    """跨进程串行化复盘计算，避免 cron 与 Web 同时写缓存。"""
-    import fcntl
-
-    lock_path = os.path.join(DATA_DIR, '.cache', 'review_refresh.lock')
-    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
-    with open(lock_path, 'a+', encoding='utf-8') as lock_file:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-
-
-def get_completed_review_date():
-    """返回最近已完成交易日，避免开盘前按自然日覆盖校准缓存。"""
-    from backend.data_access.data_source import get_last_completed_trading_day
-
-    target = get_last_completed_trading_day()
-    return datetime.strptime(target, '%Y%m%d').strftime('%Y-%m-%d')
-
-
-def compute_review_serialized(date_str=None):
-    """统一的外部实时计算入口，完整持有跨进程锁。"""
-    with review_refresh_file_lock():
-        return compute_review_real_time(date_str or get_completed_review_date())
-
-# ═══════════════════════════════════════════════════════════════
-# 存储层
-# ═══════════════════════════════════════════════════════════════
-
-def load_current_review():
-    """加载当前复盘缓存；接口层应通过此入口获得统一响应契约。"""
-    if os.path.isfile(REVIEW_DATA_PATH):
-        try:
-            with open(REVIEW_DATA_PATH, 'r', encoding='utf-8') as f:
-                return normalize_review_response(json.load(f), source='cache')
-        except (OSError, json.JSONDecodeError, TypeError):
-            log.warning('当前复盘缓存不可读，返回空复盘契约', exc_info=True)
-    archive = get_latest_archive()
-    if archive:
-        return normalize_review_response(archive, source='archive')
-    return normalize_review_response({}, source='cache')
-
-
-def normalize_review_response(data, source='cache'):
-    """补齐复盘公共契约，并为历史数据提供无损兼容。"""
-    result = dict(data) if isinstance(data, dict) else {}
-    result.setdefault('date', '')
-    result.setdefault('market', {})
-    result.setdefault('mainline', {})
-    result.setdefault('timing_signals', {})
-    result.setdefault('trading_plan', {})
-    result.setdefault('holdings', [])
-    result.setdefault('buy_signals', [])
-
-    # industry 是行业的唯一语义字段；sector 暂时保留给旧前端和历史存档。
-    for key in ('holdings', 'buy_signals', 'holdings_review', 'buy_signals_review'):
-        items = result.get(key)
-        if not isinstance(items, list):
-            continue
-        for item in items:
-            if isinstance(item, dict):
-                industry = item.get('industry') or item.get('sector') or item.get('ths_industry') or ''
-                item.setdefault('industry', industry)
-                item.setdefault('sector', industry)
-
-    result.setdefault('data_dates', {})
-    result.setdefault('data_freshness', {})
-    result['response_meta'] = {
-        'source': source,
-        'computed_live': source == 'live',
-        'contract_version': 2,
-    }
-    return result
-
-
-def save_review_data(data):
-    """保存复盘数据到文件"""
-    os.makedirs(os.path.dirname(REVIEW_DATA_PATH), exist_ok=True)
-    config.atomic_json_dump(data, REVIEW_DATA_PATH, indent=2)
-
-
-def get_review_refresh_status():
-    """返回后台刷新状态与缓存时效，不暴露线程对象。"""
-    with _review_refresh_lock:
-        state = dict(_review_refresh_state)
-    try:
-        mtime = os.path.getmtime(REVIEW_DATA_PATH)
-        age_seconds = max(0, int(time.time() - mtime))
-        state.update({
-            'cache_exists': True,
-            'cache_updated_at': datetime.fromtimestamp(mtime).isoformat(timespec='seconds'),
-            'cache_age_seconds': age_seconds,
-            'cache_stale': age_seconds >= REVIEW_CACHE_MAX_AGE_SECONDS,
-        })
-    except OSError:
-        state.update({
-            'cache_exists': False,
-            'cache_updated_at': '',
-            'cache_age_seconds': None,
-            'cache_stale': True,
-        })
-    return state
-
-
-def request_review_refresh(force=False):
-    """单飞启动后台复盘计算；并发请求共享同一个任务。"""
-    status = get_review_refresh_status()
-    with _review_refresh_lock:
-        if _review_refresh_state['status'] == 'running':
-            return {'started': False, **get_review_refresh_status()}
-        if not force and status['cache_exists'] and not status['cache_stale']:
-            return {'started': False, **status}
-        _review_refresh_state.update({
-            'status': 'running',
-            'started_at': datetime.now().isoformat(timespec='seconds'),
-            'completed_at': '',
-            'error': '',
-        })
-
-    def _worker():
-        try:
-            with review_refresh_file_lock():
-                data = compute_review_real_time(get_completed_review_date())
-                data['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
-                save_review_data(data)
-            with _review_refresh_lock:
-                _review_refresh_state.update({
-                    'status': 'completed',
-                    'completed_at': datetime.now().isoformat(timespec='seconds'),
-                    'error': '',
-                })
-        except Exception as exc:
-            log.exception('后台复盘计算失败')
-            with _review_refresh_lock:
-                _review_refresh_state.update({
-                    'status': 'failed',
-                    'completed_at': datetime.now().isoformat(timespec='seconds'),
-                    'error': str(exc),
-                })
-
-    threading.Thread(target=_worker, daemon=True, name='review-refresh').start()
-    return {'started': True, **get_review_refresh_status()}
-
-
-def get_archive_dates():
-    """获取所有复盘存档日期（倒序）"""
-    if not os.path.isdir(REVIEW_ARCHIVE_DIR):
-        return []
-    files = sorted([f.replace('.json', '') for f in os.listdir(REVIEW_ARCHIVE_DIR)
-                    if f.endswith('.json')], reverse=True)
-    return files
-
-
-def get_archive(date_str):
-    """获取指定日期的复盘存档"""
-    path = os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json')
-    if os.path.isfile(path):
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return None
-
-
-def get_latest_archive():
-    """获取最新一份复盘存档"""
-    dates = get_archive_dates()
-    if dates:
-        return get_archive(dates[0])
-    return None
-
-
-def save_review(data):
-    """
-    保存复盘数据到两个位置：
-      1) data/review_archive/{date}.json（新格式目录）
-      2) private/review_archive/{date}.json（兼容旧版）
-    """
-    date = data.get('date', '')
-    if not date:
-        return {'status': 'error', 'msg': 'missing date'}
-    adir = os.path.join(os.path.dirname(REVIEW_ARCHIVE_DIR), 'data', 'review_archive')
-    os.makedirs(adir, exist_ok=True)
-    fp = os.path.join(adir, f'{date}.json')
-    config.atomic_json_dump(data, fp, indent=2)
-    pdir = REVIEW_ARCHIVE_DIR
-    os.makedirs(pdir, exist_ok=True)
-    pf = os.path.join(pdir, f'{date}.json')
-    config.atomic_json_dump(data, pf, indent=2)
-    return {'status': 'ok'}
-
-
-def get_mainline_archive():
-    """获取主线数据（包括次级主线）"""
-    archive = get_latest_archive()
-    if archive and 'mainline' in archive:
-        return archive['mainline']
-    return {}
-
 
 # ═══════════════════════════════════════════════════════════════
 # 文件辅助
@@ -917,15 +712,12 @@ def compute_review_real_time(date_str=None):
         print(f'[3L复盘] ⚠️ 板块领涨股计算失败: {e}')
         import traceback; traceback.print_exc()
 
-    # ── 检查板块数据时效性 ──
-    _data_stale = False
+    # ── 汇总正式/预估/过期数据状态 ──
     try:
         from backend.data_access.data_layer import get_sector_daily
         _sd = get_sector_daily()
         _lu = _sd.get('last_updated', '') if isinstance(_sd, dict) else ''
         _today_yyyymmdd = date_str.replace('-', '')
-        if _lu and _lu < _today_yyyymmdd:
-            _data_stale = True
     except:
         pass
 
@@ -934,17 +726,16 @@ def compute_review_real_time(date_str=None):
     _sector_date = _lu if '_lu' in locals() else ''
     _requested_date = date_str.replace('-', '')
 
-    def _freshness(value):
-        normalized = str(value or '').replace('-', '')
-        if not normalized:
-            return 'unknown'
-        return 'current' if normalized >= _requested_date else 'stale'
+    _data_status = build_review_data_status(
+        _requested_date, _index_date, _stock_date, _sector_date, mainline_data,
+    )
 
     review = {
         'date': date_str,
         'market': {**market_cycle, 'date': date_str},
         'mainline': mainline_data,
-        'data_stale': _data_stale,
+        'data_stale': _data_status.get('overall') != 'ready',
+        'data_status': _data_status,
         'data_dates': {
             'requested': date_str,
             'index': _index_date,
@@ -952,9 +743,9 @@ def compute_review_real_time(date_str=None):
             'sectors': _sector_date,
         },
         'data_freshness': {
-            'index': _freshness(_index_date),
-            'stocks': _freshness(_stock_date),
-            'sectors': _freshness(_sector_date),
+            'index': 'current' if _data_status['index']['status'] == 'confirmed' else _data_status['index']['status'],
+            'stocks': 'current' if _data_status['stocks']['status'] == 'confirmed' else _data_status['stocks']['status'],
+            'sectors': 'current' if _data_status['industry']['status'] == 'confirmed' else 'stale',
         },
         'timing_signals': timing_signals,
         'trading_plan': trading_plan,

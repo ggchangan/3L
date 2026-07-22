@@ -5,6 +5,7 @@ import MarketCycle from '../components/MarketCycle'
 import MainlineSection from '../components/MainlineSection'
 import HistoryReview from '../components/HistoryReview'
 import ReviewDataStatus from '../components/ReviewDataStatus'
+import TradingPlan from '../components/TradingPlan'
 
 // ====== MarketCycle ======
 describe('MarketCycle', () => {
@@ -38,47 +39,73 @@ describe('HistoryReview', () => {
 
 // ====== ReviewDataStatus ======
 describe('ReviewDataStatus', () => {
-  it('显示已确认数据和待补齐的板块日期', () => {
+  it('显示正式数据和待补齐的行业概念日期', () => {
     render(
       <ReviewDataStatus
-        data_dates={{ stocks: '20260721', index: '20260721', sectors: '20260718' }}
-        data_freshness={{ stocks: 'current', index: 'current', sectors: 'stale' }}
-      />,
-    )
-
-    expect(screen.getByText('个股 07-21 · 已确认')).toBeTruthy()
-    expect(screen.getByText('指数 07-21 · 已确认')).toBeTruthy()
-    expect(screen.getByText('板块 07-18 · 待补齐')).toBeTruthy()
-    expect(screen.getByText(/次日 06:00 自动校准/)).toBeTruthy()
-  })
-
-  it('板块已确认时不显示校准提示', () => {
-    render(
-      <ReviewDataStatus
-        data_dates={{ stocks: '2026-07-21', index: '2026-07-21', sectors: '2026-07-21' }}
-        data_freshness={{ stocks: 'current', index: 'current', sectors: 'current' }}
-      />,
-    )
-
-    expect(screen.getByText('板块 07-21 · 已确认')).toBeTruthy()
-    expect(screen.queryByText(/次日 06:00 自动校准/)).toBeNull()
-  })
-
-  it('板块待补齐时展示当日预估主线', () => {
-    render(
-      <ReviewDataStatus
-        data_dates={{ stocks: '20260721', index: '20260721', sectors: '20260720' }}
-        data_freshness={{ stocks: 'current', index: 'current', sectors: 'stale' }}
-        mainline={{
-          ranking_status: 'estimated',
-          ranking_date: '20260721',
-          estimate_coverage: 0.878,
+        dataStatus={{
+          stocks: { status: 'confirmed', date: '20260721' },
+          index: { status: 'confirmed', date: '20260721' },
+          industry: { status: 'stale', confirmed_date: '20260718' },
+          concept: { status: 'unknown' },
         }}
       />,
     )
 
-    expect(screen.getByText('主线 07-21 · 当日预估')).toBeTruthy()
-    expect(screen.getByText(/收盘快照预估/)).toBeTruthy()
-    expect(screen.queryByText(/暂沿用上一交易日/)).toBeNull()
+    expect(screen.getByText('个股 07-21 · 正式数据')).toBeTruthy()
+    expect(screen.getByText('指数 07-21 · 正式数据')).toBeTruthy()
+    expect(screen.getByText('行业 07-18 · 待补齐')).toBeTruthy()
+    expect(screen.getByText(/不可作为交易指令/)).toBeTruthy()
+  })
+
+  it('行业概念均为正式数据时不显示校准提示', () => {
+    render(
+      <ReviewDataStatus
+        dataStatus={{
+          stocks: { status: 'confirmed', date: '20260721' },
+          index: { status: 'confirmed', date: '20260721' },
+          industry: { status: 'confirmed', date: '20260721' },
+          concept: { status: 'confirmed', date: '20260721' },
+        }}
+      />,
+    )
+
+    expect(screen.getByText('行业 07-21 · 正式数据')).toBeTruthy()
+    expect(screen.queryByText(/次日 06:00/)).toBeNull()
+  })
+
+  it('分别展示行业和概念当日预估覆盖率', () => {
+    render(
+      <ReviewDataStatus
+        dataStatus={{
+          stocks: { status: 'confirmed', date: '20260721' },
+          index: { status: 'confirmed', date: '20260721' },
+          industry: { status: 'estimated', date: '20260721', confirmed_date: '20260720', coverage: 0.9781, coverage_detail: { covered: 312, expected: 319 } },
+          concept: { status: 'estimated', date: '20260721', confirmed_date: '20260720', coverage: 0.8533, coverage_detail: { covered: 157, expected: 184 } },
+        }}
+      />,
+    )
+
+    expect(screen.getByText('行业 07-21 · 当日预估 97.8%，312/319')).toBeTruthy()
+    expect(screen.getByText('概念 07-21 · 当日预估 85.3%，157/184')).toBeTruthy()
+    expect(screen.getByText(/未覆盖项目已阻断交易指令/)).toBeTruthy()
+  })
+})
+
+describe('TradingPlan decision gate', () => {
+  it('分开展示可执行、候选和数据阻断项目', () => {
+    render(<TradingPlan plan={{
+      buy_priority: [
+        { code: '1', name: '执行股', decision_status: 'executable', action_type: '买入' },
+        { code: '2', name: '候选股', decision_status: 'candidate', action_type: '买入' },
+        { code: '3', name: '阻断股', decision_status: 'blocked', action_type: '待确认' },
+      ],
+    }} />)
+
+    expect(screen.getByText('✅ 可执行买点 (1)')).toBeTruthy()
+    expect(screen.getByText('👀 候选观察 (1)')).toBeTruthy()
+    expect(screen.getByText('⛔ 数据阻断 (1)')).toBeTruthy()
+    expect(screen.getByText('可执行')).toBeTruthy()
+    expect(screen.getByText('候选')).toBeTruthy()
+    expect(screen.getByText('待确认')).toBeTruthy()
   })
 })

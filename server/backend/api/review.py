@@ -20,8 +20,8 @@ def _empty_review():
         'mainline': {},
         'timing_signals': {},
         'trading_plan': {},
-        'holdings': [],
-        'buy_signals': [],
+        'holdings_review': [],
+        'buy_signals_review': [],
     }
 
 
