@@ -919,7 +919,10 @@ def fetch_sector_close_snapshot(
     if _ACTIVE_AUXILIARY_PROVIDER == 'disabled':
         raise DataSourceError('板块辅助 provider 已禁用')
     target_date = str(target_date or '').replace('-', '')
-    raw = _fetch_eastmoney_close_ranking(target_date)
+    if _ACTIVE_AUXILIARY_PROVIDER == 'ths':
+        raw = _fetch_ths_close_ranking(target_date, industry_names, concept_names)
+    else:
+        raw = _fetch_eastmoney_close_ranking(target_date)
     raw_date = str((raw or {}).get('last_updated', '')).replace('-', '')
     if raw_date != target_date:
         raise DataSourceError(f'板块快照日期不匹配: {raw_date or "无"} != {target_date}')
@@ -967,7 +970,7 @@ def fetch_sector_close_snapshot(
 
     snapshot = {
         'date': target_date,
-        'source': 'eastmoney_close',
+        'source': (raw or {}).get('source', f'{_ACTIVE_AUXILIARY_PROVIDER}_close'),
         'generated_at': datetime.now().isoformat(timespec='seconds'),
         'industries': industries,
         'concepts': concepts,
@@ -989,7 +992,14 @@ def get_sector_close_snapshot() -> dict:
     """读取最近一次通过行业覆盖门禁的收盘快照。"""
     if _ACTIVE_AUXILIARY_PROVIDER == 'disabled':
         return {}
-    return _load_json(SECTOR_CLOSE_SNAPSHOT_PATH, {})
+    snapshot = _load_json(SECTOR_CLOSE_SNAPSHOT_PATH, {})
+    expected_source = {
+        'ths': 'ths_close',
+        'eastmoney': 'eastmoney_close',
+    }.get(_ACTIVE_AUXILIARY_PROVIDER)
+    if not isinstance(snapshot, dict) or snapshot.get('source') != expected_source:
+        return {}
+    return snapshot
 
 def _fetch_em_concept_map():
     return _load_json(SOURCES_EM_CONCEPT_MAP)
@@ -1027,6 +1037,121 @@ def _fetch_ths_live_sector_ranking(date_str):
     except Exception as e:
         log.warning('THS live 失败: %s', e)
         return None
+
+
+def _fetch_ths_kline_close_snapshots(target_date, names, ths_type):
+    """从同花顺原始板块 K 线端点读取目标日行业/概念收盘值。
+
+    只接受响应中明确包含 ``target_date`` 的记录；尚未发布当天 K 线的概念
+    保持缺失，交由次日权威更新补齐。
+    """
+    db = _get_tushare_db()
+    if db is None or not names:
+        return {}
+    try:
+        all_codes = db.get_all_ths_codes()
+    except Exception as exc:
+        log.warning('THS 概念代码读取失败: %s', exc)
+        return {}
+
+    requested = {str(name) for name in names if name}
+    name_codes = {}
+    for ts_code, name, stype in all_codes:
+        if stype == ths_type and name in requested:
+            name_codes.setdefault(name, []).append(str(ts_code).replace('.TI', ''))
+    if not name_codes:
+        return {}
+
+    def _fetch_one(item):
+        import re
+        import requests
+
+        name, codes = item
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'http://q.10jqka.com.cn',
+            'Host': 'd.10jqka.com.cn',
+        }
+
+        def _load_rows(code, year):
+            url = f'https://d.10jqka.com.cn/v4/line/bk_{code}/01/{year}.js'
+            response = requests.get(url, headers=headers, timeout=8)
+            response.raise_for_status()
+            matched = re.search(r'\((.*)\)\s*;?\s*$', response.text)
+            if not matched:
+                return []
+            payload = json.loads(matched.group(1))
+            rows = []
+            for line in str(payload.get('data', '')).split(';'):
+                parts = line.split(',')
+                if len(parts) < 7:
+                    continue
+                rows.append({
+                    'date': parts[0],
+                    'open': float(parts[1]),
+                    'high': float(parts[2]),
+                    'low': float(parts[3]),
+                    'close': float(parts[4]),
+                    'volume': float(parts[5]),
+                })
+            rows.sort(key=lambda row: row['date'])
+            return rows
+
+        # data_layer 对同名多代码最终保留较大的 ts_code，这里保持一致。
+        for code in sorted(codes, reverse=True):
+            try:
+                rows = _load_rows(code, target_date[:4])
+                target_index = next(
+                    (i for i, row in enumerate(rows) if row['date'] == target_date),
+                    None,
+                )
+                if target_index is None:
+                    continue
+                current = rows[target_index]
+                if target_index > 0:
+                    previous = rows[target_index - 1]
+                else:
+                    previous_rows = _load_rows(code, str(int(target_date[:4]) - 1))
+                    if not previous_rows:
+                        continue
+                    previous = previous_rows[-1]
+                if previous['close'] <= 0:
+                    continue
+                return name, {
+                    **current,
+                    'change_pct': round(
+                        (current['close'] / previous['close'] - 1) * 100,
+                        2,
+                    ),
+                    'prev_close': previous['close'],
+                    'timestamp_verified': True,
+                    'date_verification': 'ths_kline_target_row',
+                    'provider': 'ths',
+                    'transport': '10jqka_kline',
+                    'ts_code': f'{code}.TI',
+                }
+            except Exception as exc:
+                log.debug('THS 板块收盘读取失败 [%s/%s]: %s', name, code, exc)
+        return name, None
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        pairs = executor.map(_fetch_one, name_codes.items())
+        return {name: row for name, row in pairs if row is not None}
+
+
+def _fetch_ths_close_ranking(target_date, industry_names, concept_names):
+    """获取同花顺同日收盘快照；只接受原始 K 线中的明确目标日期。"""
+    industries = _fetch_ths_kline_close_snapshots(target_date, industry_names, 'I')
+    concepts = _fetch_ths_kline_close_snapshots(target_date, concept_names, 'N')
+    if not industries:
+        return None
+    return {
+        'source': 'ths_close',
+        'last_updated': target_date,
+        'industries': industries,
+        'concepts': concepts,
+    }
 
 
 # --- 快照源文件获取函数（路径由 CONCEPT_DATA_SOURCE 配置驱动） ---
@@ -1253,7 +1378,7 @@ def _validate_primary_sector_provider(provider):
 
 
 def _validate_auxiliary_sector_provider(provider):
-    if provider not in {'eastmoney', 'disabled'}:
+    if provider not in {'ths', 'eastmoney', 'disabled'}:
         raise RuntimeError(f'未知或未实现的板块辅助 provider: {provider}')
     return provider
 
@@ -1311,7 +1436,16 @@ def get_sector_source_policy():
             'status': (
                 'legacy_pending_ths_migration'
                 if _ACTIVE_AUXILIARY_PROVIDER == 'eastmoney'
+                else 'same_provider_estimate'
+                if _ACTIVE_AUXILIARY_PROVIDER == provider
                 else 'disabled'
+            ),
+            'transports': (
+                ['10jqka_kline']
+                if _ACTIVE_AUXILIARY_PROVIDER == 'ths'
+                else ['eastmoney_close']
+                if _ACTIVE_AUXILIARY_PROVIDER == 'eastmoney'
+                else []
             ),
         },
     }

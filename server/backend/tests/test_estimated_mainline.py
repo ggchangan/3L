@@ -273,6 +273,7 @@ def test_close_snapshot_requires_industry_coverage_before_atomic_save(monkeypatc
         'concepts': {},
     }
     monkeypatch.setattr(data_source, 'SECTOR_CLOSE_SNAPSHOT_PATH', str(path))
+    monkeypatch.setattr(data_source, '_ACTIVE_AUXILIARY_PROVIDER', 'eastmoney')
     monkeypatch.setattr(data_source, '_fetch_eastmoney_close_ranking', lambda target: raw)
 
     with pytest.raises(Exception, match='覆盖不足'):
@@ -297,6 +298,7 @@ def test_close_snapshot_atomically_saves_covered_industries_and_concept_aliases(
         },
     }
     monkeypatch.setattr(data_source, 'SECTOR_CLOSE_SNAPSHOT_PATH', str(path))
+    monkeypatch.setattr(data_source, '_ACTIVE_AUXILIARY_PROVIDER', 'eastmoney')
     monkeypatch.setattr(data_source, '_fetch_eastmoney_close_ranking', lambda target: raw)
 
     result = data_source.fetch_sector_close_snapshot('20260721', names, ['5G'])

@@ -1,5 +1,7 @@
 """板块数据源口径与获取通道契约。"""
 
+import json
+
 import pytest
 
 
@@ -38,7 +40,7 @@ def test_unknown_auxiliary_provider_is_rejected():
     from backend.data_access.data_source import _validate_auxiliary_sector_provider
 
     with pytest.raises(RuntimeError, match='未知或未实现'):
-        _validate_auxiliary_sector_provider('ths')
+        _validate_auxiliary_sector_provider('unknown')
 
 
 def test_cross_provider_transport_is_rejected(monkeypatch):
@@ -64,9 +66,10 @@ def test_health_status_exposes_active_sector_policy(monkeypatch):
     assert status['sector_policy']['authoritative_cross_provider_merge'] is False
     assert status['sector_policy']['intraday_estimate'] == {
         'enabled': True,
-        'provider': 'eastmoney',
-        'cross_provider_composite': True,
-        'status': 'legacy_pending_ths_migration',
+        'provider': 'ths',
+        'cross_provider_composite': False,
+        'status': 'same_provider_estimate',
+        'transports': ['10jqka_kline'],
     }
 
 
@@ -96,6 +99,143 @@ def test_disabling_auxiliary_provider_hides_existing_snapshot(monkeypatch):
     )
 
     assert data_source.get_sector_close_snapshot() == {}
+
+
+def test_close_snapshot_rejects_previous_provider_file(monkeypatch):
+    from backend.data_access import data_source
+
+    monkeypatch.setattr(data_source, '_ACTIVE_AUXILIARY_PROVIDER', 'ths')
+    monkeypatch.setattr(
+        data_source,
+        '_load_json',
+        lambda *args: {'date': '20260722', 'source': 'eastmoney_close'},
+    )
+
+    assert data_source.get_sector_close_snapshot() == {}
+
+
+def test_ths_snapshot_passes_full_authoritative_coverage(monkeypatch, tmp_path):
+    from backend.data_access import data_source
+
+    names = [f'I{i:03d}' for i in range(319)]
+    raw = {
+        'source': 'ths_close',
+        'last_updated': '20260722',
+        'industries': {
+            name: {
+                'date': '20260722',
+                'change_pct': 1.0,
+                'timestamp_verified': True,
+            }
+            for name in names
+        },
+        'concepts': {},
+    }
+    monkeypatch.setattr(data_source, '_ACTIVE_AUXILIARY_PROVIDER', 'ths')
+    monkeypatch.setattr(
+        data_source,
+        'SECTOR_CLOSE_SNAPSHOT_PATH',
+        str(tmp_path / 'sector_close_snapshot.json'),
+    )
+    monkeypatch.setattr(
+        data_source,
+        '_fetch_ths_close_ranking',
+        lambda target, industry_names, concept_names: raw,
+    )
+
+    result = data_source.fetch_sector_close_snapshot('20260722', names, [])
+
+    assert result['source'] == 'ths_close'
+    assert result['coverage']['industry']['covered'] == 319
+    assert result['coverage']['industry']['ratio'] == 1.0
+    assert result['coverage']['industry']['ready'] is True
+
+
+def test_ths_close_ranking_combines_verified_industries_and_concepts(monkeypatch):
+    from backend.data_access import data_source
+
+    monkeypatch.setattr(
+        data_source,
+        '_fetch_ths_kline_close_snapshots',
+        lambda date, names, kind: (
+            {'半导体': {'date': date, 'change_pct': 2.5, 'provider': 'ths'}}
+            if kind == 'I'
+            else {'机器人概念': {'date': date, 'change_pct': 1.2}}
+        ),
+    )
+
+    result = data_source._fetch_ths_close_ranking(
+        '20260722', ['半导体'], ['机器人概念']
+    )
+
+    assert result['source'] == 'ths_close'
+    assert result['industries']['半导体']['provider'] == 'ths'
+    assert result['concepts']['机器人概念']['change_pct'] == 1.2
+
+
+def test_ths_concept_snapshot_requires_explicit_target_date(monkeypatch):
+    from backend.data_access import data_source
+
+    class FakeDb:
+        def get_all_ths_codes(self):
+            return [('885517.TI', '机器人概念', 'N')]
+
+    class Response:
+        text = 'callback(' + json.dumps({
+            'data': (
+                '20260720,100,102,99,101,1000,10000;'
+                '20260721,101,104,100,103,1200,12000'
+            ),
+        }) + ')'
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    monkeypatch.setattr(data_source, '_get_tushare_db', lambda: FakeDb())
+    monkeypatch.setattr('requests.get', lambda *args, **kwargs: Response())
+
+    available = data_source._fetch_ths_kline_close_snapshots(
+        '20260721', ['机器人概念'], 'N'
+    )
+    missing = data_source._fetch_ths_kline_close_snapshots(
+        '20260722', ['机器人概念'], 'N'
+    )
+
+    assert available['机器人概念']['change_pct'] == 1.98
+    assert available['机器人概念']['date_verification'] == 'ths_kline_target_row'
+    assert missing == {}
+
+
+def test_ths_snapshot_uses_previous_year_close_on_first_trading_day(monkeypatch):
+    from backend.data_access import data_source
+
+    class FakeDb:
+        def get_all_ths_codes(self):
+            return [('885517.TI', '机器人概念', 'N')]
+
+    class Response:
+        def __init__(self, rows):
+            self.text = 'callback(' + json.dumps({'data': rows}) + ')'
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    def fake_get(url, **kwargs):
+        if url.endswith('/2026.js'):
+            return Response('20261231,100,102,99,100,1000,10000')
+        return Response('20270104,103,106,102,105,1200,12000')
+
+    monkeypatch.setattr(data_source, '_get_tushare_db', lambda: FakeDb())
+    monkeypatch.setattr('requests.get', fake_get)
+
+    result = data_source._fetch_ths_kline_close_snapshots(
+        '20270104', ['机器人概念'], 'N'
+    )
+
+    assert result['机器人概念']['prev_close'] == 100
+    assert result['机器人概念']['change_pct'] == 5.0
 
 
 def test_ranking_failover_skips_transport_without_requested_type(monkeypatch):
