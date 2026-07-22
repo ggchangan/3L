@@ -3,7 +3,7 @@ review_compute_service.py — 复盘计算层
 大盘周期判定、动量主线计算、量价择时分析、交易计划生成
 所有函数接收数据为参数，不直接依赖文件 I/O（可测试）
 """
-import json, os, sys, requests, math, threading
+import json, os, sys, math, threading
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -58,47 +58,34 @@ def is_trading_day(date_str):
 # ═══════════════════════════════════════════════════════════════
 
 def fetch_market_quote():
-    """获取中证全指(000985)实时行情"""
-    try:
-        r = requests.get(
-            'https://qt.gtimg.cn/q=sh000985',
-            headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-            timeout=10
-        )
-        txt = r.text
-        parts = txt.split('~')
-        if len(parts) > 5:
-            name = parts[1]
-            cur_price = float(parts[3]) if parts[3] else 0
-            prev_close = float(parts[4]) if parts[4] else cur_price
-            chg_pct = (cur_price - prev_close) / prev_close * 100 if prev_close else 0
-            return {
-                'price': cur_price,
-                'change': round(chg_pct, 2),
-                'name': name
-            }
-    except Exception as e:
-        print(f"[WARN] 获取中证全指行情失败: {e}")
-    return None
+    """获取中证全指实时行情（经统一实时行情路由）。"""
+    from backend.data_access.realtime_quotes import get_realtime_quote
+
+    quote = get_realtime_quote('sh000985')
+    if not quote:
+        return None
+    return {
+        'price': quote['price'],
+        'change': round(quote['change_pct'], 2),
+        'name': quote.get('name') or '中证全指',
+        'source': quote.get('source'),
+        'realtime': True,
+    }
 
 
 def fetch_index_klines(days=60):
-    """获取中证全指K线（腾讯财经）"""
-    try:
-        r = requests.get(
-            f'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000985,day,,,{days},qfq',
-            headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-            timeout=10
-        )
-        data = r.json()
-        klines = data.get('data', {}).get('sh000985', {}).get('qfqday', []) or \
-                 data.get('data', {}).get('sh000985', {}).get('day', []) or []
-        return [{'date': k[0], 'open': float(k[1]), 'close': float(k[2]),
-                 'high': float(k[3]), 'low': float(k[4]), 'volume': float(k[5])}
-                for k in klines if len(k) >= 6]
-    except Exception as e:
-        print(f"[WARN] 获取K线失败: {e}")
-        return []
+    """从 Tushare/MySQL 确认数据获取中证全指K线。"""
+    from backend.data_access.data_layer import get_index_klines
+
+    records = get_index_klines('000985')[:days]
+    result = []
+    for record in records:
+        item = dict(record)
+        date = str(item.get('date', ''))
+        if len(date) == 8 and date.isdigit():
+            item['date'] = f'{date[:4]}-{date[4:6]}-{date[6:]}'
+        result.append(item)
+    return result
 
 
 def get_industry_rankings():

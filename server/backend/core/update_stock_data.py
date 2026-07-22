@@ -60,18 +60,10 @@ def log(msg):
 # ════════════════════════════════════════════════════════════════
 
 def _get_stock_name(code):
-    """通过腾讯接口获取股票名称"""
-    market = 'sz' if code.startswith(('0', '3')) else 'sh'
+    """从 Tushare/MySQL 股票基础信息获取名称。"""
     try:
-        import requests
-        r = requests.get(
-            f'https://qt.gtimg.cn/q={market}{code}',
-            headers={'User-Agent': 'Mozilla/5.0'},
-            timeout=5,
-        )
-        parts = r.text.split('~')
-        if len(parts) > 1:
-            return parts[1]
+        from backend.data_access.data_layer import get_stock_names_from_db
+        return get_stock_names_from_db([code]).get(code)
     except Exception:
         log('获取股票名称失败')
         pass

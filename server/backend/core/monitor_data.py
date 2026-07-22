@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
 3L 盯盘数据服务 - 数据采集模块
-数据源协定优先级：
-  1. mootdx（通达信）— 首选
-  2. 腾讯财经 — 备选（mootdx不可用时）
+盘中行情统一委托 data_access.realtime_quotes，供应商顺序由配置控制。
 """
 import os, json, time, requests, sys
 from datetime import datetime, timedelta
@@ -13,17 +11,16 @@ warnings.filterwarnings('ignore')
 from backend.core.logger import get_logger
 log = get_logger(__name__)
 
-from mootdx.quotes import Quotes
-
 sys.path.insert(0, '/home/ubuntu/3l-server')
 from backend.data_access.data_layer import CACHE_DIR as DL_CACHE_DIR, REVIEW_ARCHIVE_DIR, REVIEW_CHARTS_DIR, INDUSTRY_LEADERS_PATH, SCRIPTS_DIR
+from backend.data_access.realtime_quotes import get_intraday_minutes, get_realtime_quote, get_realtime_quotes
 
 CACHE_DIR = DL_CACHE_DIR
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # 中证全指代码
 INDEX_CODE = '000985'
-# 有效指数价格范围（用于校验mootdx数据是否合理）
+# 有效指数价格范围（用于校验实时供应商数据是否合理）
 INDEX_PRICE_MIN = 1000  # 中证全指正常应在5000-8000
 
 def _is_trading_time():
@@ -34,153 +31,39 @@ def _is_trading_time():
     t = now.hour * 60 + now.minute
     return 9 * 60 + 30 <= t <= 15 * 60
 
-# ========== 数据源工具 ==========
-
-def _mootdx_quote():
-    """[源1] 尝试从mootdx获取指数行情"""
-    try:
-        ctx = Quotes.factory(method='remote')
-        # 获取日K线（最近1天），检查数据是否合理
-        df = ctx.bars(symbol=INDEX_CODE, frequency=9, start=0, count=1)
-        if df is not None and len(df) > 0:
-            close = float(df['close'].iloc[-1])
-            if close > INDEX_PRICE_MIN:
-                return df, close
-        return None, None
-    except Exception as e:
-        log.warning('mootdx指数行情获取失败: %s', e)
-        return None, None
-
-def _tencent_quote_raw():
-    """[源2] 腾讯财经原始行情字符串"""
-    r = requests.get('https://qt.gtimg.cn/q=sh000985',
-                    headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-                    timeout=10)
-    r.encoding = 'gbk'
-    line = r.text.strip()
-    fields = line.split('"')[1].split('~') if '"' in line else line.split('~')
-    return fields
-
-def _tencent_daily_kline(days=5):
-    """[源2] 腾讯财经日K线"""
-    r = requests.get(f'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000985,day,,,{days},qfq',
-                    headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-                    timeout=10)
-    return r.json()
-
-def _tencent_minute_data():
-    """[源2] 腾讯财经今日分钟数据"""
-    r = requests.get('https://ifzq.gtimg.cn/appstock/app/minute/query?code=sh000985',
-                    headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-                    timeout=10)
-    return r.json()
-
-
 # ========== 指数实时行情 ==========
 
 def get_index_quote():
-    """
-    获取中证全指实时行情
-    源1: mootdx（通达信）→ 校验价格合理性
-    源2: 腾讯财经 → 备选
-    """
-    # --- 源1: mootdx ---
-    try:
-        ctx = Quotes.factory(method='remote')
-        df = ctx.bars(symbol=INDEX_CODE, frequency=9, start=0, count=2)
-        if df is not None and len(df) >= 2:
-            last = df.iloc[-1]
-            prev = df.iloc[-2]
-            close = float(last['close'])
-            if close > INDEX_PRICE_MIN:
-                # mootdx数据合理, 取amount作为成交额
-                amount = float(last['amount'])
-                return {
-                    'price': close,
-                    'close': float(prev['close']),
-                    'volume': int(last['vol']),
-                    'amount_yuan': int(amount),
-                    'change_pct': round((close / float(prev['close']) - 1) * 100, 2),
-                    'change': round(close - float(prev['close']), 2),
-                    'source': 'mootdx',
-                }
-    except Exception as e:
-        log.warning('mootdx编制数据解析失败，回退腾讯源: %s', e)
-        pass  # fall through to腾讯
-
-    # --- 源2: 腾讯财经 ---
-    try:
-        fields = _tencent_quote_raw()
-        amount_yuan = 0
-        if '/' in fields[35]:
-            amt_parts = fields[35].split('/')
-            if len(amt_parts) >= 3:
-                amount_yuan = int(amt_parts[2])
-        return {
-            'price': float(fields[3]),
-            'close': float(fields[4]),
-            'volume': int(fields[6]) if fields[6].isdigit() else 0,
-            'amount_yuan': amount_yuan,
-            'change_pct': float(fields[32]) if fields[32] else 0,
-            'change': float(fields[31]) if fields[31] else 0,
-            'time': fields[30] if len(fields) > 30 else '',
-            'high': float(fields[33]) if len(fields) > 33 else 0,
-            'low': float(fields[34]) if len(fields) > 34 else 0,
-            'source': 'tencent',
-        }
-    except Exception as e:
-        return {'error': str(e)}
+    """经统一实时行情路由获取中证全指行情。"""
+    quote = get_realtime_quote('sh000985')
+    if not quote or quote.get('price', 0) < INDEX_PRICE_MIN:
+        return {'error': '中证全指实时行情不可用'}
+    return {
+        **quote,
+        'close': quote.get('prev_close', 0),
+        'amount_yuan': quote.get('amount_yuan') or quote.get('amount', 0),
+    }
 
 
 # ========== 昨日总数据 ==========
 
 def get_yesterday_total():
-    """
-    获取昨日总成交量+总成交额
-    源1: mootdx → 校验价格合理性
-    源2: 腾讯财经日K线 → 备选
-    """
-    yesterday_date = None
-    prev_date = get_previous_trading_day_str()
-    
-    # --- 源1: mootdx ---
-    try:
-        ctx = Quotes.factory(method='remote')
-        df = ctx.bars(symbol=INDEX_CODE, frequency=9, start=0, count=5)
-        if df is not None and len(df) >= 2:
-            last = df.iloc[-1]
-            close = float(last['close'])
-            if close > INDEX_PRICE_MIN:
-                # mootdx数据合理，取昨日数据
-                yest = df.iloc[-2]
-                yest_close = float(yest['close'])
-                if INDEX_PRICE_MIN < yest_close < 20000:
-                    return {
-                        'date': prev_date,
-                        'volume': int(yest['vol']),
-                        'amount': float(yest['amount']),
-                        'close': yest_close,
-                        'source': 'mootdx',
-                    }
-    except:
-        pass
-    
-    # --- 源2: 腾讯财经 ---
-    try:
-        data = _tencent_daily_kline(2)
-        days = data.get('data', {}).get('sh000985', {}).get('day', [])
-        if len(days) >= 2:
-            yest = days[-2]
-            # 日K线只有volume(手数)没有amount，需估算
-            return {
-                'date': yest[0],
-                'volume': int(float(yest[5])),
-                'close': float(yest[2]),
-                'source': 'tencent',
-            }
-    except:
-        pass
-    
+    """从 Tushare/MySQL 确认日线读取最近已完成交易日数据。"""
+    from backend.data_access.data_layer import get_index_klines
+
+    klines = get_index_klines(INDEX_CODE)
+    if klines:
+        today = datetime.now().strftime('%Y%m%d')
+        latest_date = str(klines[0].get('date', '')).replace('-', '')
+        # 盘后 index_daily 已写入今日数据时，应取上一交易日作同比基准。
+        latest = klines[1] if latest_date == today and len(klines) > 1 else klines[0]
+        return {
+            'date': str(latest.get('date', '')),
+            'volume': int(float(latest.get('volume', 0))),
+            'amount': float(latest.get('amount', 0)),
+            'close': float(latest.get('close', 0)),
+            'source': 'tushare',
+        }
     return None
 
 
@@ -209,7 +92,7 @@ def get_previous_trading_day_str():
 # ========== 快照系统（缓存今日/昨日分时累计成交额） ==========
 
 def record_volume_snapshot():
-    """记录当前成交量快照（来自腾讯实时行情，mootdx无实时行情接口）"""
+    """记录统一行情入口返回的当前成交量快照。"""
     quote = get_index_quote()
     if 'error' in quote:
         return
@@ -252,24 +135,17 @@ def get_volume_snapshots(date_str=None):
     return []
 
 
-# ========== 今日分钟曲线（腾讯分钟API，mootdx无法提供实时分钟数据） ==========
+# ========== 今日分钟曲线 ==========
 
 def get_today_minute_curve():
     """
-    获取今日每分钟累积成交额曲线
-    说明：mootdx没有实时分钟数据接口，使用腾讯minute/query
+    经统一实时行情入口获取今日每分钟累积成交额曲线。
     """
     try:
-        data = _tencent_minute_data()
-        minutes = data['data']['sh000985']['data']['data']
-        curve = []
-        for m in minutes:
-            parts = m.split()
-            if len(parts) >= 4:
-                time_str = parts[0][:2] + ':' + parts[0][2:]
-                amount = float(parts[3])
-                curve.append({'time': time_str, 'amount': amount})
-        return curve
+        return [
+            {'time': minute['time'], 'amount': minute['amount']}
+            for minute in get_intraday_minutes('sh000985')
+        ]
     except Exception as e:
         print(f"[WARN] 获取分钟曲线失败: {e}")
         return []
@@ -736,55 +612,19 @@ DAILY_KLINE_CACHE = os.path.join(CACHE_DIR, 'market_leaders_daily')
 def _ensure_cache_dir():
     os.makedirs(DAILY_KLINE_CACHE, exist_ok=True)
 
-def _batch_tencent_quotes(codes_list):
-    """
-    批量获取腾讯实时行情
-    每批次最多100个代码，返回 {code: quote_dict} 字典
-    code使用带前缀的格式（sh600008）作为key
-    """
-    results = {}
-    batch_size = 100
-    for i in range(0, len(codes_list), batch_size):
-        batch = codes_list[i:i+batch_size]
-        q_str = ','.join(batch)
-        try:
-            r = requests.get(f'https://qt.gtimg.cn/q={q_str}',
-                            headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-                            timeout=10)
-            lines = r.text.strip().split('\n')
-            for line in lines:
-                try:
-                    fields = line.split('"')[1].split('~') if '"' in line else []
-                    if len(fields) < 40:
-                        continue
-                    bare_code = fields[2]  # 裸代码 600519
-                    # 找出这个代码对应的原始查询code（带前缀）
-                    matched = None
-                    for qc in batch:
-                        if qc.endswith(bare_code):
-                            matched = qc
-                            break
-                    if not matched:
-                        continue
-                    results[matched] = {
-                        'code': matched,
-                        'bare_code': bare_code,
-                        'name': fields[1],
-                        'price': float(fields[3]) if fields[3] else 0,
-                        'close': float(fields[4]) if fields[4] else 0,
-                        'open': float(fields[5]) if fields[5] else 0,
-                        'volume': int(fields[6]) if fields[6].isdigit() else 0,
-                        'high': float(fields[33]) if fields[33] else 0,
-                        'low': float(fields[34]) if fields[34] else 0,
-                        'change_pct': float(fields[32]) if fields[32] else 0,
-                        'turnover_rate': float(fields[38]) if len(fields) > 38 and fields[38] else 0,
-                        'turnover_amount': float(fields[37]) if len(fields) > 37 and fields[37] else 0,
-                    }
-                except:
-                    continue
-        except:
-            continue
-    return results
+def _batch_realtime_quotes(codes_list):
+    """经统一入口批量获取标准实时行情。"""
+    quotes = get_realtime_quotes(codes_list)
+    return {
+        code: {
+            **quote,
+            'code': code,
+            'bare_code': quote.get('code', code[-6:]),
+            'close': quote.get('prev_close', 0),
+            'turnover_amount': quote.get('amount', 0),
+        }
+        for code, quote in quotes.items()
+    }
 
 def _get_cached_daily_klines(code):
     """
@@ -803,28 +643,20 @@ def _get_cached_daily_klines(code):
         except:
             pass
     
-    # 没有缓存或已损坏，重新获取
-    qcode = code
-    if not code.startswith(('sh', 'sz', 'SH', 'SZ')):
-        qcode = ('sh' if code.startswith(('6', '9')) else 'sz') + code
-    
+    # 没有缓存或已损坏，从 Tushare/MySQL 确认日线读取。
     try:
-        r = requests.get(f'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={qcode},day,,,10,qfq',
-                        headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-                        timeout=10)
-        data = r.json()
-        klines = data.get('data', {}).get(qcode, {})
-        day_data = klines.get('qfqday', klines.get('day', []))
-        result = []
-        for k in day_data:
-            if len(k) >= 6:
-                result.append({
-                    'date': k[0],
-                    'close': float(k[2]),
-                    'volume': float(k[5]),
-                    'high': float(k[3]),
-                    'low': float(k[4]),
-                })
+        from backend.data_access.data_layer import get_stock_klines
+
+        result = [
+            {
+                'date': row.get('date', ''),
+                'close': float(row.get('close', 0)),
+                'volume': float(row.get('volume', 0)),
+                'high': float(row.get('high', 0)),
+                'low': float(row.get('low', 0)),
+            }
+            for row in get_stock_klines(code[-6:])[:10]
+        ]
         if result:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(result, f, ensure_ascii=False)
@@ -946,7 +778,7 @@ def get_market_leaders():
     codes_list = sorted(code_set)
     
     # 批量获取实时行情
-    quotes = _batch_tencent_quotes(codes_list)
+    quotes = _batch_realtime_quotes(codes_list)
     
     # 获取日K线（并行方式：逐个获取，缓存命中则跳过）
     daily_klines = {}
@@ -1084,21 +916,12 @@ def get_top_concept_sectors_with_5d():
 
 
 if __name__ == '__main__':
-    print("=== 测试数据源 ===\n")
-    
-    print("[数据源1] mootdx...")
-    df, close = _mootdx_quote()
-    if close:
-        print(f"  ✅ 数据合理 (close={close})")
+    print("=== 测试统一实时行情入口 ===\n")
+    quote = get_index_quote()
+    if 'error' not in quote:
+        print(f"  ✅ source={quote.get('source')}, price={quote.get('price')}")
     else:
-        print(f"  ❌ 数据无效或不可用")
-    
-    print("\n[数据源2] 腾讯财经...")
-    try:
-        fields = _tencent_quote_raw()
-        print(f"  ✅ price={fields[3]}, vol={fields[6]}, amount={fields[35][:30]}")
-    except Exception as e:
-        print(f"  ❌ {e}")
+        print(f"  ❌ {quote['error']}")
     
     print("\n=== 成交量对比 ===")
     comp = get_volume_comparison()

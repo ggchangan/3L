@@ -10,8 +10,6 @@ import threading
 import time
 from datetime import datetime
 
-import requests
-
 from backend.core.config import CACHE_DIR, INDUSTRY_LEADERS_PATH, WWW_DIR, atomic_json_dump
 from backend.models.data_models import is_trading_day, is_trading_session
 from backend.core.exceptions import DataError
@@ -202,10 +200,7 @@ def get_stop_loss_triggered():
     from backend.core.monitor_data import get_existing_holdings
     holdings = get_existing_holdings()
     triggered = []
-    headers = {
-        'User-Agent': 'Mozilla/5.0',
-        'Referer': 'https://finance.qq.com'
-    }
+    from backend.data_access.realtime_quotes import get_realtime_quote
     for h in holdings:
         code = h.get('code', '')
         sl = h.get('stop_loss_price') or h.get('stop_loss', '')
@@ -215,17 +210,9 @@ def get_stop_loss_triggered():
             sl_price = float(sl.replace('元', '').strip())
         except Exception:
             continue
-        # 取实时行情（加交易所前缀）
-        qcode = f"sh{code}" if code.startswith(('6', '9')) else f"sz{code}"
         try:
-            r = requests.get(
-                f'https://qt.gtimg.cn/q={qcode}',
-                headers=headers,
-                timeout=5
-            )
-            line = r.text.strip()
-            fields = line.split('"')[1].split('~') if '"' in line else []
-            cur_price = float(fields[3]) if len(fields) > 3 else 0
+            quote = get_realtime_quote(code)
+            cur_price = quote['price'] if quote else 0
         except Exception:
             continue
         if cur_price > 0 and cur_price <= sl_price:
@@ -261,7 +248,7 @@ def get_industry_leaders():
     if _leaders_cache_data and (now_ts - _leaders_cache_time) < 120:
         return _leaders_cache_data
 
-    from backend.core.monitor_data import _batch_tencent_quotes, _norm_code
+    from backend.core.monitor_data import _batch_realtime_quotes, _norm_code
 
     try:
         with open(INDUSTRY_LEADERS_PATH, 'r') as f:
@@ -278,7 +265,7 @@ def get_industry_leaders():
     codes_list = sorted(code_set)
 
     # 批量获取实时行情
-    quotes = _batch_tencent_quotes(codes_list)
+    quotes = _batch_realtime_quotes(codes_list)
 
     # 用实时数据更新每个股票的chg和price
     for ind, stocks in leaders.get('by_industry', {}).items():
@@ -306,7 +293,7 @@ def get_leader_dashboard():
         CACHE_DIR, HOLDINGS_PATH
     )
     from backend.core.monitor_data import (
-        _batch_tencent_quotes, _norm_code,
+        _batch_realtime_quotes, _norm_code,
         get_top_sectors_with_5d
     )
     import os
@@ -334,7 +321,7 @@ def get_leader_dashboard():
     for ind, stocks in by_industry.items():
         for s in stocks:
             qcodes.add(_norm_code(s['code']))
-    quotes = _batch_tencent_quotes(sorted(qcodes))
+    quotes = _batch_realtime_quotes(sorted(qcodes))
 
     # 把行情数据合并到龙头数据结构中
     leader_real = {}  # bare_code → {chg, price, volume, turnover_rate, name}
