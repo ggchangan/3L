@@ -538,7 +538,9 @@ def _convert_board_kline(df):
 def build_industry_map_from_db() -> dict:
     """从 ths_member + ths_index DB 构建行业映射
 
-    一只股票可能属于多个同花顺行业（如银行+银行Ⅲ），取名称最长的。
+    一只股票可能同时属于多套 ``type=I`` 行业层级。优先从最近一次通过
+    板块日线门禁的权威行业集合中选择，再在候选中取最细分（名称最长）的
+    行业，避免把 GICS ``...(A股)`` 分类与复盘主线使用的 THS 行业混用。
 
     Returns:
         {code: {code, name, ths_industry}, ...}
@@ -564,11 +566,18 @@ def build_industry_map_from_db() -> dict:
         if code and industry:
             stock_industries[code].append((industry, name))
 
+    confirmation = get_ths_daily_update_confirmation()
+    active_industries = set(confirmation.get('industry_names', []))
+
     result = {}
     for code, entries in stock_industries.items():
-        entries.sort(key=lambda x: -len(x[0]))
-        best_industry = entries[0][0]
-        best_name = entries[0][1]
+        canonical_entries = [
+            entry for entry in entries if entry[0] in active_industries
+        ]
+        candidates = canonical_entries or entries
+        candidates.sort(key=lambda x: (-len(x[0]), x[0]))
+        best_industry = candidates[0][0]
+        best_name = candidates[0][1]
         result[code] = {'code': code, 'name': best_name, 'ths_industry': best_industry}
     return result
 
