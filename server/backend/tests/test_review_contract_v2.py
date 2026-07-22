@@ -105,3 +105,29 @@ def test_trading_plan_joins_opportunity_by_canonical_industry():
     assert item['sector'] == '数字芯片设计'
     assert item['opportunity'] == '主线回调'
     assert item['opp_reason'] == ''
+    assert item['decision_status'] == 'executable'
+    assert item['data_quality'] == 'ready'
+
+
+def test_trading_plan_blocks_buy_when_estimated_snapshot_misses_industry():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中'},
+        mainline_data={'ranking_status': 'estimated', 'lines': []},
+        signals_data={},
+        existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001',
+            'name': '测试股票',
+            'industry': '未覆盖行业',
+            'action_type': '买入',
+            'action_priority': '高',
+        }],
+        opportunity_map={'已覆盖行业': '--'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['action_type'] == '待确认'
+    assert item['priority'] == '低'
+    assert item['decision_status'] == 'blocked'
+    assert item['data_quality'] == 'sector_unavailable'
+    assert item['opp_reason'] == '未覆盖行业·当日板块快照未覆盖'

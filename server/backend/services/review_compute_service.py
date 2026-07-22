@@ -805,6 +805,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     from backend.core.signal_detector.market_filter import get_market_filter
     mf = get_market_filter(market_cycle)
     mf_filter = mf.get('filter', 'normal')
+    opportunity_map = opportunity_map or {}
 
     # 大盘过滤覆盖策略
     if mf_filter == 'reduce':
@@ -922,15 +923,28 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 bs_opp = opportunity_map.get(sec_name, '--')
             if not bs_opp or bs_opp == '--':
                 if not sec_name:
-                    opp_reason = direction if direction else '暂无行业数据'
+                    opp_reason = '暂无行业映射'
                 elif sec_name not in opportunity_map:
-                    opp_reason = f'{sec_name}·无板块数据'
+                    ranking_status = mainline_data.get('ranking_status', 'stale')
+                    if ranking_status == 'estimated':
+                        opp_reason = f'{sec_name}·当日板块快照未覆盖'
+                    elif ranking_status == 'stale':
+                        opp_reason = f'{sec_name}·板块排名待补齐'
+                    else:
+                        opp_reason = f'{sec_name}·无板块数据'
                 else:
                     opp_reason = f'{sec_name}·暂无信号'
             # 操作建议（已由 get_stock_card 统一推导，这里直接读取）
             at = bs.get('action_type', '买入')
             sig_txt = bs.get('action_signal', '')
             pri = bs.get('action_priority', '高')
+            sector_unavailable = not sec_name or sec_name not in opportunity_map
+            decision_status = 'executable' if bs_opp and bs_opp != '--' else 'candidate'
+            if sector_unavailable:
+                # 3L 的板块层没有闭环时只保留个股技术信号，不生成正式买入指令。
+                at = '待确认'
+                pri = '低'
+                decision_status = 'blocked'
             plan['buy_priority'].append({
                 'name': f"{bs.get('name', '')}({bs.get('code', '')})",
                 'code': bs.get('code', ''),
@@ -951,6 +965,8 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'direction': direction,
                 'opportunity': bs_opp,
                 'opp_reason': opp_reason,
+                'decision_status': decision_status,
+                'data_quality': 'sector_unavailable' if sector_unavailable else 'ready',
                 'reason': f'{market_tag}→{sec_name}·{bs_opp}→{bs.get("structure", "--")}·{bs.get("stage", "--")}' if bs_opp and bs_opp != '--' else f'{market_tag}→{opp_reason}' if opp_reason else '',
                 'priority': pri,
                 'triggered_signals': bs.get('triggered_signals', []),
