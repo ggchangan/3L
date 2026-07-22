@@ -1075,10 +1075,19 @@ def _fetch_ths_kline_close_snapshots(target_date, names, ths_type):
 
         def _load_rows(code, year):
             url = f'https://d.10jqka.com.cn/v4/line/bk_{code}/01/{year}.js'
-            response = requests.get(url, headers=headers, timeout=8)
-            response.raise_for_status()
-            matched = re.search(r'\((.*)\)\s*;?\s*$', response.text)
-            if not matched:
+            matched = None
+            for attempt in range(2):
+                try:
+                    response = requests.get(url, headers=headers, timeout=8)
+                    response.raise_for_status()
+                    matched = re.search(r'\((.*)\)\s*;?\s*$', response.text)
+                    if matched:
+                        break
+                except Exception:
+                    matched = None
+                if attempt == 0:
+                    time.sleep(0.25)
+            if matched is None:
                 return []
             payload = json.loads(matched.group(1))
             rows = []
@@ -1135,9 +1144,20 @@ def _fetch_ths_kline_close_snapshots(target_date, names, ths_type):
         return name, None
 
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=12) as executor:
-        pairs = executor.map(_fetch_one, name_codes.items())
-        return {name: row for name, row in pairs if row is not None}
+    items = list(name_codes.items())
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        first_pairs = list(executor.map(_fetch_one, items))
+    result = {name: row for name, row in first_pairs if row is not None}
+
+    # 部分成功通常表示瞬时限流；冷却后只重试缺失项。若一条都没有，说明
+    # 目标日大概率尚未发布，不做第二轮全量请求。
+    if result and len(result) < len(items):
+        missing_items = [item for item in items if item[0] not in result]
+        time.sleep(1)
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            retry_pairs = executor.map(_fetch_one, missing_items)
+            result.update({name: row for name, row in retry_pairs if row is not None})
+    return result
 
 
 def _fetch_ths_close_ranking(target_date, industry_names, concept_names):
