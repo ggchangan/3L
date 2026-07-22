@@ -238,6 +238,47 @@ def test_ths_snapshot_uses_previous_year_close_on_first_trading_day(monkeypatch)
     assert result['机器人概念']['change_pct'] == 5.0
 
 
+def test_ths_snapshot_retries_only_missing_items_after_partial_success(monkeypatch):
+    from backend.data_access import data_source
+
+    class FakeDb:
+        def get_all_ths_codes(self):
+            return [
+                ('885001.TI', '概念一', 'N'),
+                ('885002.TI', '概念二', 'N'),
+            ]
+
+    class Response:
+        def __init__(self, text):
+            self.text = text
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    calls = {'885001': 0, '885002': 0}
+
+    def fake_get(url, **kwargs):
+        code = '885001' if '885001' in url else '885002'
+        calls[code] += 1
+        if code == '885002' and calls[code] <= 2:
+            return Response('rate limited')
+        rows = '20260720,100,102,99,100,1000,10000;20260721,101,103,100,102,1200,12000'
+        return Response('callback(' + json.dumps({'data': rows}) + ')')
+
+    monkeypatch.setattr(data_source, '_get_tushare_db', lambda: FakeDb())
+    monkeypatch.setattr('requests.get', fake_get)
+    monkeypatch.setattr(data_source.time, 'sleep', lambda seconds: None)
+
+    result = data_source._fetch_ths_kline_close_snapshots(
+        '20260721', ['概念一', '概念二'], 'N'
+    )
+
+    assert set(result) == {'概念一', '概念二'}
+    assert calls['885001'] == 1
+    assert calls['885002'] == 3
+
+
 def test_ranking_failover_skips_transport_without_requested_type(monkeypatch):
     from backend.data_access import data_source
 
