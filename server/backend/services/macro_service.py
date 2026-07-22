@@ -61,32 +61,16 @@ def get_macro_data():
         # 外围更多指数
         'us.SOX': '费城半导体', 'us.RUT': '罗素2000',
     }
-    q_str = ','.join(symbols.keys())
     indices = {}
     try:
-        r = requests.get(
-            f'https://qt.gtimg.cn/q={q_str}',
-            headers=headers,
-            timeout=10
-        )
-        for line in r.text.strip().split(';'):
-            if '="' not in line:
-                continue
-            key = line.split('=')[0].strip()
-            parts = line.split('"')[1].split('~') if '"' in line else []
-            if len(parts) < 10:
-                continue
-            tz = symbols.get(key, parts[1] if len(parts) > 1 else '')
-            price = float(parts[3]) if parts[3] else 0
-            prev = float(parts[4]) if parts[4] else price
-            chg_pct = round((price - prev) / prev * 100, 2) if prev > 0 else 0
+        from backend.data_access.realtime_quotes import get_realtime_quotes
+        for key, quote in get_realtime_quotes(symbols.keys(), timeout=10).items():
+            tz = symbols.get(key, quote.get('name', ''))
             indices[tz] = {
-                'price': price, 'prev_close': prev,
-                'change_pct': chg_pct, 'name': tz,
-                'code': parts[2] if len(parts) > 2 else '',
-                'high': float(parts[8]) if len(parts) > 8 and parts[8] else 0,
-                'low': float(parts[9]) if len(parts) > 9 and parts[9] else 0,
-                'time': parts[31] if len(parts) > 31 else '',
+                'price': quote['price'], 'prev_close': quote['prev_close'],
+                'change_pct': quote['change_pct'], 'name': tz,
+                'code': quote['code'], 'high': quote['high'], 'low': quote['low'],
+                'time': quote['time'], 'source': quote['source'],
             }
     except Exception:
         pass

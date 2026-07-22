@@ -2,7 +2,6 @@
 import json
 import os
 import sys
-import requests
 from urllib.parse import urlparse, parse_qs
 from backend.core.logger import get_logger
 from backend.core.exceptions import APIError
@@ -52,36 +51,18 @@ def _get_stock_names():
 
 
 def _batch_realtime(codes):
-    """批量获取实时行情（腾讯API），返回 {code: {price, change, change_pct}}"""
-    results = {}
-    for i in range(0, len(codes), 50):
-        batch = codes[i:i+50]
-        qstr = ','.join(
-            ('sh' + c if c.startswith(('6','9')) else 'sz' + c) for c in batch
-        )
-        try:
-            r = requests.get(f'https://qt.gtimg.cn/q={qstr}',
-                headers={'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'},
-                timeout=5)
-            text = r.text
-            try:
-                text = text.decode('gbk')
-            except:
-                pass
-            for line in text.strip().split(';'):
-                if not line.strip():
-                    continue
-                parts = line.split('~')
-                if len(parts) >= 34:
-                    code = parts[2] if len(parts) > 2 else ''
-                    price = float(parts[3]) if parts[3] else 0
-                    prev_close = float(parts[4]) if parts[4] else price
-                    change_pct = round((price - prev_close) / prev_close * 100, 2) if prev_close else 0
-                    change = round(price - prev_close, 2) if prev_close else 0
-                    results[code] = {'price': price, 'change': change, 'change_pct': change_pct}
-        except:
-            pass
-    return results
+    """经统一入口批量获取实时行情。"""
+    from backend.data_access.realtime_quotes import get_realtime_quotes
+
+    return {
+        code: {
+            'price': quote['price'],
+            'change': quote['change'],
+            'change_pct': quote['change_pct'],
+            'source': quote['source'],
+        }
+        for code, quote in get_realtime_quotes(codes).items()
+    }
 
 
 def _load_board_constituents():

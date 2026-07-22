@@ -422,7 +422,7 @@ def generate_daily_review(date_str=None):
         date_str = datetime.now().strftime('%Y-%m-%d')
 
     from backend.services.review_compute_service import (
-        is_trading_day, fetch_index_klines, fetch_market_quote,
+        is_trading_day, fetch_index_klines,
         judge_peak_valley, get_mainline_data, get_concept_mainline_data, track_mainline_persistence,
         generate_trading_plan, get_buy_sell_signals, load_market_data_for_profit_check,
     )
@@ -451,11 +451,6 @@ def generate_daily_review(date_str=None):
     # 获取大盘K线数据
     index_klines = fetch_index_klines(120)
     index_klines = [k for k in index_klines if k['date'] <= date_str]
-    if not index_klines:
-        index_klines = fetch_index_klines(120)
-        index_klines = [k for k in index_klines if k['date'] <= date_str]
-    today_quote = fetch_market_quote()
-
     print(f"[3L复盘] K线数据: 共{len(index_klines)}天, 最新={index_klines[0]['date'] if index_klines else '无'}")
 
     # ① 大盘周期判定

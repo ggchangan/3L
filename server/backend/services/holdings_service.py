@@ -45,79 +45,6 @@ def _get_cached_card(code):
         return _CARD_CACHE[code]
     return None
 
-# ── 腾讯行情接口格式 ────────────────────────────────────
-# 请求: http://qt.gtimg.cn/q=sh603259,sz301200
-# 返回: v_pvixnGq="51.200","2.300",... 多行
-# 价格在第1个字段，涨跌幅在第2个字段
-_TENCENT_URL = 'http://qt.gtimg.cn/q='
-# 市场前缀映射（6位代码判断）
-_SH_PREFIXES = ('600', '601', '603', '605', '688', '689', '510', '511', '512',
-                '513', '515', '516', '517', '518', '560', '561', '562', '563',
-                '565', '567', '580', '588')
-_SZ_PREFIXES = ('000', '001', '002', '003', '004', '159', '161', '162', '163',
-                '164', '165', '166', '168', '180', '200', '201', '202', '203',
-                '204', '300', '301')
-
-
-def _market_prefix(code):
-    """根据6位代码返回腾讯行情市场前缀"""
-    for p in _SH_PREFIXES:
-        if code.startswith(p):
-            return 'sh'
-    for p in _SZ_PREFIXES:
-        if code.startswith(p):
-            return 'sz'
-    return 'sz'  # 默认
-
-
-def _build_tencent_codes(codes):
-    """构建腾讯接口的代码列表"""
-    return ','.join(f'{_market_prefix(c)}{c}' for c in codes)
-
-
-import re as _re
-
-
-def _parse_tencent_response(text):
-    """解析腾讯行情返回的文本
-
-    实际格式: v_CODE="1~name~code~price~yclose~open~vol~..."
-    （~ 分隔，非 "," 分隔）
-    price 在第4个字段(index 3)，涨跌幅在 倒数第2个字段
-    """
-    results = {}
-    for line in text.strip().split('\n'):
-        line = line.strip()
-        if not line or '=' not in line:
-            continue
-        try:
-            value_part = line.split('=', 1)[1].strip()
-            # 去掉外层引号
-            if value_part.startswith('"') and value_part.endswith('"'):
-                value_part = value_part[1:-1]
-            # 按 ~ 分割
-            fields = value_part.split('~')
-            if len(fields) < 5:
-                continue
-
-            price = float(fields[3]) if fields[3] else 0
-
-            # 涨跌幅在 fields[32]（涨跌额在 fields[31]）
-            change = 0.0
-            if len(fields) > 32:
-                try:
-                    change = float(fields[32])
-                except (ValueError, IndexError):
-                    change = 0.0
-
-            # 代码在 fields[2]
-            code = fields[2] if len(fields) > 2 else ''
-            results[code] = {'price': price, 'change': change}
-        except (ValueError, IndexError, AttributeError):
-            continue
-    return results
-
-
 # ── 公共函数 ────────────────────────────────────────
 
 
@@ -188,10 +115,11 @@ def get_holdings_with_prices():
     prices = {}
     if codes:
         try:
-            url = _TENCENT_URL + _build_tencent_codes(codes)
-            resp = requests.get(url, timeout=5)
-            resp.raise_for_status()
-            prices = _parse_tencent_response(resp.text)
+            from backend.data_access.realtime_quotes import get_realtime_quotes
+            prices = {
+                code: {'price': quote['price'], 'change': quote['change_pct']}
+                for code, quote in get_realtime_quotes(codes).items()
+            }
         except Exception:
             prices = {}
 

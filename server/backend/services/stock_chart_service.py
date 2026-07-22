@@ -14,7 +14,6 @@ import math
 import os
 from datetime import datetime, timedelta
 
-import requests
 import akshare as ak
 
 from backend.data_access.data_layer import get_all_stocks, get_stock_klines
@@ -33,53 +32,17 @@ INDEX_CODE_CHART = '000985'  # 默认指数
 
 
 def _fetch_realtime_quote(code):
-    """从腾讯接口获取实时行情，返回 dict 或 None"""
-    prefix = 'sh' if code.startswith(('6', '9')) else 'sz'
-    qcode = f'{prefix}{code[-6:]}'
-    try:
-        r = requests.get(
-            f'https://qt.gtimg.cn/q={qcode}',
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://finance.qq.com',
-            },
-            timeout=5,
-        )
-        text = r.text
-        try:
-            text = text.decode('gbk')
-        except (UnicodeDecodeError, AttributeError):
-            pass
-        # 腾讯返回格式: v_qcode="...~name~code~price~..."
-        fields = text.split('"')[1].split('~') if '"' in text else []
-        if len(fields) >= 40:
-            def _f(idx, default=0):
-                try:
-                    return float(fields[idx]) if fields[idx] else default
-                except (ValueError, IndexError):
-                    return default
+    """经统一实时行情入口获取图表所需字段。"""
+    from backend.data_access.realtime_quotes import get_realtime_quote
 
-            def _fi(idx, default=0):
-                v = fields[idx] if idx < len(fields) else ''
-                try:
-                    return int(v) if v.strip().isdigit() else default
-                except (ValueError, IndexError):
-                    return default
-
-            return {
-                'open': _f(5),
-                'close': _f(3),          # 当前价
-                'high': _f(33),
-                'low': _f(34),
-                'volume_hand': _fi(6),   # 手
-                'prev_close': _f(4),
-                'change_pct': _f(32),
-                'amount': _f(37),
-                'name': fields[1] if len(fields) > 1 else '',
-            }
-    except Exception:
-        pass
-    return None
+    quote = get_realtime_quote(code)
+    if not quote:
+        return None
+    return {
+        **quote,
+        'close': quote['price'],
+        'volume_hand': quote.get('volume', 0),
+    }
 
 
 def _ema(values, period):
@@ -966,41 +929,7 @@ def generate_index_chart(mode='review', code=None):
     # ── Fetch real-time quote (only after 18:00) ──
     rt = None
     if use_today:
-        try:
-            r = requests.get(
-                f'https://qt.gtimg.cn/q={qt_symbol}',
-                headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Referer': 'https://finance.qq.com',
-                },
-                timeout=5,
-            )
-            text = r.text
-            try:
-                text = text.decode('gbk')
-            except (UnicodeDecodeError, AttributeError):
-                pass
-            fields = text.split('"')[1].split('~') if '"' in text else []
-            if len(fields) >= 40:
-                def _f(idx, default=0):
-                    try:
-                        return float(fields[idx]) if fields[idx] else default
-                    except (ValueError, IndexError):
-                        return default
-                def _fi(idx, default=0):
-                    v = fields[idx] if idx < len(fields) else ''
-                    try:
-                        return int(v) if v.strip().isdigit() else default
-                    except (ValueError, IndexError):
-                        return default
-                rt = {
-                    'open': _f(5), 'close': _f(3), 'high': _f(33), 'low': _f(34),
-                    'volume_hand': _fi(6), 'prev_close': _f(4),
-                    'change_pct': _f(32), 'amount': _f(37),
-                    'name': fields[1] if len(fields) > 1 else '',
-                }
-        except Exception:
-            pass
+        rt = _fetch_realtime_quote(qt_symbol)
 
     last_date_str = str(data[-1]['day']).replace('-', '')
     st = _resolve_today_candle_state(now.hour, now.minute, rt, last_date_str, today_str) if use_today else {'type': 'none'}

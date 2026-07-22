@@ -579,28 +579,21 @@ def check_panic_alerts_via_realtime(indices_api_codes: dict = None) -> list:
             'sh000985': '中证全指', 'us.INX': '标普500',
         }
 
-    headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'}
-    q_str = ','.join(indices_api_codes.keys())
     try:
-        import requests
-        r = requests.get(f'https://qt.gtimg.cn/q={q_str}', headers=headers, timeout=10)
+        from backend.data_access.realtime_quotes import get_realtime_quotes
+        raw_quotes = get_realtime_quotes(indices_api_codes.keys(), timeout=10)
     except Exception:
-        logger.warning('恐慌检测：腾讯API请求失败')
+        logger.warning('恐慌检测：实时行情入口请求失败')
         return triggered
 
     indices = {}
-    for line in r.text.strip().split(';'):
-        if '="' not in line:
-            continue
-        key = line.split('=')[0].strip()
-        parts = line.split('"')[1].split('~') if '"' in line else []
-        if len(parts) < 10:
-            continue
-        name = indices_api_codes.get(key, parts[1] if len(parts) > 1 else '')
-        price = float(parts[3]) if parts[3] else 0
-        prev = float(parts[4]) if parts[4] else price
-        chg = round((price - prev) / prev * 100, 2) if prev > 0 else 0
-        indices[name] = {'change_pct': chg, 'price': price}
+    for key, quote in raw_quotes.items():
+        name = indices_api_codes.get(key, quote.get('name', ''))
+        indices[name] = {
+            'change_pct': quote['change_pct'],
+            'price': quote['price'],
+            'source': quote['source'],
+        }
 
     if not indices:
         return triggered

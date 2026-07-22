@@ -9,7 +9,6 @@ import os
 from backend.core.logger import get_logger
 log = get_logger(__name__)
 import re
-import requests
 from datetime import date, datetime, timedelta
 
 from backend.core.config import DATA_DIR
@@ -44,29 +43,15 @@ def _norm_code(code: str) -> str:
 
 
 def _get_realtime_data(code: str) -> tuple:
-    """通过腾讯行情接口获取实时数据
+    """通过统一行情入口获取实时数据
 
     Returns:
         (price, change_pct) 或 (0, 0)
     """
-    headers = {
-        'User-Agent': 'Mozilla/5.0',
-        'Referer': 'https://finance.qq.com'
-    }
-    qcode = _norm_code(code)
     try:
-        r = requests.get(
-            f'https://qt.gtimg.cn/q={qcode}',
-            headers=headers,
-            timeout=5
-        )
-        line = r.text.strip()
-        fields = line.split('"')[1].split('~') if '"' in line else []
-        if len(fields) > 3:
-            price = float(fields[3]) if fields[3] else 0
-            change_pct = float(fields[32]) if len(fields) > 32 and fields[32] else 0
-            return (price, change_pct)
-        return (0, 0)
+        from backend.data_access.realtime_quotes import get_realtime_quote
+        quote = get_realtime_quote(code)
+        return (quote['price'], quote['change_pct']) if quote else (0, 0)
     except Exception:
         log.warning('check_alerts: trading hour check failed')
         return (0, 0)
@@ -174,16 +159,10 @@ def _get_index_realtime(qcode: str) -> tuple:
 
     与个股接口相同，但 qcode 直接传 sh000688 格式
     """
-    headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.qq.com'}
     try:
-        r = requests.get(f'https://qt.gtimg.cn/q={qcode}', headers=headers, timeout=5)
-        line = r.text.strip()
-        fields = line.split('"')[1].split('~') if '"' in line else []
-        if len(fields) > 3:
-            price = float(fields[3]) if fields[3] else 0
-            change_pct = float(fields[32]) if len(fields) > 32 and fields[32] else 0
-            return (price, change_pct)
-        return (0, 0)
+        from backend.data_access.realtime_quotes import get_realtime_quote
+        quote = get_realtime_quote(qcode)
+        return (quote['price'], quote['change_pct']) if quote else (0, 0)
     except Exception:
         log.warning('check_alerts: trading hour check failed')
         return (0, 0)

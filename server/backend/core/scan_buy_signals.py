@@ -373,12 +373,12 @@ def _parallel_fetch_klines(stocks, fetch_fn=None, max_workers=10):
 
 
 def _fetch_realtime_only(code, direction, cached_klines):
-    """只调腾讯 API 获取实时行情，合并到缓存的历史K线
+    """经统一行情入口获取实时行情，合并到缓存的历史K线。
 
-    委托给 data_source.get_realtime_kline_tencent()
+    委托给 data_source.get_realtime_kline()
     """
-    from backend.data_access.data_source import get_realtime_kline_tencent
-    return get_realtime_kline_tencent(code, cached_klines)
+    from backend.data_access.data_source import get_realtime_kline
+    return get_realtime_kline(code, cached_klines)
 
 
 def main():
