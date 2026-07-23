@@ -43,6 +43,8 @@ describe('Review page contract integration', () => {
     expect(await screen.findByText('行业 07-22 · 当日预估 97.8%，312/319')).toBeTruthy()
     expect(screen.getByText('概念 07-22 · 当日预估 85.3%，157/184')).toBeTruthy()
     expect(screen.getByText('复盘交易日 2026-07-22 星期三')).toBeTruthy()
+    expect(screen.getByText('① 大盘强弱 · ② 主线动量 · ③ 板块环境 · ④ 个股买点')).toBeTruthy()
+    expect(screen.getByText('主线动量与板块环境')).toBeTruthy()
     expect(screen.getByText('🎯 关注买点 (3)')).toBeTruthy()
     expect(screen.getAllByText('买入')).toHaveLength(2)
     expect(screen.getByText('待确认')).toBeTruthy()

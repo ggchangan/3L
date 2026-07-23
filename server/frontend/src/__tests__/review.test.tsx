@@ -1,17 +1,30 @@
 /// <reference types="vitest" />
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import MarketCycle from '../components/MarketCycle'
+import MarketCycle, { classifyMarketRegime } from '../components/MarketCycle'
 import MainlineSection from '../components/MainlineSection'
 import HistoryReview from '../components/HistoryReview'
 import ReviewDataStatus from '../components/ReviewDataStatus'
 import TradingPlan from '../components/TradingPlan'
+import { formatSectorEnvironment } from '../lib/review'
 
 // ====== MarketCycle ======
 describe('MarketCycle', () => {
   it('loading时显示加载中', () => {
     render(<MarketCycle />)
     expect(screen.getByText('加载中...')).toBeTruthy()
+  })
+
+  it('将市场趋势明确归类为强势、震荡或弱势', () => {
+    expect(classifyMarketRegime('上涨趋势')).toBe('strong')
+    expect(classifyMarketRegime('区间震荡')).toBe('neutral')
+    expect(classifyMarketRegime('下降趋势')).toBe('weak')
+  })
+
+  it('趋势接口缺失时使用均线关系兜底', () => {
+    expect(classifyMarketRegime(undefined, { price: 120, ma20: 110, ma60: 100 })).toBe('strong')
+    expect(classifyMarketRegime(undefined, { price: 80, ma20: 90, ma60: 100 })).toBe('weak')
+    expect(classifyMarketRegime(undefined, { price: '--' })).toBe('unknown')
   })
 })
 
@@ -20,6 +33,27 @@ describe('MainlineSection', () => {
   it('空数据时显示暂无主线', () => {
     render(<MainlineSection data={null} dates={[]} currentDate="" />)
     expect(screen.getByText('暂无主线数据')).toBeTruthy()
+  })
+
+  it('按主线层级展示方向，并把波峰波谷保留为板块阶段', () => {
+    render(<MainlineSection
+      data={{
+        lines: [{ name: '主线A', chg_20d: 18, stage: '波峰' }],
+        secondary: [{ name: '次线B', chg_20d: 12, stage: '波中' }],
+        all_ranked: [
+          { name: '主线A', chg_20d: 18, stage: '波峰' },
+          { name: '次线B', chg_20d: 12, stage: '波中' },
+          { name: '方向C', chg_20d: 8, stage: '波谷' },
+        ],
+      }}
+      dates={[]}
+      currentDate="2026-07-23"
+    />)
+
+    expect(screen.getByText('主线方向')).toBeTruthy()
+    expect(screen.getAllByText('次级主线').length).toBeGreaterThan(0)
+    expect(screen.getByText(/波谷是加分项/)).toBeTruthy()
+    expect(screen.queryByText('主线回调机会')).toBeNull()
   })
 })
 
@@ -128,5 +162,13 @@ describe('TradingPlan action semantics', () => {
     expect(screen.getByText('待确认')).toBeTruthy()
     expect(screen.queryByText(/可执行买点/)).toBeNull()
     expect(screen.queryByText(/候选观察/)).toBeNull()
+  })
+})
+
+describe('板块环境语义', () => {
+  it('不把波谷和趋势阶段直接称为机会', () => {
+    expect(formatSectorEnvironment('主线回调')).toBe('主线 · 波谷')
+    expect(formatSectorEnvironment('次线机会')).toBe('次级主线 · 波谷')
+    expect(formatSectorEnvironment('见顶风险', '主线')).toBe('主线 · 波峰风险')
   })
 })

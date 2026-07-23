@@ -80,7 +80,7 @@ export default function Review() {
       <NavBar />
       <div className="header">
         <h1>📋 3L 每日复盘</h1>
-        <div className="sub">② 主线 · ③ 量价择时</div>
+        <div className="sub">① 大盘强弱 · ② 主线动量 · ③ 板块环境 · ④ 个股买点</div>
         <div className="date-badge" id="todayDate">
           复盘交易日 {reviewDate} 星期{WDS[weekday]}
         </div>
@@ -112,23 +112,23 @@ export default function Review() {
           <div className="empty" style={{ color: '#e94560' }}>{error}</div>
         ) : (
           <>
-            {/* STEP 1: 大盘周期判定 */}
+            {/* STEP 1: 大盘强弱与周期位置 */}
             <div className="section">
               <div className="section-title">
                 <span className="step">STEP 1</span>
-                大盘周期判定
-                <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 决定总仓位水位(4维评分)</span>
+                大盘强弱与周期位置
+                <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 先定风险偏好和总仓位</span>
               </div>
               <MarketCycle />
             </div>
 
-            {/* STEP 2: 主线 */}
+            {/* STEP 2 + 3: 主线动量与板块环境 */}
             {data?.mainline && (
               <div className="section">
                 <div className="section-title">
-                  <span className="step">STEP 2</span>
-                  主线
-                  <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 主线/次级主线 排名</span>
+                  <span className="step">STEP 2–3</span>
+                  主线动量与板块环境
+                  <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 方向决定优先级，阶段只作加分和风险提示</span>
                 </div>
                 <div id="mainlineContainer">
                   <MainlineSection data={data.mainline} dates={[]} currentDate={reviewDate} />
@@ -136,11 +136,11 @@ export default function Review() {
               </div>
             )}
 
-            {/* STEP 3: 持仓个股复盘 */}
+            {/* STEP 4: 持仓个股复盘 */}
             {data?.holdings_review && data.holdings_review.length > 0 && (
               <div className="section">
                 <div className="section-title">
-                  <span className="step">STEP 3</span>
+                  <span className="step">STEP 4</span>
                   持仓个股复盘
                   <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>
                     → 量价择时诊断
@@ -157,7 +157,7 @@ export default function Review() {
               <div className="section-title">
                 <span className="step">STEP 4</span>
                 自选股买点信号
-                <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 关注买入机会</span>
+                <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 个股量价信号决定是否出现买点</span>
               </div>
               <div id="buySignalList">
                 {data?.buy_signals_review && data.buy_signals_review.length > 0 ? (
