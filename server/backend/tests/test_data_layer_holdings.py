@@ -1,5 +1,6 @@
 """测试 — data_layer 持仓 DB 读写接口"""
 import os, sys
+from uuid import uuid4
 _test_dir = os.path.dirname(__file__)
 _server_root = os.path.join(_test_dir, '..', '..')
 for p in [_server_root]:
@@ -23,22 +24,15 @@ _TEST_HOLDINGS = [
 def holdings_test_user_id():
     """持仓写测试使用专用用户，任何情况下都不触碰默认用户 1。"""
     db = TushareDB()
-    username = 'pytest_data_layer_holdings'
+    username = f'pytest_holdings_{uuid4().hex[:16]}'
+    db.execute_raw(
+        "INSERT INTO users(username, display_name) VALUES(%s, %s)",
+        [username, '持仓数据层测试用户'],
+    )
     rows = db.execute_raw(
         "SELECT id FROM users WHERE username=%s", [username]
     )
-    if rows:
-        user_id = rows[0]['id']
-        db.execute_raw("DELETE FROM holdings WHERE user_id=%s", [user_id])
-    else:
-        db.execute_raw(
-            "INSERT INTO users(username, display_name) VALUES(%s, %s)",
-            [username, '持仓数据层测试用户'],
-        )
-        rows = db.execute_raw(
-            "SELECT id FROM users WHERE username=%s", [username]
-        )
-        user_id = rows[0]['id']
+    user_id = rows[0]['id']
 
     yield user_id
 
