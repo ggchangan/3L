@@ -168,7 +168,7 @@ describe('TradingPlan action semantics', () => {
   it('突出重点和次级观察，并默认折叠普通技术信号', () => {
     render(<TradingPlan plan={{
       buy_priority: [
-        { code: '1', name: '重点股', attention_tier: 'focus', decision_status: 'executable', action_type: '买入', momentum_rank: 3, score: 82 },
+        { code: '1', name: '重点股', attention_tier: 'focus', decision_status: 'executable', action_type: '买入', momentum_rank: 3, score: 4, quality_score: 80 },
         { code: '2', name: '观察股', attention_tier: 'watch', decision_status: 'candidate', action_type: '买入' },
         { code: '3', name: '普通信号股', attention_tier: 'ordinary', decision_status: 'signal_only', action_type: '买入' },
       ],
@@ -186,11 +186,24 @@ describe('TradingPlan action semantics', () => {
     expect(screen.getByText('🔥 重点关注 (1)')).toBeTruthy()
     expect(screen.getByText('👀 次级观察 (1)')).toBeTruthy()
     expect(screen.getByText('动量#3')).toBeTruthy()
-    expect(screen.getByText('买点82')).toBeTruthy()
+    expect(screen.getByText('质量80')).toBeTruthy()
     expect(screen.queryByText('普通信号股')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '展开普通技术信号 (1)' }))
     expect(screen.getByText('普通信号股')).toBeTruthy()
+  })
+
+  it('旧缓存没有分层字段时保守归入普通信号', () => {
+    render(<TradingPlan plan={{
+      buy_priority: [
+        { code: '1', name: '旧缓存股票', decision_status: 'executable', action_type: '买入' },
+      ],
+    }} />)
+
+    expect(screen.getByText('重点 0')).toBeTruthy()
+    expect(screen.getByText('普通信号 1')).toBeTruthy()
+    expect(screen.queryByText('🔥 重点关注 (1)')).toBeNull()
+    expect(screen.queryByText('旧缓存股票')).toBeNull()
   })
 })
 
