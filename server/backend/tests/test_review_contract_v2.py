@@ -4,7 +4,7 @@ import threading
 import time
 
 import backend.services.review_service as review_service
-from backend.services.review_compute_service import apply_trading_plan_actions, generate_trading_plan
+from backend.services.review_compute_service import apply_trading_plan_actions, generate_trading_plan, judge_peak_valley
 from backend.services.review_service import normalize_review_response
 
 
@@ -234,6 +234,49 @@ def test_trading_plan_prioritizes_mainline_before_sector_wave_stage():
     )
 
     assert [item['code'] for item in plan['buy_priority']] == ['000002', '000001']
+
+
+def test_trading_plan_uses_momentum_rank_within_same_direction_level():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中'},
+        mainline_data={
+            'lines': [],
+            'all_ranked': [{'name': '第一方向'}, {'name': '第二方向'}],
+        },
+        signals_data={}, existing_holdings=[],
+        buy_signals_review=[
+            {
+                'code': '000002', 'name': '第二名上涨股', 'industry': '第二方向',
+                'action_type': '买入', 'mainline_level': '主线', 'structure': '上涨趋势',
+            },
+            {
+                'code': '000001', 'name': '第一名概念股', 'industry': '普通行业',
+                'direction': '人工方向', 'matched_mainline_direction': '第一方向',
+                'action_type': '买入', 'mainline_level': '主线', 'structure': '区间震荡',
+            },
+        ],
+        opportunity_map={'普通行业': '--', '第二方向': '趋势延续'},
+    )
+
+    assert [item['code'] for item in plan['buy_priority']] == ['000001', '000002']
+    assert [item['momentum_rank'] for item in plan['buy_priority']] == [1, 2]
+
+
+def test_market_regime_is_computed_from_chronological_snapshot():
+    chronological = [
+        {
+            'date': f'2026-04-{index + 1:02d}',
+            'open': 100 + index, 'high': 101 + index, 'low': 99 + index,
+            'close': 100 + index, 'volume': 1000,
+        }
+        for index in range(80)
+    ]
+
+    result = judge_peak_valley(list(reversed(chronological)))
+
+    assert result['market_regime'] == 'strong'
+    assert result['structure'] == '上涨趋势'
+    assert result['ma20'] > result['ma60']
 
 
 def test_trading_plan_action_is_synchronized_to_buy_signal_card():

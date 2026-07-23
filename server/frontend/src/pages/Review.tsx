@@ -119,7 +119,10 @@ export default function Review() {
                 大盘强弱与周期位置
                 <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 先定风险偏好和总仓位</span>
               </div>
-              <MarketCycle />
+              <MarketCycle
+                reviewMarket={data?.market}
+                reviewIndexDate={data?.data_status?.index?.date || data?.market?.data_date}
+              />
             </div>
 
             {/* STEP 2 + 3: 主线动量与板块环境 */}

@@ -185,6 +185,7 @@ export interface BuySignalItem {
   sector?: string
   sector_chg?: number
   mainline_level?: string
+  matched_mainline_direction?: string
   trading_reason?: string
   /** 融合判定字段 */
   triggered_signals?: Array<{
@@ -312,6 +313,11 @@ export interface ReviewData {
     vl_score?: number
     bias20?: number
     bias20_chg_3d?: number
+    ma20?: number
+    ma60?: number
+    structure?: string
+    market_regime?: 'strong' | 'neutral' | 'weak' | 'unknown'
+    data_date?: string
   }
   mainline?: {
     ranking_status?: 'confirmed' | 'estimated' | 'partial' | 'stale'

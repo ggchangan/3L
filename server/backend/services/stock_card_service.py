@@ -139,25 +139,34 @@ def _calc_stop_loss(klines, idx, buy_type=None, entry_idx=None, cost_price=None)
         return None, None
 
 
-def _get_mainline_level(sector, main_line_names, sub_main_names, concept_names=None, concept_main=None, concept_sub=None):
-    """判断主线等级：行业主线优先，概念主线补充"""
+def _get_mainline_match(sector, main_line_names, sub_main_names, concept_names=None, concept_main=None, concept_sub=None):
+    """返回主线等级和实际命中的行业/概念方向。"""
     if not sector:
-        return ''
+        return '', ''
     # 行业主线判定
     if sector in main_line_names:
-        return '主线'
+        return '主线', sector
     elif sector in sub_main_names:
-        return '次级主线'
+        return '次级主线', sector
     # 概念主线补充判定
     if concept_names and concept_main:
-        for cn in concept_names:
-            if cn in concept_main:
-                return '主线'
+        for cn in concept_main:
+            if cn in concept_names:
+                return '主线', cn
     if concept_names and concept_sub:
-        for cn in concept_names:
-            if cn in concept_sub:
-                return '次级主线'
-    return '非主线'
+        for cn in concept_sub:
+            if cn in concept_names:
+                return '次级主线', cn
+    return '非主线', ''
+
+
+def _get_mainline_level(sector, main_line_names, sub_main_names, concept_names=None, concept_main=None, concept_sub=None):
+    """兼容旧调用：只返回主线等级。"""
+    level, _ = _get_mainline_match(
+        sector, main_line_names, sub_main_names,
+        concept_names=concept_names, concept_main=concept_main, concept_sub=concept_sub,
+    )
+    return level
 
 
 def _build_conclusion(card):
@@ -618,10 +627,12 @@ def get_stock_card(code, date_str, market_position='波中',
             stop_loss_pct = round((close - ema20_sl) / close * 100, 2)
 
     # 7. 主线定位（行业+概念双检）
-    mainline_level = _get_mainline_level(sector, main_line_names, sub_main_names,
-                                         concept_names=_stock_concept_names,
-                                         concept_main=concept_main_names,
-                                         concept_sub=concept_sub_names)
+    mainline_level, matched_mainline_direction = _get_mainline_match(
+        sector, main_line_names, sub_main_names,
+        concept_names=_stock_concept_names,
+        concept_main=concept_main_names,
+        concept_sub=concept_sub_names,
+    )
 
     # 7b. 板块对比：个股5日涨幅 vs 板块5日涨幅
     stock_chg_5d = None
@@ -682,6 +693,7 @@ def get_stock_card(code, date_str, market_position='波中',
         'trend_buy_type': trend_buy_type,
         'trend_bias': trend_bias,
         'mainline_level': mainline_level,
+        'matched_mainline_direction': matched_mainline_direction,
         'stop_loss': stop_loss,
         'stop_loss_pct': stop_loss_pct,
         'sector_chg': None,
@@ -743,6 +755,7 @@ def _empty_card(code, name, sector, direction, reason):
         'trend_buy_type': '',
         'trend_bias': '',
         'mainline_level': '',
+        'matched_mainline_direction': '',
         'stop_loss': None,
         'stop_loss_pct': None,
         'sector_chg': None,

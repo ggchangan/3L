@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchAllIndexData, INDEX_CODES_LIST, INDEX_CODE_NAMES } from '../lib/api'
 
-interface MarketData {
+export interface MarketData {
   price?: number | string
   change?: number
   score?: number
@@ -16,12 +16,8 @@ interface MarketData {
   ma20?: number
   ma60?: number
   data_date?: string
-}
-
-interface MarketHealth {
   structure?: string
-  stage?: string
-  data_date?: string
+  market_regime?: MarketRegime
 }
 
 export type MarketRegime = 'strong' | 'neutral' | 'weak' | 'unknown'
@@ -42,34 +38,63 @@ export function classifyMarketRegime(structure?: string, market?: MarketData): M
 
 type TabState = Record<string, { showScore: boolean; showChart: boolean }>
 
-export default function MarketCycle({ mode = 'review' }: { mode?: 'review' | 'monitor' }) {
+interface MarketCycleProps {
+  mode?: 'review' | 'monitor'
+  reviewMarket?: MarketData
+  reviewIndexDate?: string
+}
+
+const normalizeDate = (value?: string) => (value || '').replaceAll('-', '')
+
+export function selectReviewIndexData(
+  fetched: Record<string, MarketData>,
+  reviewMarket?: MarketData,
+  reviewIndexDate?: string,
+  mode: 'review' | 'monitor' = 'review',
+) {
+  const expectedDate = normalizeDate(reviewIndexDate || reviewMarket?.data_date)
+  const compatible: Record<string, MarketData> = {}
+  INDEX_CODES_LIST.forEach(code => {
+    const item = fetched[code]
+    if (!item) return
+    if (mode === 'monitor' || !expectedDate || normalizeDate(item.data_date) === expectedDate) {
+      compatible[code] = item
+    }
+  })
+  if (reviewMarket) {
+    compatible['000985'] = {
+      ...compatible['000985'],
+      ...reviewMarket,
+      data_date: reviewIndexDate || reviewMarket.data_date,
+    }
+  }
+  return compatible
+}
+
+export function resolveActiveIndexCode(data: Record<string, MarketData>, activeCode: string) {
+  if (data[activeCode]) return activeCode
+  return INDEX_CODES_LIST.find(code => data[code]) || ''
+}
+
+export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndexDate }: MarketCycleProps) {
   const [allData, setAllData] = useState<Record<string, MarketData> | null>(null)
   const [activeTab, setActiveTab] = useState<string>('000985')
   const [tabStates, setTabStates] = useState<TabState>({})
   const [loading, setLoading] = useState(true)
-  const [health, setHealth] = useState<MarketHealth | null>(null)
 
   useEffect(() => {
     setLoading(true)
     fetchAllIndexData().then(data => {
-      setAllData(data as Record<string, MarketData>)
+      const fetched = data as Record<string, MarketData>
+      setAllData(selectReviewIndexData(fetched, reviewMarket, reviewIndexDate, mode))
       setLoading(false)
     }).catch(() => {
       const fallback: Record<string, MarketData> = {}
-      INDEX_CODES_LIST.forEach(code => {
-        fallback[code] = { price: '--', position: '波中', position_pct: '半仓', strategy: '中等仓位·精选个股' }
-      })
+      fallback['000985'] = reviewMarket || { price: '--', position: '波中', position_pct: '半仓', strategy: '中等仓位·精选个股' }
       setAllData(fallback)
       setLoading(false)
     })
-  }, [])
-
-  useEffect(() => {
-    fetch('/api/market-health')
-      .then(r => r.ok ? r.json() : null)
-      .then(setHealth)
-      .catch(() => setHealth(null))
-  }, [])
+  }, [mode, reviewMarket, reviewIndexDate])
 
   const getTabState = (code: string) => tabStates[code] || { showScore: false, showChart: false }
   const setTabState = (code: string, patch: Partial<{ showScore: boolean; showChart: boolean }>) => {
@@ -81,7 +106,9 @@ export default function MarketCycle({ mode = 'review' }: { mode?: 'review' | 'mo
 
   if (loading || !allData) return <div className="empty">加载中...</div>
 
-  const current = allData[activeTab]
+  const availableCodes = INDEX_CODES_LIST.filter(code => allData[code])
+  const selectedCode = resolveActiveIndexCode(allData, activeTab)
+  const current = allData[selectedCode]
   if (!current) return <div className="empty">暂无数据</div>
 
   const change = current.change || 0
@@ -98,9 +125,10 @@ export default function MarketCycle({ mode = 'review' }: { mode?: 'review' | 'mo
     : vl >= 1 ? '🔸 满足1个条件'
     : '— 无波谷信号'
 
-  const ts = getTabState(activeTab)
+  const ts = getTabState(selectedCode)
   const primary = allData['000985'] || current
-  const regime = classifyMarketRegime(health?.structure, primary)
+  const regime = primary.market_regime || classifyMarketRegime(primary.structure, primary)
+  const hiddenIndexCount = INDEX_CODES_LIST.length - availableCodes.length
   const regimeConfig = {
     strong: {
       title: '强势市场',
@@ -136,19 +164,25 @@ export default function MarketCycle({ mode = 'review' }: { mode?: 'review' | 'mo
           <span>{regimeConfig.detail}</span>
         </div>
         <div className="market-regime-meta">
-          <span>趋势：{health?.structure || '--'}</span>
+          <span>趋势：{primary.structure || '--'}</span>
           <span>周期：{primary.position || '--'}</span>
           <span>建议仓位：{primary.position_pct || '--'}</span>
-          {(health?.data_date || primary.data_date) && <span>数据：{health?.data_date || primary.data_date}</span>}
+          {(reviewIndexDate || primary.data_date) && <span>数据：{reviewIndexDate || primary.data_date}</span>}
         </div>
       </div>
 
+      {hiddenIndexCount > 0 && (
+        <div className="market-index-date-note">
+          其他 {hiddenIndexCount} 个指数缺少本次复盘交易日数据，已隐藏，避免混用当前行情。
+        </div>
+      )}
+
       {/* Tab Bar */}
       <div className="index-tab-bar">
-        {INDEX_CODES_LIST.map(code => (
+        {availableCodes.map(code => (
           <button
             key={code}
-            className={`index-tab ${activeTab === code ? 'active' : ''}`}
+            className={`index-tab ${selectedCode === code ? 'active' : ''}`}
             onClick={() => setActiveTab(code)}
           >
             {INDEX_CODE_NAMES[code] || code}
@@ -159,7 +193,7 @@ export default function MarketCycle({ mode = 'review' }: { mode?: 'review' | 'mo
       {/* Current Tab Content */}
       <div className="grid-4" id="marketGrid">
         <div className="info-card">
-          <div className="label">{INDEX_CODE_NAMES[activeTab] || activeTab}</div>
+          <div className="label">{INDEX_CODE_NAMES[selectedCode] || selectedCode}</div>
           <div className={priceClass}>{current.price || '--'}</div>
           <div className="meta" id="marketChange">涨跌 {change ? `${change >= 0 ? '+' : ''}${change}%` : '--'}</div>
         </div>
@@ -222,11 +256,11 @@ export default function MarketCycle({ mode = 'review' }: { mode?: 'review' | 'mo
           </tbody>
         </table>
         <div style={{ marginTop: 6, textAlign: 'right' }}>
-          <span style={{ cursor: 'pointer', color: '#4ecdc4', fontSize: 12 }} onClick={() => setTabState(activeTab, { showScore: !ts.showScore })}>
+          <span style={{ cursor: 'pointer', color: '#4ecdc4', fontSize: 12 }} onClick={() => setTabState(selectedCode, { showScore: !ts.showScore })}>
             📊 {ts.showScore ? '隐藏' : '查看'}评分明细
           </span>
           <span style={{ color: '#333', margin: '0 6px' }}>|</span>
-          <span style={{ cursor: 'pointer', color: '#e94560', fontSize: 12 }} onClick={() => setTabState(activeTab, { showChart: !ts.showChart })}>
+          <span style={{ cursor: 'pointer', color: '#e94560', fontSize: 12 }} onClick={() => setTabState(selectedCode, { showChart: !ts.showChart })}>
             📈 {ts.showChart ? '隐藏' : '查看'}关键点图
           </span>
         </div>
@@ -235,20 +269,20 @@ export default function MarketCycle({ mode = 'review' }: { mode?: 'review' | 'mo
       {ts.showChart && (
         <div style={{ marginTop: 8 }}>
           <div style={{ width: '100%', maxWidth: 750, height: 550, overflow: 'hidden', borderRadius: 8, margin: '0 auto' }}>
-            <img src={`/api/index-chart?code=${activeTab}&mode=${mode}`} alt={`${INDEX_CODE_NAMES[activeTab]}关键点图`}
+            <img src={`/api/index-chart?code=${selectedCode}&mode=${mode}`} alt={`${INDEX_CODE_NAMES[selectedCode]}关键点图`}
               style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
           </div>
         </div>
       )}
 
       {/* Comparison Table */}
-      <IndexComparison data={allData} />
+      <IndexComparison data={allData} codes={availableCodes} />
     </>
   )
 }
 
-function IndexComparison({ data }: { data: Record<string, MarketData> }) {
-  const entries = INDEX_CODES_LIST.map(code => ({
+function IndexComparison({ data, codes }: { data: Record<string, MarketData>; codes: readonly string[] }) {
+  const entries = codes.map(code => ({
     code,
     name: INDEX_CODE_NAMES[code] || code,
     ...data[code] || {},
