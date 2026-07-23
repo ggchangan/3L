@@ -26,8 +26,9 @@ export default function TradingPlan({ plan }: Props) {
   const [showOrdinary, setShowOrdinary] = useState(false)
   if (!plan) return <div className="empty">暂无交易计划</div>
   const buyItems = plan.buy_priority || []
-  const tierOf = (item: any) => item.attention_tier
-    || (item.decision_status === 'executable' ? 'focus' : item.decision_status === 'candidate' ? 'watch' : 'ordinary')
+  // 旧缓存没有分层字段，必须保守归为普通信号，不能把历史 executable
+  // 直接升级成“重点关注”。
+  const tierOf = (item: any) => item.attention_tier || 'ordinary'
   const focusItems = buyItems.filter(item => tierOf(item) === 'focus')
   const watchItems = buyItems.filter(item => tierOf(item) === 'watch')
   const ordinaryItems = buyItems.filter(item => tierOf(item) === 'ordinary')
@@ -176,7 +177,7 @@ function BuyActionTable({ title, items }: { title: string; items: any[] }) {
           <span style={{color: chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginRight: 6}}>{chg >= 0 ? '+' : ''}{chg}%</span>
           {item.is_main && <span className="tag red" style={{fontSize:9}}>主线</span>}
           {item.momentum_rank && item.momentum_rank < 10000 && <span style={{ color: '#58a6ff', fontSize: 9, marginLeft: 4 }}>动量#{item.momentum_rank}</span>}
-          {item.score != null && <span style={{ color: '#aaa', fontSize: 9, marginLeft: 4 }}>买点{item.score}</span>}
+          {item.quality_score != null && <span style={{ color: '#aaa', fontSize: 9, marginLeft: 4 }}>质量{item.quality_score}</span>}
         </>
       }}
     />
