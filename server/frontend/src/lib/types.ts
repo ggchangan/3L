@@ -209,6 +209,7 @@ export interface BuySignalItem {
   attention_tier?: 'focus' | 'watch' | 'ordinary'
   attention_reason?: string
   momentum_rank?: number
+  quality_score?: number | null
 }
 
 /** 止损预警API返回类型 */
