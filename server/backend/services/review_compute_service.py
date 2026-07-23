@@ -356,6 +356,21 @@ def classify_opportunity(is_mainline, is_secondary, stage, vl_score):
     return '--'
 
 
+def describe_sector_context(opportunity, mainline_level=''):
+    """把兼容字段 opportunity 转成不越权的板块环境描述。"""
+    labels = {
+        '主线回调': '主线·波谷',
+        '次线机会': '次级主线·波谷',
+        '波谷观察': '非主线·波谷',
+        '趋势延续': f'{mainline_level or "强动量"}·上升/波中',
+        '见顶风险': f'{mainline_level or "板块"}·波峰风险',
+        '回调中': f'{mainline_level or "板块"}·下跌/回调',
+        '主线观察': '主线·阶段待确认',
+        '次级观察': '次级主线·阶段待确认',
+    }
+    return labels.get(opportunity, opportunity or '--')
+
+
 # ═══════════════════════════════════════════════════════════════
 # ② 动量主线
 # ═══════════════════════════════════════════════════════════════
@@ -968,7 +983,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             sig = h.get('signal', 'hold')
             stage = h.get('stage', '')
             struct = h.get('structure', '')
-            # 查询所属板块的机会类型
+            # 查询所属板块环境（opportunity 为兼容字段名）
             sec_name = h.get('industry') or h.get('sector', '')
             sec_opp = '--'
             sec_opp_reason = ''
@@ -984,7 +999,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             # 构建推理链：大盘→板块→个股
             chain_parts = [market_tag]
             if sec_name and sec_opp and sec_opp != '--':
-                chain_parts.append(f'{sec_name}·{sec_opp}')
+                chain_parts.append(f'{sec_name}·{describe_sector_context(sec_opp, h.get("mainline_level", ""))}')
             elif sec_name and sec_opp_reason:
                 chain_parts.append(f'{sec_name}·{sec_opp_reason}')
             elif sec_name:
@@ -999,6 +1014,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'industry': sec_name,
                 'sector': sec_name,
                 'opportunity': sec_opp,
+                'sector_context': describe_sector_context(sec_opp, h.get('mainline_level', '')),
                 'opp_reason': sec_opp_reason,
                 'mainline_level': h.get('mainline_level', ''),
                 'is_main': h.get('mainline_level', '') in ('主线', '次级主线'),
@@ -1023,7 +1039,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
 
     if buy_signals_review:
         for bs in buy_signals_review:
-            # 通过 sector 名称在 opportunity_map 中查找该股票所属方向的机会类型
+            # 通过 sector 名称在兼容映射中查找该股票所属板块环境
             sec_name = bs.get('industry') or bs.get('sector', '')
             direction = bs.get('direction', '')
             bs_opp = '--'
@@ -1075,10 +1091,11 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'sector': sec_name,
                 'direction': direction,
                 'opportunity': bs_opp,
+                'sector_context': describe_sector_context(bs_opp, bs.get('mainline_level', '')),
                 'opp_reason': opp_reason,
                 'decision_status': decision_status,
                 'data_quality': 'sector_unavailable' if sector_unavailable else 'ready',
-                'reason': f'{market_tag}→{sec_name}·{bs_opp}→{bs.get("structure", "--")}·{bs.get("stage", "--")}' if bs_opp and bs_opp != '--' else f'{market_tag}→{opp_reason}' if opp_reason else '',
+                'reason': f'{market_tag}→{sec_name}·{describe_sector_context(bs_opp, bs.get("mainline_level", ""))}→{bs.get("structure", "--")}·{bs.get("stage", "--")}' if bs_opp and bs_opp != '--' else f'{market_tag}→{opp_reason}' if opp_reason else '',
                 'priority': pri,
                 'triggered_signals': bs.get('triggered_signals', []),
                 'fusion_type': bs.get('fusion_type', ''),
@@ -1089,7 +1106,8 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     PRIORITY_ORDER = {'高': 0, '中': 1, '低': 2}
     plan['holdings_action'].sort(key=lambda x: PRIORITY_ORDER.get(x.get('priority', '中'), 2))
 
-    # 排序：关注买点 机会类型优先级 > 主线级 > 趋势状态
+    # 排序：主线/动量方向优先，个股结构其次，板块阶段只作末级环境提示。
+    # 不能用板块是否处于波谷替代个股买点，也不能让非波谷主线排到非主线之后。
     OPP_ORDER = {
         '主线回调': 0, '次线机会': 1, '潜在主线': 2,
         '趋势延续': 3, '回调中': 4, '见顶风险': 5, '--': 6,
@@ -1097,9 +1115,9 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     MAINLINE_ORDER = {'主线': 0, '次级主线': 1}
     STRUCTURE_ORDER = {'上涨趋势': 0, '区间震荡': 1, '区间中段': 1, '区间底部': 1, '区间顶部': 2, '下降趋势': 3}
     plan['buy_priority'].sort(key=lambda x: (
-        OPP_ORDER.get(x.get('opportunity', '--'), 5),
         MAINLINE_ORDER.get(x.get('mainline_level', ''), 2),
         STRUCTURE_ORDER.get(x.get('structure', ''), 4),
+        OPP_ORDER.get(x.get('opportunity', '--'), 5),
         -(x.get('change', 0) or 0),
     ))
 

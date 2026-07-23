@@ -36,21 +36,12 @@ interface Props {
 
 const TAB_STYLE_BASE = { padding: '6px 16px', fontSize: 13, borderRadius: '6px 6px 0 0', cursor: 'pointer', border: 'none', fontWeight: 600 } as const
 
-// 机会类型配置：emoji + 颜色 + 显示顺序
-const OPP_GROUPS: { key: string; label: string; emoji: string; color: string; bg: string }[] = [
-  { key: '主线回调', label: '主线回调机会', emoji: '🎯', color: '#e94560', bg: 'rgba(233,69,96,0.12)' },
-  { key: '次线机会', label: '次线机会', emoji: '🎯', color: '#ffd700', bg: 'rgba(255,215,0,0.1)' },
-  { key: '波谷观察', label: '波谷观察', emoji: '🔮', color: '#4ecdc4', bg: 'rgba(78,205,196,0.1)' },
-  { key: '趋势延续', label: '趋势延续', emoji: '📈', color: '#44aa44', bg: 'rgba(68,170,68,0.08)' },
-  { key: '见顶风险', label: '见顶风险', emoji: '⚠️', color: '#ff6b00', bg: 'rgba(255,107,0,0.1)' },
-  { key: '回调中', label: '回调中', emoji: '📉', color: '#888', bg: 'rgba(136,136,136,0.06)' },
-  { key: '主线观察', label: '主线观察', emoji: '👀', color: '#666', bg: 'rgba(102,102,102,0.06)' },
-  { key: '次级观察', label: '次级观察', emoji: '👀', color: '#666', bg: 'rgba(102,102,102,0.06)' },
-]
-
-// 将 opp key 映射到分组索引
-const OPP_GROUP_ORDER: Record<string, number> = {}
-OPP_GROUPS.forEach((g, i) => { OPP_GROUP_ORDER[g.key] = i })
+// 主线/动量决定方向优先级；板块量价阶段只在行内提供环境提示。
+const DIRECTION_GROUPS = [
+  { key: 'mainline', label: '主线方向', emoji: '🔥', color: '#e94560', bg: 'rgba(233,69,96,0.10)' },
+  { key: 'secondary', label: '次级主线', emoji: '⚡', color: '#ffd700', bg: 'rgba(255,215,0,0.08)' },
+  { key: 'other', label: '其他动量方向', emoji: '📊', color: '#888', bg: 'rgba(136,136,136,0.05)' },
+] as const
 
 const STAGE_ICONS: Record<string, string> = {
   '波谷': '🟢', '波峰': '🔴', '上涨': '📈', '下跌': '📉', '波中': '➡️',
@@ -129,20 +120,14 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
 
   if (!data) return <div className="empty">暂无主线数据</div>
 
-  // 按机会类型分组
-  const groups: Record<string, LineItem[]> = {}
-  for (const item of allRanked) {
-    const opp = item.opportunity || '--'
-    if (!groups[opp]) groups[opp] = []
-    groups[opp].push(item)
-  }
-
-  // 组排序
-  const sortedGroups = Object.entries(groups).sort(([a], [b]) => {
-    const oa = OPP_GROUP_ORDER[a] ?? 99
-    const ob = OPP_GROUP_ORDER[b] ?? 99
-    return oa - ob
-  })
+  const directionGroups = DIRECTION_GROUPS.map(group => ({
+    ...group,
+    items: allRanked.filter(item => {
+      if (group.key === 'mainline') return mainNames.has(item.name)
+      if (group.key === 'secondary') return secNames.has(item.name)
+      return !mainNames.has(item.name) && !secNames.has(item.name)
+    }),
+  }))
 
   // 计算完整的 top10 排名
   const top10 = allRanked.slice(0, 10)
@@ -221,25 +206,22 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
         </div>
       )}
 
-      {/* 按机会类型分组展示 */}
-      {sortedGroups.map(([opp, items]) => {
-        const groupConfig = OPP_GROUPS.find(g => g.key === opp)
-        const emoji = groupConfig?.emoji || '📋'
-        const label = groupConfig?.label || '其他'
-        const color = groupConfig?.color || '#888'
-        const bg = groupConfig?.bg || 'rgba(255,255,255,0.02)'
-        const isOther = opp === '--'
-        const isCollapsible = isOther || opp === '回调中' || opp === '次级观察'
+      <div style={{ marginBottom: 12, color: '#888', fontSize: 11, lineHeight: 1.6 }}>
+        阅读顺序：先看主线/次级主线的动量排名，再看板块所处阶段。波谷是加分项，波中和波峰中的个股仍可能出现有效买点。
+      </div>
 
+      {/* 按方向层级展示，避免用板块阶段替代机会判断 */}
+      {directionGroups.map(({ key, items, emoji, label, color, bg }) => {
+        const isOther = key === 'other'
         return (
           <GroupSection
-            key={opp}
+            key={key}
             emoji={emoji}
             label={label}
             color={color}
             bg={bg}
             count={items.length}
-            defaultCollapsed={isCollapsible}
+            defaultCollapsed={isOther}
           >
             {items.slice(0, isOther ? 10 : undefined).map((item, i) => {
               const stage = item.stage || '--'
@@ -273,11 +255,9 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
                   {persistDays[item.name] ? (
                     <span style={{ color: '#888', fontSize: 10 }}>{persistDays[item.name]}天</span>
                   ) : null}
-                  {opp !== '--' && (
-                    <span style={{ color, fontSize: 10, fontWeight: 600 }}>
-                      {emoji} {opp}
-                    </span>
-                  )}
+                  <span style={{ color, fontSize: 10, fontWeight: 600 }}>
+                    {key === 'mainline' ? '主线' : key === 'secondary' ? '次级主线' : `动量#${allRanked.indexOf(item) + 1}`}
+                  </span>
                   {leaders.length > 0 && (
                     <span
                       onClick={() => setExpandedLeader(showLeaders ? null : item.name)}
@@ -338,7 +318,7 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
               <th>20日涨幅</th>
               <th>今日涨跌</th>
               <th>阶段</th>
-              <th>机会类型</th>
+              <th>方向层级</th>
               <th>变动</th>
               <th>天数</th>
             </tr>
@@ -348,10 +328,8 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
               const days = persistDays[l.name] || 0
               const stage = l.stage || '--'
               const stageIcon = STAGE_ICONS[stage] || '•'
-              const opp = l.opportunity || '--'
-              const oppConfig = OPP_GROUPS.find(g => g.key === opp)
-              const oppLabel = oppConfig ? `${oppConfig.emoji} ${opp}` : opp
-              const oppColor = oppConfig?.color || '#888'
+              const level = mainNames.has(l.name) ? '主线' : secNames.has(l.name) ? '次级主线' : '其他动量'
+              const levelColor = level === '主线' ? '#e94560' : level === '次级主线' ? '#ffd700' : '#888'
 
               let chgDisplay = <span style={{ color: '#555' }}>--</span>
               if (prevRanked.length) {
@@ -382,8 +360,8 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
                   <td style={{ color: STAGE_COLORS[stage] || '#888', fontSize: 11 }}>
                     {stageIcon} {stage}
                   </td>
-                  <td style={{ color: oppColor, fontSize: 11, fontWeight: 600 }}>
-                    {oppLabel}
+                  <td style={{ color: levelColor, fontSize: 11, fontWeight: 600 }}>
+                    {level}
                   </td>
                   <td style={{ fontSize: 11 }}>{chgDisplay}</td>
                   <td>{days > 0 ? days + '天' : '--'}</td>
@@ -393,7 +371,7 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
           </tbody>
         </table>
         <div style={{ marginTop: 4, color: '#555', fontSize: 10, textAlign: 'right' }}>
-          20日涨幅排序 · 分组: 机会类型优先级
+          20日涨幅排序 · 方向层级优先展示 · 板块阶段仅作环境提示
         </div>
       </details>
     </>

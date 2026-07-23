@@ -1,5 +1,6 @@
 /** 换算阶段图标 */
 import { useState } from 'react'
+import { formatSectorEnvironment } from '../lib/review'
 const STAGE_ICONS: Record<string, string> = {
   '上行': '↑', '加速': '🚀', '缩量整理': '🔄', '滞涨': '⚠️',
   '转弱': '📉', '下行': '↓', '加速跌': '📉', '转强': '📈',
@@ -160,7 +161,7 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
         {bpContent}
         {slContent}
         {sectorLine}
-        {/* 机会类型标注 */}
+        {/* 板块层只提供环境提示，不替代个股买点 */}
         {(() => {
           const secName = s.sector || s.direction || ''
           const opp = opportunityMap && secName ? opportunityMap[secName] : (s as any).opportunity
@@ -170,10 +171,11 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
             '趋势延续': '#44aa44', '见顶风险': '#ff6b00', '回调中': '#888',
           }
           const color = oppColors[opp] || '#888'
+          const environment = formatSectorEnvironment(opp, s.mainline_level)
           return (
             <div className="field">
-              <span className="l">方向机会:</span>
-              <span className="v" style={{ color, fontSize: 11, fontWeight: 600 }}>{opp}</span>
+              <span className="l">板块环境:</span>
+              <span className="v" style={{ color, fontSize: 11, fontWeight: 600 }}>{environment}</span>
             </div>
           )
         })()}

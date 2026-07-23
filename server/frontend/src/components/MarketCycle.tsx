@@ -13,6 +13,31 @@ interface MarketData {
   vl_score?: number
   bias20?: number
   bias20_chg_3d?: number
+  ma20?: number
+  ma60?: number
+  data_date?: string
+}
+
+interface MarketHealth {
+  structure?: string
+  stage?: string
+  data_date?: string
+}
+
+export type MarketRegime = 'strong' | 'neutral' | 'weak' | 'unknown'
+
+export function classifyMarketRegime(structure?: string, market?: MarketData): MarketRegime {
+  if (structure === '上涨趋势') return 'strong'
+  if (structure === '下降趋势') return 'weak'
+  if (structure === '区间震荡') return 'neutral'
+
+  const price = Number(market?.price)
+  const ma20 = Number(market?.ma20)
+  const ma60 = Number(market?.ma60)
+  if (![price, ma20, ma60].every(Number.isFinite) || ma20 <= 0 || ma60 <= 0) return 'unknown'
+  if (price >= ma20 && ma20 >= ma60) return 'strong'
+  if (price < ma20 && ma20 < ma60) return 'weak'
+  return 'neutral'
 }
 
 type TabState = Record<string, { showScore: boolean; showChart: boolean }>
@@ -22,6 +47,7 @@ export default function MarketCycle({ mode = 'review' }: { mode?: 'review' | 'mo
   const [activeTab, setActiveTab] = useState<string>('000985')
   const [tabStates, setTabStates] = useState<TabState>({})
   const [loading, setLoading] = useState(true)
+  const [health, setHealth] = useState<MarketHealth | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -36,6 +62,13 @@ export default function MarketCycle({ mode = 'review' }: { mode?: 'review' | 'mo
       setAllData(fallback)
       setLoading(false)
     })
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/market-health')
+      .then(r => r.ok ? r.json() : null)
+      .then(setHealth)
+      .catch(() => setHealth(null))
   }, [])
 
   const getTabState = (code: string) => tabStates[code] || { showScore: false, showChart: false }
@@ -66,9 +99,50 @@ export default function MarketCycle({ mode = 'review' }: { mode?: 'review' | 'mo
     : '— 无波谷信号'
 
   const ts = getTabState(activeTab)
+  const primary = allData['000985'] || current
+  const regime = classifyMarketRegime(health?.structure, primary)
+  const regimeConfig = {
+    strong: {
+      title: '强势市场',
+      badge: '允许积极寻找买点',
+      detail: '中证全指处于上涨趋势。优先在主线和强动量方向中选择个股买点，板块阶段用于加分和风险提示。',
+    },
+    neutral: {
+      title: '震荡市场',
+      badge: '控制节奏，精选个股',
+      detail: '中证全指处于区间震荡。降低出手频率，优先选择强方向中的高质量个股买点。',
+    },
+    weak: {
+      title: '弱势市场',
+      badge: '收缩仓位，严格止损',
+      detail: '中证全指处于下降趋势。提高买点要求，控制总仓位并优先处理风险。',
+    },
+    unknown: {
+      title: '市场强弱待确认',
+      badge: '数据不足',
+      detail: '当前缺少足够的趋势数据，暂不生成强弱结论，请结合仓位建议谨慎执行。',
+    },
+  }[regime]
 
   return (
     <>
+      <div className={`market-regime-banner ${regime}`}>
+        <div>
+          <div className="market-regime-label">当前市场定性</div>
+          <div className="market-regime-title">{regimeConfig.title}</div>
+        </div>
+        <div className="market-regime-copy">
+          <strong>{regimeConfig.badge}</strong>
+          <span>{regimeConfig.detail}</span>
+        </div>
+        <div className="market-regime-meta">
+          <span>趋势：{health?.structure || '--'}</span>
+          <span>周期：{primary.position || '--'}</span>
+          <span>建议仓位：{primary.position_pct || '--'}</span>
+          {(health?.data_date || primary.data_date) && <span>数据：{health?.data_date || primary.data_date}</span>}
+        </div>
+      </div>
+
       {/* Tab Bar */}
       <div className="index-tab-bar">
         {INDEX_CODES_LIST.map(code => (

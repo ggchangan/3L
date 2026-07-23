@@ -163,6 +163,7 @@ def test_trading_plan_joins_opportunity_by_canonical_industry():
     assert item['industry'] == '数字芯片设计'
     assert item['sector'] == '数字芯片设计'
     assert item['opportunity'] == '主线回调'
+    assert item['sector_context'] == '主线·波谷'
     assert item['opp_reason'] == ''
     assert item['decision_status'] == 'executable'
     assert item['data_quality'] == 'ready'
@@ -211,6 +212,28 @@ def test_trading_plan_keeps_buy_action_when_covered_industry_has_no_opportunity_
     assert item['action_type'] == '买入'
     assert item['decision_status'] == 'executable'
     assert item['data_quality'] == 'ready'
+
+
+def test_trading_plan_prioritizes_mainline_before_sector_wave_stage():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中'},
+        mainline_data={'lines': []},
+        signals_data={},
+        existing_holdings=[],
+        buy_signals_review=[
+            {
+                'code': '000001', 'name': '非主线波谷股', 'industry': '波谷行业',
+                'action_type': '买入', 'mainline_level': '', 'structure': '上涨趋势',
+            },
+            {
+                'code': '000002', 'name': '主线波峰股', 'industry': '波峰行业',
+                'action_type': '买入', 'mainline_level': '主线', 'structure': '下降趋势',
+            },
+        ],
+        opportunity_map={'波谷行业': '主线回调', '波峰行业': '见顶风险'},
+    )
+
+    assert [item['code'] for item in plan['buy_priority']] == ['000002', '000001']
 
 
 def test_trading_plan_action_is_synchronized_to_buy_signal_card():

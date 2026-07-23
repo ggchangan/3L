@@ -1,4 +1,5 @@
 import type { ReviewData } from '../lib/types'
+import { formatSectorEnvironment } from '../lib/review'
 
 interface Props {
   plan: ReviewData['trading_plan']
@@ -6,19 +7,19 @@ interface Props {
 
 const PRI_COLORS: Record<string, string> = { '高': '#e94560', '中': '#ffd700', '低': '#888' }
 
-const OPP_CFG: Record<string, { emoji: string; color: string; order: number }> = {
-  '主线回调': { emoji: '🎯', color: '#e94560', order: 0 },
-  '次线机会': { emoji: '🎯', color: '#ffd700', order: 1 },
-  '波谷观察': { emoji: '🔮', color: '#4ecdc4', order: 2 },
-  '趋势延续': { emoji: '📈', color: '#44aa44', order: 3 },
-  '回调中': { emoji: '📉', color: '#888', order: 4 },
-  '见顶风险': { emoji: '⚠️', color: '#ff6b00', order: 5 },
-  '主线观察': { emoji: '👀', color: '#666', order: 6 },
-  '次级观察': { emoji: '👀', color: '#666', order: 7 },
-  '其他': { emoji: '⚪', color: '#555', order: 99 },
+const DIRECTION_CFG: Record<string, { emoji: string; color: string; order: number }> = {
+  '主线': { emoji: '🔥', color: '#e94560', order: 0 },
+  '次级主线': { emoji: '⚡', color: '#ffd700', order: 1 },
+  '其他方向': { emoji: '📊', color: '#888', order: 2 },
 }
-const OPP_ORDER: Record<string, number> = {}
-Object.entries(OPP_CFG).forEach(([k, v]) => { OPP_ORDER[k] = v.order })
+const DIRECTION_ORDER: Record<string, number> = {}
+Object.entries(DIRECTION_CFG).forEach(([k, v]) => { DIRECTION_ORDER[k] = v.order })
+
+function directionGroup(item: any) {
+  return item.mainline_level === '主线' || item.mainline_level === '次级主线'
+    ? item.mainline_level
+    : '其他方向'
+}
 
 export default function TradingPlan({ plan }: Props) {
   if (!plan) return <div className="empty">暂无交易计划</div>
@@ -42,7 +43,7 @@ export default function TradingPlan({ plan }: Props) {
       <UnifiedTable
         title="📦 个股操作"
         items={plan.holdings_action}
-        groupKey={g => g.opportunity || '其他'}
+        groupKey={directionGroup}
         renderAction={item => {
           const c = PRI_COLORS[item.priority] || '#888'
           return <span style={{ color: c, fontWeight: 600 }}>{item.action_type || item.action}</span>
@@ -79,7 +80,7 @@ export default function TradingPlan({ plan }: Props) {
         }}
       />
 
-      {/* 机会类型用于排序；“操作”始终表达买入或待确认。 */}
+      {/* 买点按方向层级阅读；“操作”始终表达买入或待确认。 */}
       <BuyActionTable title={`🎯 关注买点 (${buyItems.length})`} items={buyItems} />
 
       {plan.risk_items?.length ? (
@@ -102,7 +103,7 @@ function BuyActionTable({ title, items }: { title: string; items: any[] }) {
     <UnifiedTable
       title={title}
       items={items}
-      groupKey={g => g.opportunity || '其他'}
+      groupKey={directionGroup}
       renderAction={item => {
         const action = item.action_type || '买入'
         const color = action === '待确认' ? '#ffd700' : PRI_COLORS[item.priority] || '#22c55e'
@@ -149,17 +150,17 @@ function UnifiedTable({ title, items, groupKey, renderAction, renderSignal, rend
     if (!groups[k]) groups[k] = []
     groups[k].push(item)
   }
-  const sorted = Object.entries(groups).sort(([a], [b]) => (OPP_ORDER[a] ?? 99) - (OPP_ORDER[b] ?? 99))
+  const sorted = Object.entries(groups).sort(([a], [b]) => (DIRECTION_ORDER[a] ?? 99) - (DIRECTION_ORDER[b] ?? 99))
 
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ marginBottom: 6 }}><strong style={{ color: '#4ecdc4', fontSize: 13 }}>{title}</strong></div>
-      {sorted.map(([opp, rows]) => {
-        const cfg = OPP_CFG[opp] || { emoji: '📋', color: '#888', order: 99 }
+      {sorted.map(([direction, rows]) => {
+        const cfg = DIRECTION_CFG[direction] || { emoji: '📋', color: '#888', order: 99 }
         return (
-          <div key={opp} style={{ marginBottom: 8 }}>
+          <div key={direction} style={{ marginBottom: 8 }}>
             <div style={{ color: cfg.color, fontSize: 11, fontWeight: 600, marginBottom: 3 }}>
-              {cfg.emoji} {opp} ({rows.length})
+              {cfg.emoji} {direction} ({rows.length})
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <colgroup>
@@ -177,7 +178,7 @@ function UnifiedTable({ title, items, groupKey, renderAction, renderSignal, rend
                   <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>操作</th>
                   <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>信号</th>
                   <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>止损</th>
-                  <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>板块</th>
+                  <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>板块环境</th>
                   <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>原因</th>
                   <th style={{ textAlign: 'right', padding: '2px 4px', borderBottom: '1px solid #333' }}>优先</th>
                 </tr>
@@ -202,8 +203,8 @@ function UnifiedTable({ title, items, groupKey, renderAction, renderSignal, rend
                         </span>
                       ) : null}
                     </td>
-                    <td style={{ padding: '3px 4px', whiteSpace: 'nowrap', color: '#555', fontSize: 10 }}>
-                      {item.sector || ''}
+                    <td style={{ padding: '3px 4px', whiteSpace: 'nowrap', color: '#777', fontSize: 10 }}>
+                      {item.sector || ''}{item.opportunity && item.opportunity !== '--' ? ` · ${formatSectorEnvironment(item.opportunity, item.mainline_level)}` : ''}
                     </td>
                     <td style={{ padding: '3px 4px', color: '#888', fontSize: 10, wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', minWidth: 80 }}>
                       {item.reason}
