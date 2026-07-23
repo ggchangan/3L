@@ -272,23 +272,23 @@ def test_trading_plan_separates_focus_watch_and_ordinary_signals_in_weak_market(
         buy_signals_review=[
             {
                 'code': '000001', 'name': '主线买点', 'industry': '普通行业',
-                'mainline_level': '主线', 'score': 80, 'action_type': '买入',
+                'mainline_level': '主线', 'score': 4, 'action_type': '买入',
             },
             {
                 'code': '000002', 'name': '强动量买点', 'industry': '方向1',
-                'score': 70, 'action_type': '买入',
+                'score': 3, 'action_type': '买入',
             },
             {
                 'code': '000003', 'name': '次级观察', 'industry': '方向30',
-                'score': 75, 'action_type': '买入',
+                'score': 5, 'action_type': '买入',
             },
             {
                 'code': '000004', 'name': '低质量信号', 'industry': '方向2',
-                'score': 4, 'action_type': '买入',
+                'score': 2, 'action_type': '买入',
             },
             {
                 'code': '000005', 'name': '普通方向信号', 'industry': '方向51',
-                'score': 80, 'action_type': '买入',
+                'score': 4, 'action_type': '买入',
             },
         ],
         opportunity_map={
@@ -313,7 +313,113 @@ def test_trading_plan_separates_focus_watch_and_ordinary_signals_in_weak_market(
     assert plan['buy_priority'][0]['priority'] == '中'
     low_quality = next(item for item in plan['buy_priority'] if item['code'] == '000004')
     assert low_quality['decision_status'] == 'signal_only'
-    assert '买点质量分4' in low_quality['attention_reason']
+    assert low_quality['quality_score'] == 40
+    assert '买点质量40' in low_quality['attention_reason']
+
+
+def test_trading_plan_reduce_filter_never_marks_focus_as_executable():
+    plan = generate_trading_plan(
+        market_cycle={
+            'position': '偏波峰', 'market_regime': 'strong',
+            'pk_score': 5, 'bias20': 12,
+        },
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '主线买点', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['attention_tier'] == 'focus'
+    assert item['quality_score'] == 80
+    assert item['decision_status'] == 'candidate'
+    assert item['priority'] == '中'
+    assert '高位或加速阶段' in plan['buy_summary']['conclusion']
+
+
+def test_trading_plan_rest_filter_never_marks_focus_as_executable():
+    plan = generate_trading_plan(
+        market_cycle={
+            'position': '下降趋势', 'market_regime': 'weak',
+            'vl_score': 4, 'bias20': -9,
+        },
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '主线买点', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['attention_tier'] == 'focus'
+    assert item['decision_status'] == 'candidate'
+    assert item['priority'] == '中'
+    assert '只观察' in plan['buy_summary']['conclusion']
+
+
+def test_trend_fixed_marker_is_not_presented_as_quality_100():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'strong'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '趋势买点', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 5, 'trading_system': 'trend',
+            'trend_stock': True, 'action_type': '买入',
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['attention_tier'] == 'focus'
+    assert item['quality_score'] is None
+
+
+def test_trading_plan_attention_tier_boundaries_are_explicit():
+    rankings = [{'name': f'方向{index}'} for index in range(1, 52)]
+    signals = [
+        {
+            'code': f'0000{index}', 'name': f'第{rank}名', 'industry': f'方向{rank}',
+            'score': 4, 'action_type': '买入',
+        }
+        for index, rank in enumerate((20, 21, 50, 51), start=1)
+    ]
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'strong'},
+        mainline_data={'lines': [], 'all_ranked': rankings},
+        signals_data={}, existing_holdings=[], buy_signals_review=signals,
+        opportunity_map={f'方向{rank}': '--' for rank in (20, 21, 50, 51)},
+    )
+
+    tiers_by_rank = {item['momentum_rank']: item['attention_tier'] for item in plan['buy_priority']}
+    assert tiers_by_rank == {20: 'focus', 21: 'watch', 50: 'watch', 51: 'ordinary'}
+
+
+def test_trading_plan_sorts_same_direction_by_quality_then_stop_loss_risk():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'strong'},
+        mainline_data={'lines': [], 'all_ranked': [{'name': '强方向'}]},
+        signals_data={}, existing_holdings=[],
+        buy_signals_review=[
+            {
+                'code': '000003', 'name': '低分宽止损', 'industry': '强方向',
+                'score': 3, 'stop_loss_pct': -8, 'action_type': '买入',
+            },
+            {
+                'code': '000002', 'name': '低分窄止损', 'industry': '强方向',
+                'score': 3, 'stop_loss_pct': -4, 'action_type': '买入',
+            },
+            {
+                'code': '000001', 'name': '高分信号', 'industry': '强方向',
+                'score': 4, 'stop_loss_pct': -9, 'action_type': '买入',
+            },
+        ],
+        opportunity_map={'强方向': '趋势延续'},
+    )
+
+    assert [item['code'] for item in plan['buy_priority']] == ['000001', '000002', '000003']
 
 
 def test_market_regime_is_computed_from_chronological_snapshot():
