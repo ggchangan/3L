@@ -1128,6 +1128,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'is_main': bs.get('mainline_level', '') in ('主线', '次级主线'),
                 'profit_model1': bs.get('profit_model1', False),
                 'trend_stock': bs.get('trend_stock', False),
+                'trading_system': bs.get('trading_system', 'trend' if bs.get('trend_stock') else '3l'),
                 'structure': bs.get('structure', ''),
                 'stage': bs.get('stage', ''),
                 'stop_loss': bs.get('stop_loss'),
@@ -1172,7 +1173,29 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
 
     for item in plan['buy_priority']:
         score = item.get('score')
-        score_ready = score is None or score >= 65
+        # 项目内存在两种历史量纲：原生3L买点为3/4，扫描融合分为
+        # 0-100；趋势系统的固定5只表示命中。仅对有质量含义的分数
+        # 归一化，避免有效的4分突破被当成低质量信号。
+        trading_system = item.get('trading_system', '3l')
+        if score is None:
+            normalized_score = None
+        elif 0 <= score <= 5 and trading_system == '3l':
+            normalized_score = score * 20
+        elif 0 <= score <= 5:
+            # 趋势系统当前固定以 score=5 表示“命中趋势买点”，它不是质量分。
+            # 若没有融合信号的独立置信度，就保持未知，避免展示成质量100。
+            normalized_score = None
+        else:
+            normalized_score = score
+        bullish_confidences = [
+            signal.get('confidence', 0) or 0
+            for signal in item.get('triggered_signals', [])
+            if signal.get('direction') == 'bullish'
+        ]
+        quality_candidates = [value for value in [normalized_score, *bullish_confidences] if value is not None]
+        quality_score = min(100, max(quality_candidates)) if quality_candidates else None
+        score_ready = quality_score is None or quality_score >= 60
+        item['quality_score'] = quality_score
         momentum = item.get('momentum_rank', 10_000)
         is_mainline = (
             item.get('mainline_level', '') in ('主线', '次级主线')
@@ -1190,9 +1213,9 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         elif score_ready and momentum <= 50:
             tier = 'watch'
             tier_reason = f'动量第{momentum}名，进入次级观察'
-        elif score is not None and score < 65:
+        elif quality_score is not None and quality_score < 60:
             tier = 'ordinary'
-            tier_reason = f'买点质量分{score:g}，暂不进入交易重点'
+            tier_reason = f'买点质量{quality_score:g}，暂不进入交易重点'
         else:
             tier = 'ordinary'
             tier_reason = '非主线且未进入动量前50，仅保留技术信号'
@@ -1201,8 +1224,9 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         item['attention_reason'] = tier_reason
         if item.get('decision_status') != 'blocked':
             if tier == 'focus':
-                item['priority'] = '中' if market_regime == 'weak' else '高'
-                item['decision_status'] = 'candidate' if market_regime == 'weak' else 'executable'
+                market_allows_execution = market_regime in ('strong', 'neutral') and mf_filter == 'normal'
+                item['priority'] = '高' if market_allows_execution else '中'
+                item['decision_status'] = 'executable' if market_allows_execution else 'candidate'
             elif tier == 'watch':
                 item['priority'] = '中'
                 item['decision_status'] = 'candidate'
@@ -1215,7 +1239,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         TIER_ORDER.get(x.get('attention_tier', 'ordinary'), 2),
         MAINLINE_ORDER.get(x.get('mainline_level', ''), 2),
         x.get('momentum_rank', 10_000),
-        -(x.get('score') or 0),
+        -(x.get('quality_score') or 0),
         STRUCTURE_ORDER.get(x.get('structure', ''), 4),
         OPP_ORDER.get(x.get('opportunity', '--'), 5),
         abs(x.get('stop_loss_pct')) if x.get('stop_loss_pct') is not None else 10_000,
@@ -1226,8 +1250,14 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         tier: sum(1 for item in plan['buy_priority'] if item.get('attention_tier') == tier)
         for tier in ('focus', 'watch', 'ordinary')
     }
-    if market_regime == 'weak':
+    if mf_filter == 'rest':
+        conclusion = '当前市场门禁为休息，重点买点也只观察，不生成可执行买入。'
+    elif mf_filter == 'reduce':
+        conclusion = '当前处于高位或加速阶段，重点买点需等待确认并控制仓位。'
+    elif market_regime == 'weak':
         conclusion = '当前为弱势市场，重点买点也需等待确认并控制仓位。'
+    elif market_regime not in ('strong', 'neutral'):
+        conclusion = '大盘强弱尚未确认，重点买点暂按观察处理。'
     elif tier_counts['focus']:
         conclusion = f'优先跟踪 {tier_counts["focus"]} 个主线/强动量买点。'
     elif tier_counts['watch']:
@@ -1272,6 +1302,7 @@ def apply_trading_plan_actions(buy_signals_review, trading_plan):
         signal['data_quality'] = item.get('data_quality', 'ready')
         signal['attention_tier'] = item.get('attention_tier', 'ordinary')
         signal['attention_reason'] = item.get('attention_reason', '')
+        signal['quality_score'] = item.get('quality_score')
         signal['action_type'] = item.get('action_type', signal.get('action_type', '买入'))
         if item.get('decision_status') == 'blocked':
             signal['action_reason'] = item.get('opp_reason') or item.get('reason') or '板块数据待补齐'
