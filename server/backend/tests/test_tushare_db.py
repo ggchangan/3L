@@ -13,6 +13,12 @@ _DB_AVAILABLE = is_db_available()
 _DB_REASON = "MySQL not available in CI"
 
 
+def test_is_db_available_can_disable_live_database(monkeypatch):
+    """部署回归必须能在生产配置下强制跳过真实数据库集成测试。"""
+    monkeypatch.setenv('DISABLE_LIVE_DB_TESTS', '1')
+    assert is_db_available() is False
+
+
 @pytest.fixture
 def db():
     """使用 MySQL tushare 数据库"""
