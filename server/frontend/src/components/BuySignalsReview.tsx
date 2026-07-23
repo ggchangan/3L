@@ -39,6 +39,9 @@ export default function BuySignalsReview({ signals, directionOrder: dirOrder, op
 
   return (
     <>
+      <div style={{ color: '#777', fontSize: 11, marginBottom: 8 }}>
+        共 {signals.length} 个个股技术信号；交易重点请以“每日交易计划”的分层结果为准。
+      </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10, borderBottom: '1px solid #333', paddingBottom: 6 }}>
         {sortedDirs.map(dir => {
           const color = DIR_COLORS[dir] || '#888'
