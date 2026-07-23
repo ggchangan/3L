@@ -168,9 +168,13 @@ def test_concept_mainline_only_ranks_tracked_concepts_on_authoritative_date(monk
         '追踪但滞后': klines('20260719'),
         '未追踪概念': klines('20260720'),
     })
-    monkeypatch.setattr(data_layer, 'get_tracked_concept_names', lambda min_related_stocks=6: {
-        '追踪且已到齐', '追踪但滞后',
-    })
+    monkeypatch.setattr(
+        data_layer,
+        'get_tracked_concept_names',
+        lambda min_related_stocks=6, reference_date=None: {
+            '追踪且已到齐', '追踪但滞后',
+        },
+    )
     monkeypatch.setattr(data_layer, 'get_sector_daily', lambda: {'last_updated': '20260720'})
     monkeypatch.setattr(data_layer, 'get_sector_close_snapshot', lambda: {})
     monkeypatch.setattr(

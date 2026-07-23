@@ -23,10 +23,20 @@ def _ranking_status(mainline, confirmed_date):
     return {
         'status': status,
         'date': _normalize_date(mainline.get('ranking_date')),
-        'confirmed_date': _normalize_date(confirmed_date),
+        'confirmed_date': _normalize_date(
+            mainline.get('confirmed_date') or confirmed_date
+        ),
         'base_date': _normalize_date(mainline.get('base_date')),
-        'coverage': mainline.get('estimate_coverage'),
-        'coverage_detail': mainline.get('estimate_coverage_detail') or {},
+        'coverage': (
+            mainline.get('coverage')
+            if mainline.get('coverage') is not None
+            else mainline.get('estimate_coverage')
+        ),
+        'coverage_detail': (
+            mainline.get('coverage_detail')
+            or mainline.get('estimate_coverage_detail')
+            or {}
+        ),
     }
 
 

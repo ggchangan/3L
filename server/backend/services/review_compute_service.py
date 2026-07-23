@@ -436,7 +436,10 @@ def get_mainline_data(date_str):
         get_ths_daily_update_confirmation,
     )
     sector_state = get_sector_daily()
-    sector_date = str(sector_state.get('last_updated', '')).replace('-', '')
+    sector_date = str(
+        sector_state.get('industry_last_updated')
+        or sector_state.get('last_updated', '')
+    ).replace('-', '')
     effective_sector_date = min(sector_date, target_date) if sector_date else target_date
     confirmation = get_ths_daily_update_confirmation()
     active_industries = set(confirmation.get('industry_names', []))
@@ -601,10 +604,25 @@ def get_concept_mainline_data(date_str):
         get_tracked_concept_names,
     )
     from backend.services.concept_wave_service import judge_concept_wave as _judge_wave
-    concepts_data = get_ths_industry_klines(ths_type='N')
-    tracked_concepts = get_tracked_concept_names(min_related_stocks=6)
-    sector_date = str(get_sector_daily().get('last_updated', '')).replace('-', '')
     target_date = str(date_str).replace('-', '')
+    concepts_data = get_ths_industry_klines(ths_type='N')
+    tracked_concepts = get_tracked_concept_names(
+        min_related_stocks=6,
+        reference_date=target_date,
+    )
+    sector_state = get_sector_daily()
+    sector_date = str(
+        sector_state.get('concept_data_date')
+        or sector_state.get('concept_last_updated')
+        or sector_state.get('last_updated', '')
+    ).replace('-', '')
+    concept_confirmed_date = str(
+        sector_state.get('concept_last_updated')
+        or sector_state.get('last_updated', '')
+    ).replace('-', '')
+    concept_official_status = sector_state.get('concept_status', 'confirmed')
+    official_coverage = sector_state.get('concept_coverage')
+    official_coverage_detail = sector_state.get('concept_coverage_detail') or {}
     if not concepts_data or not tracked_concepts or not sector_date:
         return {'lines': [], 'secondary': [], 'all_ranked': [], 'persistence': []}
 
@@ -693,7 +711,14 @@ def get_concept_mainline_data(date_str):
     main_lines = scores[:5]
     secondary_lines = scores[5:10]
 
-    ranking_status = 'estimated' if estimate_active else 'confirmed' if sector_date >= target_date else 'stale'
+    if estimate_active:
+        ranking_status = 'estimated'
+    elif sector_date >= target_date and concept_official_status == 'partial':
+        ranking_status = 'partial'
+    elif concept_confirmed_date >= target_date:
+        ranking_status = 'confirmed'
+    else:
+        ranking_status = 'stale'
 
     # 写入历史（共享同一份 mainline_history.json，标记 concept_ 前缀）
     if ranking_status == 'confirmed':
@@ -718,13 +743,27 @@ def get_concept_mainline_data(date_str):
         'date': date_str,
         'ranking_status': ranking_status,
         'ranking_date': target_date if estimate_active else sector_date,
-        'base_date': sector_date,
-        'estimate_coverage': round(float(concept_coverage.get('ratio', 0)), 4) if estimate_active else None,
+        'confirmed_date': concept_confirmed_date,
+        'base_date': (
+            sector_date if estimate_active
+            else concept_confirmed_date or sector_date
+        ),
+        'estimate_coverage': (
+            round(float(concept_coverage.get('ratio', 0)), 4)
+            if estimate_active else None
+        ),
         'estimate_coverage_detail': {
             'covered': concept_coverage.get('covered'),
             'expected': concept_coverage.get('expected'),
             'ready': concept_coverage.get('ready'),
         } if estimate_active else {},
+        'coverage': (
+            round(float(official_coverage or 0), 4)
+            if ranking_status == 'partial' else None
+        ),
+        'coverage_detail': (
+            official_coverage_detail if ranking_status == 'partial' else {}
+        ),
         'lines': main_lines,
         'secondary': secondary_lines,
         'all_ranked': scores,

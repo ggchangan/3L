@@ -314,7 +314,7 @@ export interface ReviewData {
     bias20_chg_3d?: number
   }
   mainline?: {
-    ranking_status?: 'confirmed' | 'estimated' | 'stale'
+    ranking_status?: 'confirmed' | 'estimated' | 'partial' | 'stale'
     ranking_date?: string
     base_date?: string
     estimate_coverage?: number | null
@@ -325,11 +325,13 @@ export interface ReviewData {
     persistence?: { name: string; days: number; status: string }[]
     all_ranked?: LineItem[]
     concept_mainline?: {
-      ranking_status?: 'confirmed' | 'estimated' | 'stale'
+      ranking_status?: 'confirmed' | 'estimated' | 'partial' | 'stale'
       ranking_date?: string
       base_date?: string
       estimate_coverage?: number | null
       estimate_coverage_detail?: EstimateCoverageDetail
+      coverage?: number | null
+      coverage_detail?: EstimateCoverageDetail
       lines?: LineItem[]
       secondary?: LineItem[]
       persistence?: { name: string; days: number; status: string }[]
@@ -357,12 +359,13 @@ export interface ReviewData {
   }
 }
 
-export type ReviewDataState = 'confirmed' | 'estimated' | 'stale' | 'unknown'
+export type ReviewDataState = 'confirmed' | 'estimated' | 'partial' | 'stale' | 'unknown'
 
 export interface EstimateCoverageDetail {
   covered?: number | null
   expected?: number | null
   ready?: boolean | null
+  missing?: string[]
 }
 
 export interface ReviewDataStatusItem {
