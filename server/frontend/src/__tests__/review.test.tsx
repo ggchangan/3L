@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import MarketCycle, { classifyMarketRegime } from '../components/MarketCycle'
+import MarketCycle, { classifyMarketRegime, resolveActiveIndexCode, selectReviewIndexData } from '../components/MarketCycle'
 import MainlineSection from '../components/MainlineSection'
 import HistoryReview from '../components/HistoryReview'
 import ReviewDataStatus from '../components/ReviewDataStatus'
@@ -25,6 +25,23 @@ describe('MarketCycle', () => {
     expect(classifyMarketRegime(undefined, { price: 120, ma20: 110, ma60: 100 })).toBe('strong')
     expect(classifyMarketRegime(undefined, { price: 80, ma20: 90, ma60: 100 })).toBe('weak')
     expect(classifyMarketRegime(undefined, { price: '--' })).toBe('unknown')
+  })
+
+  it('复盘模式只保留同一交易日指数，并以复盘快照覆盖中证全指', () => {
+    const selected = selectReviewIndexData({
+      '000985': { price: 120, data_date: '20260723' },
+      '000001': { price: 100, data_date: '20260723' },
+      '399006': { price: 90, data_date: '20260722' },
+    }, { price: 88, structure: '下降趋势' }, '20260722')
+
+    expect(selected['000985'].price).toBe(88)
+    expect(selected['000985'].data_date).toBe('20260722')
+    expect(selected['399006'].price).toBe(90)
+    expect(selected['000001']).toBeUndefined()
+  })
+
+  it('当前指数被日期过滤后自动回退到仍可用的中证全指', () => {
+    expect(resolveActiveIndexCode({ '000985': { price: 88 } }, '399006')).toBe('000985')
   })
 })
 
@@ -170,5 +187,6 @@ describe('板块环境语义', () => {
     expect(formatSectorEnvironment('主线回调')).toBe('主线 · 波谷')
     expect(formatSectorEnvironment('次线机会')).toBe('次级主线 · 波谷')
     expect(formatSectorEnvironment('见顶风险', '主线')).toBe('主线 · 波峰风险')
+    expect(formatSectorEnvironment('趋势延续')).toBe('板块 · 上升/波中')
   })
 })

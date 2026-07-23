@@ -113,6 +113,7 @@
 .market-regime-copy { display: flex; flex-direction: column; gap: 5px; font-size: 12px; line-height: 1.55; color: #aaa; }
 .market-regime-copy strong { color: #eee; font-size: 14px; }
 .market-regime-meta { display: flex; flex-direction: column; gap: 4px; padding-left: 14px; border-left: 1px solid rgba(255,255,255,.08); color: #888; font-size: 11px; white-space: nowrap; }
+.market-index-date-note { margin: -8px 0 12px; color: #c9a94b; font-size: 11px; }
 
 table {
   width: 100%;

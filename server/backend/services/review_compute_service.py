@@ -168,6 +168,8 @@ def judge_peak_valley(klines):
     基于乖离率趋势转折 + 乖离率位置 + 量价信号
     返回 5档：偏波峰/波中偏上/波中/波中偏下/偏波谷
     """
+    # 数据层合约是“最新在前”，指标计算统一转换为时间正序。
+    klines = sorted(klines, key=lambda row: str(row.get('date', '')))
     if len(klines) < 70:
         return _fallback_cycle(klines)
 
@@ -304,24 +306,53 @@ def judge_peak_valley(klines):
         'peak_sig': peak_sig,
         'valley_sig': valley_sig,
         'ma_score': 0, 'vol_score': 0, 'trend_score': 0, 'amp_score': 0,
+        **_market_trend_context(klines),
+    }
+
+
+def _market_trend_context(klines):
+    """用中证全指均线关系生成可解释、可随复盘快照保存的市场强弱。"""
+    ordered = sorted(klines, key=lambda row: str(row.get('date', '')))
+    if len(ordered) < 60:
+        return {'ma20': 0, 'ma60': 0, 'structure': '待确认', 'market_regime': 'unknown'}
+    closes = [float(row.get('close', 0) or 0) for row in ordered]
+    price = closes[-1]
+    ma20 = sum(closes[-20:]) / 20
+    ma60 = sum(closes[-60:]) / 60
+    if price >= ma20 >= ma60:
+        structure, regime = '上涨趋势', 'strong'
+    elif price < ma20 < ma60:
+        structure, regime = '下降趋势', 'weak'
+    else:
+        structure, regime = '区间震荡', 'neutral'
+    return {
+        'ma20': round(ma20, 2),
+        'ma60': round(ma60, 2),
+        'structure': structure,
+        'market_regime': regime,
     }
 
 
 def _fallback_cycle(klines):
     """数据不足时的兜底方案"""
+    trend_context = _market_trend_context(klines)
     if len(klines) < 10:
         return {'score': 0, 'position': '波中', 'strategy': '正常交易',
-                'position_pct': '七至八成', 'build_per_stock_pct': 5}
+                'position_pct': '七至八成', 'build_per_stock_pct': 5,
+                **trend_context}
     chg = (klines[-1]['close'] - klines[-6]['close']) / klines[-6]['close'] * 100
     if chg > 5:
         return {'score': 0.5, 'position': '波中偏上', 'strategy': '正常交易，注意减仓信号',
-                'position_pct': '六至七成', 'build_per_stock_pct': 5}
+                'position_pct': '六至七成', 'build_per_stock_pct': 5,
+                **trend_context}
     elif chg < -5:
         return {'score': -0.5, 'position': '波中偏下', 'strategy': '谨慎选股，收紧止损',
-                'position_pct': '五至七成', 'build_per_stock_pct': 5}
+                'position_pct': '五至七成', 'build_per_stock_pct': 5,
+                **trend_context}
     else:
         return {'score': 0, 'position': '波中', 'strategy': '正常交易',
-                'position_pct': '七至八成', 'build_per_stock_pct': 5}
+                'position_pct': '七至八成', 'build_per_stock_pct': 5,
+                **trend_context}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -362,7 +393,7 @@ def describe_sector_context(opportunity, mainline_level=''):
         '主线回调': '主线·波谷',
         '次线机会': '次级主线·波谷',
         '波谷观察': '非主线·波谷',
-        '趋势延续': f'{mainline_level or "强动量"}·上升/波中',
+        '趋势延续': f'{mainline_level or "板块"}·上升/波中',
         '见顶风险': f'{mainline_level or "板块"}·波峰风险',
         '回调中': f'{mainline_level or "板块"}·下跌/回调',
         '主线观察': '主线·阶段待确认',
@@ -930,6 +961,16 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     mf = get_market_filter(market_cycle)
     mf_filter = mf.get('filter', 'normal')
     opportunity_map = opportunity_map or {}
+    momentum_rank = {}
+    ranked_sets = [
+        mainline_data.get('all_ranked', []),
+        (mainline_data.get('concept_mainline') or {}).get('all_ranked', []),
+    ]
+    for ranked in ranked_sets:
+        for index, entry in enumerate(ranked):
+            name = entry.get('name', '')
+            if name:
+                momentum_rank[name] = min(momentum_rank.get(name, 10_000), index + 1)
 
     # 大盘过滤覆盖策略
     if mf_filter == 'reduce':
@@ -1042,6 +1083,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             # 通过 sector 名称在兼容映射中查找该股票所属板块环境
             sec_name = bs.get('industry') or bs.get('sector', '')
             direction = bs.get('direction', '')
+            matched_mainline_direction = bs.get('matched_mainline_direction', '')
             bs_opp = '--'
             opp_reason = ''
             if opportunity_map and sec_name:
@@ -1080,6 +1122,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'buy_point': bs.get('buy_point', '') or bs.get('flags', '') or '买点信号',
                 'change': bs.get('change'),
                 'mainline_level': bs.get('mainline_level', ''),
+                'matched_mainline_direction': matched_mainline_direction,
                 'is_main': bs.get('mainline_level', '') in ('主线', '次级主线'),
                 'profit_model1': bs.get('profit_model1', False),
                 'trend_stock': bs.get('trend_stock', False),
@@ -1090,6 +1133,11 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'industry': sec_name,
                 'sector': sec_name,
                 'direction': direction,
+                'momentum_rank': min(
+                    momentum_rank.get(sec_name, 10_000),
+                    momentum_rank.get(direction, 10_000),
+                    momentum_rank.get(matched_mainline_direction, 10_000),
+                ),
                 'opportunity': bs_opp,
                 'sector_context': describe_sector_context(bs_opp, bs.get('mainline_level', '')),
                 'opp_reason': opp_reason,
@@ -1106,7 +1154,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     PRIORITY_ORDER = {'高': 0, '中': 1, '低': 2}
     plan['holdings_action'].sort(key=lambda x: PRIORITY_ORDER.get(x.get('priority', '中'), 2))
 
-    # 排序：主线/动量方向优先，个股结构其次，板块阶段只作末级环境提示。
+    # 排序：主线层级 > 同层级动量名次 > 个股结构 > 板块阶段。
     # 不能用板块是否处于波谷替代个股买点，也不能让非波谷主线排到非主线之后。
     OPP_ORDER = {
         '主线回调': 0, '次线机会': 1, '潜在主线': 2,
@@ -1116,6 +1164,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     STRUCTURE_ORDER = {'上涨趋势': 0, '区间震荡': 1, '区间中段': 1, '区间底部': 1, '区间顶部': 2, '下降趋势': 3}
     plan['buy_priority'].sort(key=lambda x: (
         MAINLINE_ORDER.get(x.get('mainline_level', ''), 2),
+        x.get('momentum_rank', 10_000),
         STRUCTURE_ORDER.get(x.get('structure', ''), 4),
         OPP_ORDER.get(x.get('opportunity', '--'), 5),
         -(x.get('change', 0) or 0),

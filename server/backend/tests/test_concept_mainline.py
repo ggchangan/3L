@@ -12,6 +12,7 @@ for p in [_server_root]:
         sys.path.insert(0, p)
 
 from backend.services.stock_card_service import (
+    _get_mainline_match,
     _get_mainline_level,
     get_stock_card,
 )
@@ -23,6 +24,28 @@ import pytest
 # ═══════════════════════════════════════════════
 
 class TestConceptMainlineLevel:
+
+    def test_concept_match_returns_actual_ranked_direction(self):
+        level, matched = _get_mainline_match(
+            sector='消费电子',
+            main_line_names=['银行'],
+            sub_main_names=['小金属'],
+            concept_names=['先进封装', 'PCB概念'],
+            concept_main=['先进封装'],
+            concept_sub=['存储芯片'],
+        )
+        assert (level, matched) == ('主线', '先进封装')
+
+    def test_multiple_concept_matches_choose_highest_ranked_direction(self):
+        level, matched = _get_mainline_match(
+            sector='消费电子',
+            main_line_names=['银行'],
+            sub_main_names=[],
+            concept_names=['第五名概念', '第一名概念'],
+            concept_main=['第一名概念', '第二名概念', '第五名概念'],
+            concept_sub=[],
+        )
+        assert (level, matched) == ('主线', '第一名概念')
 
     def test_industry_non_main_concept_main_returns_main(self):
         """行业非主线 + 概念是主线 → 返回 '主线'"""

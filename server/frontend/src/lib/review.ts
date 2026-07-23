@@ -7,7 +7,7 @@ export function formatSectorEnvironment(value?: string, mainlineLevel?: string):
     '主线回调': '主线 · 波谷',
     '次线机会': '次级主线 · 波谷',
     '波谷观察': '非主线 · 波谷',
-    '趋势延续': `${mainlineLevel || '强动量'} · 上升/波中`,
+    '趋势延续': `${mainlineLevel || '板块'} · 上升/波中`,
     '见顶风险': `${mainlineLevel || '板块'} · 波峰风险`,
     '回调中': `${mainlineLevel || '板块'} · 下跌/回调`,
     '主线观察': '主线 · 阶段待确认',
