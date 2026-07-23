@@ -19,9 +19,13 @@ DIST_DIR = os.path.join(FE_DIR, 'dist')
 def run_regression():
     """运行全回归测试（CRITICAL等级）"""
     print('🧪 运行全回归测试...')
+    env = os.environ.copy()
+    # 部署机继承的是生产数据库配置。回归测试只能验证不写库的路径；
+    # 数据库集成测试必须在独立测试库中单独执行。
+    env['DISABLE_LIVE_DB_TESTS'] = '1'
     r = subprocess.run(
         [sys.executable, 'scripts/run_full_regression.py', '--ci'],
-        cwd=ROOT, capture_output=True, text=True
+        cwd=ROOT, capture_output=True, text=True, env=env
     )
     # 输出结果
     for line in (r.stdout + r.stderr).split('\n'):
