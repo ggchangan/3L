@@ -210,7 +210,8 @@ def test_trading_plan_keeps_buy_action_when_covered_industry_has_no_opportunity_
 
     item = plan['buy_priority'][0]
     assert item['action_type'] == '买入'
-    assert item['decision_status'] == 'executable'
+    assert item['decision_status'] == 'signal_only'
+    assert item['attention_tier'] == 'ordinary'
     assert item['data_quality'] == 'ready'
 
 
@@ -260,6 +261,59 @@ def test_trading_plan_uses_momentum_rank_within_same_direction_level():
 
     assert [item['code'] for item in plan['buy_priority']] == ['000001', '000002']
     assert [item['momentum_rank'] for item in plan['buy_priority']] == [1, 2]
+
+
+def test_trading_plan_separates_focus_watch_and_ordinary_signals_in_weak_market():
+    rankings = [{'name': f'方向{index}'} for index in range(1, 52)]
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中偏下', 'market_regime': 'weak'},
+        mainline_data={'lines': [], 'all_ranked': rankings},
+        signals_data={}, existing_holdings=[],
+        buy_signals_review=[
+            {
+                'code': '000001', 'name': '主线买点', 'industry': '普通行业',
+                'mainline_level': '主线', 'score': 80, 'action_type': '买入',
+            },
+            {
+                'code': '000002', 'name': '强动量买点', 'industry': '方向1',
+                'score': 70, 'action_type': '买入',
+            },
+            {
+                'code': '000003', 'name': '次级观察', 'industry': '方向30',
+                'score': 75, 'action_type': '买入',
+            },
+            {
+                'code': '000004', 'name': '低质量信号', 'industry': '方向2',
+                'score': 4, 'action_type': '买入',
+            },
+            {
+                'code': '000005', 'name': '普通方向信号', 'industry': '方向51',
+                'score': 80, 'action_type': '买入',
+            },
+        ],
+        opportunity_map={
+            '普通行业': '--', '方向1': '--', '方向30': '--',
+            '方向2': '--', '方向51': '--',
+        },
+    )
+
+    assert [item['attention_tier'] for item in plan['buy_priority']] == [
+        'focus', 'focus', 'watch', 'ordinary', 'ordinary',
+    ]
+    assert plan['buy_summary'] == {
+        'total': 5,
+        'focus': 2,
+        'watch': 1,
+        'ordinary': 2,
+        'market_regime': 'weak',
+        'conclusion': '当前为弱势市场，重点买点也需等待确认并控制仓位。',
+        'ranking_rule': '市场过滤 → 主线/强动量 → 个股买点质量 → 板块环境 → 止损风险',
+    }
+    assert plan['buy_priority'][0]['decision_status'] == 'candidate'
+    assert plan['buy_priority'][0]['priority'] == '中'
+    low_quality = next(item for item in plan['buy_priority'] if item['code'] == '000004')
+    assert low_quality['decision_status'] == 'signal_only'
+    assert '买点质量分4' in low_quality['attention_reason']
 
 
 def test_market_regime_is_computed_from_chronological_snapshot():
