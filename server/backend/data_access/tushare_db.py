@@ -157,6 +157,13 @@ CREATE_INDEXES = {
 
 def is_db_available() -> bool:
     """检查 MySQL 是否可达（供测试跳过等外部使用）"""
+    # 部署回归运行在生产配置下时，绝不能把“数据库可达”解释成
+    # “允许集成测试写生产库”。需要真实数据库测试时必须显式不设置
+    # DISABLE_LIVE_DB_TESTS，并使用隔离的测试库/测试用户。
+    if os.environ.get('DISABLE_LIVE_DB_TESTS', '').strip().lower() in {
+        '1', 'true', 'yes', 'on',
+    }:
+        return False
     try:
         conn = pymysql.connect(
             host=MYSQL_HOST, port=MYSQL_PORT,
