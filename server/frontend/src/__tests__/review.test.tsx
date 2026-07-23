@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import MarketCycle, { classifyMarketRegime, resolveActiveIndexCode, selectReviewIndexData } from '../components/MarketCycle'
 import MainlineSection from '../components/MainlineSection'
 import HistoryReview from '../components/HistoryReview'
@@ -165,20 +165,45 @@ describe('ReviewDataStatus', () => {
 })
 
 describe('TradingPlan action semantics', () => {
-  it('在同一列表展示买入和待确认操作', () => {
+  it('突出重点和次级观察，并默认折叠普通技术信号', () => {
     render(<TradingPlan plan={{
       buy_priority: [
-        { code: '1', name: '执行股', decision_status: 'executable', action_type: '买入' },
-        { code: '2', name: '候选股', decision_status: 'candidate', action_type: '买入' },
-        { code: '3', name: '阻断股', decision_status: 'blocked', action_type: '待确认' },
+        { code: '1', name: '重点股', attention_tier: 'focus', decision_status: 'executable', action_type: '买入', momentum_rank: 3, score: 4, quality_score: 80 },
+        { code: '2', name: '观察股', attention_tier: 'watch', decision_status: 'candidate', action_type: '买入' },
+        { code: '3', name: '普通信号股', attention_tier: 'ordinary', decision_status: 'signal_only', action_type: '买入' },
+      ],
+      buy_summary: {
+        total: 3, focus: 1, watch: 1, ordinary: 1, market_regime: 'weak',
+        conclusion: '当前为弱势市场，重点买点也需等待确认并控制仓位。',
+        ranking_rule: '市场过滤 → 主线/强动量 → 个股买点质量 → 板块环境 → 止损风险',
+      },
+    }} />)
+
+    expect(screen.getByText('🎯 今日买点重点')).toBeTruthy()
+    expect(screen.getByText('重点 1')).toBeTruthy()
+    expect(screen.getByText('次级观察 1')).toBeTruthy()
+    expect(screen.getByText('普通信号 1')).toBeTruthy()
+    expect(screen.getByText('🔥 重点关注 (1)')).toBeTruthy()
+    expect(screen.getByText('👀 次级观察 (1)')).toBeTruthy()
+    expect(screen.getByText('动量#3')).toBeTruthy()
+    expect(screen.getByText('质量80')).toBeTruthy()
+    expect(screen.queryByText('普通信号股')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '展开普通技术信号 (1)' }))
+    expect(screen.getByText('普通信号股')).toBeTruthy()
+  })
+
+  it('旧缓存没有分层字段时保守归入普通信号', () => {
+    render(<TradingPlan plan={{
+      buy_priority: [
+        { code: '1', name: '旧缓存股票', decision_status: 'executable', action_type: '买入' },
       ],
     }} />)
 
-    expect(screen.getByText('🎯 关注买点 (3)')).toBeTruthy()
-    expect(screen.getAllByText('买入')).toHaveLength(2)
-    expect(screen.getByText('待确认')).toBeTruthy()
-    expect(screen.queryByText(/可执行买点/)).toBeNull()
-    expect(screen.queryByText(/候选观察/)).toBeNull()
+    expect(screen.getByText('重点 0')).toBeTruthy()
+    expect(screen.getByText('普通信号 1')).toBeTruthy()
+    expect(screen.queryByText('🔥 重点关注 (1)')).toBeNull()
+    expect(screen.queryByText('旧缓存股票')).toBeNull()
   })
 })
 

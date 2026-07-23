@@ -162,6 +162,10 @@ def extract_plans_from_trading_plan(trading_plan: dict, date_str: str) -> list:
 
     # 2. 关注买入
     for bp in trading_plan.get('buy_priority', []):
+        # 新契约中只有“重点关注”进入正式计划追踪；次级观察和普通技术
+        # 信号仍保留在复盘页，但不能混入交易胜率统计。
+        if bp.get('attention_tier') and bp.get('attention_tier') != 'focus':
+            continue
         # 板块数据完全未覆盖的项目尚未形成操作，不进入后续胜率统计。
         if bp.get('decision_status') == 'blocked':
             continue

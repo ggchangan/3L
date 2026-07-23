@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ReviewData } from '../lib/types'
 import { formatSectorEnvironment } from '../lib/review'
 
@@ -22,8 +23,24 @@ function directionGroup(item: any) {
 }
 
 export default function TradingPlan({ plan }: Props) {
+  const [showOrdinary, setShowOrdinary] = useState(false)
   if (!plan) return <div className="empty">暂无交易计划</div>
   const buyItems = plan.buy_priority || []
+  // 旧缓存没有分层字段，必须保守归为普通信号，不能把历史 executable
+  // 直接升级成“重点关注”。
+  const tierOf = (item: any) => item.attention_tier || 'ordinary'
+  const focusItems = buyItems.filter(item => tierOf(item) === 'focus')
+  const watchItems = buyItems.filter(item => tierOf(item) === 'watch')
+  const ordinaryItems = buyItems.filter(item => tierOf(item) === 'ordinary')
+  const summary = plan.buy_summary || {
+    total: buyItems.length,
+    focus: focusItems.length,
+    watch: watchItems.length,
+    ordinary: ordinaryItems.length,
+    market_regime: undefined,
+    conclusion: focusItems.length ? `优先跟踪 ${focusItems.length} 个重点买点。` : '当前暂无一级重点买点。',
+    ranking_rule: '市场过滤 → 主线/强动量 → 个股买点质量 → 板块环境 → 止损风险',
+  }
 
   return (
     <div className="plan-card" style={{ overflowX: 'auto' }}>
@@ -80,8 +97,41 @@ export default function TradingPlan({ plan }: Props) {
         }}
       />
 
-      {/* 买点按方向层级阅读；“操作”始终表达买入或待确认。 */}
-      <BuyActionTable title={`🎯 关注买点 (${buyItems.length})`} items={buyItems} />
+      {/* 买点先分交易关注层级，普通技术信号默认折叠。 */}
+      {buyItems.length > 0 && (
+        <div style={{ marginTop: 14, padding: '10px 12px', border: '1px solid #333', borderRadius: 8, background: 'rgba(255,255,255,0.025)' }}>
+          <div style={{ color: '#ddd', fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+            🎯 今日买点重点
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, fontSize: 12, marginBottom: 6 }}>
+            <span style={{ color: '#e94560' }}>重点 {summary.focus}</span>
+            <span style={{ color: '#ffd700' }}>次级观察 {summary.watch}</span>
+            <span style={{ color: '#888' }}>普通信号 {summary.ordinary}</span>
+            <span style={{ color: '#666' }}>共 {summary.total}</span>
+          </div>
+          <div style={{ color: summary.market_regime === 'weak' ? '#ff9800' : '#4ecdc4', fontSize: 12 }}>
+            {summary.conclusion}
+          </div>
+          <div style={{ color: '#666', fontSize: 10, marginTop: 5 }}>排序：{summary.ranking_rule}</div>
+        </div>
+      )}
+
+      {focusItems.length > 0
+        ? <BuyActionTable title={`🔥 重点关注 (${focusItems.length})`} items={focusItems} />
+        : buyItems.length > 0 && <div className="empty" style={{ marginTop: 10 }}>🔥 今日暂无主线/强动量重点买点</div>}
+      {watchItems.length > 0 && <BuyActionTable title={`👀 次级观察 (${watchItems.length})`} items={watchItems} />}
+      {ordinaryItems.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <button
+            type="button"
+            onClick={() => setShowOrdinary(value => !value)}
+            style={{ cursor: 'pointer', border: '1px solid #333', borderRadius: 6, background: '#181824', color: '#888', padding: '5px 10px', fontSize: 11 }}
+          >
+            {showOrdinary ? '收起' : '展开'}普通技术信号 ({ordinaryItems.length})
+          </button>
+          {showOrdinary && <BuyActionTable title={`📋 普通信号 (${ordinaryItems.length})`} items={ordinaryItems} />}
+        </div>
+      )}
 
       {plan.risk_items?.length ? (
         <div style={{ marginTop: 12 }}>
@@ -126,6 +176,8 @@ function BuyActionTable({ title, items }: { title: string; items: any[] }) {
         return <>
           <span style={{color: chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginRight: 6}}>{chg >= 0 ? '+' : ''}{chg}%</span>
           {item.is_main && <span className="tag red" style={{fontSize:9}}>主线</span>}
+          {item.momentum_rank && item.momentum_rank < 10000 && <span style={{ color: '#58a6ff', fontSize: 9, marginLeft: 4 }}>动量#{item.momentum_rank}</span>}
+          {item.quality_score != null && <span style={{ color: '#aaa', fontSize: 9, marginLeft: 4 }}>质量{item.quality_score}</span>}
         </>
       }}
     />
@@ -207,7 +259,8 @@ function UnifiedTable({ title, items, groupKey, renderAction, renderSignal, rend
                       {item.sector || ''}{item.opportunity && item.opportunity !== '--' ? ` · ${formatSectorEnvironment(item.opportunity, item.mainline_level)}` : ''}
                     </td>
                     <td style={{ padding: '3px 4px', color: '#888', fontSize: 10, wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', minWidth: 80 }}>
-                      {item.reason}
+                      {item.attention_reason && <div style={{ color: '#bbb' }}>{item.attention_reason}</div>}
+                      {item.reason && <div>{item.reason}</div>}
                     </td>
                     <td style={{ padding: '3px 4px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                       {rightCol(item)}

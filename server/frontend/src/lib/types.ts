@@ -179,6 +179,7 @@ export interface BuySignalItem {
   trend_bias?: number
   direction?: string
   change?: number
+  score?: number
   price?: number
   vol_analysis?: string
   industry?: string
@@ -203,8 +204,12 @@ export interface BuySignalItem {
   action_signal?: string     // '强势买入·缩量回踩(85)' / '偏多等确认' / ...
   action_priority?: string   // '高'/'中'/'低'
   action_reason?: string     // 操作理由文字
-  decision_status?: 'executable' | 'candidate' | 'blocked'
+  decision_status?: 'executable' | 'candidate' | 'signal_only' | 'blocked'
   data_quality?: 'ready' | 'sector_unavailable'
+  attention_tier?: 'focus' | 'watch' | 'ordinary'
+  attention_reason?: string
+  momentum_rank?: number
+  quality_score?: number | null
 }
 
 /** 止损预警API返回类型 */
@@ -357,6 +362,15 @@ export interface ReviewData {
     position_detail?: string
     holdings_action?: { stock: string; action: string; reason: string; priority: string }[]
     buy_priority?: (BuySignalItem & { is_main?: boolean; sector?: string; opportunity?: string })[]
+    buy_summary?: {
+      total: number
+      focus: number
+      watch: number
+      ordinary: number
+      market_regime?: 'strong' | 'neutral' | 'weak' | 'unknown'
+      conclusion: string
+      ranking_rule: string
+    }
     risk_items?: string[]
   }
   charts?: {

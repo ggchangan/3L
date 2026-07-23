@@ -190,6 +190,23 @@ class TestPlanTrackingV2(unittest.TestCase):
 
         self.assertEqual([plan['code'] for plan in plans], ['000001', '000002'])
 
+    def test_new_attention_contract_only_tracks_focus_tier(self):
+        """次级观察和普通技术信号不混入正式交易计划胜率。"""
+        from backend.services.plan_tracking_service import extract_plans_from_trading_plan
+        focus = _make_buy_priority(name='重点股', code='000001')
+        focus['attention_tier'] = 'focus'
+        watch = _make_buy_priority(name='观察股', code='000002')
+        watch['attention_tier'] = 'watch'
+        ordinary = _make_buy_priority(name='普通信号股', code='000003')
+        ordinary['attention_tier'] = 'ordinary'
+
+        plans = extract_plans_from_trading_plan(
+            _make_trading_plan(buy_priorities=[focus, watch, ordinary]),
+            '2026-05-28',
+        )
+
+        self.assertEqual([plan['code'] for plan in plans], ['000001'])
+
     def test_extract_both_sources(self):
         """同时提取holdings_action和buy_priority"""
         from backend.services.plan_tracking_service import extract_plans_from_trading_plan
