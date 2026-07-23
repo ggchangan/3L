@@ -29,6 +29,7 @@ from backend.data_access.data_layer import (
     get_stock_names_from_db,
     get_stock_daily_latest_date,
     get_tracked_concept_names,
+    get_tracked_concept_universe,
 )
 from backend.data_access.data_layer import (
     get_concept_list,
@@ -43,6 +44,7 @@ from backend.data_access.data_layer import (
     build_concept_maps_from_db,
     tushare_fetch_daily_incremental,
     get_ths_daily_update_coverage,
+    retry_missing_ths_concepts,
     save_ths_daily_update_confirmation,
     refresh_sector_close_snapshot,
 )
@@ -259,8 +261,19 @@ def update_sectors():
 
     # ── 确定追踪中的概念 ──
     try:
-        tracked_concepts = get_tracked_concept_names(min_related_stocks=6)
+        concept_universe = get_tracked_concept_universe(
+            min_related_stocks=6,
+            reference_date=today,
+        )
+        tracked_concepts = concept_universe['names']
         log(f'📋  追踪概念: {len(tracked_concepts)}个（自选股关联≥6只）')
+        excluded = concept_universe.get('excluded', {})
+        if excluded:
+            reason_counts = {}
+            for detail in excluded.values():
+                reason = detail.get('reason', 'unknown')
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            log(f'🧹  概念主线排除: {len(excluded)}个 {reason_counts}')
     except Exception as e:
         log(f'⚠️  计算追踪概念失败: {e}，回退到全量更新')
         tracked_concepts = set()
@@ -293,6 +306,18 @@ def update_sectors():
             log(f'  {line}')
 
     coverage = get_ths_daily_update_coverage(names_to_update, today)
+    missing_concepts = coverage.get('concept', {}).get('missing', [])
+    if missing_concepts:
+        try:
+            retry = retry_missing_ths_concepts(today, missing_concepts)
+            log(
+                '🔁  缺失概念同源重试: '
+                f'{retry.get("covered", 0)}/{retry.get("requested", 0)}'
+            )
+            if retry.get('covered', 0):
+                coverage = get_ths_daily_update_coverage(names_to_update, today)
+        except Exception as exc:
+            log(f'⚠️  缺失概念同源重试失败，保留部分正式状态: {exc}')
     ind_cov = coverage.get('industry', {})
     con_cov = coverage.get('concept', {})
     log(

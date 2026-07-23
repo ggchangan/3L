@@ -89,6 +89,28 @@ describe('ReviewDataStatus', () => {
     expect(screen.getByText('概念 07-21 · 当日预估 85.3%，157/184')).toBeTruthy()
     expect(screen.getByText(/未覆盖个股暂显示“待确认”/)).toBeTruthy()
   })
+
+  it('概念正式日线不完整时显示部分状态和覆盖数', () => {
+    render(
+      <ReviewDataStatus
+        dataStatus={{
+          stocks: { status: 'confirmed', date: '20260722' },
+          index: { status: 'confirmed', date: '20260722' },
+          industry: { status: 'confirmed', date: '20260722' },
+          concept: {
+            status: 'partial',
+            date: '20260722',
+            confirmed_date: '20260721',
+            coverage: 175 / 179,
+            coverage_detail: { covered: 175, expected: 179 },
+          },
+        }}
+      />,
+    )
+
+    expect(screen.getByText('概念 07-22 · 部分正式数据 97.8%，175/179')).toBeTruthy()
+    expect(screen.getByText(/缺失概念已从当日排名中排除/)).toBeTruthy()
+  })
 })
 
 describe('TradingPlan action semantics', () => {

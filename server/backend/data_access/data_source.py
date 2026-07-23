@@ -335,6 +335,79 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
     return (written, len(names_list))
 
 
+def get_ths_concept_latest_dates(names, reference_date=None) -> dict:
+    """批量读取概念最近日线日期，用于识别同花顺已停止维护的标签。"""
+    requested = sorted({str(name) for name in names if name})
+    db = _get_tushare_db()
+    if not db or not requested:
+        return {}
+    placeholders = ','.join(['%s'] * len(requested))
+    params = list(requested)
+    date_clause = ''
+    if reference_date:
+        date_clause = ' AND td.trade_date<=%s'
+        params.append(str(reference_date).replace('-', ''))
+    rows = db.execute_raw(
+        f"""SELECT ti.name, MAX(td.trade_date) AS latest_date
+            FROM ths_index ti
+            LEFT JOIN ths_daily td ON td.ts_code=ti.ts_code
+            WHERE ti.type='N' AND ti.name IN ({placeholders}){date_clause}
+            GROUP BY ti.name""",
+        params,
+    )
+    return {
+        row['name']: str(row.get('latest_date') or '')
+        for row in rows
+        if row.get('name')
+    }
+
+
+def retry_missing_ths_concepts(target_date, concept_names) -> dict:
+    """仅对缺失的有效概念使用同花顺原始 K 线通道重试并写入 DB。"""
+    requested = sorted({str(name) for name in concept_names if name})
+    result = {
+        'requested': len(requested),
+        'covered': 0,
+        'written': 0,
+        'covered_names': [],
+        'missing': requested,
+    }
+    if not requested:
+        return result
+
+    snapshots = _fetch_ths_kline_close_snapshots(target_date, requested, 'N')
+    db = _get_tushare_db()
+    if not db or not snapshots:
+        return result
+
+    records = []
+    covered_names = []
+    for name, row in snapshots.items():
+        ts_code = row.get('ts_code')
+        if not ts_code:
+            continue
+        records.append({
+            'ts_code': ts_code,
+            'trade_date': target_date,
+            'open': row.get('open', 0),
+            'high': row.get('high', 0),
+            'low': row.get('low', 0),
+            'close': row.get('close', 0),
+            'vol': row.get('volume', 0),
+            'pct_chg': row.get('change_pct', 0),
+        })
+        covered_names.append(name)
+    if records:
+        result['written'] = db.upsert_many_from_dicts('ths_daily', records)
+    covered_names = sorted(covered_names)
+    result.update({
+        'covered': len(covered_names),
+        'covered_names': covered_names,
+        'missing': sorted(set(requested) - set(covered_names)),
+    })
+    return result
+
+
 def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> dict:
     """检查本次板块更新在目标日期的覆盖率。
 
@@ -380,6 +453,7 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> di
             'ratio': ratio,
             'threshold': threshold,
             'ready': total > 0 and ratio >= threshold,
+            'complete': total > 0 and count == total,
             'missing': sorted(names - covered),
         }
 
@@ -395,6 +469,7 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> di
         'concept': concept,
         'missing': industry['missing'] + concept['missing'],
         'industry_names': sorted(active_industries | covered_industries),
+        'concept_names': sorted(requested_concepts),
         'bootstrap': bootstrap,
     }
 
@@ -476,14 +551,48 @@ def _save_json_atomic(path: str, data: dict) -> None:
 
 
 def save_ths_daily_update_confirmation(target_date: str, coverage: dict) -> None:
-    """仅在门禁通过后推进权威日期；失败写入永远不能成为基线。"""
-    state = {
-        'confirmed_date': target_date,
-        'industry_names': coverage.get('industry_names', []),
-        'industry_coverage': coverage.get('industry', {}).get('ratio', 0),
-        'concept_coverage': coverage.get('concept', {}).get('ratio', 0),
-        'confirmed_at': datetime.now().isoformat(timespec='seconds'),
-    }
+    """分别保存行业与概念确认状态；概念不完整时不得伪装成正式数据。"""
+    previous = get_ths_daily_update_confirmation()
+    industry = coverage.get('industry', {})
+    concept = coverage.get('concept', {})
+    state = dict(previous)
+    state['concept_coverage'] = concept.get(
+        'ratio',
+        state.get('concept_coverage', 0),
+    )
+
+    if industry.get('ready') or coverage.get('industry_names'):
+        state.update({
+            # confirmed_date 保留为行业日期，兼容旧调用方。
+            'confirmed_date': target_date,
+            'industry_confirmed_date': target_date,
+            'industry_names': coverage.get('industry_names', []),
+            'industry_coverage': industry.get('ratio', 0),
+            'industry_coverage_detail': {
+                'covered': industry.get('covered'),
+                'expected': industry.get('expected'),
+                'missing': industry.get('missing', []),
+            },
+        })
+
+    concept_expected = int(concept.get('expected') or 0)
+    if concept_expected:
+        concept_complete = bool(concept.get('complete'))
+        state.update({
+            'concept_data_date': target_date,
+            'concept_status': 'confirmed' if concept_complete else 'partial',
+            'concept_names': coverage.get('concept_names', []),
+            'concept_coverage': concept.get('ratio', 0),
+            'concept_coverage_detail': {
+                'covered': concept.get('covered'),
+                'expected': concept_expected,
+                'missing': concept.get('missing', []),
+            },
+        })
+        if concept_complete:
+            state['concept_confirmed_date'] = target_date
+
+    state['confirmed_at'] = datetime.now().isoformat(timespec='seconds')
     _save_json_atomic(SECTOR_UPDATE_STATE_PATH, state)
 
 

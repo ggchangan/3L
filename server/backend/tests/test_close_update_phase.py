@@ -347,6 +347,52 @@ def test_sector_confirmation_is_saved_and_loaded_atomically(tmp_path):
     assert not (tmp_path / 'computed' / 'sector_update_state.json.tmp').exists()
 
 
+def test_partial_concept_confirmation_keeps_previous_official_date(tmp_path):
+    from backend.data_access import data_source
+
+    state_path = tmp_path / 'computed' / 'sector_update_state.json'
+    complete = {
+        'industry_names': ['A'],
+        'concept_names': ['C', 'D'],
+        'industry': {
+            'ready': True, 'ratio': 1.0, 'covered': 1,
+            'expected': 1, 'complete': True, 'missing': [],
+        },
+        'concept': {
+            'ready': True, 'ratio': 1.0, 'covered': 2,
+            'expected': 2, 'complete': True, 'missing': [],
+        },
+    }
+    partial = {
+        'industry_names': ['A'],
+        'concept_names': ['C', 'D'],
+        'industry': {
+            'ready': True, 'ratio': 1.0, 'covered': 1,
+            'expected': 1, 'complete': True, 'missing': [],
+        },
+        'concept': {
+            'ready': True, 'ratio': 0.5, 'covered': 1,
+            'expected': 2, 'complete': False, 'missing': ['D'],
+        },
+    }
+
+    with patch.object(data_source, 'SECTOR_UPDATE_STATE_PATH', str(state_path)):
+        data_source.save_ths_daily_update_confirmation('20260721', complete)
+        data_source.save_ths_daily_update_confirmation('20260722', partial)
+        state = data_source.get_ths_daily_update_confirmation()
+
+    assert state['industry_confirmed_date'] == '20260722'
+    assert state['concept_data_date'] == '20260722'
+    assert state['concept_confirmed_date'] == '20260721'
+    assert state['concept_status'] == 'partial'
+    assert state['concept_coverage'] == 0.5
+    assert state['concept_coverage_detail'] == {
+        'covered': 1,
+        'expected': 2,
+        'missing': ['D'],
+    }
+
+
 def test_sector_update_advances_confirmation_only_after_gate_passes():
     from backend.core import update_stock_data
 
@@ -368,3 +414,52 @@ def test_sector_update_advances_confirmation_only_after_gate_passes():
         assert update_stock_data.update_sectors() == (1, 0)
 
     save.assert_called_once_with('20260721', coverage)
+
+
+def test_sector_update_rechecks_coverage_after_targeted_concept_retry():
+    from backend.core import update_stock_data
+
+    initial = {
+        'ready': True,
+        'industry': {'expected': 1, 'covered': 1, 'ready': True},
+        'concept': {
+            'expected': 2, 'covered': 1, 'ready': True,
+            'missing': ['工业互联网'],
+        },
+        'missing': ['工业互联网'],
+        'industry_names': ['A'],
+        'concept_names': ['大飞机', '工业互联网'],
+    }
+    completed = {
+        'ready': True,
+        'industry': {'expected': 1, 'covered': 1, 'ready': True},
+        'concept': {
+            'expected': 2, 'covered': 2, 'ready': True,
+            'complete': True, 'missing': [],
+        },
+        'missing': [],
+        'industry_names': ['A'],
+        'concept_names': ['大飞机', '工业互联网'],
+    }
+    with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
+         patch.object(update_stock_data, 'datetime') as current_time, \
+         patch.object(update_stock_data, 'get_tracked_concept_universe', return_value={
+             'names': {'大飞机', '工业互联网'}, 'excluded': {},
+         }), \
+         patch.object(update_stock_data, 'get_ths_index_names', return_value=[('A', '881001.TI')]), \
+         patch.object(update_stock_data, 'fetch_ths_daily_klines_akshare', return_value=(2, 3)), \
+         patch.object(
+             update_stock_data,
+             'get_ths_daily_update_coverage',
+             side_effect=[initial, completed],
+         ) as get_coverage, \
+         patch.object(update_stock_data, 'retry_missing_ths_concepts', return_value={
+             'requested': 1, 'covered': 1, 'written': 1,
+         }) as retry, \
+         patch.object(update_stock_data, 'save_ths_daily_update_confirmation') as save:
+        current_time.now.return_value.weekday.return_value = 0
+        assert update_stock_data.update_sectors() == (1, 2)
+
+    retry.assert_called_once_with('20260721', ['工业互联网'])
+    assert get_coverage.call_count == 2
+    save.assert_called_once_with('20260721', completed)

@@ -228,7 +228,11 @@ def test_concept_mainline_estimates_only_when_concept_coverage_is_ready(monkeypa
 
     monkeypatch.setattr(concept_wave_service, 'judge_concept_wave', judge_wave)
     monkeypatch.setattr(data_layer, 'get_sector_daily', lambda: {'last_updated': '20260720'})
-    monkeypatch.setattr(data_layer, 'get_tracked_concept_names', lambda min_related_stocks=6: {'C', 'D'})
+    monkeypatch.setattr(
+        data_layer,
+        'get_tracked_concept_names',
+        lambda min_related_stocks=6, reference_date=None: {'C', 'D'},
+    )
     monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='N': {
         'C': _klines(),
         'D': _klines(1, 1000),
@@ -258,6 +262,58 @@ def test_concept_mainline_estimates_only_when_concept_coverage_is_ready(monkeypa
         'date': '20260721', 'open': 101.0, 'high': 109.0,
         'low': 100.0, 'close': 108.0, 'volume': 1600.0,
     }
+    assert not (tmp_path / 'history.json').exists()
+
+
+def test_concept_mainline_reports_partial_official_coverage(monkeypatch, tmp_path):
+    from backend.data_access import data_layer
+    from backend.services import concept_wave_service, review_compute_service
+
+    monkeypatch.setattr(
+        review_compute_service,
+        'MAINLINE_HISTORY_PATH',
+        str(tmp_path / 'history.json'),
+    )
+    monkeypatch.setattr(
+        concept_wave_service,
+        'judge_concept_wave',
+        lambda rows: {'stage': '上涨', 'vl_score': 1, 'volume_ratio': 1},
+    )
+    monkeypatch.setattr(data_layer, 'get_sector_daily', lambda: {
+        'concept_data_date': '20260722',
+        'concept_last_updated': '20260721',
+        'concept_status': 'partial',
+        'concept_coverage': 0.5,
+        'concept_coverage_detail': {
+            'covered': 1, 'expected': 2, 'missing': ['D'],
+        },
+    })
+    monkeypatch.setattr(
+        data_layer,
+        'get_tracked_concept_names',
+        lambda min_related_stocks=6, reference_date=None: {'C', 'D'},
+    )
+    current_rows = _klines(include_target=True)
+    current_rows[-1]['date'] = '20260722'
+    monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='N': {
+        'C': current_rows,
+        'D': _klines(),
+    })
+    monkeypatch.setattr(data_layer, 'get_sector_close_snapshot', lambda: {})
+    monkeypatch.setattr(
+        data_layer,
+        'get_sector_daily_snapshot',
+        lambda: type('Snapshot', (), {'concepts': {}})(),
+    )
+
+    result = review_compute_service.get_concept_mainline_data('2026-07-22')
+
+    assert result['ranking_status'] == 'partial'
+    assert result['ranking_date'] == '20260722'
+    assert result['confirmed_date'] == '20260721'
+    assert result['coverage'] == 0.5
+    assert result['coverage_detail']['missing'] == ['D']
+    assert [item['name'] for item in result['all_ranked']] == ['C']
     assert not (tmp_path / 'history.json').exists()
 
 

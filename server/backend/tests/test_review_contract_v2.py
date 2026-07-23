@@ -57,6 +57,38 @@ def test_estimated_sector_status_is_ready_without_pretending_to_be_confirmed():
     assert review['data_stale'] is False
 
 
+def test_partial_concept_status_keeps_review_partial_and_exposes_counts():
+    review = normalize_review_response({
+        'date': '2026-07-22',
+        'data_dates': {
+            'requested': '2026-07-22', 'index': '20260722',
+            'stocks': '20260722', 'sectors': '20260722',
+        },
+        'mainline': {
+            'ranking_status': 'confirmed',
+            'ranking_date': '20260722',
+            'concept_mainline': {
+                'ranking_status': 'partial',
+                'ranking_date': '20260722',
+                'confirmed_date': '20260721',
+                'coverage': 175 / 179,
+                'coverage_detail': {
+                    'covered': 175,
+                    'expected': 179,
+                    'missing': ['大飞机'],
+                },
+            },
+        },
+    })
+
+    assert review['data_status']['overall'] == 'partial'
+    assert review['data_status']['concept']['status'] == 'partial'
+    assert review['data_status']['concept']['date'] == '20260722'
+    assert review['data_status']['concept']['confirmed_date'] == '20260721'
+    assert review['data_status']['concept']['coverage_detail']['expected'] == 179
+    assert review['data_stale'] is True
+
+
 def test_archive_review_contract_marks_archive_source():
     review = normalize_review_response({'date': '2026-07-15'}, source='archive')
 

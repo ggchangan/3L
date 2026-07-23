@@ -12,8 +12,8 @@
   data_access/data_source.py  ← 多源路由
   data_access/tushare_db.py   ← MySQL驱动
 """
-import json, os
-from datetime import datetime
+import json, os, re
+from datetime import datetime, timedelta
 from backend.data_access.cache_layer import cache
 from backend.core.logger import get_logger
 
@@ -36,6 +36,7 @@ from backend.core.config import (
 # ── 局部路径常量（旧JSON文件已迁移至DB，保留供 fallback 读取）──
 ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
 INDEX_DATA_PATH = os.path.join(DATA_DIR, 'index_sh_data.json')
+CONCEPT_MAINLINE_MAX_STALE_CALENDAR_DAYS = 14
 
 # ====== 共享函数 — 从 threel_core 转发（加缓存）======
 
@@ -146,12 +147,22 @@ def get_watchlist_by_direction():
     return get_watchlist_by_direction()
 
 
-def get_tracked_concept_names(min_related_stocks=6):
-    """返回达到自选股关联门槛的概念集合，供更新和排名共用。"""
+def _concept_mainline_exclusion_reason(name):
+    """返回不适合参与概念主线排名的语义原因；个股概念标签不受影响。"""
+    value = str(name or '').strip()
+    if re.search(r'(成份股|样本股)$', value):
+        return 'index_membership'
+    if re.match(r'^\d{4}(?:一季报|中报|半年报|三季报|年报)', value):
+        return 'expired_periodic_event'
+    return ''
+
+
+def get_tracked_concept_universe(min_related_stocks=6, reference_date=None):
+    """构建可参与概念主线的活跃集合，并保留排除原因供诊断。"""
     concept_list = get_concept_list()
     stock_concept_map = get_stock_concept_map()
     watchlist_codes = {item.get('code', '') for item in get_watchlist()}
-    tracked = set()
+    candidates = {}
     for concept_code, info in concept_list.items():
         name = info.get('name', '')
         if not name:
@@ -162,8 +173,77 @@ def get_tracked_concept_names(min_related_stocks=6):
             and concept_code in stock_info.get('concept_codes', [])
         )
         if related >= min_related_stocks:
+            candidates[name] = related
+
+    if reference_date is None:
+        try:
+            from backend.data_access.data_source import get_last_completed_trading_day
+            reference_date = get_last_completed_trading_day()
+        except Exception:
+            reference_date = ''
+    reference_date = str(reference_date or '').replace('-', '')
+
+    semantic_excluded = {}
+    active_candidates = set()
+    for name in candidates:
+        reason = _concept_mainline_exclusion_reason(name)
+        if reason:
+            semantic_excluded[name] = {
+                'reason': reason,
+                'related_watchlist': candidates[name],
+            }
+        else:
+            active_candidates.add(name)
+
+    latest_dates = {}
+    try:
+        from backend.data_access.data_source import get_ths_concept_latest_dates
+        latest_dates = get_ths_concept_latest_dates(
+            active_candidates,
+            reference_date=reference_date,
+        )
+    except Exception as exc:
+        log.warning('读取概念最近日线失败，暂不执行停更过滤: %s', exc)
+
+    stale_cutoff = ''
+    if len(reference_date) == 8:
+        try:
+            stale_cutoff = (
+                datetime.strptime(reference_date, '%Y%m%d')
+                - timedelta(days=CONCEPT_MAINLINE_MAX_STALE_CALENDAR_DAYS)
+            ).strftime('%Y%m%d')
+        except ValueError:
+            stale_cutoff = ''
+
+    tracked = set()
+    inactive_excluded = {}
+    for name in active_candidates:
+        latest_date = str(latest_dates.get(name, '') or '').replace('-', '')
+        if stale_cutoff and latest_date and latest_date < stale_cutoff:
+            inactive_excluded[name] = {
+                'reason': 'source_inactive',
+                'last_date': latest_date,
+                'related_watchlist': candidates[name],
+            }
+        else:
             tracked.add(name)
-    return tracked
+
+    return {
+        'names': tracked,
+        'reference_date': reference_date,
+        'excluded': {
+            **semantic_excluded,
+            **inactive_excluded,
+        },
+    }
+
+
+def get_tracked_concept_names(min_related_stocks=6, reference_date=None):
+    """返回达到自选股门槛、适合主线排名且数据源仍活跃的概念集合。"""
+    return get_tracked_concept_universe(
+        min_related_stocks=min_related_stocks,
+        reference_date=reference_date,
+    )['names']
 
 
 def get_industry_map():
@@ -322,7 +402,22 @@ def get_sector_daily():
         confirmation = bootstrap_ths_daily_update_confirmation()
     return {
         'last_updated': confirmation.get('confirmed_date', ''),
+        'industry_last_updated': confirmation.get(
+            'industry_confirmed_date',
+            confirmation.get('confirmed_date', ''),
+        ),
+        'concept_last_updated': confirmation.get(
+            'concept_confirmed_date',
+            confirmation.get('confirmed_date', ''),
+        ),
+        'concept_data_date': confirmation.get(
+            'concept_data_date',
+            confirmation.get('confirmed_date', ''),
+        ),
+        'concept_status': confirmation.get('concept_status', 'confirmed'),
         'coverage': confirmation.get('industry_coverage', 0),
+        'concept_coverage': confirmation.get('concept_coverage', 0),
+        'concept_coverage_detail': confirmation.get('concept_coverage_detail', {}),
         **klines,
     }
 
@@ -857,6 +952,12 @@ def get_ths_daily_update_coverage(names_to_update, target_date):
     return _fn(names_to_update, target_date)
 
 
+def retry_missing_ths_concepts(target_date, concept_names):
+    """通过同花顺原始 K 线通道定向补齐批量更新遗漏的有效概念。"""
+    from backend.data_access.data_source import retry_missing_ths_concepts as _fn
+    return _fn(target_date, concept_names)
+
+
 def get_ths_daily_update_confirmation():
     """读取上次通过门禁的权威板块状态。"""
     from backend.data_access.data_source import get_ths_daily_update_confirmation as _fn
@@ -876,7 +977,10 @@ def refresh_sector_close_snapshot(target_date):
     industry_names = confirmation.get('industry_names', [])
     if len(industry_names) < 80:
         raise RuntimeError('权威行业基线未就绪，不生成收盘预估快照')
-    concept_names = sorted(get_tracked_concept_names(min_related_stocks=6))
+    concept_names = sorted(get_tracked_concept_names(
+        min_related_stocks=6,
+        reference_date=target_date,
+    ))
     return _fn(target_date, industry_names, concept_names)
 
 

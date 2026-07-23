@@ -18,7 +18,7 @@ function formatDate(value?: string) {
 }
 
 function coverageText(item: ReviewDataStatusItem) {
-  if (item.status !== 'estimated' || item.coverage == null) return ''
+  if (!['estimated', 'partial'].includes(item.status) || item.coverage == null) return ''
   const detail = item.coverage_detail
   const counts = detail?.covered != null && detail?.expected != null
     ? `，${detail.covered}/${detail.expected}`
@@ -29,6 +29,7 @@ function coverageText(item: ReviewDataStatusItem) {
 function statusText(item: ReviewDataStatusItem) {
   if (item.status === 'confirmed') return '正式数据'
   if (item.status === 'estimated') return `当日预估${coverageText(item)}`
+  if (item.status === 'partial') return `部分正式数据${coverageText(item)}`
   if (item.status === 'stale') return '待补齐'
   return '状态未知'
 }
@@ -43,10 +44,11 @@ export default function ReviewDataStatus({ dataStatus }: Props) {
     value: dataStatus[key] || { status: 'unknown' as const },
   }))
   const hasEstimate = items.some(item => item.value.status === 'estimated')
+  const hasPartial = items.some(item => item.value.status === 'partial')
   const hasStale = items.some(item => item.value.status === 'stale' || item.value.status === 'unknown')
 
   return (
-    <div className={`review-data-status${hasStale ? ' warning' : ''}`} role="status">
+    <div className={`review-data-status${hasStale || hasPartial ? ' warning' : ''}`} role="status">
       <div className="review-data-status-title">当日复盘数据</div>
       <div className="review-data-status-items">
         {items.map(item => (
@@ -58,6 +60,11 @@ export default function ReviewDataStatus({ dataStatus }: Props) {
       {hasEstimate && (
         <div className="review-data-status-note">
           行业、概念为当日预估；未覆盖个股暂显示“待确认”。次日 06:00 使用正式 THS 日线重新计算。
+        </div>
+      )}
+      {!hasEstimate && hasPartial && (
+        <div className="review-data-status-note">
+          部分有效概念的正式日线尚未补齐；缺失概念已从当日排名中排除并明确显示覆盖率。
         </div>
       )}
       {!hasEstimate && hasStale && (

@@ -3,10 +3,16 @@ import { fetchReviewByDate } from '../lib/api'
 import type { LineItem } from '../lib/types'
 
 interface MainlineData {
-  ranking_status?: 'confirmed' | 'estimated' | 'stale'
+  ranking_status?: 'confirmed' | 'estimated' | 'partial' | 'stale'
   ranking_date?: string
   base_date?: string
   estimate_coverage?: number | null
+  coverage?: number | null
+  coverage_detail?: {
+    covered?: number | null
+    expected?: number | null
+    missing?: string[]
+  }
   calibration?: {
     status: 'pending' | 'completed'
     top5_overlap?: number
@@ -171,6 +177,15 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
       {activeData?.ranking_status === 'stale' && (
         <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#aaa', background: 'rgba(255,255,255,0.04)' }}>
           当日快照覆盖不足，暂沿用 {activeData.base_date || activeData.ranking_date || '上一交易日'} 已确认排名
+        </div>
+      )}
+      {activeData?.ranking_status === 'partial' && (
+        <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#ffd166', background: 'rgba(255,209,102,0.1)' }}>
+          正式日线部分缺失 · 覆盖 {((activeData.coverage || 0) * 100).toFixed(1)}%
+          {activeData.coverage_detail?.covered != null && activeData.coverage_detail?.expected != null
+            ? `（${activeData.coverage_detail.covered}/${activeData.coverage_detail.expected}）`
+            : ''}
+          · 缺失概念不参与当日排名
         </div>
       )}
       {activeData?.ranking_status === 'confirmed' && activeData.calibration?.status === 'completed' && (
