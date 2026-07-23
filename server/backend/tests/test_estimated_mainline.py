@@ -51,9 +51,13 @@ def test_mainline_uses_close_snapshot_for_estimated_20d_ranking(monkeypatch, tmp
     monkeypatch.setattr(review_compute_service, 'MAINLINE_HISTORY_PATH', str(tmp_path / 'history.json'))
     monkeypatch.setattr(review_compute_service, 'MAINLINE_CALIBRATION_PATH', str(tmp_path / 'calibration.json'))
     monkeypatch.setattr(review_compute_service, 'get_industry_rankings', lambda: [])
-    monkeypatch.setattr(concept_wave_service, 'judge_concept_wave', lambda rows: {
-        'stage': '上涨', 'vl_score': 1, 'volume_ratio': 1,
-    })
+    judged_rows = []
+
+    def judge_wave(rows):
+        judged_rows.append(rows)
+        return {'stage': '上涨', 'vl_score': 1, 'volume_ratio': 1}
+
+    monkeypatch.setattr(concept_wave_service, 'judge_concept_wave', judge_wave)
     monkeypatch.setattr(data_layer, 'get_sector_daily', lambda: {'last_updated': '20260720'})
     monkeypatch.setattr(data_layer, 'get_ths_daily_update_confirmation', lambda: {
         'industry_names': ['A', 'B', 'C'],
@@ -61,7 +65,13 @@ def test_mainline_uses_close_snapshot_for_estimated_20d_ranking(monkeypatch, tmp
     monkeypatch.setattr(data_layer, 'get_sector_close_snapshot', lambda: {
         'date': '20260721',
         'coverage': {'industry': {'ready': True, 'ratio': 0.9}},
-        'industries': {'A': {'change_pct': 10.0}, 'B': {'change_pct': 0.0}},
+        'industries': {
+            'A': {
+                'change_pct': 10.0, 'open': 102, 'high': 111,
+                'low': 101, 'close': 110, 'volume': 2000,
+            },
+            'B': {'change_pct': 0.0},
+        },
     })
     monkeypatch.setattr(
         data_layer, 'get_sector_daily_snapshot',
@@ -83,6 +93,15 @@ def test_mainline_uses_close_snapshot_for_estimated_20d_ranking(monkeypatch, tmp
     assert [item['name'] for item in result['all_ranked']] == ['A', 'B']
     assert result['all_ranked'][0]['chg_20d'] == 10.0
     assert result['all_ranked'][0]['estimate_applied'] is True
+    assert all(rows[-1]['date'] == '20260721' for rows in judged_rows)
+    estimated_a = next(rows[-1] for rows in judged_rows if rows[-1]['close'] == 110)
+    assert estimated_a == {
+        'date': '20260721', 'open': 102.0, 'high': 111.0,
+        'low': 101.0, 'close': 110.0, 'volume': 2000.0,
+    }
+    # 缺少成交量时用历史均量保持中性，不能误判成缩量波谷。
+    estimated_b = next(rows[-1] for rows in judged_rows if rows[-1]['close'] == 100)
+    assert estimated_b['volume'] == 1000
     assert result['calibration']['status'] == 'pending'
     assert not (tmp_path / 'history.json').exists()
 
@@ -201,9 +220,13 @@ def test_concept_mainline_estimates_only_when_concept_coverage_is_ready(monkeypa
     from backend.services import concept_wave_service, review_compute_service
 
     monkeypatch.setattr(review_compute_service, 'MAINLINE_HISTORY_PATH', str(tmp_path / 'history.json'))
-    monkeypatch.setattr(concept_wave_service, 'judge_concept_wave', lambda rows: {
-        'stage': '上涨', 'vl_score': 1, 'volume_ratio': 1,
-    })
+    judged_rows = []
+
+    def judge_wave(rows):
+        judged_rows.append(rows)
+        return {'stage': '上涨', 'vl_score': 1, 'volume_ratio': 1}
+
+    monkeypatch.setattr(concept_wave_service, 'judge_concept_wave', judge_wave)
     monkeypatch.setattr(data_layer, 'get_sector_daily', lambda: {'last_updated': '20260720'})
     monkeypatch.setattr(data_layer, 'get_tracked_concept_names', lambda min_related_stocks=6: {'C', 'D'})
     monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='N': {
@@ -213,7 +236,12 @@ def test_concept_mainline_estimates_only_when_concept_coverage_is_ready(monkeypa
     monkeypatch.setattr(data_layer, 'get_sector_close_snapshot', lambda: {
         'date': '20260721',
         'coverage': {'concept': {'ready': True, 'ratio': 0.85}},
-        'concepts': {'C': {'change_pct': 8.0}},
+        'concepts': {
+            'C': {
+                'change_pct': 8.0, 'open': 101, 'high': 109,
+                'low': 100, 'close': 108, 'volume': 1600,
+            },
+        },
     })
     monkeypatch.setattr(
         data_layer, 'get_sector_daily_snapshot',
@@ -226,6 +254,10 @@ def test_concept_mainline_estimates_only_when_concept_coverage_is_ready(monkeypa
     assert result['estimate_coverage'] == 0.85
     assert result['all_ranked'][0]['estimate_applied'] is True
     assert [item['name'] for item in result['all_ranked']] == ['C']
+    assert judged_rows[0][-1] == {
+        'date': '20260721', 'open': 101.0, 'high': 109.0,
+        'low': 100.0, 'close': 108.0, 'volume': 1600.0,
+    }
     assert not (tmp_path / 'history.json').exists()
 
 

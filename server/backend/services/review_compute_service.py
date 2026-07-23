@@ -53,6 +53,53 @@ def is_trading_day(date_str):
     return _is_trading_day(date_str)
 
 
+def _append_estimated_sector_kline(klines, snapshot, target_date, change_pct):
+    """把目标日收盘快照追加为临时 K 线，供当日阶段与量价判断使用。"""
+    if not klines or not snapshot:
+        return klines
+
+    def _number(value, default=None):
+        try:
+            result = float(value)
+            return result if math.isfinite(result) else default
+        except (TypeError, ValueError):
+            return default
+
+    previous_close = _number(klines[-1].get('close'))
+    if previous_close is None or previous_close <= 0:
+        return klines
+
+    close = _number(snapshot.get('close'))
+    if close is None or close <= 0:
+        close = previous_close * (1 + float(change_pct) / 100)
+
+    open_price = _number(snapshot.get('open'), close)
+    if open_price is None or open_price <= 0:
+        open_price = close
+    high = _number(snapshot.get('high'), max(open_price, close))
+    low = _number(snapshot.get('low'), min(open_price, close))
+    high = max(high or close, open_price, close)
+    low = min(low or close, open_price, close)
+
+    volume = _number(snapshot.get('volume'))
+    if volume is None or volume <= 0:
+        recent_volumes = [
+            _number(row.get('volume'))
+            for row in klines[-20:]
+        ]
+        recent_volumes = [value for value in recent_volumes if value and value > 0]
+        volume = sum(recent_volumes) / len(recent_volumes) if recent_volumes else 0
+
+    return [*klines, {
+        'date': target_date,
+        'open': open_price,
+        'high': high,
+        'low': low,
+        'close': close,
+        'volume': volume,
+    }]
+
+
 # ═══════════════════════════════════════════════════════════════
 # 数据获取（外部 API / akshare）
 # ═══════════════════════════════════════════════════════════════
@@ -453,14 +500,21 @@ def get_mainline_data(date_str):
                 chg_1d = float(chg_1d)
             estimate_applied = estimate_snap is not None and len(klines) >= 19
             if estimate_applied:
-                estimated_close = float(klines[-1]['close']) * (1 + chg_1d / 100)
-                chg_20d = (estimated_close / float(klines[-19]['close']) - 1) * 100
+                analysis_klines = _append_estimated_sector_kline(
+                    klines, estimate_snap, target_date, chg_1d,
+                )
+                chg_20d = (
+                    float(analysis_klines[-1]['close'])
+                    / float(analysis_klines[-20]['close']) - 1
+                ) * 100
             elif len(klines) >= 20:
+                analysis_klines = klines
                 chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
             else:
+                analysis_klines = klines
                 chg_20d = 0  # 历史不足，不参与20日排名
-            # 阶段判定
-            wave = _judge_wave(klines)
+            # 预估榜也必须使用目标日临时 K 线判断阶段，不能沿用上一日结论。
+            wave = _judge_wave(analysis_klines)
             stage = wave.get('stage', '--')
             vl_score = wave.get('vl_score', 0)
             volume_ratio = wave.get('volume_ratio', 0)
@@ -598,12 +652,18 @@ def get_concept_mainline_data(date_str):
                 chg_1d = 0
             estimate_applied = estimate_snap is not None and len(klines) >= 19
             if estimate_applied:
-                estimated_close = float(klines[-1]['close']) * (1 + chg_1d / 100)
-                chg_20d = (estimated_close / float(klines[-19]['close']) - 1) * 100
+                analysis_klines = _append_estimated_sector_kline(
+                    klines, estimate_snap, target_date, chg_1d,
+                )
+                chg_20d = (
+                    float(analysis_klines[-1]['close'])
+                    / float(analysis_klines[-20]['close']) - 1
+                ) * 100
             else:
+                analysis_klines = klines
                 chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
-            # 阶段判定
-            wave = _judge_wave(klines)
+            # 概念榜与行业榜使用相同的目标日临时 K 线口径。
+            wave = _judge_wave(analysis_klines)
             stage = wave.get('stage', '--')
             vl_score = wave.get('vl_score', 0)
             volume_ratio = wave.get('volume_ratio', 0)
