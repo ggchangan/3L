@@ -405,7 +405,9 @@ def test_sector_update_advances_confirmation_only_after_gate_passes():
     }
     with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
          patch.object(update_stock_data, 'datetime') as current_time, \
-         patch.object(update_stock_data, 'get_tracked_concept_names', return_value=set()), \
+         patch.object(update_stock_data, 'get_tracked_concept_universe', return_value={
+             'names': set(), 'excluded': {},
+         }), \
          patch.object(update_stock_data, 'get_ths_index_names', return_value=[('A', '881001.TI')]), \
          patch.object(update_stock_data, 'fetch_ths_daily_klines_akshare', return_value=(1, 1)), \
          patch.object(update_stock_data, 'get_ths_daily_update_coverage', return_value=coverage), \

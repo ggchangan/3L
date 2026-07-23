@@ -1,4 +1,5 @@
 """复盘 API v3 契约：统一接口语义、行业字段和数据时效。"""
+from contextlib import nullcontext
 import threading
 import time
 
@@ -110,6 +111,8 @@ def test_background_refresh_is_single_flight(monkeypatch):
     monkeypatch.setattr(review_service, 'compute_review_real_time', fake_compute)
     monkeypatch.setattr(review_service, 'get_completed_review_date', lambda: '2026-07-21')
     monkeypatch.setattr(review_service, 'save_review_data', saved.append)
+    # 单飞测试不依赖跨进程文件锁，避免与正在运行的生产服务互相等待。
+    monkeypatch.setattr(review_service, 'review_refresh_file_lock', nullcontext)
     with review_service._review_refresh_lock:
         review_service._review_refresh_state.update({
             'status': 'idle', 'started_at': '', 'completed_at': '', 'error': '',
