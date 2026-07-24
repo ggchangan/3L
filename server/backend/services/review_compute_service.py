@@ -962,15 +962,23 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     mf_filter = mf.get('filter', 'normal')
     opportunity_map = opportunity_map or {}
     momentum_rank = {}
+    momentum_meta = {}
     ranked_sets = [
-        mainline_data.get('all_ranked', []),
-        (mainline_data.get('concept_mainline') or {}).get('all_ranked', []),
+        ('行业', mainline_data.get('all_ranked', [])),
+        ('概念', (mainline_data.get('concept_mainline') or {}).get('all_ranked', [])),
     ]
-    for ranked in ranked_sets:
+    for source, ranked in ranked_sets:
         for index, entry in enumerate(ranked):
             name = entry.get('name', '')
             if name:
-                momentum_rank[name] = min(momentum_rank.get(name, 10_000), index + 1)
+                rank = index + 1
+                if rank < momentum_rank.get(name, 10_000):
+                    momentum_rank[name] = rank
+                    momentum_meta[name] = {
+                        'rank': rank,
+                        'total': len(ranked),
+                        'source': source,
+                    }
 
     # 大盘过滤覆盖策略
     if mf_filter == 'reduce':
@@ -1107,6 +1115,16 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             sig_txt = bs.get('action_signal', '')
             pri = bs.get('action_priority', '高')
             sector_unavailable = not sec_name or sec_name not in opportunity_map
+            momentum_names = [
+                name for name in (sec_name, direction, matched_mainline_direction)
+                if name and name in momentum_rank
+            ]
+            momentum_name = min(
+                momentum_names,
+                key=lambda name: momentum_rank[name],
+                default='',
+            )
+            momentum_info = momentum_meta.get(momentum_name, {})
             # 板块已覆盖时，机会类型只影响排序和仓位判断，不改变“买入”操作。
             # 只有板块数据完全未覆盖，才将操作降级为“待确认”。
             decision_status = 'executable'
@@ -1136,11 +1154,10 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'industry': sec_name,
                 'sector': sec_name,
                 'direction': direction,
-                'momentum_rank': min(
-                    momentum_rank.get(sec_name, 10_000),
-                    momentum_rank.get(direction, 10_000),
-                    momentum_rank.get(matched_mainline_direction, 10_000),
-                ),
+                'momentum_rank': momentum_info.get('rank', 10_000),
+                'momentum_total': momentum_info.get('total'),
+                'momentum_source': momentum_info.get('source', ''),
+                'momentum_direction': momentum_name,
                 'opportunity': bs_opp,
                 'sector_context': describe_sector_context(bs_opp, bs.get('mainline_level', '')),
                 'opp_reason': opp_reason,
@@ -1177,9 +1194,14 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         # 0-100；趋势系统的固定5只表示命中。仅对有质量含义的分数
         # 归一化，避免有效的4分突破被当成低质量信号。
         trading_system = item.get('trading_system', '3l')
+        is_native_3l_score = (
+            score is not None
+            and 0 <= score <= 5
+            and trading_system == '3l'
+        )
         if score is None:
             normalized_score = None
-        elif 0 <= score <= 5 and trading_system == '3l':
+        elif is_native_3l_score:
             normalized_score = score * 20
         elif 0 <= score <= 5:
             # 趋势系统当前固定以 score=5 表示“命中趋势买点”，它不是质量分。
@@ -1193,9 +1215,18 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             if signal.get('direction') == 'bullish'
         ]
         quality_candidates = [value for value in [normalized_score, *bullish_confidences] if value is not None]
-        quality_score = min(100, max(quality_candidates)) if quality_candidates else None
+        quality_score = round(min(100, max(quality_candidates))) if quality_candidates else None
+        if bullish_confidences and max(bullish_confidences) >= (normalized_score or 0):
+            quality_basis = '多信号融合置信度'
+        elif normalized_score is not None and is_native_3l_score:
+            quality_basis = '3L买点等级'
+        elif normalized_score is not None:
+            quality_basis = '融合信号置信度'
+        else:
+            quality_basis = ''
         score_ready = quality_score is None or quality_score >= 60
         item['quality_score'] = quality_score
+        item['quality_basis'] = quality_basis
         momentum = item.get('momentum_rank', 10_000)
         is_mainline = (
             item.get('mainline_level', '') in ('主线', '次级主线')
@@ -1303,6 +1334,10 @@ def apply_trading_plan_actions(buy_signals_review, trading_plan):
         signal['attention_tier'] = item.get('attention_tier', 'ordinary')
         signal['attention_reason'] = item.get('attention_reason', '')
         signal['quality_score'] = item.get('quality_score')
+        signal['quality_basis'] = item.get('quality_basis', '')
+        signal['momentum_total'] = item.get('momentum_total')
+        signal['momentum_source'] = item.get('momentum_source', '')
+        signal['momentum_direction'] = item.get('momentum_direction', '')
         signal['action_type'] = item.get('action_type', signal.get('action_type', '买入'))
         if item.get('decision_status') == 'blocked':
             signal['action_reason'] = item.get('opp_reason') or item.get('reason') or '板块数据待补齐'

@@ -168,9 +168,19 @@ describe('TradingPlan action semantics', () => {
   it('突出重点和次级观察，并默认折叠普通技术信号', () => {
     render(<TradingPlan plan={{
       buy_priority: [
-        { code: '1', name: '重点股', attention_tier: 'focus', decision_status: 'executable', action_type: '买入', momentum_rank: 3, score: 4, quality_score: 80 },
+        {
+          code: '1', name: '重点股', attention_tier: 'focus', decision_status: 'executable',
+          action_type: '买入', momentum_rank: 4, momentum_total: 319,
+          momentum_source: '行业', momentum_direction: '半导体', score: 4,
+          quality_score: 80, quality_basis: '3L买点等级',
+        },
         { code: '2', name: '观察股', attention_tier: 'watch', decision_status: 'candidate', action_type: '买入' },
-        { code: '3', name: '普通信号股', attention_tier: 'ordinary', decision_status: 'signal_only', action_type: '买入' },
+        {
+          code: '3', name: '普通信号股', attention_tier: 'ordinary', decision_status: 'signal_only',
+          action_type: '买入', momentum_rank: 137, momentum_total: 319,
+          momentum_source: '行业', momentum_direction: '消费电子',
+          quality_score: 66.57076461728134, quality_basis: '多信号融合置信度',
+        },
       ],
       buy_summary: {
         total: 3, focus: 1, watch: 1, ordinary: 1, market_regime: 'weak',
@@ -185,23 +195,31 @@ describe('TradingPlan action semantics', () => {
     expect(screen.getByText('普通信号 1')).toBeTruthy()
     expect(screen.getByText('🔥 重点关注 (1)')).toBeTruthy()
     expect(screen.getByText('👀 次级观察 (1)')).toBeTruthy()
-    expect(screen.getByText('动量#3')).toBeTruthy()
-    expect(screen.getByText('质量80')).toBeTruthy()
+    expect(screen.getByText('指标说明：如何理解动量与质量？')).toBeTruthy()
+    expect(screen.getByText('动量第4/319（前2%）')).toBeTruthy()
+    expect(screen.getByText('质量80/100')).toBeTruthy()
     expect(screen.queryByText('普通信号股')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '展开普通技术信号 (1)' }))
     expect(screen.getByText('普通信号股')).toBeTruthy()
+    const momentum = screen.getByText('动量第137/319（前43%）')
+    expect(momentum.getAttribute('title')).toContain('行业动量榜')
+    expect(momentum.getAttribute('title')).toContain('匹配方向：消费电子')
+    const quality = screen.getByText('质量67/100')
+    expect(quality.getAttribute('title')).toContain('不是上涨概率')
+    expect(quality.getAttribute('title')).toContain('多信号融合置信度')
   })
 
   it('旧缓存没有分层字段时保守归入普通信号', () => {
     render(<TradingPlan plan={{
       buy_priority: [
-        { code: '1', name: '旧缓存股票', decision_status: 'executable', action_type: '买入' },
+        { code: '1', name: '旧缓存股票', decision_status: 'executable', action_type: '买入', momentum_rank: 3 },
       ],
     }} />)
 
     expect(screen.getByText('重点 0')).toBeTruthy()
     expect(screen.getByText('普通信号 1')).toBeTruthy()
+    expect(screen.getByText('历史缓存未按当前规则重新分层，动量名次仅供参考。')).toBeTruthy()
     expect(screen.queryByText('🔥 重点关注 (1)')).toBeNull()
     expect(screen.queryByText('旧缓存股票')).toBeNull()
   })

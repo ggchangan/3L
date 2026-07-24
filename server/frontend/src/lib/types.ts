@@ -209,7 +209,11 @@ export interface BuySignalItem {
   attention_tier?: 'focus' | 'watch' | 'ordinary'
   attention_reason?: string
   momentum_rank?: number
+  momentum_total?: number | null
+  momentum_source?: '行业' | '概念' | string
+  momentum_direction?: string
   quality_score?: number | null
+  quality_basis?: string
 }
 
 /** 止损预警API返回类型 */

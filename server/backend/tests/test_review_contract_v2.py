@@ -261,6 +261,41 @@ def test_trading_plan_uses_momentum_rank_within_same_direction_level():
 
     assert [item['code'] for item in plan['buy_priority']] == ['000001', '000002']
     assert [item['momentum_rank'] for item in plan['buy_priority']] == [1, 2]
+    assert [item['momentum_total'] for item in plan['buy_priority']] == [2, 2]
+    assert [item['momentum_source'] for item in plan['buy_priority']] == ['行业', '行业']
+    assert [item['momentum_direction'] for item in plan['buy_priority']] == ['第一方向', '第二方向']
+
+
+def test_trading_plan_explains_concept_momentum_and_rounds_quality_score():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'strong'},
+        mainline_data={
+            'lines': [],
+            'all_ranked': [{'name': '行业方向'}],
+            'concept_mainline': {
+                'all_ranked': [
+                    {'name': '第一概念'}, {'name': '目标概念'}, {'name': '第三概念'},
+                ],
+            },
+        },
+        signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '概念买点', 'industry': '普通行业',
+            'matched_mainline_direction': '目标概念', 'action_type': '买入',
+            'triggered_signals': [{
+                'direction': 'bullish', 'confidence': 66.57076461728134,
+            }],
+        }],
+        opportunity_map={'普通行业': '--'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['momentum_rank'] == 2
+    assert item['momentum_total'] == 3
+    assert item['momentum_source'] == '概念'
+    assert item['momentum_direction'] == '目标概念'
+    assert item['quality_score'] == 67
+    assert item['quality_basis'] == '多信号融合置信度'
 
 
 def test_trading_plan_separates_focus_watch_and_ordinary_signals_in_weak_market():
