@@ -26,6 +26,7 @@ export default function TradingPlan({ plan }: Props) {
   const [showOrdinary, setShowOrdinary] = useState(false)
   if (!plan) return <div className="empty">暂无交易计划</div>
   const buyItems = plan.buy_priority || []
+  const hasLegacyTierItems = buyItems.some(item => !item.attention_tier)
   // 旧缓存没有分层字段，必须保守归为普通信号，不能把历史 executable
   // 直接升级成“重点关注”。
   const tierOf = (item: any) => item.attention_tier || 'ordinary'
@@ -112,7 +113,26 @@ export default function TradingPlan({ plan }: Props) {
           <div style={{ color: summary.market_regime === 'weak' ? '#ff9800' : '#4ecdc4', fontSize: 12 }}>
             {summary.conclusion}
           </div>
+          {hasLegacyTierItems && (
+            <div style={{ color: '#ff9800', fontSize: 10, marginTop: 5 }}>
+              历史缓存未按当前规则重新分层，动量名次仅供参考。
+            </div>
+          )}
           <div style={{ color: '#666', fontSize: 10, marginTop: 5 }}>排序：{summary.ranking_rule}</div>
+          <details style={{ marginTop: 7, color: '#888', fontSize: 11 }}>
+            <summary style={{ cursor: 'pointer', color: '#58a6ff' }}>指标说明：如何理解动量与质量？</summary>
+            <div style={{ marginTop: 6, lineHeight: 1.7 }}>
+              <div>
+                <strong style={{ color: '#aaa' }}>动量排名</strong>：对应行业或概念在当日板块动量榜中的位置。
+                名次越靠前，说明该方向近期量价表现越强；前20进入重点条件，21–50进入次级观察。
+              </div>
+              <div>
+                <strong style={{ color: '#aaa' }}>质量分</strong>：0–100 的个股买点确认强度，由3L买点等级或多信号融合置信度换算。
+                对可计算质量分的3L/融合信号，60分是进入重点/次级的最低条件；趋势买点当前不计算质量分，按已命中买点参与方向分层。
+                它不是上涨概率，也不能替代大盘和主线判断。
+              </div>
+            </div>
+          </details>
         </div>
       )}
 
@@ -173,11 +193,37 @@ function BuyActionTable({ title, items }: { title: string; items: any[] }) {
       renderExtra={() => null}
       rightCol={item => {
         const chg = item.change || 0
+        const momentumPercent = item.momentum_total && item.momentum_rank
+          ? Math.max(1, Math.ceil(item.momentum_rank / item.momentum_total * 100))
+          : null
+        const momentumText = item.momentum_rank && item.momentum_rank < 10000
+          ? `动量第${item.momentum_rank}${item.momentum_total ? `/${item.momentum_total}` : ''}${momentumPercent ? `（前${momentumPercent}%）` : ''}`
+          : ''
+        const momentumHelp = [
+          item.momentum_source ? `${item.momentum_source}动量榜` : '板块动量榜',
+          item.momentum_direction ? `匹配方向：${item.momentum_direction}` : '',
+          item.momentum_total ? `共${item.momentum_total}个方向` : '',
+          '名次越靠前代表近期量价动量越强；前20为重点条件，21–50为次级观察。',
+        ].filter(Boolean).join('；')
+        const qualityText = item.quality_score != null ? Math.round(item.quality_score) : null
+        const qualityHelp = [
+          '质量分表示个股买点确认强度，不是上涨概率',
+          item.quality_basis ? `来源：${item.quality_basis}` : '',
+          '满分100；对可计算质量分的3L/融合信号，60分为进入重点/次级的最低条件',
+        ].filter(Boolean).join('；')
         return <>
           <span style={{color: chg >= 0 ? '#ff4444' : '#44aa44', fontSize: 11, marginRight: 6}}>{chg >= 0 ? '+' : ''}{chg}%</span>
           {item.is_main && <span className="tag red" style={{fontSize:9}}>主线</span>}
-          {item.momentum_rank && item.momentum_rank < 10000 && <span style={{ color: '#58a6ff', fontSize: 9, marginLeft: 4 }}>动量#{item.momentum_rank}</span>}
-          {item.quality_score != null && <span style={{ color: '#aaa', fontSize: 9, marginLeft: 4 }}>质量{item.quality_score}</span>}
+          {momentumText && (
+            <span title={momentumHelp} style={{ color: '#58a6ff', fontSize: 9, marginLeft: 4, cursor: 'help' }}>
+              {momentumText}
+            </span>
+          )}
+          {qualityText != null && (
+            <span title={qualityHelp} style={{ color: '#aaa', fontSize: 9, marginLeft: 4, cursor: 'help' }}>
+              质量{qualityText}/100
+            </span>
+          )}
         </>
       }}
     />
