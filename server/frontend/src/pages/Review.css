@@ -89,8 +89,8 @@
 /* 大盘层先给结论，再展开指数和周期细节 */
 .market-regime-banner {
   display: grid;
-  grid-template-columns: minmax(120px, 0.7fr) minmax(260px, 2fr) auto;
-  gap: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
   align-items: center;
   margin-bottom: 18px;
   padding: 16px 18px;
@@ -104,15 +104,24 @@
 .market-regime-banner.neutral { border-left-color: #ffd166; background: rgba(255, 209, 102, 0.07); }
 .market-regime-banner.weak { border-left-color: #4ecdc4; background: rgba(78, 205, 196, 0.07); }
 .market-regime-banner.unknown { border-left-color: #777; }
+.market-regime-banner.risk-main_decline { border-left-color: #e94560; background: rgba(233, 69, 96, 0.08); }
 
 .market-regime-label { color: #888; font-size: 11px; }
 .market-regime-title { margin-top: 3px; color: #f3f3f3; font-size: 24px; font-weight: 800; letter-spacing: 1px; }
-.market-regime-banner.strong .market-regime-title { color: #ff6b7d; }
-.market-regime-banner.neutral .market-regime-title { color: #ffd166; }
-.market-regime-banner.weak .market-regime-title { color: #4ecdc4; }
-.market-regime-copy { display: flex; flex-direction: column; gap: 5px; font-size: 12px; line-height: 1.55; color: #aaa; }
+.market-regime-banner.strong .market-dimension.environment .market-regime-title { color: #ff6b7d; }
+.market-regime-banner.neutral .market-dimension.environment .market-regime-title { color: #ffd166; }
+.market-regime-banner.weak .market-dimension.environment .market-regime-title { color: #4ecdc4; }
+.market-dimension { min-width: 0; padding: 0 18px; border-left: 1px solid rgba(255,255,255,.08); }
+.market-dimension:first-child { padding-left: 0; border-left: 0; }
+.market-dimension.risk.main_decline .market-regime-title { color: #ff526d; }
+.market-dimension.risk.risk_rising .market-regime-title { color: #ff9f43; }
+.market-dimension.risk.valley_recovery .market-regime-title { color: #22c55e; }
+.market-dimension.risk.normal .market-regime-title { color: #4ecdc4; }
+.market-dimension.risk.unknown .market-regime-title { color: #888; }
+.market-dimension.wave .market-regime-title { color: #ffd166; }
+.market-regime-copy { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 5px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); font-size: 12px; line-height: 1.55; color: #aaa; }
 .market-regime-copy strong { color: #eee; font-size: 14px; }
-.market-regime-meta { display: flex; flex-direction: column; gap: 4px; padding-left: 14px; border-left: 1px solid rgba(255,255,255,.08); color: #888; font-size: 11px; white-space: nowrap; }
+.market-regime-meta { grid-column: 1 / -1; display: flex; flex-direction: row; flex-wrap: wrap; gap: 12px; margin-top: 8px; color: #888; font-size: 11px; white-space: nowrap; }
 .market-index-date-note { margin: -8px 0 12px; color: #c9a94b; font-size: 11px; }
 
 table {
@@ -201,5 +210,7 @@ table td {
   .grid-4 { grid-template-columns: repeat(2, 1fr); }
   .review-data-status { margin-right: 12px; margin-left: 12px; }
   .market-regime-banner { grid-template-columns: 1fr; gap: 10px; }
-  .market-regime-meta { padding-left: 0; padding-top: 8px; border-left: 0; border-top: 1px solid rgba(255,255,255,.08); flex-direction: row; flex-wrap: wrap; }
+  .market-dimension { padding: 10px 0 0; border-left: 0; border-top: 1px solid rgba(255,255,255,.08); }
+  .market-dimension:first-child { padding-top: 0; border-top: 0; }
+  .market-regime-copy, .market-regime-meta { grid-column: 1; }
 }
