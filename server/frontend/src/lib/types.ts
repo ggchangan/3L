@@ -200,7 +200,7 @@ export interface BuySignalItem {
   fusion_reason?: string
   wave_position?: string
   /** 操作建议（由卡片统一推导） */
-  action_type?: string       // '买入'/'卖出'/'持有'/'加仓'/'减仓'/'换股'
+  action_type?: string       // 交易动作，或复盘分层后的'观察'/'技术信号'/'待确认'
   action_signal?: string     // '强势买入·缩量回踩(85)' / '偏多等确认' / ...
   action_priority?: string   // '高'/'中'/'低'
   action_reason?: string     // 操作理由文字

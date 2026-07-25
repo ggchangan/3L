@@ -166,8 +166,10 @@ def extract_plans_from_trading_plan(trading_plan: dict, date_str: str) -> list:
         # 信号仍保留在复盘页，但不能混入交易胜率统计。
         if bp.get('attention_tier') and bp.get('attention_tier') != 'focus':
             continue
-        # 板块数据完全未覆盖的项目尚未形成操作，不进入后续胜率统计。
-        if bp.get('decision_status') == 'blocked':
+        # 新契约中只有真正 executable 的重点买点进入胜率统计；candidate、
+        # signal_only 和 blocked 都不是已经形成的交易计划。旧缓存缺少该字段
+        # 时保持兼容，由 attention_tier 继续做保守过滤。
+        if bp.get('decision_status') and bp.get('decision_status') != 'executable':
             continue
         code = bp.get('code', '')
         if not code:

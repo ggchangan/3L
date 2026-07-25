@@ -166,6 +166,83 @@ describe('StockCard', () => {
     expect(screen.getByText('🎯 买点')).toBeTruthy()
   })
 
+  it('普通技术信号不描述成可执行买入', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      decision_status: 'signal_only',
+      attention_tier: 'ordinary',
+      action_type: '买入',
+      action_reason: '非主线且未进入动量前50',
+    }} idx={1} mode="review" decisionContext="buy-signal" />)
+
+    expect(screen.getByText('技术信号', { selector: '.v' })).toBeTruthy()
+    expect(screen.getByText('📡 技术信号')).toBeTruthy()
+    expect(screen.getByText(/不进入当前核心交易计划/)).toBeTruthy()
+    expect(screen.queryByText(/可执行买入计划/)).toBeNull()
+  })
+
+  it('候选买点显示观察而不是买入', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      decision_status: 'candidate',
+      attention_tier: 'watch',
+      action_type: '买入',
+      action_reason: '弱势市场等待反转确认',
+    }} idx={1} mode="review" decisionContext="buy-signal" />)
+
+    expect(screen.getByText('观察', { selector: '.v' })).toBeTruthy()
+    expect(screen.getByText('👀 观察')).toBeTruthy()
+    expect(screen.getByText(/尚非可执行买入/)).toBeTruthy()
+    expect(screen.queryByText(/可执行买入计划/)).toBeNull()
+  })
+
+  it('显式 executable 覆盖冲突的旧 action_type', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      decision_status: 'executable',
+      action_type: '待确认',
+    }} idx={1} mode="review" decisionContext="buy-signal" />)
+
+    expect(screen.getByText('买入', { selector: '.v' })).toBeTruthy()
+    expect(screen.getByText('🎯 买点')).toBeTruthy()
+    expect(screen.getByText(/可执行买入计划/)).toBeTruthy()
+    expect(screen.queryByText('⏳ 待确认')).toBeNull()
+  })
+
+  it('复盘旧缓存缺少决策字段时保守降级为技术信号', () => {
+    render(<StockCard s={{ ...buySignal, action_type: '买入' }} idx={1} mode="review" decisionContext="buy-signal" />)
+
+    expect(screen.getByText('技术信号', { selector: '.v' })).toBeTruthy()
+    expect(screen.getByText('📡 技术信号')).toBeTruthy()
+    expect(screen.queryByText(/可执行买入计划/)).toBeNull()
+  })
+
+  it('复盘持仓卡片没有决策字段时保留持仓操作', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      signal: 'hold',
+      action_type: '持有',
+      stage: '上行',
+    }} idx={1} mode="review" decisionContext="holding" />)
+
+    expect(screen.getByText('持有', { selector: '.v' })).toBeTruthy()
+    expect(screen.getByText(/继续持有不动/)).toBeTruthy()
+    expect(screen.queryByText('📡 技术信号')).toBeNull()
+  })
+
+  it('复盘卖出卡片没有决策字段时保留卖出操作', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      signal: 'sell',
+      action_type: '卖出',
+      stage: '转弱',
+    }} idx={1} mode="review" decisionContext="holding" />)
+
+    expect(screen.getByText('卖出', { selector: '.v' })).toBeTruthy()
+    expect(screen.getByText(/趋势转弱/)).toBeTruthy()
+    expect(screen.queryByText('📡 技术信号')).toBeNull()
+  })
+
   it('trend 系统显示区域代替买点', () => {
     const trendSignal: BuySignalItem = {
       ...buySignal,

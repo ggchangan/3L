@@ -209,7 +209,7 @@ def test_trading_plan_keeps_buy_action_when_covered_industry_has_no_opportunity_
     )
 
     item = plan['buy_priority'][0]
-    assert item['action_type'] == '买入'
+    assert item['action_type'] == '技术信号'
     assert item['decision_status'] == 'signal_only'
     assert item['attention_tier'] == 'ordinary'
     assert item['data_quality'] == 'ready'
@@ -345,9 +345,11 @@ def test_trading_plan_separates_focus_watch_and_ordinary_signals_in_weak_market(
         'ranking_rule': '市场过滤 → 主线/强动量 → 个股买点质量 → 板块环境 → 止损风险',
     }
     assert plan['buy_priority'][0]['decision_status'] == 'candidate'
+    assert plan['buy_priority'][0]['action_type'] == '观察'
     assert plan['buy_priority'][0]['priority'] == '中'
     low_quality = next(item for item in plan['buy_priority'] if item['code'] == '000004')
     assert low_quality['decision_status'] == 'signal_only'
+    assert low_quality['action_type'] == '技术信号'
     assert low_quality['quality_score'] == 40
     assert '买点质量40' in low_quality['attention_reason']
 
@@ -655,3 +657,31 @@ def test_trading_plan_action_is_synchronized_to_buy_signal_card():
     assert signals[0]['action_type'] == '待确认'
     assert signals[0]['decision_status'] == 'blocked'
     assert signals[0]['action_reason'] == '板块当日数据待补齐'
+
+
+def test_non_executable_actions_are_synchronized_to_buy_signal_cards():
+    signals = [
+        {'code': '000001', 'action_type': '买入'},
+        {'code': '000002', 'action_type': '买入'},
+    ]
+    plan = {
+        'buy_priority': [
+            {
+                'code': '000001', 'action_type': '买入',
+                'decision_status': 'candidate', 'attention_tier': 'watch',
+                'attention_reason': '等待市场条件确认',
+            },
+            {
+                'code': '000002', 'action_type': '买入',
+                'decision_status': 'signal_only', 'attention_tier': 'ordinary',
+                'attention_reason': '非主线且动量靠后',
+            },
+        ],
+    }
+
+    apply_trading_plan_actions(signals, plan)
+
+    assert signals[0]['action_type'] == '观察'
+    assert signals[0]['action_reason'] == '等待市场条件确认'
+    assert signals[1]['action_type'] == '技术信号'
+    assert signals[1]['action_reason'] == '非主线且动量靠后'

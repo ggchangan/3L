@@ -173,8 +173,8 @@ class TestPlanTrackingV2(unittest.TestCase):
         self.assertEqual(p['stage'], '上行')
         self.assertEqual(p['is_main'], 1)
 
-    def test_only_blocked_buy_priority_is_not_tracked_as_plan(self):
-        """兼容旧候选数据，但板块未覆盖的待确认买点不进入胜率统计。"""
+    def test_only_executable_buy_priority_is_tracked_as_plan(self):
+        """候选、普通技术信号和阻断项都不进入正式交易胜率统计。"""
         from backend.services.plan_tracking_service import extract_plans_from_trading_plan
         executable = _make_buy_priority(name='执行股', code='000001')
         executable['decision_status'] = 'executable'
@@ -182,13 +182,15 @@ class TestPlanTrackingV2(unittest.TestCase):
         candidate['decision_status'] = 'candidate'
         blocked = _make_buy_priority(name='阻断股', code='000003')
         blocked['decision_status'] = 'blocked'
+        ordinary = _make_buy_priority(name='普通信号股', code='000004')
+        ordinary['decision_status'] = 'signal_only'
 
         plans = extract_plans_from_trading_plan(
-            _make_trading_plan(buy_priorities=[executable, candidate, blocked]),
+            _make_trading_plan(buy_priorities=[executable, candidate, blocked, ordinary]),
             '2026-05-28',
         )
 
-        self.assertEqual([plan['code'] for plan in plans], ['000001', '000002'])
+        self.assertEqual([plan['code'] for plan in plans], ['000001'])
 
     def test_new_attention_contract_only_tracks_focus_tier(self):
         """次级观察和普通技术信号不混入正式交易计划胜率。"""

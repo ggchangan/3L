@@ -59,7 +59,7 @@ export default function BuySignalsReview({ signals, directionOrder: dirOrder, op
         })}
       </div>
       {pageItems.map((s, i) => (
-        <StockCard key={s.code + '-' + i} s={s} idx={start + i + 1} chartPrefix="bs_" mode="review" opportunityMap={opportunityMap} />
+        <StockCard key={s.code + '-' + i} s={s} idx={start + i + 1} chartPrefix="bs_" mode="review" decisionContext="buy-signal" opportunityMap={opportunityMap} />
       ))}
       {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12 }}>

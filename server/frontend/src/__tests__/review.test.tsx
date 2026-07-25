@@ -195,6 +195,7 @@ describe('TradingPlan action semantics', () => {
     expect(screen.getByText('普通信号 1')).toBeTruthy()
     expect(screen.getByText('🔥 重点关注 (1)')).toBeTruthy()
     expect(screen.getByText('👀 次级观察 (1)')).toBeTruthy()
+    expect(screen.getByText('观察')).toBeTruthy()
     expect(screen.getByText('指标说明：如何理解动量与质量？')).toBeTruthy()
     expect(screen.getByText('动量第4/319（前2%）')).toBeTruthy()
     expect(screen.getByText('质量80/100')).toBeTruthy()
@@ -202,6 +203,7 @@ describe('TradingPlan action semantics', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '展开普通技术信号 (1)' }))
     expect(screen.getByText('普通信号股')).toBeTruthy()
+    expect(screen.getByText('技术信号')).toBeTruthy()
     const momentum = screen.getByText('动量第137/319（前43%）')
     expect(momentum.getAttribute('title')).toContain('行业动量榜')
     expect(momentum.getAttribute('title')).toContain('匹配方向：消费电子')

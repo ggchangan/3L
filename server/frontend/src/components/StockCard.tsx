@@ -14,23 +14,29 @@ const STAGE_COLORS: Record<string, string> = {
 const STRUCT_ICONS: Record<string, string> = { '上涨趋势': '📈', '区间震荡': '➡️', '下降趋势': '📉' }
 
 import type { BuySignalItem } from '../lib/types'
+import { buyDecisionAction } from '../lib/buyDecision'
 
 interface StockCardProps {
   s: BuySignalItem
   idx: number
   chartPrefix?: string
   mode?: 'review' | 'monitor'
+  decisionContext?: 'buy-signal' | 'holding'
   opportunityMap?: Record<string, string>
 }
 
-export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityMap }: StockCardProps) {
+export default function StockCard({ s, idx, chartPrefix = '', mode, decisionContext, opportunityMap }: StockCardProps) {
   const [showChart, setShowChart] = useState(false)
-  const isPending = s.action_type === '待确认' || s.decision_status === 'blocked'
-  const cls = isPending ? 'hold' : s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold'
-  const signalText = isPending ? '⏳待确认' : s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--'
+  const decisionAction = buyDecisionAction(s, decisionContext === 'buy-signal' ? 'signal' : 'raw')
+  const isBlocked = decisionAction === '待确认'
+  const isCandidate = decisionAction === '观察'
+  const isSignalOnly = decisionAction === '技术信号'
+  const isNonExecutable = isBlocked || isCandidate || isSignalOnly
+  const cls = isNonExecutable ? 'hold' : s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold'
+  const signalText = isBlocked ? '⏳待确认' : isCandidate ? '👀观察' : isSignalOnly ? '📡技术信号' : s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--'
   // 操作文字：主操作用 action_type（买入/卖出/持有/加仓/减仓/换股）
   // action_signal 作为补充说明用小字显示
-  const displayAction = s.action_type || signalText
+  const displayAction = decisionAction || signalText
   const hasSignalDetail = s.action_signal && s.action_signal !== s.action_type
 
   const isTrend = s.trading_system === 'trend'
@@ -101,9 +107,15 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
   // 结论
   let conclusion = `阶段${s.stage}，${s.structure}`
   let conclusionColor = '#aaa'
-  if (isPending) {
+  if (isBlocked) {
     conclusion = `${s.buy_point || '买点信号'}已触发，但${s.action_reason || '板块数据待补齐'}，操作暂待确认`
     conclusionColor = '#ffd700'
+  } else if (isCandidate) {
+    conclusion = `${s.buy_point || '买点'}技术信号已触发；${s.action_reason || '尚未满足当前市场执行条件'}，列入观察，尚非可执行买入`
+    conclusionColor = '#ffd700'
+  } else if (isSignalOnly) {
+    conclusion = `${s.buy_point || '买点'}技术信号已触发；${s.action_reason || '当前方向优先级不足'}，不进入当前核心交易计划`
+    conclusionColor = '#888'
   } else if (isBuy) {
     const slText = (s.stop_loss && s.stop_loss_pct)
       ? `，建议止损${Number(s.stop_loss).toFixed(2)}（约${Number(s.stop_loss_pct).toFixed(1)}%）`
@@ -147,7 +159,9 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, opportunityM
           <span className="code">{s.code}</span>
           {s.profit_model1 && <span className="tag" style={{ background: '#e94560', fontSize: 10, padding: '1px 6px', borderRadius: 4, marginLeft: 4 }}>🏆 盈利1</span>}
           {s.trend_stock && <span className="tag" style={{ background: '#2196f3', fontSize: 10, padding: '1px 6px', borderRadius: 4, marginLeft: 4 }}>📈 趋势股</span>}
-          {isBuy && <span style={{ background: '#e94560', color: '#fff', fontSize: 11, fontWeight: 'bold', padding: '2px 8px', borderRadius: 4, marginLeft: 6 }}>🎯 买点</span>}
+          {isBuy && <span style={{ background: isNonExecutable ? '#4b5563' : '#e94560', color: '#fff', fontSize: 11, fontWeight: 'bold', padding: '2px 8px', borderRadius: 4, marginLeft: 6 }}>
+            {isBlocked ? '⏳ 待确认' : isCandidate ? '👀 观察' : isSignalOnly ? '📡 技术信号' : '🎯 买点'}
+          </span>}
         </div>
         <span style={{ fontSize: 13, color: changeColor }}>
           {s.price !== undefined && s.price !== null ? s.price.toFixed(2) : '--'} {changeVal >= 0 ? '+' : ''}{changeVal}%
