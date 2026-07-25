@@ -156,10 +156,18 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
 
   return (
     <>
-      <div className={`market-regime-banner ${regime}`}>
-        <div>
-          <div className="market-regime-label">当前市场定性</div>
+      <div className={`market-regime-banner ${regime} risk-${marketStrategy?.risk_phase || 'unknown'}`}>
+        <div className="market-dimension environment">
+          <div className="market-regime-label">市场环境</div>
           <div className="market-regime-title">{regimeConfig.title}</div>
+        </div>
+        <div className={`market-dimension risk ${marketStrategy?.risk_phase || 'unknown'}`}>
+          <div className="market-regime-label">风险阶段</div>
+          <div className="market-regime-title">{marketStrategy?.risk_label || '待确认'}</div>
+        </div>
+        <div className="market-dimension wave">
+          <div className="market-regime-label">波段位置</div>
+          <div className="market-regime-title">{marketStrategy?.wave_label || primary.position || '待确认'}</div>
         </div>
         <div className="market-regime-copy">
           <strong>{regimeConfig.badge}</strong>
@@ -167,8 +175,6 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
         </div>
         <div className="market-regime-meta">
           <span>趋势：{primary.structure || '--'}</span>
-          <span>周期：{primary.position || '--'}</span>
-          <span>风险阶段：{marketStrategy?.risk_label || '--'}</span>
           <span>{marketStrategy?.current_position_pct != null ? `当前仓位：${marketStrategy.current_position_pct}%` : '当前仓位：未记录'}</span>
           {(reviewIndexDate || primary.data_date) && <span>数据：{reviewIndexDate || primary.data_date}</span>}
         </div>
