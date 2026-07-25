@@ -14,23 +14,40 @@ def get_market_filter(market_cycle: Dict) -> Dict:
     vl = market_cycle.get('vl_score', 0) or 0
     bias20 = market_cycle.get('bias20', 0) or 0
     structure = market_cycle.get('structure', '')
+    algorithm_version = market_cycle.get('algorithm_version', '')
+    wave_side = market_cycle.get('wave_side', 'none')
+    wave_phase = market_cycle.get('wave_phase', 'none')
+    evidence = market_cycle.get('evidence') or {}
+    context = market_cycle.get('context') or {}
     if not bias20:
         bias20 = market_cycle.get('deviation_pct', 0) or 0
 
-    valley_confirmed = position in ('偏波谷', '波谷', '波谷偏多') or vl >= 4
+    if algorithm_version == 'supply_demand_v3':
+        valley_confirmed = wave_side == 'valley' and wave_phase in ('biased', 'confirmed')
+        main_decline = (
+            structure == '下降趋势'
+            and context.get('decline_context', 0) >= 45
+            and evidence.get('supply_entry', 0) >= 55
+            and not valley_confirmed
+        )
+        peak_risk = wave_side == 'peak' and wave_phase in ('biased', 'confirmed')
+    else:
+        valley_confirmed = position in ('偏波谷', '波谷', '波谷偏多') or vl >= 4
+        main_decline = (structure == '下降趋势' or position == '下降趋势') and not valley_confirmed
+        peak_risk = position in ('偏波峰', '波峰', '波峰偏多') or pk >= 4
 
-    # 下降趋势且尚未形成明确波谷，按主跌风险处理。波谷修复不能被
-    # vl_score>=4 误判为“休息”，否则会与“波谷重仓”直接冲突。
-    if (structure == '下降趋势' or position == '下降趋势') and not valley_confirmed:
+    # 弱势结构不等于主跌。V3 还要求下降过程仍在、供应继续有效进入；
+    # 兼容旧调用时保留原判定，避免缺少供需字段时静默放松门禁。
+    if main_decline:
         return {
             'filter': 'rest',
             'risk_phase': 'main_decline',
-            'reason': '下降趋势尚未形成明确波谷，按主跌风险处理，暂停新增仓位',
+            'reason': '下降过程仍在且供应继续占优，按主跌风险处理，暂停新增仓位',
             'max_position': None,
         }
 
     # 波峰/严重正乖离是风险升高，不设固定仓位上限。
-    if position in ('偏波峰', '波峰', '波峰偏多') or pk >= 4:
+    if peak_risk:
         return {
             'filter': 'reduce',
             'risk_phase': 'risk_rising',
