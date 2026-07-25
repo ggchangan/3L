@@ -1,72 +1,61 @@
-"""
-大盘过滤 — 加速/阴跌阶段嵌入交易计划
+"""3L 大盘风险门禁。
 
-《量价原理》简化版大盘作用：
-- 加速阶段（BIAS>12% 或 pk≥4）→ 减仓控风险
-- 阴跌阶段（下降趋势/持续跌）→ 休息不动
-- 其他阶段（波中/波谷）→ 不管大盘，直接看板块和个股
+市场强弱决定买点与交易节奏；这里只判断是否处于需要暂停新增仓位
+或优先控风险的阶段，不再给出静态目标仓位。
 """
 
-from typing import Dict, Optional
+from typing import Dict
 
 
 def get_market_filter(market_cycle: Dict) -> Dict:
-    """
-    判断大盘过滤状态。
-
-    Args:
-        market_cycle: 大盘周期判定的结果 dict
-            {'pk_score': int, 'vl_score': int, 'position': str,
-             'bias20': float, 'position_level': str}
-
-    Returns:
-        {'filter': str, 'reason': str, 'max_position': str}
-         filter: 'reduce' | 'rest' | 'normal'
-         max_position: 建议最大仓位
-    """
-    # 安全取值
+    """返回风险门禁，保留 ``filter`` 字段兼容现有交易计划。"""
     position = market_cycle.get('position', '波中')
     pk = market_cycle.get('pk_score', 0) or 0
     vl = market_cycle.get('vl_score', 0) or 0
     bias20 = market_cycle.get('bias20', 0) or 0
-
-    # 尝试从其他字段取
+    structure = market_cycle.get('structure', '')
     if not bias20:
-        bias20 = abs(market_cycle.get('deviation_pct', 0) or 0)
+        bias20 = market_cycle.get('deviation_pct', 0) or 0
 
-    # 规则1: 加速阶段（波峰+偏多）
-    if position in ('波峰', '波峰偏多') or pk >= 4:
+    valley_confirmed = position in ('偏波谷', '波谷', '波谷偏多') or vl >= 4
+
+    # 下降趋势且尚未形成明确波谷，按主跌风险处理。波谷修复不能被
+    # vl_score>=4 误判为“休息”，否则会与“波谷重仓”直接冲突。
+    if (structure == '下降趋势' or position == '下降趋势') and not valley_confirmed:
         return {
-            'filter': 'reduce',
-            'reason': f'大盘加速阶段(pk={pk})，减仓控风险，仓位建议5成以下',
-            'max_position': '5成',
+            'filter': 'rest',
+            'risk_phase': 'main_decline',
+            'reason': '下降趋势尚未形成明确波谷，按主跌风险处理，暂停新增仓位',
+            'max_position': None,
         }
 
+    # 波峰/严重正乖离是风险升高，不设固定仓位上限。
+    if position in ('偏波峰', '波峰', '波峰偏多') or pk >= 4:
+        return {
+            'filter': 'reduce',
+            'risk_phase': 'risk_rising',
+            'reason': f'大盘接近波峰(pk={pk})，不追高并优先兑现风险持仓',
+            'max_position': None,
+        }
     if bias20 > 12:
         return {
             'filter': 'reduce',
-            'reason': f'BIAS20={bias20:.1f}%，严重超买，减仓控风险',
-            'max_position': '5成',
+            'risk_phase': 'risk_rising',
+            'reason': f'BIAS20={bias20:.1f}%，严重超买，不追高并收紧止盈',
+            'max_position': None,
         }
 
-    # 规则2: 阴跌阶段（下降趋势）
-    if position in ('下降趋势', '波谷偏空') or vl >= 4:
+    if valley_confirmed:
         return {
-            'filter': 'rest',
-            'reason': f'大盘阴跌阶段(vl={vl})，休息不动，等待企稳',
-            'max_position': '3成',
+            'filter': 'normal',
+            'risk_phase': 'valley_recovery',
+            'reason': f'大盘形成明确波谷(vl={vl})，仅随有效个股买点逐步增加仓位',
+            'max_position': None,
         }
 
-    if bias20 < -8:
-        return {
-            'filter': 'rest',
-            'reason': f'BIAS20={bias20:.1f}%，严重超卖，等待企稳',
-            'max_position': '3成',
-        }
-
-    # 规则3: 正常交易
     return {
         'filter': 'normal',
-        'reason': '大盘正常，不管大盘，直接看板块和个股',
-        'max_position': '8成',
+        'risk_phase': 'normal',
+        'reason': '未识别主跌或波峰风险，继续关注方向和个股买卖点',
+        'max_position': None,
     }
