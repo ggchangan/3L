@@ -162,7 +162,7 @@ def get_industry_rankings():
 # ① 大盘周期判定（V5）
 # ═══════════════════════════════════════════════════════════════
 
-def judge_peak_valley(klines):
+def _judge_peak_valley_legacy(klines):
     """
     三维度大盘波峰波谷判定
     基于乖离率趋势转折 + 乖离率位置 + 量价信号
@@ -310,6 +310,61 @@ def judge_peak_valley(klines):
     }
 
 
+def judge_peak_valley(klines):
+    """供需证据驱动的大盘峰谷判定，保留既有 API 字段。"""
+    from backend.core.market_peak_valley import judge_peak_valley_v3, normalize_market_klines
+
+    cleaned_klines = normalize_market_klines(klines)
+    result = judge_peak_valley_v3(cleaned_klines)
+    if result.get('wave_label') == '数据不足':
+        fallback = _fallback_cycle(cleaned_klines)
+        return {
+            **result, **fallback,
+            'wave_label': '数据不足', 'supply_demand_state': '待确认',
+            'algorithm_version': 'supply_demand_v3_fallback',
+        }
+
+    features = result.get('features', {})
+    side = result.get('wave_side', 'none')
+    phase = result.get('wave_phase', 'none')
+    strategy = {
+        ('valley', 'confirmed'): '需求确认进入，随有效买点逐步增加仓位',
+        ('valley', 'biased'): '供需偏向需求，关注主线与强动量买点',
+        ('valley', 'forming'): '供应正在衰减，等待需求进入确认',
+        ('valley', 'left'): '处于波谷左侧，尚未形成买入确认',
+        ('peak', 'confirmed'): '供应确认进入，随卖点降低风险暴露',
+        ('peak', 'biased'): '供需偏向供应，收紧止盈并观察卖点',
+        ('peak', 'forming'): '需求正在衰减，避免无计划追高',
+        ('peak', 'left'): '处于波峰左侧，观察供需是否转弱',
+    }.get((side, phase), '供需未出现明确转折，按有效买卖点交易')
+    peak_evidence = max((result.get('evidence') or {}).get(key, 0) for key in (
+        'buying_climax', 'demand_exhaustion', 'distribution', 'supply_entry',
+    ))
+    valley_evidence = max((result.get('evidence') or {}).get(key, 0) for key in (
+        'panic_release', 'supply_exhaustion', 'absorption', 'demand_entry',
+    ))
+    return {
+        **result,
+        'score': result.get('pk_score', 0) - result.get('vl_score', 0),
+        'bias20': features.get('bias20', 0),
+        'bias20_chg_3d': 0,
+        'ma20': features.get('ma20', 0),
+        'ma60': features.get('ma60', 0),
+        'vol_ratio': features.get('volume_ratio20', 0),
+        'chg_10d': features.get('return_10d', 0),
+        'chg_10d_raw': features.get('return_10d', 0),
+        'strategy': strategy,
+        'position_pct': '动态',
+        'build_per_stock_pct': 5,
+        'peak_sig': int(peak_evidence >= 55),
+        'valley_sig': int(valley_evidence >= 55),
+        'ma_score': 0, 'vol_score': 0, 'trend_score': 0, 'amp_score': 0,
+        'market_regime': {
+            '上涨趋势': 'strong', '下降趋势': 'weak', '区间震荡': 'neutral',
+        }.get(result.get('structure'), 'unknown'),
+    }
+
+
 def _market_trend_context(klines):
     """用中证全指均线关系生成可解释、可随复盘快照保存的市场强弱。"""
     ordered = sorted(klines, key=lambda row: str(row.get('date', '')))
@@ -335,12 +390,13 @@ def _market_trend_context(klines):
 
 def _fallback_cycle(klines):
     """数据不足时的兜底方案"""
-    trend_context = _market_trend_context(klines)
-    if len(klines) < 10:
+    ordered = sorted(klines, key=lambda row: str(row.get('date', '')))
+    trend_context = _market_trend_context(ordered)
+    if len(ordered) < 10:
         return {'score': 0, 'position': '波中', 'strategy': '正常交易',
                 'position_pct': '七至八成', 'build_per_stock_pct': 5,
                 **trend_context}
-    chg = (klines[-1]['close'] - klines[-6]['close']) / klines[-6]['close'] * 100
+    chg = (ordered[-1]['close'] - ordered[-6]['close']) / ordered[-6]['close'] * 100
     if chg > 5:
         return {'score': 0.5, 'position': '波中偏上', 'strategy': '正常交易，注意减仓信号',
                 'position_pct': '六至七成', 'build_per_stock_pct': 5,
@@ -989,7 +1045,7 @@ def build_market_strategy(market_cycle, existing_holdings, holdings_action, buy_
         'main_decline': '主跌风险', 'risk_rising': '风险升高',
         'valley_recovery': '波谷修复', 'normal': '常态',
     }
-    wave_position = market_cycle.get('position', '待确认')
+    wave_position = market_cycle.get('wave_label') or market_cycle.get('position', '待确认')
 
     ratios = [_position_ratio(item) for item in (existing_holdings or [])]
     all_ratios_known = all(value is not None for value in ratios)
@@ -1062,7 +1118,9 @@ def build_market_strategy(market_cycle, existing_holdings, holdings_action, buy_
         'summary': summary,
         'basis': [
             f'市场结构：{market_cycle.get("structure", "待确认")}',
-            f'波段位置：{wave_position}', market_filter.get('reason', ''),
+            f'波段位置：{wave_position}',
+            f'供需状态：{market_cycle.get("supply_demand_state", "待确认")}',
+            market_filter.get('reason', ''),
         ],
     }
 

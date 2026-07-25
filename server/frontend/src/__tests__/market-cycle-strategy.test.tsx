@@ -67,5 +67,28 @@ describe('MarketCycle dynamic position strategy', () => {
     expect(screen.getByText('波段位置')).toBeTruthy()
     expect(screen.getAllByText('波中').length).toBeGreaterThan(0)
     expect(container.querySelector('.market-dimension.risk.unknown')).toBeTruthy()
+    expect(screen.getByText('供需证据不可用')).toBeTruthy()
+    expect(screen.getByText(/旧缓存或数据不足/)).toBeTruthy()
+  })
+
+  it('V3未形成峰谷方向时同时展示双侧证据，不伪装成波谷', async () => {
+    render(
+      <MarketCycle
+        reviewMarket={{
+          position: '波中', wave_side: 'none', wave_phase: 'none', wave_label: '波中',
+          structure: '区间震荡', market_regime: 'neutral', algorithm_version: 'supply_demand_v3',
+          context: { low_location: 20, high_location: 35 },
+          evidence: { supply_exhaustion: 10, demand_exhaustion: 30, absorption: 5, distribution: 25, demand_entry: 8, supply_entry: 12 },
+        }}
+        reviewIndexDate="20260724"
+      />,
+    )
+
+    expect(await screen.findByText('未形成')).toBeTruthy()
+    expect(screen.getByText('供需衰竭')).toBeTruthy()
+    expect(screen.getByText('努力与结果')).toBeTruthy()
+    expect(screen.getByText('反向力量')).toBeTruthy()
+    expect(screen.getByText(/低 20\/100 \/ 高 35\/100/)).toBeTruthy()
+    expect(screen.getByText(/当前未形成峰谷方向/)).toBeTruthy()
   })
 })
