@@ -42,11 +42,30 @@ describe('MarketCycle dynamic position strategy', () => {
     )
 
     expect(await screen.findByText('弱势市场')).toBeTruthy()
-    expect(screen.getByText('风险阶段：主跌风险')).toBeTruthy()
+    expect(screen.getByText('市场环境')).toBeTruthy()
+    expect(screen.getByText('风险阶段')).toBeTruthy()
+    expect(screen.getByText('主跌风险')).toBeTruthy()
+    expect(screen.getByText('波段位置')).toBeTruthy()
+    expect(screen.getAllByText('波中').length).toBeGreaterThan(0)
     expect(screen.getByText('50% → 40%')).toBeTruthy()
     expect(screen.getByText('明确卖出 10%')).toBeTruthy()
     expect(screen.getByText(/适用买点：恐慌买点、供应衰竭买点、明确反转买点/)).toBeTruthy()
     expect(screen.queryByText(/建议仓位/)).toBeNull()
     expect(screen.queryByText(/七至八成/)).toBeNull()
+  })
+
+  it('旧缓存缺少市场策略时风险阶段明确降级为待确认', async () => {
+    const { container } = render(
+      <MarketCycle
+        reviewMarket={{ position: '波中', structure: '下降趋势', market_regime: 'weak' }}
+        reviewIndexDate="20260724"
+      />,
+    )
+
+    expect(await screen.findByText('待确认')).toBeTruthy()
+    expect(screen.getByText('风险阶段')).toBeTruthy()
+    expect(screen.getByText('波段位置')).toBeTruthy()
+    expect(screen.getAllByText('波中').length).toBeGreaterThan(0)
+    expect(container.querySelector('.market-dimension.risk.unknown')).toBeTruthy()
   })
 })
