@@ -300,6 +300,27 @@ export interface IndustryBoardItem {
 export type IndustryMap = Record<string, { ths_industry?: string }>
 
 /** 复盘数据结构 */
+export interface MarketStrategy {
+  environment: 'strong' | 'neutral' | 'weak' | 'unknown'
+  environment_label: string
+  risk_phase: 'main_decline' | 'risk_rising' | 'valley_recovery' | 'normal'
+  risk_label: string
+  wave_phase: string
+  wave_label: string
+  position_mode: 'defensive' | 'reduce' | 'increase_on_signal' | 'follow_signals'
+  position_action: string
+  current_position_pct: number | null
+  planned_exit_pct: number | null
+  position_after_exits_pct: number | null
+  executable_buy_count: number
+  allowed_buy_points: string[]
+  avoid_buy_points: string[]
+  holding_style: string
+  exit_style: string
+  summary: string
+  basis: string[]
+}
+
 export interface ReviewData {
   date?: string
   data_status?: ReviewDataStatus
@@ -364,6 +385,7 @@ export interface ReviewData {
     build_per_stock_pct?: string
     main_lines?: string[]
     position_detail?: string
+    market_strategy?: MarketStrategy
     holdings_action?: { stock: string; action: string; reason: string; priority: string }[]
     buy_priority?: (BuySignalItem & { is_main?: boolean; sector?: string; opportunity?: string })[]
     buy_summary?: {
