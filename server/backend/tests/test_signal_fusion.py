@@ -514,6 +514,52 @@ class TestMarketFilter(unittest.TestCase):
         result = self._get_filter({'position': '波中', 'pk_score': 0, 'vl_score': 0, 'bias20': -10})
         self.assertEqual(result['filter'], 'normal')
 
+    def test_v3_weak_structure_without_active_supply_is_not_main_decline(self):
+        result = self._get_filter({
+            'algorithm_version': 'supply_demand_v3',
+            'structure': '下降趋势', 'wave_side': 'valley', 'wave_phase': 'left',
+            'position': '波中偏下', 'context': {'decline_context': 60},
+            'evidence': {'supply_entry': 20},
+        })
+        self.assertEqual(result['filter'], 'normal')
+        self.assertEqual(result['risk_phase'], 'normal')
+
+    def test_v3_active_supply_in_downtrend_is_main_decline(self):
+        result = self._get_filter({
+            'algorithm_version': 'supply_demand_v3',
+            'structure': '下降趋势', 'wave_side': 'valley', 'wave_phase': 'left',
+            'position': '波中偏下', 'context': {'decline_context': 60},
+            'evidence': {'supply_entry': 70},
+        })
+        self.assertEqual(result['risk_phase'], 'main_decline')
+
+    def test_v3_insufficient_data_keeps_legacy_downtrend_protection(self):
+        from backend.services.review_compute_service import judge_peak_valley
+
+        closes = [150 - index * .8 for index in range(70)]
+        rows = [{
+            'date': f'2025-{index // 28 + 1:02d}-{index % 28 + 1:02d}',
+            'open': close + .2, 'high': close + 1, 'low': close - 1,
+            'close': close, 'volume': 1000,
+        } for index, close in enumerate(closes)]
+        rows.extend([
+            dict(rows[-1]),
+            {**rows[-1], 'date': '2099-01-01', 'close': 'bad'},
+        ])
+        cycle = judge_peak_valley(rows)
+        result = self._get_filter(cycle)
+        self.assertEqual(cycle['algorithm_version'], 'supply_demand_v3_fallback')
+        self.assertEqual(cycle['structure'], '下降趋势')
+        self.assertEqual(result['risk_phase'], 'main_decline')
+
+    def test_v3_forming_peak_does_not_claim_risk_rising(self):
+        result = self._get_filter({
+            'algorithm_version': 'supply_demand_v3',
+            'structure': '上涨趋势', 'wave_side': 'peak', 'wave_phase': 'forming',
+            'position': '波中偏上', 'pk_score': 2, 'bias20': 3,
+        })
+        self.assertEqual(result['risk_phase'], 'normal')
+
     def test_filter_normal(self):
         """正常状态 → normal"""
         result = self._get_filter({'position': '波中', 'pk_score': 0, 'vl_score': 0, 'bias20': 0})
