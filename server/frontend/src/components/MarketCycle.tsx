@@ -19,6 +19,15 @@ export interface MarketData {
   data_date?: string
   structure?: string
   market_regime?: MarketRegime
+  wave_side?: 'valley' | 'peak' | 'none'
+  wave_phase?: 'left' | 'forming' | 'biased' | 'confirmed' | 'none'
+  wave_label?: string
+  supply_demand_state?: string
+  context?: Record<string, number>
+  evidence?: Record<string, number>
+  hard_gates?: string[]
+  explanation?: string[]
+  algorithm_version?: string
 }
 
 export type MarketRegime = 'strong' | 'neutral' | 'weak' | 'unknown'
@@ -115,17 +124,22 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
 
   const change = current.change || 0
   const priceClass = change >= 0 ? 'value up' : 'value down'
-  const pk = current.pk_score || 0
-  const vl = current.vl_score || 0
-
-  const pkDesc = pk >= 4 ? '✅ 趋势转跌+位置偏高+量价异常+方向确认 → 高度确信'
-    : pk >= 3 ? '⚠️ 满足3个条件，可能偏峰'
-    : pk >= 1 ? '🔸 满足1个条件，趋势有波动'
-    : '— 无波峰信号'
-  const vlDesc = vl >= 4 ? '✅ 趋势转涨+位置偏低+恐慌出清+方向确认 → 高度确信'
-    : vl >= 3 ? '⚠️ 满足3个条件，可能偏谷'
-    : vl >= 1 ? '🔸 满足1个条件'
-    : '— 无波谷信号'
+  const phaseText = { none: '未形成', left: '左侧观察', forming: '形成中', biased: '供需偏向', confirmed: '转折确认' }
+  const scoreText = (value?: number) => typeof value === 'number' ? `${value.toFixed(0)}/100` : '--'
+  const evidenceSide = current.wave_side === 'peak' || current.wave_side === 'valley' ? current.wave_side : 'none'
+  const hasSupplyDemandDetails = current.algorithm_version === 'supply_demand_v3'
+  const locationText = evidenceSide === 'peak' ? scoreText(current.context?.high_location)
+    : evidenceSide === 'valley' ? scoreText(current.context?.low_location)
+    : `低 ${scoreText(current.context?.low_location)} / 高 ${scoreText(current.context?.high_location)}`
+  const exhaustionText = evidenceSide === 'peak' ? scoreText(current.evidence?.demand_exhaustion)
+    : evidenceSide === 'valley' ? scoreText(current.evidence?.supply_exhaustion)
+    : `供 ${scoreText(current.evidence?.supply_exhaustion)} / 需 ${scoreText(current.evidence?.demand_exhaustion)}`
+  const effortResultText = evidenceSide === 'peak' ? scoreText(current.evidence?.distribution)
+    : evidenceSide === 'valley' ? scoreText(current.evidence?.absorption)
+    : `吸收 ${scoreText(current.evidence?.absorption)} / 派发 ${scoreText(current.evidence?.distribution)}`
+  const reverseEntryText = evidenceSide === 'peak' ? scoreText(current.evidence?.supply_entry)
+    : evidenceSide === 'valley' ? scoreText(current.evidence?.demand_entry)
+    : `需求 ${scoreText(current.evidence?.demand_entry)} / 供应 ${scoreText(current.evidence?.supply_entry)}`
 
   const ts = getTabState(selectedCode)
   const primary = allData['000985'] || current
@@ -222,8 +236,8 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
         </div>
         <div className="info-card">
           <div className="label">大盘周期位置</div>
-          <div className="value" style={{ fontSize: 18 }}>{current.position || '--'}</div>
-          <div className="meta" id="cycleScore">综合评分 {current.score ?? '--'}</div>
+          <div className="value" style={{ fontSize: 18 }}>{current.wave_label || current.position || '--'}</div>
+          <div className="meta" id="cycleScore">{current.supply_demand_state || '供需待确认'}</div>
         </div>
         <div className="info-card">
           <div className="label">动态仓位</div>
@@ -246,39 +260,34 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
             <tr><th>维度</th><th>评分</th><th>明细</th></tr>
           </thead>
           <tbody>
-            <tr><td colSpan={3} style={{ fontSize: 13, color: '#4ecdc4', fontWeight: 'bold', paddingBottom: 8 }}>{current.position}</td></tr>
+            <tr><td colSpan={3} style={{ fontSize: 13, color: '#4ecdc4', fontWeight: 'bold', paddingBottom: 8 }}>{current.wave_label || current.position} · {current.supply_demand_state || '供需待确认'}</td></tr>
             <tr>
-              <td style={{ color: '#888', width: 50 }}>波峰</td>
-              <td style={{ width: 50, textAlign: 'center', fontSize: 16 }}>{pk >= 4 ? '🟢' : pk >= 3 ? '🟡' : pk >= 1 ? '⚪' : '⚪'}</td>
-              <td style={{ color: '#888', fontSize: 11 }}>{pkDesc}</td>
+              <td style={{ color: '#888', width: 80 }}>当前阶段</td>
+              <td style={{ width: 120, textAlign: 'center' }}>{hasSupplyDemandDetails ? phaseText[current.wave_phase || 'none'] : '供需证据不可用'}</td>
+              <td style={{ color: '#888', fontSize: 11 }}>{hasSupplyDemandDetails ? '阶段按“位置背景 → 供需事件 → 反向力量进入”依次升级，不等同于未来涨跌预测' : '旧缓存或数据不足，刷新并补齐至少80根有效K线后查看'}</td>
             </tr>
             <tr>
-              <td style={{ color: '#888' }}>波谷</td>
-              <td style={{ textAlign: 'center', fontSize: 16 }}>{vl >= 4 ? '🟢' : vl >= 3 ? '🟡' : vl >= 1 ? '⚪' : '⚪'}</td>
-              <td style={{ color: '#888', fontSize: 11 }}>{vlDesc}</td>
-            </tr>
-            <tr><td colSpan={3} style={{ borderTop: '1px solid #333', paddingTop: 6 }}></td></tr>
-            <tr>
-              <td style={{ color: '#888' }}>①趋势</td>
-              <td style={{ textAlign: 'center' }}>{pk >= 1 ? '✅' : '❌'}</td>
-              <td style={{ color: '#888', fontSize: 11 }}>前期bias上升+近期走平/掉头</td>
+              <td style={{ color: '#888' }}>位置背景</td>
+              <td style={{ textAlign: 'center' }}>{hasSupplyDemandDetails ? locationText : '--'}</td>
+              <td style={{ color: '#888', fontSize: 11 }}>{evidenceSide === 'none' ? '当前未形成峰谷方向，同时展示低位与高位背景' : `${evidenceSide === 'peak' ? '高位' : '低位'}背景只表示所处区域，不能单独确认峰谷`}</td>
             </tr>
             <tr>
-              <td style={{ color: '#888' }}>②位置</td>
-              <td style={{ textAlign: 'center' }}>{pk >= 2 ? '✅' : '❌'}</td>
-              <td style={{ color: '#888', fontSize: 11 }}>MA20乖离率&gt;+1.5% {typeof current.bias20 === 'number' ? `(当前: ${current.bias20.toFixed(1)}%)` : ''}</td>
+              <td style={{ color: '#888' }}>{evidenceSide === 'peak' ? '需求衰竭' : evidenceSide === 'valley' ? '供应衰竭' : '供需衰竭'}</td>
+              <td style={{ textAlign: 'center' }}>{hasSupplyDemandDetails ? exhaustionText : '--'}</td>
+              <td style={{ color: '#888', fontSize: 11 }}>推进速度、波动与成交量收缩后，原方向的推动力是否减弱</td>
             </tr>
             <tr>
-              <td style={{ color: '#888' }}>③量价</td>
-              <td style={{ textAlign: 'center' }}>{pk >= 3 ? '✅' : '❌'}</td>
-              <td style={{ color: '#888', fontSize: 11 }}>放量滞涨/长上影/加速衰竭</td>
+              <td style={{ color: '#888' }}>{evidenceSide === 'peak' ? '派发/滞涨' : evidenceSide === 'valley' ? '吸收/滞跌' : '努力与结果'}</td>
+              <td style={{ textAlign: 'center' }}>{hasSupplyDemandDetails ? effortResultText : '--'}</td>
+              <td style={{ color: '#888', fontSize: 11 }}>成交努力较大，但价格沿原方向推进效率下降</td>
             </tr>
             <tr>
-              <td style={{ color: '#888' }}>④方向</td>
-              <td style={{ textAlign: 'center' }}>{pk >= 4 ? '✅' : '❌'}</td>
-              <td style={{ color: '#888', fontSize: 11 }}>乖离率3日变化转负 {typeof current.bias20_chg_3d === 'number' ? `(${current.bias20_chg_3d.toFixed(1)}%)` : ''}</td>
+              <td style={{ color: '#888' }}>{evidenceSide === 'peak' ? '供应进入' : evidenceSide === 'valley' ? '需求进入' : '反向力量'}</td>
+              <td style={{ textAlign: 'center' }}>{hasSupplyDemandDetails ? reverseEntryText : '--'}</td>
+              <td style={{ color: '#888', fontSize: 11 }}>反向价格推进、短期关键位收复/跌破及连续性证据</td>
             </tr>
-            <tr><td colSpan={3} style={{ textAlign: 'center', color: '#555', fontSize: 11, paddingTop: 6 }}>pk≥4=峰 &nbsp; pk≥3=近峰 &nbsp; vl≥4=谷 &nbsp; vl≥3=近谷 &nbsp; 其余=波中</td></tr>
+            {current.hard_gates?.map(gate => <tr key={gate}><td style={{ color: '#e0a800' }}>未满足</td><td>—</td><td style={{ color: '#aaa', fontSize: 11 }}>{gate}</td></tr>)}
+            <tr><td colSpan={3} style={{ textAlign: 'center', color: '#555', fontSize: 11, paddingTop: 6 }}>算法：{current.algorithm_version || 'legacy'}；峰谷决定交易节奏，不替代主线方向和个股买点</td></tr>
           </tbody>
         </table>
         <div style={{ marginTop: 6, textAlign: 'right' }}>
