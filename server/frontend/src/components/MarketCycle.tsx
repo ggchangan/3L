@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchAllIndexData, INDEX_CODES_LIST, INDEX_CODE_NAMES } from '../lib/api'
+import type { MarketStrategy } from '../lib/types'
 
 export interface MarketData {
   price?: number | string
@@ -42,6 +43,7 @@ interface MarketCycleProps {
   mode?: 'review' | 'monitor'
   reviewMarket?: MarketData
   reviewIndexDate?: string
+  marketStrategy?: MarketStrategy
 }
 
 const normalizeDate = (value?: string) => (value || '').replaceAll('-', '')
@@ -76,7 +78,7 @@ export function resolveActiveIndexCode(data: Record<string, MarketData>, activeC
   return INDEX_CODES_LIST.find(code => data[code]) || ''
 }
 
-export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndexDate }: MarketCycleProps) {
+export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndexDate, marketStrategy }: MarketCycleProps) {
   const [allData, setAllData] = useState<Record<string, MarketData> | null>(null)
   const [activeTab, setActiveTab] = useState<string>('000985')
   const [tabStates, setTabStates] = useState<TabState>({})
@@ -132,8 +134,8 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
   const regimeConfig = {
     strong: {
       title: '强势市场',
-      badge: '允许积极寻找买点',
-      detail: '中证全指处于上涨趋势。优先在主线和强动量方向中选择个股买点，板块阶段用于加分和风险提示。',
+      badge: '突破与中继均可，允许持股',
+      detail: '优先在主线和强动量方向中选择个股买点，让有效买入和卖出自然形成仓位。',
     },
     neutral: {
       title: '震荡市场',
@@ -142,13 +144,13 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
     },
     weak: {
       title: '弱势市场',
-      badge: '收缩仓位，严格止损',
-      detail: '中证全指处于下降趋势。提高买点要求，控制总仓位并优先处理风险。',
+      badge: '提高买点要求，缩短交易周期',
+      detail: '优先恐慌、供应衰竭和明确反转买点；弱势本身不设固定仓位，主跌风险才暂停新增仓位。',
     },
     unknown: {
       title: '市场强弱待确认',
       badge: '数据不足',
-      detail: '当前缺少足够的趋势数据，暂不生成强弱结论，请结合仓位建议谨慎执行。',
+      detail: '当前缺少足够的趋势数据，暂不生成强弱结论，请等待数据确认。',
     },
   }[regime]
 
@@ -166,10 +168,25 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
         <div className="market-regime-meta">
           <span>趋势：{primary.structure || '--'}</span>
           <span>周期：{primary.position || '--'}</span>
-          <span>建议仓位：{primary.position_pct || '--'}</span>
+          <span>风险阶段：{marketStrategy?.risk_label || '--'}</span>
+          <span>{marketStrategy?.current_position_pct != null ? `当前仓位：${marketStrategy.current_position_pct}%` : '当前仓位：未记录'}</span>
           {(reviewIndexDate || primary.data_date) && <span>数据：{reviewIndexDate || primary.data_date}</span>}
         </div>
       </div>
+
+      {marketStrategy && (
+        <div style={{ margin: '10px 0 12px', padding: '10px 12px', border: '1px solid #333', borderRadius: 8, background: 'rgba(78,205,196,0.05)' }}>
+          <div style={{ color: marketStrategy.risk_phase === 'main_decline' ? '#e94560' : '#4ecdc4', fontWeight: 700, marginBottom: 6 }}>
+            {marketStrategy.position_action}
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', color: '#aaa', fontSize: 12 }}>
+            <span>适用买点：{marketStrategy.allowed_buy_points.join('、')}</span>
+            <span>避免：{marketStrategy.avoid_buy_points.join('、')}</span>
+            <span>持股：{marketStrategy.holding_style}</span>
+            <span>退出：{marketStrategy.exit_style}</span>
+          </div>
+        </div>
+      )}
 
       {hiddenIndexCount > 0 && (
         <div className="market-index-date-note">
@@ -203,14 +220,17 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
           <div className="meta" id="cycleScore">综合评分 {current.score ?? '--'}</div>
         </div>
         <div className="info-card">
-          <div className="label">建议总仓位</div>
-          <div className="value" style={{ fontSize: 18 }}>{current.position_pct || '--'}</div>
-          <div className="meta" id="positionRule">建仓 {current.build_per_stock_pct || '--'}/只</div>
+          <div className="label">动态仓位</div>
+          <div className="value" style={{ fontSize: 18 }}>
+            {marketStrategy?.current_position_pct != null ? `${marketStrategy.current_position_pct}%` : '--'}
+            {marketStrategy?.position_after_exits_pct != null && marketStrategy.planned_exit_pct ? ` → ${marketStrategy.position_after_exits_pct}%` : ''}
+          </div>
+          <div className="meta" id="positionRule">{marketStrategy?.planned_exit_pct ? `明确卖出 ${marketStrategy.planned_exit_pct}%` : '随有效买卖点变化'}</div>
         </div>
         <div className="info-card">
-          <div className="label">策略</div>
-          <div className="value" style={{ fontSize: 14 }}>{current.strategy || '--'}</div>
-          <div className="meta" id="strategyAdvice">{current.strategy || '--'}</div>
+          <div className="label">仓位动作</div>
+          <div className="value" style={{ fontSize: 14 }}>{marketStrategy?.position_action || current.strategy || '--'}</div>
+          <div className="meta" id="strategyAdvice">不预设目标仓位</div>
         </div>
       </div>
 

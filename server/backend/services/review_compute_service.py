@@ -953,6 +953,142 @@ def get_buy_sell_signals(holdings, buy_signals, date_str=None, all_stocks_data=N
 # ④ 每日交易计划
 # ═══════════════════════════════════════════════════════════════
 
+def _position_ratio(holding):
+    """读取持仓比例；缺失时不猜测。"""
+    value = holding.get('target_ratio', holding.get('ratio'))
+    try:
+        ratio = float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+    if ratio is None or not math.isfinite(ratio) or ratio < 0 or ratio > 100:
+        return None
+    return ratio
+
+
+def build_market_strategy(market_cycle, existing_holdings, holdings_action, buy_priority, market_filter):
+    """把市场环境、风险阶段和逐笔交易动作合成为动态仓位策略。"""
+    environment = market_cycle.get('market_regime') or {
+        '上涨趋势': 'strong', '下降趋势': 'weak',
+    }.get(market_cycle.get('structure', ''), 'neutral')
+    configs = {
+        'strong': ('强势市场', ['突破买点', '中继/浅回踩买点', '反转买点'],
+                   ['远离止损位的无计划追高'], '允许持股，让趋势利润延伸', '止盈可适当放宽，按卖点退出'),
+        'neutral': ('震荡市场', ['区间底部买点', '有效突破买点', '回踩确认买点'],
+                    ['区间中部频繁追涨杀跌'], '降低出手频率，优先强方向', '靠近区间上沿或出现卖点时主动兑现'),
+        'weak': ('弱势市场', ['恐慌买点', '供应衰竭买点', '明确反转买点'],
+                 ['普通突破追涨', '弱反弹中的模糊买点'], '缩短交易周期，只保留强方向和强个股',
+                 '收紧止盈和止损，反弹不强时及时退出'),
+        'unknown': ('市场环境待确认', ['数据确认后的高质量买点'], ['在环境不明时主动扩大风险'],
+                    '降低出手频率', '严格执行既定止损'),
+    }
+    if environment not in configs:
+        environment = 'unknown'
+    label, allowed, avoid, holding_style, exit_style = configs[environment]
+    risk_phase = market_filter.get('risk_phase', 'normal')
+    risk_labels = {
+        'main_decline': '主跌风险', 'risk_rising': '风险升高',
+        'valley_recovery': '波谷修复', 'normal': '常态',
+    }
+    wave_position = market_cycle.get('position', '待确认')
+
+    ratios = [_position_ratio(item) for item in (existing_holdings or [])]
+    all_ratios_known = all(value is not None for value in ratios)
+    ratio_total = sum(ratios) if all_ratios_known else None
+    current_position = (
+        round(ratio_total, 2)
+        if ratio_total is not None and ratio_total <= 100 else None
+    )
+    ratio_by_code = {
+        str(item.get('code', '')).split('.')[0]: _position_ratio(item)
+        for item in (existing_holdings or [])
+    }
+    planned_exit = 0.0
+    exit_ratio_unknown = False
+    has_unsized_reduction = False
+    for action in holdings_action or []:
+        action_type = action.get('action_type') or action.get('action')
+        code = str(action.get('code', '')).split('.')[0]
+        if action_type in ('卖出', '换股'):
+            ratio = ratio_by_code.get(code)
+            if ratio is not None:
+                planned_exit += ratio
+            else:
+                exit_ratio_unknown = True
+        elif action_type == '减仓':
+            has_unsized_reduction = True
+    planned_exit_pct = (
+        round(planned_exit, 2)
+        if current_position is not None and not exit_ratio_unknown else None
+    )
+    after_exits = (
+        round(max(0.0, current_position - planned_exit), 2)
+        if current_position is not None and not has_unsized_reduction and not exit_ratio_unknown else None
+    )
+    executable_buys = sum(
+        1 for item in (buy_priority or []) if item.get('decision_status') == 'executable'
+    )
+
+    if risk_phase == 'main_decline':
+        position_mode, position_action = 'defensive', '暂停新增仓位，先执行卖出与止损计划'
+    elif risk_phase == 'risk_rising':
+        position_mode, position_action = 'reduce', '不追高，随卖点降低风险暴露'
+    elif risk_phase == 'valley_recovery':
+        position_mode = 'increase_on_signal'
+        position_action = '只随主线/强动量中的有效买点逐步增加仓位'
+    else:
+        position_mode, position_action = 'follow_signals', '按有效买卖点动态调整，不预设目标仓位'
+
+    if current_position is None:
+        position_summary = '当前仓位比例未记录'
+    elif after_exits is not None and planned_exit > 0:
+        position_summary = f'当前{current_position:g}% → 执行明确卖出后约{after_exits:g}%'
+    elif has_unsized_reduction:
+        position_summary = f'当前{current_position:g}% → 有减仓计划，比例待执行时确定'
+    else:
+        position_summary = f'当前{current_position:g}%'
+    if executable_buys:
+        position_summary += f'；另有{executable_buys}个可执行重点买点，触发后逐笔增加'
+
+    summary = f'{label} · {risk_labels.get(risk_phase, "常态")}：{position_action}。{position_summary}'
+    return {
+        'environment': environment, 'environment_label': label,
+        'risk_phase': risk_phase, 'risk_label': risk_labels.get(risk_phase, '常态'),
+        'wave_phase': wave_position, 'wave_label': wave_position,
+        'position_mode': position_mode, 'position_action': position_action,
+        'current_position_pct': current_position, 'planned_exit_pct': planned_exit_pct,
+        'position_after_exits_pct': after_exits, 'executable_buy_count': executable_buys,
+        'allowed_buy_points': allowed, 'avoid_buy_points': avoid,
+        'holding_style': holding_style, 'exit_style': exit_style,
+        'summary': summary,
+        'basis': [
+            f'市场结构：{market_cycle.get("structure", "待确认")}',
+            f'波段位置：{wave_position}', market_filter.get('reason', ''),
+        ],
+    }
+
+
+def _market_buy_compatibility(item, market_regime, risk_phase):
+    """判断重点买点是否符合当前环境；方向/质量分层仍由上游负责。"""
+    signal_names = ' '.join(
+        str(signal.get('name', '')) for signal in item.get('triggered_signals', [])
+        if signal.get('direction') == 'bullish'
+    )
+    text = ' '.join(str(item.get(key, '') or '') for key in (
+        'buy_point', 'signal', 'stage', 'fusion_reason',
+    )) + ' ' + signal_names
+    if risk_phase == 'main_decline':
+        return False, '主跌风险阶段暂停新增仓位'
+    if market_regime not in ('strong', 'neutral', 'weak'):
+        return False, '市场强弱尚未确认，暂按观察处理'
+    if risk_phase == 'risk_rising' and ('突破' in text or '追涨' in text):
+        return False, '波峰风险阶段避免突破追高'
+    if market_regime == 'weak':
+        weak_tokens = ('恐慌', '供应衰竭', '向上反转', '明确反转', '反转买点')
+        if not any(token in text for token in weak_tokens):
+            return False, '弱势市场只执行恐慌、供应衰竭或明确反转买点'
+    return True, '符合当前市场环境和风险阶段'
+
+
 def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_holdings,
                           holdings_review=None, buy_signals_review=None,
                           opportunity_map=None):
@@ -983,13 +1119,13 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     # 大盘过滤覆盖策略
     if mf_filter == 'reduce':
         _strategy = '减仓控风险'
-        _position = mf.get('max_position', '5成')
+        _position = '随卖点动态降低'
     elif mf_filter == 'rest':
         _strategy = '休息不动'
-        _position = mf.get('max_position', '3成')
+        _position = '暂停新增仓位'
     else:
         _strategy = market_cycle.get('strategy', '正常交易')
-        _position = market_cycle.get('position_pct', '半仓')
+        _position = '按买卖点动态调整'
 
     plan = {
         'overall_strategy': _strategy,
@@ -1008,13 +1144,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         plan['main_lines'].append(f"{line['name']}({line['chg_20d']}%)")
 
     pos = market_cycle.get('position', '波中')
-    plan['position_detail'] = {
-        '偏波峰': '偏波峰仓位五成，建仓5%/只。大盘偏高位，控制总仓位，收紧止盈线',
-        '波中偏上': '波中偏上仓位六至七成，建仓5%/只。正常交易，注意减仓信号',
-        '波中': '波中仓位七至八成，建仓5%/只。正常交易，积极选股',
-        '波中偏下': '波中偏下仓位五至七成，建仓5%/只。谨慎选股，收紧止损',
-        '偏波谷': '偏波谷仓位五至八成，建仓10%/只。积极寻找买点，止损后换股补回',
-    }.get(pos, '正常仓位管理')
+    plan['position_detail'] = '仓位由持仓卖出和有效买入逐笔形成，不预设静态目标仓位'
 
     # 大盘过滤覆盖 position_detail
     if mf_filter == 'reduce':
@@ -1022,7 +1152,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         plan['risk_items'].append(f'大盘减速阶段：{mf.get("reason", "")}')
     elif mf_filter == 'rest':
         plan['position_detail'] = f'{mf.get("reason", "")}。{plan["position_detail"]}'
-        plan['risk_items'].append(f'大盘休整阶段：{mf.get("reason", "")}')
+        plan['risk_items'].append(f'大盘主跌风险：{mf.get("reason", "")}')
 
     # 大盘周期标签（注入原因链）
     market_tag = f'大盘{pos}'
@@ -1082,6 +1212,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             pri = h.get('action_priority', '中')
             plan['holdings_action'].append({
                 'name': name,  # "名称(代码)" 格式
+                'code': h.get('code', ''),
                 **base, 'action_type': at, 'signal': sig_txt,
                 'action': at,
                 'reason': f'{chain}→{reason}', 'priority': pri,
@@ -1255,7 +1386,13 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         item['attention_reason'] = tier_reason
         if item.get('decision_status') != 'blocked':
             if tier == 'focus':
-                market_allows_execution = market_regime in ('strong', 'neutral') and mf_filter == 'normal'
+                market_allows_execution, compatibility_reason = _market_buy_compatibility(
+                    item, market_regime, mf.get('risk_phase', 'normal'),
+                )
+                item['market_compatible'] = market_allows_execution
+                item['market_compatibility_reason'] = compatibility_reason
+                if not market_allows_execution:
+                    item['attention_reason'] = f'{item["attention_reason"]}；{compatibility_reason}'
                 item['priority'] = '高' if market_allows_execution else '中'
                 item['decision_status'] = 'executable' if market_allows_execution else 'candidate'
             elif tier == 'watch':
@@ -1284,11 +1421,13 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     if mf_filter == 'rest':
         conclusion = '当前市场门禁为休息，重点买点也只观察，不生成可执行买入。'
     elif mf_filter == 'reduce':
-        conclusion = '当前处于高位或加速阶段，重点买点需等待确认并控制仓位。'
-    elif market_regime == 'weak':
-        conclusion = '当前为弱势市场，重点买点也需等待确认并控制仓位。'
-    elif market_regime not in ('strong', 'neutral'):
+        conclusion = '当前风险升高，避免突破追高；其他有效重点买点仍按信号逐笔确认。'
+    elif market_regime not in ('strong', 'neutral', 'weak'):
         conclusion = '大盘强弱尚未确认，重点买点暂按观察处理。'
+    elif market_regime == 'weak' and tier_counts['focus'] and not any(
+        item.get('decision_status') == 'executable' for item in plan['buy_priority']
+    ):
+        conclusion = '当前为弱势市场，重点信号需符合恐慌、供应衰竭或明确反转买点后才可执行。'
     elif tier_counts['focus']:
         conclusion = f'优先跟踪 {tier_counts["focus"]} 个主线/强动量买点。'
     elif tier_counts['watch']:
@@ -1314,6 +1453,21 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         plan['risk_items'].append(f'乖离率偏高（BIAS20={bias20:.1f}%），警惕回调')
     if vl_score >= 3:
         plan['risk_items'].append(f'大盘偏波谷（vl_score={vl_score}），积极寻找机会')
+
+    market_strategy = build_market_strategy(
+        market_cycle, existing_holdings, plan['holdings_action'],
+        plan['buy_priority'], mf,
+    )
+    plan['market_strategy'] = market_strategy
+    plan['overall_strategy'] = market_strategy['position_action']
+    plan['position_level'] = (
+        f"当前{market_strategy['current_position_pct']:g}%"
+        if market_strategy['current_position_pct'] is not None
+        else '当前仓位未记录'
+    )
+    if market_strategy['position_after_exits_pct'] is not None and market_strategy['planned_exit_pct']:
+        plan['position_level'] += f" → 卖出后约{market_strategy['position_after_exits_pct']:g}%"
+    plan['position_detail'] = market_strategy['summary']
 
     return plan
 

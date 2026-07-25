@@ -483,7 +483,8 @@ class TestMarketFilter(unittest.TestCase):
         """波峰状态 → reduce"""
         result = self._get_filter({'position': '波峰', 'pk_score': 3, 'vl_score': 0, 'bias20': 5})
         self.assertEqual(result['filter'], 'reduce')
-        self.assertIn('5成', result['max_position'])
+        self.assertEqual(result['risk_phase'], 'risk_rising')
+        self.assertIsNone(result['max_position'])
 
     def test_filter_reduce_pk_high(self):
         """pk_score >= 4 → reduce"""
@@ -497,25 +498,27 @@ class TestMarketFilter(unittest.TestCase):
 
     def test_filter_rest_downtrend(self):
         """下降趋势 → rest"""
-        result = self._get_filter({'position': '下降趋势', 'pk_score': 0, 'vl_score': 3, 'bias20': 0})
+        result = self._get_filter({'position': '波中', 'structure': '下降趋势', 'pk_score': 0, 'vl_score': 3, 'bias20': 0})
         self.assertEqual(result['filter'], 'rest')
-        self.assertIn('3成', result['max_position'])
+        self.assertEqual(result['risk_phase'], 'main_decline')
+        self.assertIsNone(result['max_position'])
 
-    def test_filter_rest_vl_high(self):
-        """vl_score >= 4 → rest"""
+    def test_filter_valley_recovery_vl_high(self):
+        """vl_score >= 4 → 波谷修复，不得误判为休息"""
         result = self._get_filter({'position': '波中', 'pk_score': 0, 'vl_score': 4, 'bias20': 0})
-        self.assertEqual(result['filter'], 'rest')
+        self.assertEqual(result['filter'], 'normal')
+        self.assertEqual(result['risk_phase'], 'valley_recovery')
 
-    def test_filter_rest_bias20_low(self):
-        """BIAS20 < -8 → rest"""
+    def test_filter_low_bias_alone_does_not_create_main_decline(self):
+        """严重负乖离可能接近波谷，不能单独形成休息门禁"""
         result = self._get_filter({'position': '波中', 'pk_score': 0, 'vl_score': 0, 'bias20': -10})
-        self.assertEqual(result['filter'], 'rest')
+        self.assertEqual(result['filter'], 'normal')
 
     def test_filter_normal(self):
         """正常状态 → normal"""
         result = self._get_filter({'position': '波中', 'pk_score': 0, 'vl_score': 0, 'bias20': 0})
         self.assertEqual(result['filter'], 'normal')
-        self.assertIn('8成', result['max_position'])
+        self.assertIsNone(result['max_position'])
 
     def test_filter_normal_missing_keys(self):
         """缺少字段时安全降级到 normal"""
@@ -529,6 +532,13 @@ class TestMarketFilter(unittest.TestCase):
             'bias20': 0, 'deviation_pct': 15,
         })
         self.assertEqual(result['filter'], 'reduce')
+
+    def test_negative_deviation_fallback_is_not_treated_as_overbought(self):
+        result = self._get_filter({
+            'position': '波中', 'pk_score': 0, 'vl_score': 0,
+            'bias20': 0, 'deviation_pct': -15,
+        })
+        self.assertEqual(result['filter'], 'normal')
 
 
 # ══════════════════════════════════════════════════════════════════

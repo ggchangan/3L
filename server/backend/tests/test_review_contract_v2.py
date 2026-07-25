@@ -341,7 +341,7 @@ def test_trading_plan_separates_focus_watch_and_ordinary_signals_in_weak_market(
         'watch': 1,
         'ordinary': 2,
         'market_regime': 'weak',
-        'conclusion': '当前为弱势市场，重点买点也需等待确认并控制仓位。',
+        'conclusion': '当前为弱势市场，重点信号需符合恐慌、供应衰竭或明确反转买点后才可执行。',
         'ranking_rule': '市场过滤 → 主线/强动量 → 个股买点质量 → 板块环境 → 止损风险',
     }
     assert plan['buy_priority'][0]['decision_status'] == 'candidate'
@@ -352,29 +352,38 @@ def test_trading_plan_separates_focus_watch_and_ordinary_signals_in_weak_market(
     assert '买点质量40' in low_quality['attention_reason']
 
 
-def test_trading_plan_reduce_filter_never_marks_focus_as_executable():
+def test_trading_plan_peak_risk_blocks_breakout_but_not_every_valid_buy():
     plan = generate_trading_plan(
         market_cycle={
             'position': '偏波峰', 'market_regime': 'strong',
             'pk_score': 5, 'bias20': 12,
         },
         mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
-        buy_signals_review=[{
-            'code': '000001', 'name': '主线买点', 'industry': '主线方向',
-            'mainline_level': '主线', 'score': 4, 'action_type': '买入',
-        }],
+        buy_signals_review=[
+            {
+                'code': '000001', 'name': '突破标的', 'industry': '主线方向',
+                'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+                'buy_point': '突破买点',
+            },
+            {
+                'code': '000002', 'name': '回踩标的', 'industry': '主线方向',
+                'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+                'buy_point': '缩量回踩',
+            },
+        ],
         opportunity_map={'主线方向': '趋势延续'},
     )
 
-    item = plan['buy_priority'][0]
-    assert item['attention_tier'] == 'focus'
-    assert item['quality_score'] == 80
-    assert item['decision_status'] == 'candidate'
-    assert item['priority'] == '中'
-    assert '高位或加速阶段' in plan['buy_summary']['conclusion']
+    items = {item['code']: item for item in plan['buy_priority']}
+    assert items['000001']['decision_status'] == 'candidate'
+    assert items['000001']['market_compatible'] is False
+    assert '波峰风险阶段避免突破追高' in items['000001']['attention_reason']
+    assert items['000002']['decision_status'] == 'executable'
+    assert items['000002']['market_compatible'] is True
+    assert '避免突破追高' in plan['buy_summary']['conclusion']
 
 
-def test_trading_plan_rest_filter_never_marks_focus_as_executable():
+def test_trading_plan_valley_recovery_allows_focus_to_be_executable():
     plan = generate_trading_plan(
         market_cycle={
             'position': '下降趋势', 'market_regime': 'weak',
@@ -384,15 +393,168 @@ def test_trading_plan_rest_filter_never_marks_focus_as_executable():
         buy_signals_review=[{
             'code': '000001', 'name': '主线买点', 'industry': '主线方向',
             'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+            'buy_point': '明确反转买点',
         }],
         opportunity_map={'主线方向': '趋势延续'},
     )
 
     item = plan['buy_priority'][0]
     assert item['attention_tier'] == 'focus'
+    assert item['decision_status'] == 'executable'
+    assert item['priority'] == '高'
+    assert plan['market_strategy']['risk_phase'] == 'valley_recovery'
+    assert '随主线/强动量中的有效买点逐步增加仓位' in plan['market_strategy']['position_action']
+
+
+def test_dynamic_position_uses_actual_holdings_and_planned_sells_in_main_decline():
+    plan = generate_trading_plan(
+        market_cycle={
+            'position': '波中', 'structure': '下降趋势',
+            'market_regime': 'weak', 'vl_score': 2, 'pk_score': 1,
+        },
+        mainline_data={'lines': []}, signals_data={},
+        existing_holdings=[
+            {'code': '300604', 'target_ratio': 40},
+            {'code': '600584', 'target_ratio': 4},
+            {'code': '603986', 'target_ratio': 6},
+        ],
+        holdings_review=[
+            {'code': '300604', 'name': '长川科技', 'action_type': '持有'},
+            {'code': '600584', 'name': '长电科技', 'action_type': '卖出'},
+            {'code': '603986', 'name': '兆易创新', 'action_type': '卖出'},
+        ],
+    )
+
+    strategy = plan['market_strategy']
+    assert strategy['environment'] == 'weak'
+    assert strategy['risk_phase'] == 'main_decline'
+    assert strategy['current_position_pct'] == 50
+    assert strategy['planned_exit_pct'] == 10
+    assert strategy['position_after_exits_pct'] == 40
+    assert strategy['executable_buy_count'] == 0
+    assert plan['position_level'] == '当前50% → 卖出后约40%'
+    assert '七至八成' not in plan['position_detail']
+    assert '恐慌买点' in strategy['allowed_buy_points']
+
+
+def test_dynamic_position_does_not_guess_when_any_holding_ratio_is_missing():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'neutral'},
+        mainline_data={'lines': []}, signals_data={},
+        existing_holdings=[
+            {'code': '000001', 'target_ratio': 30},
+            {'code': '000002'},
+        ],
+        holdings_review=[
+            {'code': '000001', 'name': '已知比例', 'action_type': '卖出'},
+            {'code': '000002', 'name': '缺少比例', 'action_type': '持有'},
+        ],
+    )
+
+    strategy = plan['market_strategy']
+    assert strategy['current_position_pct'] is None
+    assert strategy['planned_exit_pct'] is None
+    assert strategy['position_after_exits_pct'] is None
+    assert plan['position_level'] == '当前仓位未记录'
+
+
+def test_dynamic_position_counts_switch_as_full_exit():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'neutral'},
+        mainline_data={'lines': []}, signals_data={},
+        existing_holdings=[{'code': '000001', 'target_ratio': 25}],
+        holdings_review=[{'code': '000001', 'name': '换股标的', 'action_type': '换股'}],
+    )
+
+    strategy = plan['market_strategy']
+    assert strategy['planned_exit_pct'] == 25
+    assert strategy['position_after_exits_pct'] == 0
+
+
+def test_dynamic_position_keeps_after_exits_unknown_for_unsized_reduction():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'neutral'},
+        mainline_data={'lines': []}, signals_data={},
+        existing_holdings=[{'code': '000001', 'target_ratio': 25}],
+        holdings_review=[{'code': '000001', 'name': '减仓标的', 'action_type': '减仓'}],
+    )
+
+    strategy = plan['market_strategy']
+    assert strategy['current_position_pct'] == 25
+    assert strategy['planned_exit_pct'] == 0
+    assert strategy['position_after_exits_pct'] is None
+
+
+def test_dynamic_position_reports_zero_exit_when_no_exit_is_planned():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'neutral'},
+        mainline_data={'lines': []}, signals_data={},
+        existing_holdings=[{'code': '000001', 'target_ratio': 25}],
+        holdings_review=[{'code': '000001', 'name': '持有标的', 'action_type': '持有'}],
+    )
+
+    strategy = plan['market_strategy']
+    assert strategy['planned_exit_pct'] == 0
+    assert strategy['position_after_exits_pct'] == 25
+
+
+def test_dynamic_position_rejects_invalid_or_impossible_ratios():
+    invalid_sets = [
+        [{'code': '1', 'target_ratio': -1}],
+        [{'code': '1', 'target_ratio': float('nan')}],
+        [{'code': '1', 'target_ratio': float('inf')}],
+        [{'code': '1', 'target_ratio': 101}],
+        [{'code': '1', 'target_ratio': 60}, {'code': '2', 'target_ratio': 50}],
+    ]
+    for holdings in invalid_sets:
+        plan = generate_trading_plan(
+            market_cycle={'position': '波中', 'market_regime': 'neutral'},
+            mainline_data={'lines': []}, signals_data={}, existing_holdings=holdings,
+        )
+        strategy = plan['market_strategy']
+        assert strategy['current_position_pct'] is None
+        assert strategy['planned_exit_pct'] is None
+        assert strategy['position_after_exits_pct'] is None
+
+
+def test_unknown_market_never_marks_focus_buy_as_executable():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'unknown'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '主线买点', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+            'buy_point': '明确反转买点',
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['buy_priority'][0]
     assert item['decision_status'] == 'candidate'
-    assert item['priority'] == '中'
-    assert '只观察' in plan['buy_summary']['conclusion']
+    assert item['market_compatible'] is False
+    assert '市场强弱尚未确认' in item['attention_reason']
+
+
+def test_weak_market_does_not_treat_bearish_reversal_or_demand_exhaustion_as_buy_compatible():
+    plan = generate_trading_plan(
+        market_cycle={'position': '偏波谷', 'market_regime': 'weak', 'vl_score': 4},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '主线买点', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+            'buy_point': '信号确认',
+            'triggered_signals': [
+                {'name': '向下反转', 'direction': 'bearish', 'confidence': 80},
+                {'name': '需求衰竭', 'direction': 'bearish', 'confidence': 75},
+            ],
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['decision_status'] == 'candidate'
+    assert item['market_compatible'] is False
+    assert '弱势市场只执行' in item['attention_reason']
 
 
 def test_trend_fixed_marker_is_not_presented_as_quality_100():

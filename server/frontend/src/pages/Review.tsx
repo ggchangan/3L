@@ -122,6 +122,7 @@ export default function Review() {
               <MarketCycle
                 reviewMarket={data?.market}
                 reviewIndexDate={data?.data_status?.index?.date || data?.market?.data_date}
+                marketStrategy={data?.trading_plan?.market_strategy}
               />
             </div>
 
