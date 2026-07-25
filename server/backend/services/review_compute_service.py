@@ -1460,6 +1460,14 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 item['priority'] = '低'
                 item['decision_status'] = 'signal_only'
 
+        # signal=buy 只说明检测到个股技术买点；是否形成交易动作必须以
+        # decision_status 为准，避免普通信号继续被下游描述成“可执行买入”。
+        item['action_type'] = {
+            'blocked': '待确认',
+            'candidate': '观察',
+            'signal_only': '技术信号',
+        }.get(item.get('decision_status'), '买入')
+
     TIER_ORDER = {'focus': 0, 'watch': 1, 'ordinary': 2}
     plan['buy_priority'].sort(key=lambda x: (
         TIER_ORDER.get(x.get('attention_tier', 'ordinary'), 2),
@@ -1550,9 +1558,16 @@ def apply_trading_plan_actions(buy_signals_review, trading_plan):
         signal['momentum_total'] = item.get('momentum_total')
         signal['momentum_source'] = item.get('momentum_source', '')
         signal['momentum_direction'] = item.get('momentum_direction', '')
-        signal['action_type'] = item.get('action_type', signal.get('action_type', '买入'))
-        if item.get('decision_status') == 'blocked':
+        decision_status = item.get('decision_status', 'executable')
+        signal['action_type'] = {
+            'blocked': '待确认',
+            'candidate': '观察',
+            'signal_only': '技术信号',
+        }.get(decision_status, item.get('action_type', signal.get('action_type', '买入')))
+        if decision_status == 'blocked':
             signal['action_reason'] = item.get('opp_reason') or item.get('reason') or '板块数据待补齐'
+        elif decision_status in ('candidate', 'signal_only'):
+            signal['action_reason'] = item.get('attention_reason', '')
     return buy_signals_review
 
 

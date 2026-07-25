@@ -49,7 +49,7 @@ export default function HoldingsReview({ stocks, directionOrder: dirOrder, oppor
         })}
       </div>
       {(groups[activeDir] || []).map((s, i) => (
-        <StockCard key={s.code + '-' + i} s={s} idx={i + 1} chartPrefix="hr_" mode="review" opportunityMap={opportunityMap} />
+        <StockCard key={s.code + '-' + i} s={s} idx={i + 1} chartPrefix="hr_" mode="review" decisionContext="holding" opportunityMap={opportunityMap} />
       ))}
       <div style={{ marginTop: 6, textAlign: 'right', color: '#555', fontSize: 11 }}>
         共{stocks.length}只持仓

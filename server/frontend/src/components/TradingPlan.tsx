@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ReviewData } from '../lib/types'
 import { formatSectorEnvironment } from '../lib/review'
+import { buyDecisionAction } from '../lib/buyDecision'
 
 interface Props {
   plan: ReviewData['trading_plan']
@@ -190,7 +191,7 @@ function BuyActionTable({ title, items }: { title: string; items: any[] }) {
       items={items}
       groupKey={directionGroup}
       renderAction={item => {
-        const action = item.action_type || '买入'
+        const action = buyDecisionAction(item, 'signal')
         const color = action === '待确认' ? '#ffd700' : PRI_COLORS[item.priority] || '#22c55e'
         return <span style={{ color, fontWeight: 600 }}>{action}</span>
       }}

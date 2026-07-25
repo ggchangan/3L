@@ -30,7 +30,7 @@ describe('Review page contract integration', () => {
       buy_signals_review: [],
       trading_plan: {
         buy_priority: [
-          { code: '1', name: '买入股', attention_tier: 'focus', decision_status: 'executable', action_type: '买入' },
+          { code: '1', name: '买入股', attention_tier: 'focus', decision_status: 'executable', action_type: '观察' },
           { code: '2', name: '普通买点股', attention_tier: 'watch', decision_status: 'candidate', action_type: '买入' },
           { code: '3', name: '待确认股', attention_tier: 'ordinary', decision_status: 'blocked', action_type: '待确认' },
         ],
@@ -53,7 +53,8 @@ describe('Review page contract integration', () => {
     expect(screen.getByText('🎯 今日买点重点')).toBeTruthy()
     expect(screen.getByText('🔥 重点关注 (1)')).toBeTruthy()
     expect(screen.getByText('👀 次级观察 (1)')).toBeTruthy()
-    expect(screen.getAllByText('买入')).toHaveLength(2)
+    expect(screen.getAllByText('买入')).toHaveLength(1)
+    expect(screen.getByText('观察')).toBeTruthy()
     expect(screen.queryByText('待确认')).toBeNull()
   })
 })
