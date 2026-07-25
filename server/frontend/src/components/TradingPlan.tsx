@@ -42,6 +42,7 @@ export default function TradingPlan({ plan }: Props) {
     conclusion: focusItems.length ? `优先跟踪 ${focusItems.length} 个重点买点。` : '当前暂无一级重点买点。',
     ranking_rule: '市场过滤 → 主线/强动量 → 个股买点质量 → 板块环境 → 止损风险',
   }
+  const marketStrategy = plan.market_strategy
 
   return (
     <div className="plan-card" style={{ overflowX: 'auto' }}>
@@ -54,6 +55,20 @@ export default function TradingPlan({ plan }: Props) {
       {plan.position_detail && (
         <div style={{ marginBottom: 12, padding: '6px 10px', background: 'rgba(78,205,196,0.08)', borderRadius: 6, fontSize: 12, color: '#4ecdc4' }}>
           📋 {plan.position_detail}
+        </div>
+      )}
+      {marketStrategy && (
+        <div style={{ marginBottom: 12, padding: '9px 10px', border: '1px solid #333', borderRadius: 6, fontSize: 12 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 6 }}>
+            <strong style={{ color: '#ddd' }}>{marketStrategy.environment_label}</strong>
+            <span style={{ color: marketStrategy.risk_phase === 'main_decline' ? '#e94560' : '#ffd700' }}>风险：{marketStrategy.risk_label}</span>
+            <span style={{ color: '#aaa' }}>波段：{marketStrategy.wave_label}</span>
+            <span style={{ color: '#aaa' }}>可执行重点买点：{marketStrategy.executable_buy_count}</span>
+          </div>
+          <div style={{ color: '#aaa', lineHeight: 1.7 }}>
+            <div>买点偏好：{marketStrategy.allowed_buy_points.join('、')}</div>
+            <div>交易节奏：{marketStrategy.holding_style}；{marketStrategy.exit_style}</div>
+          </div>
         </div>
       )}
 
