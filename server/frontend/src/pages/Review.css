@@ -108,16 +108,18 @@
 
 .market-regime-label { display: flex; align-items: center; gap: 6px; color: #888; font-size: 11px; }
 .market-info-button {
-  width: 32px;
-  height: 32px;
+  position: relative;
+  width: 18px;
+  height: 18px;
   padding: 0;
-  border: 1px solid #667085;
+  border: 1px solid rgba(170,177,189,.58);
   border-radius: 50%;
   background: transparent;
-  color: #aab1bd;
-  font: 700 12px/30px Georgia, serif;
+  color: rgba(170,177,189,.82);
+  font: 700 10px/16px Georgia, serif;
   cursor: pointer;
 }
+.market-info-button::after { content: ''; position: absolute; inset: -7px; }
 .market-info-button:hover,
 .market-info-button:focus-visible,
 .market-info-button.active { border-color: #4ecdc4; color: #4ecdc4; background: rgba(78,205,196,.1); outline: none; }
