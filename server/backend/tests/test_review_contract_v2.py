@@ -634,6 +634,8 @@ def test_market_regime_is_computed_from_chronological_snapshot():
     assert result['market_regime'] == 'strong'
     assert result['structure'] == '上涨趋势'
     assert result['ma20'] > result['ma60']
+    assert result['algorithm_version'] == 'supply_demand_v3'
+    assert 'evidence' in result
 
 
 def test_trading_plan_action_is_synchronized_to_buy_signal_card():
