@@ -28,6 +28,7 @@ export interface MarketData {
   hard_gates?: string[]
   explanation?: string[]
   algorithm_version?: string
+  features?: Record<string, number | string | boolean>
 }
 
 export type MarketRegime = 'strong' | 'neutral' | 'weak' | 'unknown'
@@ -47,6 +48,15 @@ export function classifyMarketRegime(structure?: string, market?: MarketData): M
 }
 
 type TabState = Record<string, { showScore: boolean; showChart: boolean }>
+type MarketInfoKind = 'environment' | 'risk' | 'wave'
+
+interface MarketDimensionInfo {
+  title: string
+  rule: string[]
+  values: Array<{ label: string; value: string }>
+  conclusion: string
+  blockers?: string[]
+}
 
 interface MarketCycleProps {
   mode?: 'review' | 'monitor'
@@ -56,6 +66,130 @@ interface MarketCycleProps {
 }
 
 const normalizeDate = (value?: string) => (value || '').replaceAll('-', '')
+const numericText = (value: unknown, digits = 1, suffix = '') => {
+  const number = Number(value)
+  return Number.isFinite(number) ? `${number.toFixed(digits)}${suffix}` : '--'
+}
+
+export function buildMarketDimensionInfo(
+  kind: MarketInfoKind,
+  market: MarketData,
+  strategy?: MarketStrategy,
+): MarketDimensionInfo {
+  const structure = market.structure || '待确认'
+  const phase = market.wave_phase || 'none'
+  const side = market.wave_side || 'none'
+  const context = market.context || {}
+  const evidence = market.evidence || {}
+  const features = market.features || {}
+  const isV3 = market.algorithm_version === 'supply_demand_v3'
+
+  if (kind === 'environment') {
+    const canonicalRegime = classifyMarketRegime(structure, market)
+    const regimeLabel = {
+      strong: '强势环境', neutral: '震荡环境', weak: '弱势环境', unknown: '环境待确认',
+    }[canonicalRegime]
+    return {
+      title: `市场环境：${regimeLabel}`,
+      rule: isV3 ? [
+          '强势：收盘价 ≥ MA20 ≥ MA60，且 MA20 的5日斜率不为负。',
+          '弱势：收盘价 < MA20 < MA60，且 MA20 的5日斜率不为正。',
+          '其余组合归为震荡；市场环境影响买点要求和交易节奏，不直接给固定仓位。',
+        ] : [
+          '兼容判定强势：收盘价 ≥ MA20 ≥ MA60；弱势：收盘价 < MA20 < MA60；其余为震荡。',
+          '当前快照没有 V3 斜率与供需证据，刷新或重新生成复盘后可查看完整判断。',
+        ],
+      values: [
+        { label: '算法口径', value: isV3 ? '供需峰谷 V3' : '兼容/旧快照' },
+        { label: '当前结构', value: structure },
+        { label: '收盘价', value: numericText(market.price ?? features.close, 2) },
+        { label: 'MA20', value: numericText(market.ma20 ?? features.ma20, 2) },
+        { label: 'MA60', value: numericText(market.ma60 ?? features.ma60, 2) },
+        ...(isV3 ? [{ label: 'MA20 5日斜率', value: numericText(features.ma20_slope_5d, 2, '%') }] : []),
+      ],
+      conclusion: canonicalRegime === 'weak'
+        ? '价格与中期均线处于空头排列，当前按弱势环境提高买点要求、缩短交易周期。'
+        : canonicalRegime === 'strong'
+          ? '价格与中期均线处于多头排列，当前按强势环境允许突破与中继买点。'
+          : canonicalRegime === 'neutral'
+            ? '均线未形成同向排列，当前按震荡环境控制出手频率。'
+            : '有效数据不足，暂不形成市场环境结论。',
+    }
+  }
+
+  if (kind === 'risk') {
+    const riskPhase = strategy?.risk_phase || 'unknown'
+    const riskLabel = strategy?.risk_label || '待确认'
+    return {
+      title: `风险阶段：${riskLabel}`,
+      rule: isV3 ? [
+        '主跌风险：下降趋势 + 下降背景分 ≥ 45 + 供应进入分 ≥ 55，且尚未形成偏波谷/波谷确认。',
+        '风险升高：波峰达到供需偏向/确认，或 BIAS20 > 12%。',
+        '波谷修复：波谷达到供需偏向/确认；其余为常态。弱势环境本身不等于主跌。',
+      ] : [
+        '兼容判定主跌：下降趋势且尚未形成明确波谷；风险升高：偏波峰、pk_score ≥ 4 或 BIAS20 > 12%。',
+        '兼容判定波谷修复：位置为偏波谷或 vl_score ≥ 4；其余为常态。',
+        '当前快照缺少 V3 供需证据，刷新或重新生成复盘后可查看 45/55 门槛值。',
+      ],
+      values: isV3 ? [
+        { label: '当前结构', value: structure },
+        { label: '下降背景', value: `${numericText(context.decline_context)}/100（门槛45）` },
+        { label: '供应进入', value: `${numericText(evidence.supply_entry)}/100（门槛55）` },
+        { label: '峰谷方向 / 阶段', value: side === 'none' ? '未形成' : `${side === 'valley' ? '波谷' : '波峰'} / ${phase}` },
+        { label: 'BIAS20', value: numericText(market.bias20 ?? features.bias20, 2, '%') },
+      ] : [
+        { label: '算法口径', value: '兼容/旧快照' },
+        { label: '当前结构', value: structure },
+        { label: '五档位置', value: market.position || '待确认' },
+        { label: 'pk_score / vl_score', value: `${numericText(market.pk_score, 0)} / ${numericText(market.vl_score, 0)}` },
+        { label: 'BIAS20', value: numericText(market.bias20, 2, '%') },
+      ],
+      conclusion: riskPhase === 'main_decline'
+        ? '下降过程仍在且供应继续占优，当前属于主跌风险，暂停新增仓位。'
+        : riskPhase === 'risk_rising'
+          ? '波峰供需风险或严重正乖离成立，当前不追高并优先处理风险持仓。'
+          : riskPhase === 'valley_recovery'
+            ? '波谷修复证据成立，但仍只随主线/强动量中的有效个股买点增加仓位。'
+            : riskPhase === 'normal'
+              ? '主跌、波峰风险和波谷修复门禁均未触发，按常态跟随买卖点。'
+              : '缺少同一交易日的完整风险策略快照，暂不形成风险阶段结论。',
+    }
+  }
+
+  const sideLabel = side === 'valley' ? '波谷' : side === 'peak' ? '波峰' : '未形成方向'
+  if (!isV3) {
+    return {
+      title: `波段位置：${market.wave_label || market.position || '待确认'}`,
+      rule: [
+        '当前为兼容或旧快照，只能展示原五档位置与 pk/vl 分数，不能还原 V3 的供需证据链。',
+        '刷新或重新生成复盘后，将按“左侧 → 形成中 → 供需偏向 → 转折确认”展示完整依据。',
+      ],
+      values: [
+        { label: '算法口径', value: '兼容/旧快照' },
+        { label: '五档位置', value: market.position || '待确认' },
+        { label: 'pk_score / vl_score', value: `${numericText(market.pk_score, 0)} / ${numericText(market.vl_score, 0)}` },
+      ],
+      conclusion: '当前缺少同日 V3 供需证据，不对旧结果补造解释。',
+    }
+  }
+  return {
+    title: `波段位置：${market.wave_label || market.position || '待确认'}`,
+    rule: [
+      '先识别高低位与涨跌背景，再识别供应/需求衰竭、吸收/派发，最后确认反向力量是否进入。',
+      '阶段依次为：左侧观察 → 形成中 → 供需偏向 → 转折确认；不能仅凭超跌、缩量或单根反转K线跳级。',
+      '波段位置只提供节奏和环境加减分，不能替代主线方向与个股量价买点。',
+    ],
+    values: [
+      { label: '识别方向', value: sideLabel },
+      { label: '低位 / 高位背景', value: `${numericText(context.low_location)}/100 / ${numericText(context.high_location)}/100` },
+      { label: '供应 / 需求衰竭', value: `${numericText(evidence.supply_exhaustion)}/100 / ${numericText(evidence.demand_exhaustion)}/100` },
+      { label: '吸收 / 派发', value: `${numericText(evidence.absorption)}/100 / ${numericText(evidence.distribution)}/100` },
+      { label: '需求 / 供应进入', value: `${numericText(evidence.demand_entry)}/100 / ${numericText(evidence.supply_entry)}/100` },
+    ],
+    conclusion: market.explanation?.join('；') || '当前没有可用的供需峰谷解释。',
+    blockers: market.hard_gates || [],
+  }
+}
 
 export function selectReviewIndexData(
   fetched: Record<string, MarketData>,
@@ -73,11 +207,23 @@ export function selectReviewIndexData(
     }
   })
   if (reviewMarket) {
-    compatible['000985'] = {
+    const mergedPrimary: MarketData = {
       ...compatible['000985'],
       ...reviewMarket,
       data_date: reviewIndexDate || reviewMarket.data_date,
     }
+    // 旧复盘不能继承同日实时接口的 V3 证据，否则会把旧策略结论和新算法依据拼在一起。
+    if (reviewMarket.algorithm_version !== 'supply_demand_v3') {
+      const v3OnlyKeys: Array<keyof MarketData> = [
+        'context', 'evidence', 'features', 'hard_gates', 'explanation',
+        'wave_side', 'wave_phase', 'wave_label', 'supply_demand_state',
+      ]
+      v3OnlyKeys.forEach(key => {
+        if (!(key in reviewMarket)) delete mergedPrimary[key]
+      })
+      if (!reviewMarket.algorithm_version) delete mergedPrimary.algorithm_version
+    }
+    compatible['000985'] = mergedPrimary
   }
   return compatible
 }
@@ -91,6 +237,7 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
   const [allData, setAllData] = useState<Record<string, MarketData> | null>(null)
   const [activeTab, setActiveTab] = useState<string>('000985')
   const [tabStates, setTabStates] = useState<TabState>({})
+  const [activeInfo, setActiveInfo] = useState<MarketInfoKind | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -143,7 +290,7 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
 
   const ts = getTabState(selectedCode)
   const primary = allData['000985'] || current
-  const regime = primary.market_regime || classifyMarketRegime(primary.structure, primary)
+  const regime = classifyMarketRegime(primary.structure, primary)
   const hiddenIndexCount = INDEX_CODES_LIST.length - availableCodes.length
   const regimeConfig = {
     strong: {
@@ -167,22 +314,55 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
       detail: '当前缺少足够的趋势数据，暂不生成强弱结论，请等待数据确认。',
     },
   }[regime]
+  const dimensionInfo = activeInfo ? buildMarketDimensionInfo(activeInfo, primary, marketStrategy) : null
+
+  const infoButton = (kind: MarketInfoKind, label: string) => (
+    <button
+      type="button"
+      className={`market-info-button ${activeInfo === kind ? 'active' : ''}`}
+      aria-label={`${activeInfo === kind ? '收起' : '查看'}${label}判断依据`}
+      aria-expanded={activeInfo === kind}
+      aria-controls="market-dimension-info"
+      onClick={() => setActiveInfo(activeInfo === kind ? null : kind)}
+    >i</button>
+  )
 
   return (
     <>
       <div className={`market-regime-banner ${regime} risk-${marketStrategy?.risk_phase || 'unknown'}`}>
         <div className="market-dimension environment">
-          <div className="market-regime-label">市场环境</div>
+          <div className="market-regime-label">市场环境 {infoButton('environment', '市场环境')}</div>
           <div className="market-regime-title">{regimeConfig.title}</div>
         </div>
         <div className={`market-dimension risk ${marketStrategy?.risk_phase || 'unknown'}`}>
-          <div className="market-regime-label">风险阶段</div>
+          <div className="market-regime-label">风险阶段 {infoButton('risk', '风险阶段')}</div>
           <div className="market-regime-title">{marketStrategy?.risk_label || '待确认'}</div>
         </div>
         <div className="market-dimension wave">
-          <div className="market-regime-label">波段位置</div>
+          <div className="market-regime-label">波段位置 {infoButton('wave', '波段位置')}</div>
           <div className="market-regime-title">{marketStrategy?.wave_label || primary.position || '待确认'}</div>
         </div>
+        {dimensionInfo && (
+          <section id="market-dimension-info" className="market-dimension-info" role="region" aria-label={`${dimensionInfo.title}判断详情`}>
+            <div className="market-dimension-info-title">{dimensionInfo.title}</div>
+            <div className="market-dimension-info-grid">
+              <div>
+                <div className="market-dimension-info-heading">如何判断</div>
+                <ol>{dimensionInfo.rule.map(item => <li key={item}>{item}</li>)}</ol>
+              </div>
+              <div>
+                <div className="market-dimension-info-heading">本次判断值</div>
+                <dl>{dimensionInfo.values.map(item => (
+                  <div key={item.label}><dt>{item.label}</dt><dd>{item.value}</dd></div>
+                ))}</dl>
+              </div>
+            </div>
+            <div className="market-dimension-info-conclusion"><strong>本次结论：</strong>{dimensionInfo.conclusion}</div>
+            {!!dimensionInfo.blockers?.length && (
+              <div className="market-dimension-info-blockers"><strong>尚未满足：</strong>{dimensionInfo.blockers.join('；')}</div>
+            )}
+          </section>
+        )}
         <div className="market-regime-copy">
           <strong>{regimeConfig.badge}</strong>
           <span>{regimeConfig.detail}</span>
