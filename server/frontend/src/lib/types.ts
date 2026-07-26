@@ -390,6 +390,7 @@ export interface ReviewData {
     }
   }
   holdings_review?: BuySignalItem[]
+  holdings_risk_exposure?: HoldingsRiskExposure
   holdings?: BuySignalItem[]
   buy_signals_review?: BuySignalItem[]
   direction_order?: string[]
@@ -429,6 +430,40 @@ export interface ReviewData {
     index_chart?: string
     fund_flow?: string
   }
+}
+
+export interface HoldingsRiskExposureItem {
+  code: string
+  name: string
+  direction: string
+  position_pct: number | null
+  cost_price: number | null
+  current_price: number | null
+  stop_loss: number | null
+  stop_loss_source?: 'manual' | 'system' | 'unknown'
+  stop_loss_warning?: string
+  downside_to_stop_pct: number | null
+  portfolio_risk_pct: number | null
+  unrealized_pnl_pct: number | null
+  stop_status: 'covered' | 'breached' | 'unassessable' | 'missing'
+}
+
+export interface HoldingsRiskExposure {
+  status: 'confirmed' | 'partial'
+  basis: string
+  total_position_pct: number
+  cash_pct: number | null
+  stop_covered_position_pct: number
+  breached_position_pct: number
+  unassessable_position_pct: number
+  uncovered_position_pct: number
+  portfolio_downside_to_stops_pct: number
+  largest_position: { code: string; name: string; position_pct: number } | null
+  direction_concentration: Array<{ name: string; position_pct: number }>
+  breached_stop_codes: string[]
+  stop_warnings: Array<{ code: string; name: string; message: string }>
+  missing: string[]
+  items: HoldingsRiskExposureItem[]
 }
 
 export type ReviewDataState = 'confirmed' | 'estimated' | 'partial' | 'stale' | 'unknown'

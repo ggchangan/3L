@@ -6,6 +6,7 @@ import MainlineSection from '../components/MainlineSection'
 import HistoryReview from '../components/HistoryReview'
 import ReviewDataStatus from '../components/ReviewDataStatus'
 import TradingPlan from '../components/TradingPlan'
+import HoldingsReview, { RiskExposurePanel } from '../components/HoldingsReview'
 import { formatSectorEnvironment } from '../lib/review'
 
 // ====== MarketCycle ======
@@ -224,6 +225,56 @@ describe('TradingPlan action semantics', () => {
     expect(screen.getByText('历史缓存未按当前规则重新分层，动量名次仅供参考。')).toBeTruthy()
     expect(screen.queryByText('🔥 重点关注 (1)')).toBeNull()
     expect(screen.queryByText('旧缓存股票')).toBeNull()
+  })
+})
+
+describe('持仓真实风险暴露', () => {
+  it('展示到止损的组合风险、覆盖率和集中度', () => {
+    render(<RiskExposurePanel exposure={{
+      status: 'partial', basis: '按记录仓位计算',
+      total_position_pct: 30, cash_pct: 70,
+      stop_covered_position_pct: 20, uncovered_position_pct: 10,
+      breached_position_pct: 0, unassessable_position_pct: 0,
+      portfolio_downside_to_stops_pct: 2.5,
+      largest_position: { code: '000001', name: '平安银行', position_pct: 20 },
+      direction_concentration: [{ name: '银行', position_pct: 20 }],
+      breached_stop_codes: ['000002'], stop_warnings: [], missing: ['1只缺少有效止损'],
+      items: [{
+        code: '000001', name: '平安银行', direction: '银行', position_pct: 20,
+        cost_price: 10, current_price: 12, stop_loss: 10.8,
+        downside_to_stop_pct: 10, portfolio_risk_pct: 2,
+        unrealized_pnl_pct: 20,
+        stop_status: 'covered',
+      }],
+    }} />)
+
+    expect(screen.getByText('持仓真实风险暴露')).toBeTruthy()
+    expect(screen.getByText('2.50%')).toBeTruthy()
+    expect(screen.getByText(/未设 10.0% · 无价格 0.0%/)).toBeTruthy()
+    expect(screen.getByText(/最大单股：平安银行 20.0%/)).toBeTruthy()
+    expect(screen.getByText(/已跌破止损：000002/)).toBeTruthy()
+  })
+
+  it('所有持仓卡片失败时仍展示风险数据缺口', () => {
+    render(<HoldingsReview stocks={[]} exposure={{
+      status: 'partial', basis: '按记录仓位计算',
+      total_position_pct: 20, cash_pct: 80,
+      stop_covered_position_pct: 0, breached_position_pct: 0, unassessable_position_pct: 20, uncovered_position_pct: 0,
+      portfolio_downside_to_stops_pct: 0,
+      largest_position: { code: '000001', name: '平安银行', position_pct: 20 },
+      direction_concentration: [{ name: '银行', position_pct: 20 }],
+      breached_stop_codes: [], stop_warnings: [], missing: ['1只缺少当日价格'],
+      items: [{
+        code: '000001', name: '平安银行', direction: '银行', position_pct: 20,
+        cost_price: 10, current_price: null, stop_loss: null,
+        downside_to_stop_pct: null, portfolio_risk_pct: null,
+        unrealized_pnl_pct: null, stop_status: 'missing',
+      }],
+    }} />)
+
+    expect(screen.getByText('持仓真实风险暴露')).toBeTruthy()
+    expect(screen.getByText(/持仓卡片暂不可用/)).toBeTruthy()
+    expect(screen.getByText(/数据缺口：1只缺少当日价格/)).toBeTruthy()
   })
 })
 

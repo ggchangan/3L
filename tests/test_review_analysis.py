@@ -173,6 +173,7 @@ class TestGenerateHoldingsReview:
             assert 'sector' in item, f'{item["code"]} 缺少 sector 字段'
             assert item['sector'] != '', f'{item["code"]} sector 不应为空'
 
+
     def test_stock_not_in_data_returns_error(self):
         """持仓股不在 stocks 数据中 → 标记为数据缺失"""
         result = self._make_review(holdings=[{'code': 'XXXXX', 'name': '未知股'}])
@@ -206,6 +207,126 @@ class TestGenerateHoldingsReview:
             if expected_dir:
                 assert 'direction' in item, f'{code} 缺少 direction'
                 assert item['direction'] == expected_dir, f'{code}: 期望 direction={expected_dir}, 实际={item["direction"]}'
+
+    @pytest.mark.parametrize('invalid_stop', ['not-a-number', float('nan'), 0, -1])
+    def test_invalid_manual_stop_does_not_break_review_or_override_system(self, invalid_stop):
+        holdings = [
+            {**item, 'stop_loss_price': invalid_stop}
+            for item in MOCK_HOLDINGS
+        ]
+        result = self._make_review(holdings=holdings)
+
+        assert len(result) == 2
+        assert all(item['stop_loss_source'] == 'system' for item in result)
+        assert all(item['stop_loss_warning'] for item in result)
+
+
+class TestHoldingsRiskExposure:
+    def test_calculates_portfolio_downside_stop_coverage_and_concentration(self):
+        from backend.core.review_analysis import build_holdings_risk_exposure
+
+        exposure = build_holdings_risk_exposure(
+            holdings=[
+                {'code': '000001', 'target_ratio': 20, 'cost_price': 10},
+                {'code': '000002', 'target_ratio': 10, 'cost_price': 20},
+            ],
+            holdings_review=[
+                {'code': '000001', 'name': 'A', 'direction': '银行', 'price': 12, 'stop_loss': 10.8},
+                {'code': '000002', 'name': 'B', 'direction': '地产', 'price': 18, 'stop_loss': 17.1},
+            ],
+        )
+
+        assert exposure['status'] == 'confirmed'
+        assert exposure['total_position_pct'] == 30
+        assert exposure['cash_pct'] == 70
+        assert exposure['stop_covered_position_pct'] == 30
+        # 20%*10% + 10%*5% = 总资产 2.5%
+        assert exposure['portfolio_downside_to_stops_pct'] == 2.5
+        assert exposure['direction_concentration'][0] == {'name': '银行', 'position_pct': 20.0}
+        assert exposure['largest_position']['code'] == '000001'
+
+    def test_missing_and_breached_stops_are_explicit_not_counted_as_future_downside(self):
+        from backend.core.review_analysis import build_holdings_risk_exposure
+
+        exposure = build_holdings_risk_exposure(
+            holdings=[
+                {'code': '000001', 'target_ratio': 20, 'cost_price': 10},
+                {'code': '000002', 'target_ratio': 10, 'cost_price': 20},
+            ],
+            holdings_review=[
+                {'code': '000001', 'name': 'A', 'price': 9, 'stop_loss': 9.5},
+                {'code': '000002', 'name': 'B', 'price': 18, 'stop_loss': None},
+            ],
+        )
+
+        assert exposure['status'] == 'partial'
+        assert exposure['breached_stop_codes'] == ['000001']
+        assert exposure['breached_position_pct'] == 20
+        assert exposure['stop_covered_position_pct'] == 0
+        assert exposure['unassessable_position_pct'] == 0
+        assert exposure['uncovered_position_pct'] == 10
+        assert exposure['portfolio_downside_to_stops_pct'] == 0
+        assert any('缺少有效止损' in item for item in exposure['missing'])
+
+    def test_invalid_position_never_produces_fake_confirmed_exposure(self):
+        from backend.core.review_analysis import build_holdings_risk_exposure
+
+        exposure = build_holdings_risk_exposure(
+            holdings=[{'code': '000001', 'target_ratio': float('nan')}],
+            holdings_review=[{'code': '000001', 'name': 'A', 'price': 10, 'stop_loss': 9}],
+        )
+
+        assert exposure['status'] == 'partial'
+        assert exposure['cash_pct'] is None
+        assert exposure['items'][0]['portfolio_risk_pct'] is None
+
+    def test_card_failure_keeps_raw_holding_and_direction_visible(self):
+        from backend.core.review_analysis import build_holdings_risk_exposure
+
+        exposure = build_holdings_risk_exposure(
+            holdings=[{
+                'code': '000001', 'name': 'A', 'target_ratio': 20,
+                'cost_price': 10, 'stop_loss_price': 9, 'direction': '银行',
+            }],
+            holdings_review=[],
+        )
+
+        assert len(exposure['items']) == 1
+        assert exposure['items'][0]['direction'] == '银行'
+        assert exposure['status'] == 'partial'
+        assert exposure['stop_covered_position_pct'] == 0
+        assert exposure['unassessable_position_pct'] == 20
+        assert exposure['items'][0]['stop_status'] == 'unassessable'
+        assert any('缺少当日价格' in item for item in exposure['missing'])
+
+    def test_missing_cost_marks_partial_without_inventing_portfolio_pnl(self):
+        from backend.core.review_analysis import build_holdings_risk_exposure
+
+        exposure = build_holdings_risk_exposure(
+            holdings=[{'code': '000001', 'target_ratio': 20, 'stop_loss_price': 9}],
+            holdings_review=[{'code': '000001', 'name': 'A', 'price': 10, 'stop_loss': 9}],
+        )
+
+        assert exposure['status'] == 'partial'
+        assert exposure['items'][0]['unrealized_pnl_pct'] is None
+        assert any('缺少持仓成本' in item for item in exposure['missing'])
+        assert 'portfolio_unrealized_pnl_pct' not in exposure
+
+    def test_invalid_manual_stop_warning_reaches_portfolio_quality(self):
+        from backend.core.review_analysis import build_holdings_risk_exposure
+
+        exposure = build_holdings_risk_exposure(
+            holdings=[{'code': '000001', 'target_ratio': 20, 'cost_price': 10}],
+            holdings_review=[{
+                'code': '000001', 'name': 'A', 'price': 10, 'stop_loss': 9,
+                'stop_loss_source': 'system',
+                'stop_loss_warning': '手动止损无效，已回退系统建议',
+            }],
+        )
+
+        assert exposure['status'] == 'partial'
+        assert exposure['stop_warnings'][0]['code'] == '000001'
+        assert any('手动止损无效' in item for item in exposure['missing'])
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -229,7 +229,9 @@ def generate_daily_review(date_str=None):
         judge_peak_valley, get_mainline_data, get_concept_mainline_data, track_mainline_persistence,
         generate_trading_plan, apply_trading_plan_actions, get_buy_sell_signals, load_market_data_for_profit_check,
     )
-    from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
+    from backend.core.review_analysis import (
+        build_holdings_risk_exposure, generate_buy_signals_review, generate_holdings_review,
+    )
     from backend.core.scan_buy_signals import get_main_lines
     from backend.data_access.data_layer import get_watchlist
 
@@ -328,6 +330,7 @@ def generate_daily_review(date_str=None):
         date_str=date_str, mainlines=mainline_data,
         trend_mainlines=_trend_mainlines,
     )
+    holdings_risk_exposure = build_holdings_risk_exposure(holdings, holdings_review)
 
     # 买点方向映射（从 watchlist 取）
     _wl = get_watchlist()
@@ -369,6 +372,7 @@ def generate_daily_review(date_str=None):
         'holdings': holdings,
         'buy_signals': buy_signals,
         'holdings_review': holdings_review,
+        'holdings_risk_exposure': holdings_risk_exposure,
         'buy_signals_review': buy_signals_review,
     }
 
@@ -501,7 +505,9 @@ def compute_review_real_time(date_str=None):
         judge_peak_valley, get_mainline_data, get_concept_mainline_data, track_mainline_persistence,
         generate_trading_plan, apply_trading_plan_actions, get_buy_sell_signals, load_market_data_for_profit_check,
     )
-    from backend.core.review_analysis import generate_holdings_review, generate_buy_signals_review
+    from backend.core.review_analysis import (
+        build_holdings_risk_exposure, generate_buy_signals_review, generate_holdings_review,
+    )
     from backend.core.scan_buy_signals import get_main_lines
     from backend.data_access.data_layer import get_watchlist, get_all_stocks, get_index_klines, get_concept_list, get_stock_concept_map
 
@@ -581,6 +587,7 @@ def compute_review_real_time(date_str=None):
         date_str=date_str, mainlines=mainline_data,
         trend_mainlines=_trend_mainlines,
     )
+    holdings_risk_exposure = build_holdings_risk_exposure(holdings, holdings_review)
 
     # 买点方向映射（从 watchlist 取）
     _wl = get_watchlist()
@@ -772,6 +779,7 @@ def compute_review_real_time(date_str=None):
         'holdings': holdings,
         'buy_signals': buy_signals,
         'holdings_review': holdings_review,
+        'holdings_risk_exposure': holdings_risk_exposure,
         'buy_signals_review': buy_signals_review,
         'direction_order': get_all_ordered(),
         'opportunity_map': opp_map,

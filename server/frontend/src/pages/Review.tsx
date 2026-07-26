@@ -141,7 +141,7 @@ export default function Review() {
             )}
 
             {/* STEP 4: 持仓个股复盘 */}
-            {data?.holdings_review && data.holdings_review.length > 0 && (
+            {((data?.holdings_review?.length || 0) > 0 || (data?.holdings_risk_exposure?.items?.length || 0) > 0) && (
               <div className="section">
                 <div className="section-title">
                   <span className="step">STEP 4</span>
@@ -151,7 +151,7 @@ export default function Review() {
                   </span>
                 </div>
                 <div id="stockReviewList">
-                  <HoldingsReview stocks={data.holdings_review as any} directionOrder={data.direction_order} opportunityMap={data.opportunity_map} />
+                  <HoldingsReview stocks={data.holdings_review as any} directionOrder={data.direction_order} opportunityMap={data.opportunity_map} exposure={data.holdings_risk_exposure} />
                 </div>
               </div>
             )}

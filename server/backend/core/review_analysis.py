@@ -6,10 +6,178 @@ review_analysis.py — 复盘数据分析模块
 """
 
 import sys
+import math
 
 from backend.core.logger import get_logger
 
 log = get_logger(__name__)
+
+
+def _finite_number(value):
+    try:
+        number = float(value)
+        return number if math.isfinite(number) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def build_holdings_risk_exposure(holdings, holdings_review):
+    """按真实持仓记录计算组合风险暴露，不用建议仓位代替实际仓位。
+
+    当前持仓模型只记录仓位百分比，不记录股数/市值，因此口径明确为
+    “按记录仓位”；系统不伪造盘中市值权重。
+    """
+    raw_by_code = {
+        str(item.get('code', '')).split('.')[0]: item
+        for item in (holdings or []) if item.get('code')
+    }
+    review_by_code = {
+        str(item.get('code', '')).split('.')[0]: item
+        for item in (holdings_review or []) if item.get('code')
+    }
+    ordered_codes = list(raw_by_code)
+    ordered_codes.extend(code for code in review_by_code if code not in raw_by_code)
+    items = []
+    direction_position = {}
+    missing_ratio = []
+    missing_price = []
+    missing_stop = []
+    breached = []
+    total_position = 0.0
+    covered_position = 0.0
+    breached_position = 0.0
+    unassessable_position = 0.0
+    downside_to_stops = 0.0
+    missing_cost = []
+    stop_warnings = []
+
+    for code in ordered_codes:
+        review = review_by_code.get(code, {})
+        raw = raw_by_code.get(code, {})
+        ratio = _finite_number(raw.get('target_ratio', raw.get('ratio')))
+        ratio = ratio if ratio is not None and 0 <= ratio <= 100 else None
+        price = _finite_number(review.get('price'))
+        cost = _finite_number(raw.get('cost_price', raw.get('buy_price')))
+        stop = _finite_number(review.get('stop_loss'))
+        if stop is None:
+            stop = _finite_number(raw.get('stop_loss_price'))
+        stop_source = review.get('stop_loss_source') or (
+            'manual' if _finite_number(raw.get('stop_loss_price')) not in (None, 0) else 'unknown'
+        )
+        direction = (
+            review.get('direction') or review.get('industry') or review.get('sector')
+            or raw.get('direction') or raw.get('sector') or '未分类'
+        )
+
+        if ratio is None:
+            missing_ratio.append(code)
+        else:
+            total_position += ratio
+            direction_position[direction] = direction_position.get(direction, 0.0) + ratio
+        if price is None or price <= 0:
+            missing_price.append(code)
+        if cost is None or cost <= 0:
+            missing_cost.append(code)
+
+        stop_valid = stop is not None and stop > 0
+        price_valid = price is not None and price > 0
+        stop_breached = bool(stop_valid and price_valid and price <= stop)
+        stop_assessable = bool(stop_valid and price_valid)
+        stop_warning = str(review.get('stop_loss_warning') or '')
+        if stop_warning:
+            stop_warnings.append({'code': code, 'name': review.get('name') or raw.get('name', ''), 'message': stop_warning})
+        downside_pct = None
+        risk_contribution = None
+        if not stop_valid:
+            missing_stop.append(code)
+        elif ratio is not None and not stop_assessable:
+            unassessable_position += ratio
+        elif ratio is not None:
+            if stop_breached:
+                breached_position += ratio
+            else:
+                covered_position += ratio
+        if stop_valid and price is not None and price > 0:
+            downside_pct = round(max(0.0, (price - stop) / price * 100), 2)
+            if ratio is not None:
+                risk_contribution = round(ratio * downside_pct / 100, 3)
+                downside_to_stops += risk_contribution
+        if stop_breached:
+            breached.append(code)
+
+        unrealized_pct = None
+        if cost is not None and cost > 0 and price is not None and price > 0:
+            unrealized_pct = round((price - cost) / cost * 100, 2)
+
+        items.append({
+            'code': code,
+            'name': review.get('name') or raw.get('name', ''),
+            'direction': direction,
+            'position_pct': round(ratio, 2) if ratio is not None else None,
+            'cost_price': round(cost, 3) if cost is not None else None,
+            'current_price': round(price, 3) if price is not None else None,
+            'stop_loss': round(stop, 3) if stop is not None else None,
+            'stop_loss_source': stop_source,
+            'stop_loss_warning': stop_warning,
+            'downside_to_stop_pct': downside_pct,
+            'portfolio_risk_pct': risk_contribution,
+            'unrealized_pnl_pct': unrealized_pct,
+            'stop_status': (
+                'breached' if stop_breached
+                else 'covered' if stop_assessable
+                else 'unassessable' if stop_valid
+                else 'missing'
+            ),
+        })
+
+    ranked_directions = sorted(
+        ({'name': name, 'position_pct': round(value, 2)} for name, value in direction_position.items()),
+        key=lambda item: item['position_pct'], reverse=True,
+    )
+    largest_item = max(
+        (item for item in items if item['position_pct'] is not None),
+        key=lambda item: item['position_pct'], default=None,
+    )
+    missing = []
+    if missing_ratio:
+        missing.append(f'{len(missing_ratio)}只缺少仓位比例')
+    if missing_price:
+        missing.append(f'{len(missing_price)}只缺少当日价格')
+    if missing_cost:
+        missing.append(f'{len(missing_cost)}只缺少持仓成本')
+    if missing_stop:
+        missing.append(f'{len(missing_stop)}只缺少有效止损')
+    if stop_warnings:
+        missing.append(f'{len(stop_warnings)}只手动止损无效，已回退系统建议')
+    invalid_total = total_position > 100.0001
+    if invalid_total:
+        missing.append(f'记录仓位合计异常（{total_position:.2f}% > 100%）')
+    status = 'confirmed' if not missing else 'partial'
+    return {
+        'status': status,
+        'basis': '按用户记录仓位比例与当日收盘价计算；未记录股数/市值时不伪造盘中权重',
+        'total_position_pct': round(total_position, 2),
+        'cash_pct': (
+            round(100 - total_position, 2)
+            if not missing_ratio and not invalid_total else None
+        ),
+        'stop_covered_position_pct': round(covered_position, 2),
+        'breached_position_pct': round(breached_position, 2),
+        'unassessable_position_pct': round(unassessable_position, 2),
+        'uncovered_position_pct': round(max(
+            0.0, total_position - covered_position - breached_position - unassessable_position,
+        ), 2),
+        'portfolio_downside_to_stops_pct': round(downside_to_stops, 3),
+        'largest_position': ({
+            'code': largest_item['code'], 'name': largest_item['name'],
+            'position_pct': largest_item['position_pct'],
+        } if largest_item else None),
+        'direction_concentration': ranked_directions,
+        'breached_stop_codes': breached,
+        'stop_warnings': stop_warnings,
+        'missing': missing,
+        'items': items,
+    }
 
 
 def _get_actual_date(code, stocks, date_str):
@@ -85,9 +253,12 @@ def generate_holdings_review(holdings, stocks, buy_signals,
         # 手动止损（唯一不从卡片取的东西）
         stop_loss = card['stop_loss']
         stop_loss_pct = card['stop_loss_pct']
-        manual_sl = d.get('stop_loss_price')
-        if manual_sl is not None:
-            stop_loss = float(manual_sl)
+        manual_raw = d.get('stop_loss_price')
+        manual_sl = _finite_number(manual_raw)
+        manual_valid = manual_sl is not None and manual_sl > 0
+        invalid_manual = manual_raw is not None and manual_raw != '' and not manual_valid
+        if manual_valid:
+            stop_loss = manual_sl
             stop_loss_pct = round((card['price'] - stop_loss) / card['price'] * 100, 2) if card['price'] and card['price'] > 0 else None
         decision = dict(card.get('decision', {}))
         decision.update({'stop_loss': stop_loss, 'stop_loss_pct': stop_loss_pct})
@@ -117,6 +288,10 @@ def generate_holdings_review(holdings, stocks, buy_signals,
             'matched_mainline_direction': card.get('matched_mainline_direction', ''),
             'stop_loss': stop_loss,
             'stop_loss_pct': stop_loss_pct,
+            'position_pct': _finite_number(d.get('target_ratio', d.get('ratio'))),
+            'cost_price': _finite_number(d.get('cost_price', d.get('buy_price'))),
+            'stop_loss_source': 'manual' if manual_valid else 'system',
+            'stop_loss_warning': '手动止损无效，已回退系统建议' if invalid_manual else '',
             'decision': decision,
             # 融合判定字段
             'triggered_signals': card.get('triggered_signals', []),
