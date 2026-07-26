@@ -5,16 +5,22 @@ import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../lib/api', () => ({
   fetchReviewToday: vi.fn(),
+  fetchReviewDates: vi.fn(),
+  fetchReviewByDate: vi.fn(),
   fetchReviewStatus: vi.fn(),
   refreshReview: vi.fn(),
 }))
 vi.mock('../components/MarketCycle', () => ({ default: () => <div>大盘周期已加载</div> }))
 
 import Review from '../pages/Review'
-import { fetchReviewToday } from '../lib/api'
+import { fetchReviewByDate, fetchReviewDates, fetchReviewToday } from '../lib/api'
 
 describe('Review page contract integration', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(fetchReviewDates).mockResolvedValue({ dates: ['2026-07-21'] })
+    vi.mocked(fetchReviewByDate).mockResolvedValue({ mainline: { all_ranked: [] } })
+  })
 
   it('从 v3 契约展示复盘交易日、预估覆盖率和操作', async () => {
     vi.mocked(fetchReviewToday).mockResolvedValue({

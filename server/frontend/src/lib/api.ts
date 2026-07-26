@@ -138,7 +138,7 @@ export function fetchReviewDates(): Promise<{ dates: string[] }> {
 }
 
 export function fetchReviewByDate(date: string): Promise<ReviewData> {
-  return fetchJson<ReviewData>(`/api/review/${date}`)
+  return fetchJson<ReviewData>(`/api/review/archive?date=${encodeURIComponent(date)}`)
 }
 
 export function fetchMarket(): Promise<Record<string, unknown>> {

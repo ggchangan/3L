@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { fetchReviewToday, fetchReviewStatus, refreshReview } from '../lib/api'
+import { fetchReviewToday, fetchReviewStatus, fetchReviewDates, refreshReview } from '../lib/api'
 import type { ReviewRefreshStatus } from '../lib/api'
 import NavBar, { BottomNav } from '../components/NavBar'
 import MarketCycle from '../components/MarketCycle'
@@ -18,6 +18,7 @@ export default function Review() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshStatus, setRefreshStatus] = useState<ReviewRefreshStatus | null>(null)
+  const [reviewDates, setReviewDates] = useState<string[]>([])
 
   const now = new Date()
   const fallbackDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -28,6 +29,9 @@ export default function Review() {
   const loadData = useCallback(() => {
     setLoading(true)
     setError('')
+    fetchReviewDates()
+      .then(result => setReviewDates(Array.isArray(result.dates) ? result.dates : []))
+      .catch(() => setReviewDates([]))
     fetchReviewToday().then(reviewData => {
       setData({
         ...reviewData,
@@ -135,7 +139,7 @@ export default function Review() {
                   <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 方向决定优先级，阶段只作加分和风险提示</span>
                 </div>
                 <div id="mainlineContainer">
-                  <MainlineSection data={data.mainline} dates={[]} currentDate={reviewDate} />
+                  <MainlineSection data={data.mainline} dates={reviewDates} currentDate={reviewDate} />
                 </div>
               </div>
             )}
