@@ -1,4 +1,6 @@
 """复盘相关路由（生成、保存、日期列表）"""
+from datetime import datetime
+
 from . import parse_query
 from backend.core.logger import get_logger
 log = get_logger(__name__)
@@ -6,6 +8,7 @@ log = get_logger(__name__)
 from backend.services.review_service import (
     run_daily_review, generate_review, save_review, compute_review_serialized,
     load_current_review,
+    get_archive, normalize_review_response,
     get_review_refresh_status, request_review_refresh,
 )
 from backend.core.exceptions import APIError
@@ -71,6 +74,25 @@ def _handle_review_dates(h, path):
     h.send_json({'dates': dates})
 
 
+def _handle_review_archive(h, path):
+    """按严格日期读取只读复盘归档，避免动态路径和目录穿越。"""
+    params = parse_query(path)
+    date_arg = params.get('date', [''])[0]
+    try:
+        valid_date = datetime.strptime(date_arg, '%Y-%m-%d').strftime('%Y-%m-%d')
+    except (TypeError, ValueError):
+        h.send_json({'success': False, 'error': 'date 必须为 YYYY-MM-DD'}, 400)
+        return
+    if valid_date != date_arg:
+        h.send_json({'success': False, 'error': 'date 必须为 YYYY-MM-DD'}, 400)
+        return
+    archive = get_archive(valid_date)
+    if archive is None:
+        h.send_json({'success': False, 'error': '复盘归档不存在', 'date': valid_date}, 404)
+        return
+    h.send_json(normalize_review_response(archive, source='archive'))
+
+
 def _handle_review_get(h, path):
     """兼容旧接口：等价于 /api/review/current。"""
     try:
@@ -102,5 +124,6 @@ def register_routes(routes):
     routes.exact('/api/review/refresh', func=_handle_review_refresh)
     routes.exact('/api/review/status', func=_handle_review_status)
     routes.exact('/api/review/dates', func=_handle_review_dates)
+    routes.exact('/api/review/archive', func=_handle_review_archive)
     # POST 路由在 server.py 的 do_POST 中直接处理，保持兼容
     return routes

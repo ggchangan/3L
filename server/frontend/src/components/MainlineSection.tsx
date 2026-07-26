@@ -62,8 +62,9 @@ const chgSign = (v?: number) => {
 }
 
 export default function MainlineSection({ data, dates, currentDate }: Props) {
-  const [prevRanked, setPrevRanked] = useState<string[]>([])
-  const [rotationNote, setRotationNote] = useState('')
+  const [prevRanked, setPrevRanked] = useState<string[] | null>(null)
+  const [comparisonDate, setComparisonDate] = useState('')
+  const [comparisonStatus, setComparisonStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable' | 'error'>('idle')
   const [tab, setTab] = useState<'industry' | 'concept'>('industry')
   const [expandedLeader, setExpandedLeader] = useState<string | null>(null)
 
@@ -82,15 +83,31 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
 
   // 获取前一天的排名
   useEffect(() => {
-    if (!data || !dates.length || !currentDate) return
-    const prevDates = dates.filter(d => d !== currentDate).sort().reverse()
-    if (!prevDates.length) return
-    fetchReviewByDate(prevDates[0])
+    setPrevRanked(null)
+    setComparisonDate('')
+    if (!data || !currentDate) {
+      setComparisonStatus('idle')
+      return
+    }
+    const prevDate = dates.filter(d => d < currentDate).sort().reverse()[0]
+    if (!prevDate) {
+      setComparisonStatus('unavailable')
+      return
+    }
+    let cancelled = false
+    setComparisonDate(prevDate)
+    setComparisonStatus('loading')
+    fetchReviewByDate(prevDate)
       .then(prev => {
+        if (cancelled) return
         const prevR = ((tab === 'concept' ? prev.mainline?.concept_mainline?.all_ranked : prev.mainline?.all_ranked) || []).slice(0, 10).map((l: any) => l.name)
         setPrevRanked(prevR)
+        setComparisonStatus('ready')
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) setComparisonStatus('error')
+      })
+    return () => { cancelled = true }
   }, [data, dates, currentDate, tab])
 
   // 轮动检测
@@ -104,8 +121,12 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
       newDirectionAlerts.push(l)
   }
 
-  useEffect(() => {
-    if (!prevRanked.length || !allRanked.length) return
+  const rotationNote = (() => {
+    if (comparisonStatus === 'loading') return `正在读取 ${comparisonDate} 排名进行轮动比较…`
+    if (comparisonStatus === 'unavailable') return '缺少上一交易日复盘，轮动比较待建立'
+    if (comparisonStatus === 'error') return `${comparisonDate} 历史复盘读取失败，暂无法比较轮动`
+    if (comparisonStatus !== 'ready') return ''
+    if (!prevRanked?.length || !allRanked.length) return `${comparisonDate} 或当前排名数据不足，暂无法比较轮动`
     const top10Names = allRanked.slice(0, 10).map(l => l.name)
     const newEntry = top10Names.filter(n => !prevRanked.includes(n))
     const gone = prevRanked.filter(n => !top10Names.includes(n))
@@ -114,9 +135,9 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
     if (gone.length) parts.push(`📉 跌出前10: ${gone.join(' · ')}`)
     if (escapeAlerts.length) parts.push(`⚠️ 资金出逃: ${escapeAlerts.map(e => `${e.name}(${e.chg_1d > 0 ? '+' : ''}${e.chg_1d?.toFixed(1)}%)`).join(' · ')}`)
     if (newDirectionAlerts.length) parts.push(`🆕 新方向观察: ${newDirectionAlerts.slice(0, 5).map(e => `${e.name}(${e.chg_1d > 0 ? '+' : ''}${e.chg_1d?.toFixed(1)}%)`).join(' · ')}`)
-    if (parts.length) setRotationNote(parts.join(' | '))
-    else setRotationNote('↔️ 前10名无变化')
-  }, [prevRanked])
+    const detail = parts.length ? parts.join(' | ') : '↔️ 前10名无变化'
+    return `对比 ${comparisonDate} · ${detail}`
+  })()
 
   if (!data) return <div className="empty">暂无主线数据</div>
 
@@ -332,7 +353,7 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
               const levelColor = level === '主线' ? '#e94560' : level === '次级主线' ? '#ffd700' : '#888'
 
               let chgDisplay = <span style={{ color: '#555' }}>--</span>
-              if (prevRanked.length) {
+              if (prevRanked?.length) {
                 const prevIdx = prevRanked.indexOf(l.name)
                 if (prevIdx === i) chgDisplay = <span style={{ color: '#555' }}>—</span>
                 else if (prevIdx >= 0) {

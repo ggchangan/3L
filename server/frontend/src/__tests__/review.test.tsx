@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
-import { describe, it, expect } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import MarketCycle, { classifyMarketRegime, resolveActiveIndexCode, selectReviewIndexData } from '../components/MarketCycle'
 import MainlineSection from '../components/MainlineSection'
 import HistoryReview from '../components/HistoryReview'
@@ -8,6 +8,12 @@ import ReviewDataStatus from '../components/ReviewDataStatus'
 import TradingPlan from '../components/TradingPlan'
 import HoldingsReview, { RiskExposurePanel } from '../components/HoldingsReview'
 import { formatSectorEnvironment } from '../lib/review'
+import { fetchReviewByDate } from '../lib/api'
+
+vi.mock('../lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/api')>()
+  return { ...actual, fetchReviewByDate: vi.fn() }
+})
 
 // ====== MarketCycle ======
 describe('MarketCycle', () => {
@@ -48,6 +54,8 @@ describe('MarketCycle', () => {
 
 // ====== MainlineSection ======
 describe('MainlineSection', () => {
+  beforeEach(() => vi.mocked(fetchReviewByDate).mockReset())
+
   it('空数据时显示暂无主线', () => {
     render(<MainlineSection data={null} dates={[]} currentDate="" />)
     expect(screen.getByText('暂无主线数据')).toBeTruthy()
@@ -72,6 +80,36 @@ describe('MainlineSection', () => {
     expect(screen.getAllByText('次级主线').length).toBeGreaterThan(0)
     expect(screen.getByText(/波谷是加分项/)).toBeTruthy()
     expect(screen.queryByText('主线回调机会')).toBeNull()
+  })
+
+  it('严格使用当前复盘日前最近归档运行轮动比较', async () => {
+    vi.mocked(fetchReviewByDate).mockResolvedValue({
+      mainline: { all_ranked: [{ name: '旧方向', chg_20d: 10 }] },
+    })
+    render(<MainlineSection
+      data={{
+        lines: [{ name: '新方向', chg_20d: 20 }],
+        all_ranked: [{ name: '新方向', chg_20d: 20 }],
+      }}
+      dates={['2026-07-24', '2026-07-22', '2026-07-21']}
+      currentDate="2026-07-23"
+    />)
+
+    await waitFor(() => expect(fetchReviewByDate).toHaveBeenCalledWith('2026-07-22'))
+    expect(await screen.findByText(/对比 2026-07-22/)).toBeTruthy()
+    expect(screen.getByText(/新进前10: 新方向/)).toBeTruthy()
+    expect(screen.getByText(/跌出前10: 旧方向/)).toBeTruthy()
+  })
+
+  it('没有更早归档时明确说明轮动比较尚未建立', async () => {
+    render(<MainlineSection
+      data={{ all_ranked: [{ name: '方向A', chg_20d: 10 }] }}
+      dates={['2026-07-24', '2026-07-23']}
+      currentDate="2026-07-23"
+    />)
+
+    expect(await screen.findByText('缺少上一交易日复盘，轮动比较待建立')).toBeTruthy()
+    expect(fetchReviewByDate).not.toHaveBeenCalled()
   })
 })
 

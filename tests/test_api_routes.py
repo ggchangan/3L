@@ -101,6 +101,7 @@ EXPECTED_ROUTES_GET = [
     '/api/review/refresh',
     '/api/review/status',
     '/api/review/dates',
+    '/api/review/archive',
     '/api/review/generate',
     '/api/stock-analysis',
     '/api/stock-backtest',
