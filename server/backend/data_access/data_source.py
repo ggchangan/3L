@@ -775,10 +775,37 @@ def build_concept_maps_from_db() -> tuple:
     return (concept_list, stock_concept_data)
 
 
-def tushare_fetch_daily_incremental():
-    """Tushare 增量拉取 — 将最新交易日数据写入 stock_daily + index_daily
+def _daily_table_count(db, table, trade_date, complete_where=''):
+    where = f' AND {complete_where}' if complete_where else ''
+    rows = db.execute_raw(
+        f'SELECT COUNT(*) AS row_count FROM {table} WHERE trade_date=%s{where}',
+        [trade_date],
+    )
+    return int((rows[0] if rows else {}).get('row_count') or 0)
 
-    自动跳过非交易日和已有数据的日期。
+
+def _expected_stock_daily_count(db, trade_date):
+    """以应上市股票池和近 5 日最大样本共同构造可信覆盖基线。"""
+    rows = db.execute_raw("""
+        SELECT
+          (SELECT COUNT(*) FROM stock_basic
+             WHERE (list_date IS NULL OR list_date='' OR list_date <= %s)
+               AND (delist_date IS NULL OR delist_date='' OR delist_date > %s)) AS listed_count,
+          (SELECT MAX(day_count) FROM (
+             SELECT COUNT(*) AS day_count FROM stock_daily
+             WHERE trade_date < %s GROUP BY trade_date ORDER BY trade_date DESC LIMIT 5
+          ) recent_days) AS recent_max
+    """, [trade_date, trade_date, trade_date])
+    row = rows[0] if rows else {}
+    listed_count = int(row.get('listed_count') or 0)
+    recent_max = int(row.get('recent_max') or 0)
+    return max(listed_count, recent_max)
+
+
+def tushare_fetch_daily_incremental():
+    """Tushare 增量拉取 — 写入最近已收盘交易日的日线及辅助表。
+
+    周末也会回补周五数据，只跳过已有数据的表。
     使用 Tushare 2000分/分钟额度，每个接口后 sleep 0.6s。
     """
     from backend.core.config import TUSHARE_TOKEN
@@ -787,12 +814,6 @@ def tushare_fetch_daily_incremental():
     db = _get_tushare_db()
     if not db:
         log.warning('tushare_fetch_daily_incremental: DB不可用')
-        return 0
-
-    # 非交易日跳过
-    now = datetime.now()
-    if now.weekday() >= 5:
-        log.info('非交易日，跳过 Tushare 增量拉取')
         return 0
 
     trade_date = get_last_completed_trading_day()
@@ -809,12 +830,17 @@ def tushare_fetch_daily_incremental():
         return 0
 
     total_rows = 0
+    expected_stock_count = _expected_stock_daily_count(db, trade_date)
+    stock_count = _daily_table_count(
+        db, 'stock_daily', trade_date,
+        'pct_chg IS NOT NULL AND high IS NOT NULL AND low IS NOT NULL',
+    )
 
     # stock_daily
     try:
-        latest = db.get_last_trade_date('stock_daily')
-        if latest and latest >= trade_date:
-            log.info('  stock_daily 已有 %s 数据，跳过', trade_date)
+        stock_ready = bool(expected_stock_count and stock_count >= expected_stock_count * 0.98)
+        if stock_ready:
+            log.info('  stock_daily %s 覆盖完整 (%d/%d)，跳过', trade_date, stock_count, expected_stock_count)
         else:
             df = api.daily(trade_date=trade_date)
             if df is not None and not df.empty:
@@ -824,6 +850,44 @@ def tushare_fetch_daily_incremental():
             time.sleep(0.6)
     except Exception as e:
         log.warning('  stock_daily 增量失败: %s', e)
+
+    # adj_factor：一年新高/新低必须使用同日复权因子，不能用原始价格误判。
+    try:
+        expected = expected_stock_count
+        covered = _daily_table_count(db, 'adj_factor', trade_date, 'adj_factor IS NOT NULL')
+        if expected and covered >= expected * 0.98:
+            log.info('  adj_factor %s 覆盖完整 (%d/%d)，跳过', trade_date, covered, expected)
+        else:
+            df = api.adj_factor(trade_date=trade_date)
+            if df is not None and not df.empty:
+                rows = db.upsert_many('adj_factor', df)
+                log.info('  adj_factor: 写入 %d 条', rows)
+                total_rows += rows
+            else:
+                log.warning('  adj_factor: Tushare 返回空数据 (%s)', trade_date)
+            time.sleep(0.6)
+    except Exception as e:
+        log.warning('  adj_factor 增量失败: %s', e)
+
+    # 每日涨跌停价格：与收盘价连接后得到收盘涨停/跌停家数。
+    try:
+        expected = expected_stock_count
+        covered = _daily_table_count(
+            db, 'stk_limit', trade_date, 'up_limit IS NOT NULL AND down_limit IS NOT NULL',
+        )
+        if expected and covered >= expected * 0.98:
+            log.info('  stk_limit %s 覆盖完整 (%d/%d)，跳过', trade_date, covered, expected)
+        else:
+            df = api.stk_limit(trade_date=trade_date)
+            if df is not None and not df.empty:
+                rows = db.upsert_many('stk_limit', df)
+                log.info('  stk_limit: 写入 %d 条', rows)
+                total_rows += rows
+            else:
+                log.warning('  stk_limit: Tushare 返回空数据 (%s)', trade_date)
+            time.sleep(0.6)
+    except Exception as e:
+        log.warning('  stk_limit 增量失败: %s', e)
 
     # index_daily
     try:

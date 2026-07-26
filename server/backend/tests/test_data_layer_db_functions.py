@@ -226,3 +226,42 @@ class TestTushareIncrementalIndexDaily:
             tushare_fetch_daily_incremental()
 
         assert 'Tushare 返回空数据' in caplog.text
+
+    @patch('backend.data_access.data_source.time.sleep')
+    @patch('backend.data_access.data_source.get_last_completed_trading_day')
+    @patch('backend.data_access.data_source._get_tushare_db')
+    def test_incremental_fetches_adj_factor_and_limit_price_on_weekend_backfill(
+        self, mock_db, mock_ltd, mock_sleep,
+    ):
+        """次日完整任务即使周六运行，也必须补齐周五温度辅助数据。"""
+        import pandas as pd
+
+        mock_ltd.return_value = '20260724'
+        db = MagicMock()
+        db.get_last_trade_date.side_effect = lambda table: {
+            'stock_daily': '20260723', 'adj_factor': '20260723', 'stk_limit': '20260723',
+        }.get(table, '20260724')
+        db.execute_raw.return_value = [{'latest': '20260724'}]
+        db.upsert_many.side_effect = lambda table, frame: len(frame)
+        mock_db.return_value = db
+
+        api = MagicMock()
+        api.daily.return_value = pd.DataFrame([{'ts_code': '000001.SZ', 'trade_date': '20260724'}])
+        api.adj_factor.return_value = pd.DataFrame([{
+            'ts_code': '000001.SZ', 'trade_date': '20260724', 'adj_factor': 123.4,
+        }])
+        api.stk_limit.return_value = pd.DataFrame([{
+            'ts_code': '000001.SZ', 'trade_date': '20260724',
+            'pre_close': 10.0, 'up_limit': 11.0, 'down_limit': 9.0,
+        }])
+        tushare = MagicMock(pro_api=MagicMock(return_value=api))
+
+        from backend.data_access.data_source import tushare_fetch_daily_incremental
+        with patch.dict(sys.modules, {'tushare': tushare}):
+            result = tushare_fetch_daily_incremental()
+
+        assert result == 3
+        api.adj_factor.assert_called_once_with(trade_date='20260724')
+        api.stk_limit.assert_called_once_with(trade_date='20260724')
+        written_tables = [call.args[0] for call in db.upsert_many.call_args_list]
+        assert written_tables == ['stock_daily', 'adj_factor', 'stk_limit']

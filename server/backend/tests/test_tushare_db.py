@@ -33,12 +33,13 @@ class TestTushareDBInit:
     """TushareDB 初始化与建表"""
 
     def test_init_creates_tables(self, db):
-        """建表后9张表都应存在"""
+        """建表后核心表和市场温度辅助表都应存在"""
         tables = db.get_table_names()
         expected = {
             'stock_daily', 'daily_basic', 'index_daily',
             'ths_daily', 'ths_index', 'ths_member',
             'stock_basic', 'adj_factor', 'trade_cal',
+            'stk_limit',
         }
         assert expected.issubset(set(tables)), f"Missing tables: {expected - set(tables)}"
 

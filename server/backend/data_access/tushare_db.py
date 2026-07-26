@@ -131,6 +131,16 @@ CREATE_TABLES = {
             PRIMARY KEY (ts_code, trade_date)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
+    'stk_limit': """
+        CREATE TABLE IF NOT EXISTS stk_limit (
+            ts_code     VARCHAR(20) NOT NULL,
+            trade_date  VARCHAR(10) NOT NULL,
+            pre_close   DOUBLE,
+            up_limit    DOUBLE,
+            down_limit  DOUBLE,
+            PRIMARY KEY (ts_code, trade_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
     'trade_cal': """
         CREATE TABLE IF NOT EXISTS trade_cal (
             exchange    VARCHAR(10) NOT NULL,
@@ -148,6 +158,8 @@ CREATE_INDEXES = {
     'idx_stock_daily_date': 'CREATE INDEX idx_stock_daily_date ON stock_daily(trade_date)',
     'idx_daily_basic_ts_code': 'CREATE INDEX idx_daily_basic_ts_code ON daily_basic(ts_code)',
     'idx_adj_factor_ts_code': 'CREATE INDEX idx_adj_factor_ts_code ON adj_factor(ts_code)',
+    'idx_adj_factor_trade_date': 'CREATE INDEX idx_adj_factor_trade_date ON adj_factor(trade_date)',
+    'idx_stk_limit_trade_date': 'CREATE INDEX idx_stk_limit_trade_date ON stk_limit(trade_date)',
     'idx_ths_daily_ts_code': 'CREATE INDEX idx_ths_daily_ts_code ON ths_daily(ts_code)',
     'idx_ths_member_con_code': 'CREATE INDEX idx_ths_member_con_code ON ths_member(con_code)',
     'idx_ths_index_type': 'CREATE INDEX idx_ths_index_type ON ths_index(type)',

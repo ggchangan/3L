@@ -20,6 +20,36 @@ vi.mock('../lib/api', () => ({
 import MarketCycle, { buildMarketDimensionInfo, selectReviewIndexData } from '../components/MarketCycle'
 
 describe('MarketCycle dynamic position strategy', () => {
+  it('市场温度展示原始证据、数据状态和知识库口径', async () => {
+    render(
+      <MarketCycle
+        reviewMarket={{
+          position: '波中', structure: '下降趋势', market_regime: 'weak',
+          temperature: {
+            level: 'ice', label: '冰点观察', status: 'confirmed', date: '20260724', source: 'tushare_mysql',
+            metrics: {
+              total: 5526, up: 555, down: 4940, flat: 31,
+              limit_up: 43, limit_down: 25, new_high_1y: 7, new_low_1y: 232,
+              amount_yi: 19444.6, amount_vs_5d_pct: -8.2,
+            },
+            evidence: ['一年新高仅7家，低于知识库冰点参考线20家', '下跌家数占比89.4%，亏钱效应明显'],
+            quality: { stock_count: 5526, limit_covered: 5526, adj_factor_covered: 5526, year_comparable: 5396, missing: [] },
+            rules: [{ name: '冰点参考', rule: '一年新高少于20家', origin: '3L训练营' }],
+          },
+        }}
+        reviewIndexDate="20260724"
+      />,
+    )
+
+    expect(await screen.findByText('冰点观察')).toBeTruthy()
+    expect(screen.getByText('555 / 4940 / 31')).toBeTruthy()
+    expect(screen.getByText('43 / 25')).toBeTruthy()
+    expect(screen.getByText('7 / 232')).toBeTruthy()
+    expect(screen.getByText('19444.6亿')).toBeTruthy()
+    expect(screen.getByText(/知识库冰点参考线20家/)).toBeTruthy()
+    expect(screen.getByText('数据完整')).toBeTruthy()
+  })
+
   it('弱势主跌场景展示真实仓位和交易节奏，不展示静态建议仓位', async () => {
     render(
       <MarketCycle

@@ -29,6 +29,37 @@ export interface MarketData {
   explanation?: string[]
   algorithm_version?: string
   features?: Record<string, number | string | boolean>
+  temperature?: MarketTemperatureData
+}
+
+export interface MarketTemperatureData {
+  level: 'ice' | 'cold' | 'neutral' | 'warm' | 'hot' | 'unknown'
+  label: string
+  date?: string
+  status: 'confirmed' | 'partial' | 'unavailable'
+  source?: string
+  metrics?: {
+    total?: number
+    up?: number
+    down?: number
+    flat?: number
+    limit_up?: number
+    limit_down?: number
+    new_high_1y?: number | null
+    new_low_1y?: number | null
+    amount_yi?: number
+    amount_vs_5d_pct?: number | null
+    amount_vs_20d_pct?: number | null
+  }
+  evidence?: string[]
+  quality?: {
+    stock_count?: number
+    limit_covered?: number
+    adj_factor_covered?: number
+    year_comparable?: number
+    missing?: string[]
+  }
+  rules?: Array<{ name: string; rule: string; origin: string }>
 }
 
 export type MarketRegime = 'strong' | 'neutral' | 'weak' | 'unknown'
@@ -69,6 +100,52 @@ const normalizeDate = (value?: string) => (value || '').replaceAll('-', '')
 const numericText = (value: unknown, digits = 1, suffix = '') => {
   const number = Number(value)
   return Number.isFinite(number) ? `${number.toFixed(digits)}${suffix}` : '--'
+}
+
+function MarketTemperaturePanel({ temperature }: { temperature?: MarketTemperatureData }) {
+  if (!temperature) {
+    return (
+      <div className="market-temperature-panel unknown">
+        <div className="market-temperature-header"><strong>市场温度</strong><span>历史快照未记录</span></div>
+        <div className="market-temperature-empty">刷新或重新生成当日复盘后可查看市场宽度与赚钱效应。</div>
+      </div>
+    )
+  }
+  const metrics = temperature.metrics || {}
+  const statusLabel = { confirmed: '数据完整', partial: '部分数据', unavailable: '数据不可用' }[temperature.status]
+  const amountCompareValue = Number(metrics.amount_vs_5d_pct)
+  const amountCompare = Number.isFinite(amountCompareValue)
+    ? `${amountCompareValue >= 0 ? '+' : ''}${amountCompareValue.toFixed(1)}%`
+    : '--'
+  return (
+    <section className={`market-temperature-panel ${temperature.level}`} aria-label="市场温度">
+      <div className="market-temperature-header">
+        <div><span>市场温度</span><strong>{temperature.label || '温度待确认'}</strong></div>
+        <span className={`market-temperature-status ${temperature.status}`}>{statusLabel}</span>
+      </div>
+      <div className="market-temperature-metrics">
+        <div><span>涨 / 跌 / 平</span><strong>{metrics.up ?? '--'} / {metrics.down ?? '--'} / {metrics.flat ?? '--'}</strong></div>
+        <div><span>收盘涨停 / 跌停</span><strong>{metrics.limit_up ?? '--'} / {metrics.limit_down ?? '--'}</strong></div>
+        <div><span>一年新高 / 新低</span><strong>{metrics.new_high_1y ?? '--'} / {metrics.new_low_1y ?? '--'}</strong></div>
+        <div><span>成交额</span><strong>{numericText(metrics.amount_yi, 1, '亿')}</strong><small>较5日 {amountCompare}</small></div>
+      </div>
+      {!!temperature.evidence?.length && (
+        <div className="market-temperature-conclusion">{temperature.evidence.join('；')}</div>
+      )}
+      <details className="market-temperature-details">
+        <summary>查看判断口径与数据覆盖</summary>
+        {temperature.rules?.map(rule => <div key={rule.name}><strong>{rule.name}：</strong>{rule.rule}（{rule.origin}）</div>)}
+        <div>
+          数据：{temperature.date || '--'} · {temperature.source || '--'} ·
+          个股 {temperature.quality?.stock_count ?? '--'} ·
+          涨跌停覆盖 {temperature.quality?.limit_covered ?? '--'} ·
+          复权覆盖 {temperature.quality?.adj_factor_covered ?? '--'} ·
+          一年可比 {temperature.quality?.year_comparable ?? '--'}
+        </div>
+        {!!temperature.quality?.missing?.length && <div className="market-temperature-missing">待补齐：{temperature.quality.missing.join('；')}</div>}
+      </details>
+    </section>
+  )
 }
 
 export function buildMarketDimensionInfo(
@@ -373,6 +450,8 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
           {(reviewIndexDate || primary.data_date) && <span>数据：{reviewIndexDate || primary.data_date}</span>}
         </div>
       </div>
+
+      <MarketTemperaturePanel temperature={primary.temperature} />
 
       {marketStrategy && (
         <div style={{ margin: '10px 0 12px', padding: '10px 12px', border: '1px solid #333', borderRadius: 8, background: 'rgba(78,205,196,0.05)' }}>

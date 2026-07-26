@@ -100,6 +100,39 @@
   background: rgba(255, 255, 255, 0.025);
 }
 
+.market-temperature-panel {
+  margin: 10px 0 12px;
+  padding: 12px 14px;
+  border: 1px solid #333;
+  border-left: 4px solid #777;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.market-temperature-panel.ice { border-left-color: #58a6ff; background: rgba(88, 166, 255, 0.07); }
+.market-temperature-panel.cold { border-left-color: #4ecdc4; }
+.market-temperature-panel.warm { border-left-color: #ffd166; }
+.market-temperature-panel.hot { border-left-color: #e94560; background: rgba(233, 69, 96, 0.06); }
+.market-temperature-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #888; font-size: 12px; }
+.market-temperature-header > div { display: flex; align-items: baseline; gap: 10px; }
+.market-temperature-header strong { color: #e0e0e0; font-size: 18px; }
+.market-temperature-status { padding: 2px 7px; border-radius: 10px; background: #252532; color: #aaa; font-size: 10px; }
+.market-temperature-status.confirmed { color: #4ecdc4; }
+.market-temperature-status.partial { color: #ff9800; }
+.market-temperature-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.market-temperature-metrics > div { padding: 8px 9px; border-radius: 6px; background: rgba(0, 0, 0, 0.16); }
+.market-temperature-metrics span, .market-temperature-metrics small { display: block; color: #777; font-size: 10px; }
+.market-temperature-metrics strong { display: block; margin: 3px 0 1px; color: #ddd; font-size: 14px; }
+.market-temperature-conclusion { margin-top: 9px; color: #aaa; font-size: 11px; line-height: 1.6; }
+.market-temperature-details { margin-top: 7px; color: #777; font-size: 10px; line-height: 1.7; }
+.market-temperature-details summary { cursor: pointer; color: #58a6ff; }
+.market-temperature-missing { color: #ff9800; }
+.market-temperature-empty { margin-top: 7px; color: #777; font-size: 11px; }
+
+@media (max-width: 700px) {
+  .market-temperature-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .market-temperature-header { align-items: flex-start; }
+}
+
 .market-regime-banner.strong { border-left-color: #e94560; background: rgba(233, 69, 96, 0.08); }
 .market-regime-banner.neutral { border-left-color: #ffd166; background: rgba(255, 209, 102, 0.07); }
 .market-regime-banner.weak { border-left-color: #4ecdc4; background: rgba(78, 205, 196, 0.07); }
