@@ -88,6 +88,9 @@ def test_close_phase_refreshes_review_after_daily_data_is_ready():
          patch.object(update_stock_data, 'refresh_sector_close_snapshot', return_value={
              'coverage': {'industry': {'covered': 280, 'expected': 319, 'ratio': 0.878}},
          }), \
+         patch.object(update_stock_data, '_market_temperature_data_freshness', return_value={
+             'ready': True, 'adj_factor_date': '20260721', 'stk_limit_date': '20260721',
+         }), \
          patch.object(update_stock_data, '_refresh_review_cache') as refresh:
         assert update_stock_data.run_close_phase() is True
         refresh.assert_called_once_with('20260721')
@@ -153,6 +156,9 @@ def test_close_phase_keeps_review_available_and_requests_retry_when_sector_snaps
          patch.object(update_stock_data, 'update_stocks'), \
          patch.object(update_stock_data, 'update_index'), \
          patch.object(update_stock_data, 'refresh_sector_close_snapshot', side_effect=RuntimeError('暂时不可用')), \
+         patch.object(update_stock_data, '_market_temperature_data_freshness', return_value={
+             'ready': True, 'adj_factor_date': '20260721', 'stk_limit_date': '20260721',
+         }), \
          patch.object(update_stock_data, '_clear_mainline_cache'), \
          patch.object(update_stock_data, '_refresh_review_cache') as refresh:
         assert update_stock_data.run_close_phase() is False

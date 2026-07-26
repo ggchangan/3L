@@ -455,15 +455,49 @@ def _daily_data_freshness(target_date):
     }
 
 
+def _market_temperature_data_freshness(target_date):
+    """市场温度辅助表允许降级展示，但未到齐时收盘任务应继续重试。"""
+    try:
+        from backend.data_access.data_source import (
+            _daily_table_count, _expected_stock_daily_count, _get_tushare_db,
+        )
+        db = _get_tushare_db()
+        if not db:
+            return {'ready': False, 'stock_count': 0, 'adj_count': 0, 'limit_count': 0}
+        stock_count = _daily_table_count(
+            db, 'stock_daily', target_date,
+            'pct_chg IS NOT NULL AND high IS NOT NULL AND low IS NOT NULL',
+        )
+        expected = _expected_stock_daily_count(db, target_date)
+        adj_count = _daily_table_count(db, 'adj_factor', target_date, 'adj_factor IS NOT NULL')
+        limit_count = _daily_table_count(
+            db, 'stk_limit', target_date, 'up_limit IS NOT NULL AND down_limit IS NOT NULL',
+        )
+        return {
+            'ready': bool(expected and stock_count >= expected * 0.98
+                          and adj_count >= expected * 0.98
+                          and limit_count >= expected * 0.98),
+            'stock_count': stock_count,
+            'expected_stock_count': expected,
+            'adj_count': adj_count,
+            'limit_count': limit_count,
+        }
+    except Exception as exc:
+        return {'ready': False, 'stock_count': 0, 'adj_count': 0, 'limit_count': 0, 'error': str(exc)}
+
+
 def _refresh_review_cache(target_date):
     """同步生成复盘缓存，保证命令退出前页面已经可用。"""
     from backend.services.review_service import (
         compute_review_real_time, review_refresh_file_lock, save_review_data,
     )
+    from backend.services.market_temperature_service import invalidate_market_temperature_cache
 
     date_str = datetime.strptime(target_date, '%Y%m%d').strftime('%Y-%m-%d')
     log(f'━━━ 生成当日复盘缓存 ({date_str}) ━━━')
     with review_refresh_file_lock():
+        # 日线/复权/涨跌停或历史窗口可能刚被回补，不复用旧温度。
+        invalidate_market_temperature_cache(target_date)
         review = compute_review_real_time(date_str)
         review['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
         save_review_data(review)
@@ -526,7 +560,15 @@ def run_close_phase():
         log(f'⚠️  收盘板块快照未就绪，先生成降级复盘并继续重试: {exc}')
     _clear_mainline_cache()
     _refresh_review_cache(target_date)
-    return snapshot_ready
+    temperature_freshness = _market_temperature_data_freshness(target_date)
+    if not temperature_freshness['ready']:
+        log(
+            '⏳ 市场温度辅助数据尚未到齐: '
+            f'stock={temperature_freshness.get("stock_count", 0)}, '
+            f'adj_factor={temperature_freshness.get("adj_count", 0)}, '
+            f'stk_limit={temperature_freshness.get("limit_count", 0)}'
+        )
+    return snapshot_ready and temperature_freshness['ready']
 
 
 def run_full_phase():

@@ -55,6 +55,14 @@ def save_json(path, data):
 # 编排层 — 复盘数据加载与扫描
 # ═══════════════════════════════════════════════════════════════
 
+def _attach_market_temperature(market_cycle, date_str):
+    """市场温度失败时只降级该证据块，不阻断大盘、主线和买点复盘。"""
+    from backend.services.market_temperature_service import get_market_temperature
+
+    target_date = market_cycle.get('data_date') or date_str
+    market_cycle['temperature'] = get_market_temperature(target_date)
+    return market_cycle
+
 def load_review_data(date_str, existing, ww_dir):
     """加载持仓数据、扫描结果，检查盈利模式和趋势股
 
@@ -261,6 +269,7 @@ def generate_daily_review(date_str=None):
         else:
             market_cycle['change'] = 0
         market_cycle['data_date'] = last.get('date', date_str)
+    _attach_market_temperature(market_cycle, date_str)
 
     # ② 动量主线评判
     print("[3L复盘] ② 计算动量主线...")
@@ -517,6 +526,7 @@ def compute_review_real_time(date_str=None):
         else:
             market_cycle['change'] = 0
         market_cycle['data_date'] = last.get('date', date_str)
+    _attach_market_temperature(market_cycle, date_str)
 
     # ② 动量主线
     mainline_data = get_mainline_data(date_str)
