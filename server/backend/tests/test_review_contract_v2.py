@@ -165,7 +165,8 @@ def test_trading_plan_joins_opportunity_by_canonical_industry():
     assert item['opportunity'] == '主线回调'
     assert item['sector_context'] == '主线·波谷'
     assert item['opp_reason'] == ''
-    assert item['decision_status'] == 'executable'
+    assert item['decision_status'] == 'candidate'
+    assert item['buy_point_category'] == 'unknown'
     assert item['data_quality'] == 'ready'
 
 
@@ -370,7 +371,7 @@ def test_trading_plan_peak_risk_blocks_breakout_but_not_every_valid_buy():
             {
                 'code': '000002', 'name': '回踩标的', 'industry': '主线方向',
                 'mainline_level': '主线', 'score': 4, 'action_type': '买入',
-                'buy_point': '缩量回踩',
+                'buy_point': '缩量回踩', 'structure': '上涨趋势', 'stage': '上行',
             },
         ],
         opportunity_map={'主线方向': '趋势延续'},
@@ -395,7 +396,7 @@ def test_trading_plan_valley_recovery_allows_focus_to_be_executable():
         buy_signals_review=[{
             'code': '000001', 'name': '主线买点', 'industry': '主线方向',
             'mainline_level': '主线', 'score': 4, 'action_type': '买入',
-            'buy_point': '明确反转买点',
+            'buy_point': '明确反转买点', 'structure': '下降趋势', 'stage': '转强',
         }],
         opportunity_map={'主线方向': '趋势延续'},
     )
@@ -556,7 +557,135 @@ def test_weak_market_does_not_treat_bearish_reversal_or_demand_exhaustion_as_buy
     item = plan['buy_priority'][0]
     assert item['decision_status'] == 'candidate'
     assert item['market_compatible'] is False
-    assert '弱势市场只执行' in item['attention_reason']
+    assert '无法将当前信号确认为3L四类买点' in item['attention_reason']
+
+
+def test_strong_market_executes_breakout_but_not_reversal_buy_point():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'strong'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[
+            {
+                'code': '000001', 'name': '突破标的', 'industry': '主线方向',
+                'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+                'buy_point': '突破买点', 'structure': '上涨趋势', 'stage': '上行',
+            },
+            {
+                'code': '000002', 'name': '反转标的', 'industry': '主线方向',
+                'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+                'buy_point': '明确反转买点', 'structure': '下降趋势', 'stage': '转强',
+            },
+        ],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    items = {item['code']: item for item in plan['buy_priority']}
+    assert items['000001']['decision_status'] == 'executable'
+    assert items['000001']['buy_point_category'] == 'breakout'
+    assert items['000002']['decision_status'] == 'candidate'
+    assert '强势市场不执行反转买点' in items['000002']['attention_reason']
+
+
+def test_strong_market_does_not_turn_downtrend_breakout_signal_into_execution():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'strong'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '下降突破信号', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+            'buy_point': '信号确认', 'structure': '下降趋势', 'stage': '下行',
+            'triggered_signals': [{
+                'key': 'upward_breakout', 'name': '向上突破',
+                'direction': 'bullish', 'confidence': 80,
+            }],
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['decision_status'] == 'candidate'
+    assert '上涨趋势或区间顶部' in item['attention_reason']
+
+
+def test_strong_market_treats_real_trend_bias_buy_as_continuation():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'strong'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '趋势标的', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 5, 'action_type': '买入',
+            'buy_point': 'BIAS5乖离率买入', 'trading_system': 'trend',
+            'trend_stock': True, 'structure': '上涨趋势', 'stage': '沿EMA5趋势',
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['buy_point_category'] == 'continuation'
+    assert item['decision_status'] == 'executable'
+
+
+def test_neutral_market_only_executes_buy_points_at_range_edges():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'neutral'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[
+            {
+                'code': '000001', 'name': '区底标的', 'industry': '主线方向',
+                'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+                'buy_point': '中继买点', 'structure': '区间震荡', 'stage': '区间底部',
+            },
+            {
+                'code': '000002', 'name': '区中标的', 'industry': '主线方向',
+                'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+                'buy_point': '中继买点', 'structure': '区间震荡', 'stage': '区间中段',
+            },
+        ],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    items = {item['code']: item for item in plan['buy_priority']}
+    assert items['000001']['decision_status'] == 'executable'
+    assert items['000002']['decision_status'] == 'candidate'
+    assert '只在区间底部成立' in items['000002']['attention_reason']
+
+
+def test_neutral_market_accepts_display_stage_for_confirmed_range_breakout():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'neutral'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '突破标的', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+            'buy_point': '突破买点', 'structure': '区间震荡', 'stage': '突破位',
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    assert plan['buy_priority'][0]['decision_status'] == 'executable'
+
+
+def test_market_strategy_and_execution_share_the_same_buy_point_policy():
+    plan = generate_trading_plan(
+        market_cycle={'position': '偏波谷', 'market_regime': 'weak', 'vl_score': 4},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '恐慌标的', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+            'buy_point': '信号确认', 'structure': '下降趋势', 'stage': '恐慌',
+            'triggered_signals': [{
+                'key': 'supply_exhaustion', 'name': '供应衰竭',
+                'direction': 'bullish', 'confidence': 80,
+            }],
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['decision_status'] == 'executable'
+    assert item['buy_point_category'] == 'panic'
+    assert '恐慌买点' in plan['market_strategy']['allowed_buy_points']
+    assert '供应衰竭买点' in plan['market_strategy']['allowed_buy_points']
 
 
 def test_trend_fixed_marker_is_not_presented_as_quality_100():
@@ -685,3 +814,23 @@ def test_non_executable_actions_are_synchronized_to_buy_signal_cards():
     assert signals[0]['action_reason'] == '等待市场条件确认'
     assert signals[1]['action_type'] == '技术信号'
     assert signals[1]['action_reason'] == '非主线且动量靠后'
+
+
+def test_executable_market_match_is_synchronized_to_buy_signal_card():
+    signals = [{'code': '000001', 'action_type': '买入', 'action_reason': '个股买点成立'}]
+    plan = {
+        'buy_priority': [{
+            'code': '000001', 'action_type': '买入',
+            'decision_status': 'executable', 'attention_tier': 'focus',
+            'buy_point_category': 'breakout', 'buy_point_category_label': '突破买点',
+            'market_compatible': True,
+            'market_compatibility_reason': '强势市场与突破买点匹配',
+        }],
+    }
+
+    apply_trading_plan_actions(signals, plan)
+
+    assert signals[0]['action_type'] == '买入'
+    assert signals[0]['buy_point_category'] == 'breakout'
+    assert signals[0]['market_compatible'] is True
+    assert signals[0]['action_reason'] == '个股买点成立；强势市场与突破买点匹配'

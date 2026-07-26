@@ -6,8 +6,8 @@
 # 交易日17:30开始尝试当天数据；未到齐每15分钟重试，最晚19:00结束
 30 17 * * 1-5 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 /usr/bin/flock -n /tmp/3l-close-update.lock /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data --phase close --max-attempts 7 --retry-interval 900 >> /home/ubuntu/3l-server/logs/update-close.log 2>&1
 
-# 交易日6:00拉上一个交易日数据（同花顺数据次日才补齐）
-0 6 * * 1-5 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data --phase full >> /home/ubuntu/3l-server/logs/update.log 2>&1
+# 每个交日的次日6:00补齐上一个交易日数据；周六必须补周五
+0 6 * * 2-6 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data --phase full >> /home/ubuntu/3l-server/logs/update.log 2>&1
 
 # 6:30 数据源验证
 30 6 * * 1-5 cd /home/ubuntu/3l-server && bash server/scripts/run_verify.sh >> /home/ubuntu/3l-server/logs/verify.log 2>&1

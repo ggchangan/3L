@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 
@@ -416,6 +417,108 @@ def test_sector_update_advances_confirmation_only_after_gate_passes():
         assert update_stock_data.update_sectors() == (1, 0)
 
     save.assert_called_once_with('20260721', coverage)
+
+
+def test_sector_update_runs_on_saturday_to_confirm_friday_data():
+    from backend.core import update_stock_data
+
+    coverage = {
+        'ready': True,
+        'industry': {'expected': 1, 'covered': 1},
+        'concept': {'expected': 0, 'covered': 0},
+        'missing': [],
+        'industry_names': ['A'],
+    }
+    with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260724'), \
+         patch.object(update_stock_data, 'get_tracked_concept_universe', return_value={
+             'names': set(), 'excluded': {},
+         }), \
+         patch.object(update_stock_data, 'get_ths_index_names', return_value=[('A', '881001.TI')]), \
+         patch.object(update_stock_data, 'fetch_ths_daily_klines_akshare', return_value=(1, 1)) as fetch, \
+         patch.object(update_stock_data, 'get_ths_daily_update_coverage', return_value=coverage), \
+         patch.object(update_stock_data, 'save_ths_daily_update_confirmation') as save:
+        assert update_stock_data.update_sectors() == (1, 0)
+
+    fetch.assert_called_once_with([('A', 'industry')], '20260724')
+    save.assert_called_once_with('20260724', coverage)
+
+
+def test_full_sector_cron_runs_tuesday_through_saturday():
+    crontab = (Path(__file__).resolve().parents[3] / 'deploy' / 'crontab').read_text()
+    full_lines = [line for line in crontab.splitlines() if '--phase full' in line]
+
+    assert len(full_lines) == 1
+    assert full_lines[0].startswith('0 6 * * 2-6 ')
+
+
+def test_board_kline_conversion_rejects_bad_prices_and_sanitizes_volume():
+    import pandas as pd
+    from backend.data_access.data_source import _convert_board_kline
+
+    frame = pd.DataFrame([
+        {
+            '日期': '2026-07-23', '开盘价': 9, '收盘价': float('nan'),
+            '最高价': 11, '最低价': 8, '成交量': 100,
+        },
+        {
+            '日期': float('nan'), '开盘价': 9, '收盘价': 10,
+            '最高价': 11, '最低价': 8, '成交量': 100,
+        },
+        {
+            '日期': '2026-07-24', '开盘价': 9, '收盘价': 10,
+            '最高价': 11, '最低价': 8, '成交量': float('inf'),
+        },
+    ])
+
+    assert _convert_board_kline(frame) == [{
+        'date': '20260724', 'open': 9.0, 'close': 10.0,
+        'high': 11.0, 'low': 8.0, 'volume': 0,
+    }]
+
+
+def test_board_fetch_never_writes_invalid_close_as_formal_coverage(monkeypatch):
+    import math
+    import pandas as pd
+    from backend.data_access import data_source
+
+    frame = pd.DataFrame([
+        {
+            '日期': '2026-07-23', '开盘价': 9, '收盘价': float('nan'),
+            '最高价': 11, '最低价': 8, '成交量': 100,
+        },
+        {
+            '日期': '2026-07-24', '开盘价': 9, '收盘价': 10,
+            '最高价': 11, '最低价': 8, '成交量': 100,
+        },
+    ])
+
+    class FakeAkshare:
+        @staticmethod
+        def stock_board_industry_index_ths(**kwargs):
+            return frame
+
+    class FakeDB:
+        records = []
+
+        def execute_raw(self, sql, params=None):
+            return [{'ts_code': '881001.TI', 'name': 'A'}]
+
+        def upsert_many_from_dicts(self, table, records):
+            self.records = records
+            return len(records)
+
+    db = FakeDB()
+    monkeypatch.setitem(__import__('sys').modules, 'akshare', FakeAkshare())
+    with patch.object(data_source, '_get_tushare_db', return_value=db):
+        written, requested = data_source.fetch_ths_daily_klines_akshare(
+            [('A', 'industry')], '20260724',
+        )
+
+    assert (written, requested) == (1, 1)
+    assert len(db.records) == 1
+    assert db.records[0]['trade_date'] == '20260724'
+    assert db.records[0]['close'] == 10
+    assert all(math.isfinite(value) for value in db.records[0].values() if isinstance(value, float))
 
 
 def test_sector_update_rechecks_coverage_after_targeted_concept_retry():
