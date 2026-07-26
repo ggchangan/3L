@@ -1234,6 +1234,130 @@ def build_market_strategy(market_cycle, existing_holdings, holdings_action, buy_
     }
 
 
+def _normalize_stop_loss(stop_loss):
+    """只接受有限正数止损价，避免非法值进入计划、JSON 和报警链路。"""
+    if isinstance(stop_loss, bool):
+        return None
+    try:
+        value = float(stop_loss)
+        if math.isfinite(value) and value > 0:
+            return value
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def _format_stop_condition(stop_loss):
+    """把结构止损转换为计划条件；没有数值时明确要求人工补齐。"""
+    value = _normalize_stop_loss(stop_loss)
+    if value is not None:
+        return f'盘中有效跌破 {value:.2f} 时止损'
+    return '止损位尚未设定，导入工作台后必须补充，未补充前不执行买入'
+
+
+def _build_holding_condition_plan(item):
+    """把持仓结论转换为次日可检查的“如果—那么—否则”计划。"""
+    action = item.get('action_type') or item.get('action') or '持有'
+    stop_condition = _format_stop_condition(item.get('stop_loss'))
+    plans = {
+        '卖出': (
+            '个股卖出信号仍成立，或盘中跌破关键支撑时',
+            '执行卖出',
+            '卖出信号解除且结构重新转强时，取消主动卖出计划',
+        ),
+        '减仓': (
+            '滞涨、压力位受阻或供应增强信号继续确认时',
+            '执行减仓',
+            '重新放量转强且原有风险信号解除时，取消减仓计划',
+        ),
+        '换股': (
+            '弱势结构未修复，且主线或更强动量方向出现有效买点时',
+            '卖出后再评估换入强势标的',
+            '原持仓重新转强，或替代标的没有形成有效买点时，不换股',
+        ),
+        '加仓': (
+            '关键支撑有效、回踩止跌并重新转强时',
+            '按计划加仓',
+            '支撑失效、结构转弱或市场进入主跌风险时，取消加仓计划',
+        ),
+        '买入': (
+            '个股买点再次确认，且市场与方向门禁仍然成立时',
+            '按计划买入',
+            '买点失败、方向转弱或市场进入主跌风险时，取消买入计划',
+        ),
+    }
+    trigger, action_when_triggered, invalidation = plans.get(action, (
+        '趋势结构与关键支撑保持有效，且未出现卖出信号时',
+        '继续持有',
+        '出现明确卖出信号，或跌破关键支撑/止损位时，持有条件失效',
+    ))
+    if action not in ('买入', '加仓') and stop_condition.startswith('止损位尚未设定'):
+        stop_condition = '未设置价格止损，按明确卖出信号或结构失效条件处理'
+    needs_stop = action in ('买入', '加仓') and stop_condition.startswith('止损位尚未设定')
+    if needs_stop:
+        action_when_triggered = '先补充有效止损位，再评估是否执行新增仓位'
+    return {
+        'trigger_condition': trigger,
+        'action_when_triggered': action_when_triggered,
+        'invalidation_condition': invalidation,
+        'stop_condition': stop_condition,
+        'valid_for': '下一交易日',
+        'plan_readiness': 'needs_stop' if needs_stop else 'ready',
+    }
+
+
+def _build_buy_condition_plan(item):
+    """按3L四类买点生成条件计划，不虚构尚未计算的价格位。"""
+    category = item.get('buy_point_category', 'unknown')
+    category_conditions = {
+        'breakout': (
+            '放量有效突破关键压力位、未快速跌回时',
+            '突破后快速跌回关键位，或成交量无法确认突破时',
+        ),
+        'continuation': (
+            '缩量回踩关键支撑后止跌并重新转强时',
+            '回踩放量下跌、关键支撑失效或上涨结构被破坏时',
+        ),
+        'reversal': (
+            '下跌动能衰减、需求重新占优并出现明确反转确认时',
+            '反转确认失败、再次放量创新低或供应重新占优时',
+        ),
+        'panic': (
+            '恐慌释放后停止创新低，并出现供应衰竭和需求进入确认时',
+            '恐慌下跌延续、继续放量创新低或没有需求确认时',
+        ),
+        'unknown': (
+            '买点类型、市场门禁和方向优先级全部确认后',
+            '买点类型无法确认，或市场与方向门禁任一不成立时',
+        ),
+    }
+    trigger, invalidation = category_conditions.get(category, category_conditions['unknown'])
+    trigger_prefix = {
+        'executable': '市场门禁仍成立、方向仍处于主线/强动量，且',
+        'candidate': '市场与方向门禁重新满足，且',
+        'signal_only': '方向进入主线/强动量，且',
+        'blocked': '板块数据闭环后，且',
+    }.get(item.get('decision_status'), '市场与方向门禁确认后，且')
+    trigger = f'{trigger_prefix}{trigger}'
+    invalidation += '；方向退出主线/强动量，或市场进入主跌风险时，计划同时失效'
+    status = item.get('decision_status')
+    action_when_triggered = {
+        'executable': '按计划买入',
+        'candidate': '重新评估，满足市场与方向门禁后再决定是否买入',
+        'signal_only': '继续观察，不自动转为买入',
+        'blocked': '等待数据闭环，不执行买入',
+    }.get(status, '继续观察，确认全部条件后再决定是否买入')
+    stop_condition = _format_stop_condition(item.get('stop_loss'))
+    return {
+        'trigger_condition': trigger,
+        'action_when_triggered': action_when_triggered,
+        'invalidation_condition': invalidation,
+        'stop_condition': stop_condition,
+        'valid_for': '下一交易日',
+        'plan_readiness': 'needs_stop' if stop_condition.startswith('止损位尚未设定') else 'ready',
+    }
+
+
 def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_holdings,
                           holdings_review=None, buy_signals_review=None,
                           opportunity_map=None):
@@ -1333,7 +1457,10 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             # 基础字段
             base = {
                 'stock': name,
-                'stop_loss': h.get('stop_loss'),
+                'structure': struct,
+                'stage': stage,
+                'buy_point': h.get('buy_point', ''),
+                'stop_loss': _normalize_stop_loss(h.get('stop_loss')),
                 'stop_loss_pct': h.get('stop_loss_pct'),
                 'change': h.get('change'),
                 'industry': sec_name,
@@ -1355,13 +1482,15 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             sig_txt = h.get('action_signal', '')
             reason = h.get('action_reason', '')
             pri = h.get('action_priority', '中')
-            plan['holdings_action'].append({
+            holding_item = {
                 'name': name,  # "名称(代码)" 格式
                 'code': h.get('code', ''),
                 **base, 'action_type': at, 'signal': sig_txt,
                 'action': at,
                 'reason': f'{chain}→{reason}', 'priority': pri,
-            })
+            }
+            holding_item.update(_build_holding_condition_plan(holding_item))
+            plan['holdings_action'].append(holding_item)
 
     if buy_signals_review:
         for bs in buy_signals_review:
@@ -1425,7 +1554,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
                 'trading_system': bs.get('trading_system', 'trend' if bs.get('trend_stock') else '3l'),
                 'structure': bs.get('structure', ''),
                 'stage': bs.get('stage', ''),
-                'stop_loss': bs.get('stop_loss'),
+                'stop_loss': _normalize_stop_loss(bs.get('stop_loss')),
                 'stop_loss_pct': bs.get('stop_loss_pct'),
                 'industry': sec_name,
                 'sector': sec_name,
@@ -1559,6 +1688,15 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             'candidate': '观察',
             'signal_only': '技术信号',
         }.get(item.get('decision_status'), '买入')
+        item.update(_build_buy_condition_plan(item))
+        # 知识库要求买入前先设止损。缺少有效止损的重点信号只能进入
+        # 待完善观察，不能仅靠一段警示文案继续成为 executable。
+        if item.get('decision_status') == 'executable' and item.get('plan_readiness') == 'needs_stop':
+            item['decision_status'] = 'candidate'
+            item['action_type'] = '观察'
+            item['priority'] = '中'
+            item['attention_reason'] = f'{item.get("attention_reason", "重点信号")}；止损位待补充，暂不可执行'
+            item.update(_build_buy_condition_plan(item))
 
     TIER_ORDER = {'focus': 0, 'watch': 1, 'ordinary': 2}
     plan['buy_priority'].sort(key=lambda x: (

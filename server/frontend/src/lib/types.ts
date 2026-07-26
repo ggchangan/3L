@@ -218,6 +218,12 @@ export interface BuySignalItem {
   buy_point_category_label?: string
   market_compatible?: boolean | null
   market_compatibility_reason?: string
+  trigger_condition?: string
+  action_when_triggered?: string
+  invalidation_condition?: string
+  stop_condition?: string
+  valid_for?: string
+  plan_readiness?: 'ready' | 'needs_stop'
 }
 
 /** 止损预警API返回类型 */
@@ -247,6 +253,11 @@ export interface PlanItem {
   stock?: string
   sector?: string
   condition?: string
+  action_when_triggered?: string
+  invalidation_condition?: string
+  stop_condition?: string
+  valid_for?: string
+  plan_readiness?: 'ready' | 'needs_stop'
   qty?: string
   status?: 'executed' | 'triggered' | 'not_triggered' | 'pending'
   focus?: string
@@ -390,7 +401,18 @@ export interface ReviewData {
     main_lines?: string[]
     position_detail?: string
     market_strategy?: MarketStrategy
-    holdings_action?: { stock: string; action: string; reason: string; priority: string }[]
+    holdings_action?: Array<{
+      stock: string
+      action: string
+      reason: string
+      priority: string
+      trigger_condition?: string
+      action_when_triggered?: string
+      invalidation_condition?: string
+      stop_condition?: string
+      valid_for?: string
+      plan_readiness?: 'ready' | 'needs_stop'
+    }>
     buy_priority?: (BuySignalItem & { is_main?: boolean; sector?: string; opportunity?: string })[]
     buy_summary?: {
       total: number

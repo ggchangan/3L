@@ -18,7 +18,13 @@ SAMPLE_LOG = {
     'review_summary': {'market': '上涨趋势', 'mainline': '算力', 'signals_count': 3, 'marked_count': 1},
     'todos': [{'text': '复盘', 'done': False}, {'text': '看报告', 'done': True}],
     'plan': {
-        'buy': [{'stock': '000001', 'condition': '回踩EMA5', 'qty': '1000', 'status': 'pending'}],
+        'buy': [{
+            'stock': '000001', 'condition': '回踩EMA5', 'qty': '1000', 'status': 'pending',
+            'action_when_triggered': '按计划买入',
+            'invalidation_condition': '跌破关键支撑',
+            'stop_condition': '盘中有效跌破 9.50 时止损',
+            'valid_for': '下一交易日', 'plan_readiness': 'ready',
+        }],
         'sell': [],
         'watch': [{'stock': '002371', 'focus': '突破前高', 'status': 'pending'}],
     },
@@ -84,6 +90,9 @@ class TestGetLog:
         assert log['todos'][0]['text'] == '复盘'
         assert log['todos'][0]['done'] is False
         assert log['plan']['buy'][0]['stock'] == '000001'
+        assert log['plan']['buy'][0]['invalidation_condition'] == '跌破关键支撑'
+        assert log['plan']['buy'][0]['stop_condition'] == '盘中有效跌破 9.50 时止损'
+        assert log['plan']['buy'][0]['valid_for'] == '下一交易日'
 
     def test_data_fields_integrity(self, svc_with_data):
         """保存的数据6个区块字段完整不丢"""

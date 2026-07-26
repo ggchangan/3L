@@ -293,7 +293,7 @@ function UnifiedTable({ title, items, groupKey, renderAction, renderSignal, rend
                   <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>信号</th>
                   <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>止损</th>
                   <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>板块环境</th>
-                  <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>原因</th>
+                  <th style={{ textAlign: 'left', padding: '2px 4px', borderBottom: '1px solid #333' }}>条件与依据</th>
                   <th style={{ textAlign: 'right', padding: '2px 4px', borderBottom: '1px solid #333' }}>优先</th>
                 </tr>
               </thead>
@@ -321,6 +321,15 @@ function UnifiedTable({ title, items, groupKey, renderAction, renderSignal, rend
                       {item.sector || ''}{item.opportunity && item.opportunity !== '--' ? ` · ${formatSectorEnvironment(item.opportunity, item.mainline_level)}` : ''}
                     </td>
                     <td style={{ padding: '3px 4px', color: '#888', fontSize: 10, wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', minWidth: 80 }}>
+                      {item.trigger_condition && (
+                        <div style={{ marginBottom: 3, lineHeight: 1.5 }}>
+                          <div style={{ color: '#4ecdc4' }}>如果：{item.trigger_condition}</div>
+                          {item.action_when_triggered && <div style={{ color: '#ddd' }}>那么：{item.action_when_triggered}</div>}
+                          {item.invalidation_condition && <div style={{ color: '#ff9800' }}>失效：{item.invalidation_condition}</div>}
+                          {item.stop_condition && <div style={{ color: item.plan_readiness === 'needs_stop' ? '#e94560' : '#888' }}>止损：{item.stop_condition}</div>}
+                          {item.valid_for && <div style={{ color: '#666' }}>有效：{item.valid_for}</div>}
+                        </div>
+                      )}
                       {item.attention_reason && <div style={{ color: '#bbb' }}>{item.attention_reason}</div>}
                       {item.reason && <div>{item.reason}</div>}
                     </td>
