@@ -372,6 +372,7 @@ def test_trading_plan_peak_risk_blocks_breakout_but_not_every_valid_buy():
                 'code': '000002', 'name': '回踩标的', 'industry': '主线方向',
                 'mainline_level': '主线', 'score': 4, 'action_type': '买入',
                 'buy_point': '缩量回踩', 'structure': '上涨趋势', 'stage': '上行',
+                'stop_loss': 9.5,
             },
         ],
         opportunity_map={'主线方向': '趋势延续'},
@@ -397,6 +398,7 @@ def test_trading_plan_valley_recovery_allows_focus_to_be_executable():
             'code': '000001', 'name': '主线买点', 'industry': '主线方向',
             'mainline_level': '主线', 'score': 4, 'action_type': '买入',
             'buy_point': '明确反转买点', 'structure': '下降趋势', 'stage': '转强',
+            'stop_loss': 9.5,
         }],
         opportunity_map={'主线方向': '趋势延续'},
     )
@@ -569,6 +571,7 @@ def test_strong_market_executes_breakout_but_not_reversal_buy_point():
                 'code': '000001', 'name': '突破标的', 'industry': '主线方向',
                 'mainline_level': '主线', 'score': 4, 'action_type': '买入',
                 'buy_point': '突破买点', 'structure': '上涨趋势', 'stage': '上行',
+                'stop_loss': 9.5,
             },
             {
                 'code': '000002', 'name': '反转标的', 'industry': '主线方向',
@@ -616,6 +619,7 @@ def test_strong_market_treats_real_trend_bias_buy_as_continuation():
             'mainline_level': '主线', 'score': 5, 'action_type': '买入',
             'buy_point': 'BIAS5乖离率买入', 'trading_system': 'trend',
             'trend_stock': True, 'structure': '上涨趋势', 'stage': '沿EMA5趋势',
+            'stop_loss': 9.5,
         }],
         opportunity_map={'主线方向': '趋势延续'},
     )
@@ -634,11 +638,13 @@ def test_neutral_market_only_executes_buy_points_at_range_edges():
                 'code': '000001', 'name': '区底标的', 'industry': '主线方向',
                 'mainline_level': '主线', 'score': 4, 'action_type': '买入',
                 'buy_point': '中继买点', 'structure': '区间震荡', 'stage': '区间底部',
+                'stop_loss': 9.5,
             },
             {
                 'code': '000002', 'name': '区中标的', 'industry': '主线方向',
                 'mainline_level': '主线', 'score': 4, 'action_type': '买入',
                 'buy_point': '中继买点', 'structure': '区间震荡', 'stage': '区间中段',
+                'stop_loss': 9.5,
             },
         ],
         opportunity_map={'主线方向': '趋势延续'},
@@ -658,6 +664,7 @@ def test_neutral_market_accepts_display_stage_for_confirmed_range_breakout():
             'code': '000001', 'name': '突破标的', 'industry': '主线方向',
             'mainline_level': '主线', 'score': 4, 'action_type': '买入',
             'buy_point': '突破买点', 'structure': '区间震荡', 'stage': '突破位',
+            'stop_loss': 9.5,
         }],
         opportunity_map={'主线方向': '趋势延续'},
     )
@@ -677,6 +684,7 @@ def test_market_strategy_and_execution_share_the_same_buy_point_policy():
                 'key': 'supply_exhaustion', 'name': '供应衰竭',
                 'direction': 'bullish', 'confidence': 80,
             }],
+            'stop_loss': 9.5,
         }],
         opportunity_map={'主线方向': '趋势延续'},
     )
@@ -686,6 +694,106 @@ def test_market_strategy_and_execution_share_the_same_buy_point_policy():
     assert item['buy_point_category'] == 'panic'
     assert '恐慌买点' in plan['market_strategy']['allowed_buy_points']
     assert '供应衰竭买点' in plan['market_strategy']['allowed_buy_points']
+
+
+def test_executable_breakout_is_upgraded_to_a_complete_condition_plan():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'strong'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '突破标的', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+            'buy_point': '突破买点', 'structure': '上涨趋势', 'stage': '上行',
+            'stop_loss': 9.5,
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['decision_status'] == 'executable'
+    assert '放量有效突破关键压力位' in item['trigger_condition']
+    assert item['action_when_triggered'] == '按计划买入'
+    assert '突破后快速跌回关键位' in item['invalidation_condition']
+    assert item['stop_condition'] == '盘中有效跌破 9.50 时止损'
+    assert item['valid_for'] == '下一交易日'
+    assert item['plan_readiness'] == 'ready'
+
+
+def test_condition_plan_never_invents_a_missing_stop_price():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'strong'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '中继标的', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+            'buy_point': '中继买点', 'structure': '上涨趋势', 'stage': '上行',
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['decision_status'] == 'candidate'
+    assert item['action_type'] == '观察'
+    assert item['plan_readiness'] == 'needs_stop'
+    assert '止损位尚未设定' in item['stop_condition']
+    assert '未补充前不执行买入' in item['stop_condition']
+
+
+def test_condition_plan_rejects_invalid_stop_prices():
+    for invalid_stop in (0, -1, float('nan'), float('inf'), True, 'not-a-price'):
+        plan = generate_trading_plan(
+            market_cycle={'position': '波中', 'market_regime': 'strong'},
+            mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+            buy_signals_review=[{
+                'code': '000001', 'name': '中继标的', 'industry': '主线方向',
+                'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+                'buy_point': '中继买点', 'structure': '上涨趋势', 'stage': '上行',
+                'stop_loss': invalid_stop,
+            }],
+            opportunity_map={'主线方向': '趋势延续'},
+        )
+        item = plan['buy_priority'][0]
+        assert item['stop_loss'] is None
+        assert item['plan_readiness'] == 'needs_stop'
+        assert item['decision_status'] == 'candidate'
+
+
+def test_candidate_condition_does_not_upgrade_to_buy_action():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'weak'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000001', 'name': '突破标的', 'industry': '主线方向',
+            'mainline_level': '主线', 'score': 4, 'action_type': '买入',
+            'buy_point': '突破买点', 'structure': '上涨趋势', 'stage': '上行',
+            'stop_loss': 9.5,
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['decision_status'] == 'candidate'
+    assert item['action_type'] == '观察'
+    assert item['action_when_triggered'].startswith('重新评估')
+
+
+def test_holding_action_has_continue_and_exit_conditions():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'strong'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        holdings_review=[{
+            'code': '000001', 'name': '持仓标的', 'industry': '主线方向',
+            'action_type': '持有', 'signal': 'hold', 'structure': '上涨趋势',
+            'stage': '上行', 'stop_loss': 9.5,
+        }],
+        opportunity_map={'主线方向': '趋势延续'},
+    )
+
+    item = plan['holdings_action'][0]
+    assert '趋势结构与关键支撑保持有效' in item['trigger_condition']
+    assert item['action_when_triggered'] == '继续持有'
+    assert '出现明确卖出信号' in item['invalidation_condition']
+    assert item['stop_condition'] == '盘中有效跌破 9.50 时止损'
 
 
 def test_trend_fixed_marker_is_not_presented_as_quality_100():

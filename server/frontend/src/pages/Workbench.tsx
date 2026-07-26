@@ -7,6 +7,11 @@ interface PlanItem {
   stock?: string
   sector?: string
   condition?: string
+  action_when_triggered?: string
+  invalidation_condition?: string
+  stop_condition?: string
+  valid_for?: string
+  plan_readiness?: 'ready' | 'needs_stop'
   focus?: string
   qty?: string
   status: string
@@ -58,6 +63,12 @@ interface SuggestionItem {
   data_quality?: 'ready' | 'sector_unavailable'
   structure?: string
   stage?: string
+  trigger_condition?: string
+  action_when_triggered?: string
+  invalidation_condition?: string
+  stop_condition?: string
+  valid_for?: string
+  plan_readiness?: 'ready' | 'needs_stop'
 }
 
 interface SuggestionsData {
@@ -66,8 +77,23 @@ interface SuggestionsData {
   risk_items: SuggestionItem[]
 }
 
-export function buySuggestionDestination(item: Pick<SuggestionItem, 'decision_status'>): 'buy' | 'watch' {
-  return item.decision_status === 'executable' ? 'buy' : 'watch'
+export function buySuggestionDestination(
+  item: Pick<SuggestionItem, 'decision_status' | 'plan_readiness'>,
+): 'buy' | 'watch' {
+  return item.decision_status === 'executable' && item.plan_readiness !== 'needs_stop'
+    ? 'buy'
+    : 'watch'
+}
+
+export function holdingSuggestionDestination(
+  item: Pick<SuggestionItem, 'action' | 'plan_readiness'>,
+): 'buy' | 'sell' | 'watch' {
+  const action = (item.action || '').toLowerCase()
+  if (action.startsWith('卖出')) return 'sell'
+  if ((action.includes('买入') || action.includes('执行') || action.includes('加仓')) && item.plan_readiness !== 'needs_stop') {
+    return 'buy'
+  }
+  return 'watch'
 }
 
 export function buySuggestionAction(
@@ -84,6 +110,29 @@ export function buySuggestionWatchReason(
   return item.decision_status === 'signal_only'
     ? '仅为技术信号，不进入核心交易计划'
     : '等待交易条件确认'
+}
+
+export function suggestionConditionFields(item: SuggestionItem, fallbackCondition: string) {
+  return {
+    condition: item.trigger_condition || fallbackCondition,
+    action_when_triggered: item.action_when_triggered,
+    invalidation_condition: item.invalidation_condition,
+    stop_condition: item.stop_condition,
+    valid_for: item.valid_for,
+    plan_readiness: item.plan_readiness,
+  }
+}
+
+export function formatYesterdayPlanItem(item: PlanItem, type: 'buy' | 'sell' | 'watch'): string {
+  const parts: string[] = []
+  const condition = item.condition || (type === 'watch' ? item.focus : '') || ''
+  if (condition) parts.push(`触发：${condition}`)
+  if (item.action_when_triggered) parts.push(`动作：${item.action_when_triggered}`)
+  if (item.invalidation_condition) parts.push(`失效：${item.invalidation_condition}`)
+  if (item.stop_condition) parts.push(`止损：${item.stop_condition}`)
+  if (item.valid_for) parts.push(`有效：${item.valid_for}`)
+  if (type === 'watch' && item.focus && item.focus !== condition) parts.push(`依据：${item.focus}`)
+  return parts.join('；') || '--'
 }
 
 export default function Workbench() {
@@ -177,14 +226,22 @@ export default function Workbench() {
       const id = `ha-${i}`
       if (!checkedIds.has(id)) return
       const stockName = item.stock || ''
-      const act = (item.action || '').toLowerCase()
-      const pi: PlanItem = { stock: stockName, condition: item.reason || '', qty: '', status: 'pending', alert: null, stop_loss: item.stop_loss, stop_loss_pct: item.stop_loss_pct }
-      if (act.startsWith('卖出')) {
+      const pi: PlanItem = {
+        stock: stockName,
+        ...suggestionConditionFields(item, item.reason || ''),
+        qty: '', status: 'pending', alert: null,
+        stop_loss: item.stop_loss, stop_loss_pct: item.stop_loss_pct,
+      }
+      const destination = holdingSuggestionDestination(item)
+      if (destination === 'sell') {
         newPlan.sell.push(pi)
-      } else if (act.includes('买入') || act.includes('执行') || act.includes('加仓')) {
+      } else if (destination === 'buy') {
         newPlan.buy.push(pi)
       } else {
-        newPlan.watch.push({ ...pi, focus: item.reason || '' })
+        const focus = item.plan_readiness === 'needs_stop'
+          ? '止损位待补充，完善前不执行新增仓位'
+          : item.reason || ''
+        newPlan.watch.push({ ...pi, focus })
       }
     })
 
@@ -195,8 +252,11 @@ export default function Workbench() {
       const name = item.name || ''
       const code = item.code || ''
       const planItem: PlanItem = {
-        stock: `${name}(${code})`,
-        condition: `${item.buy_point || ''} ${item.change != null ? `${item.change > 0 ? '+' : ''}${item.change}%` : ''}`,
+        stock: name.includes(`(${code})`) ? name : `${name}(${code})`,
+        ...suggestionConditionFields(
+          item,
+          `${item.buy_point || ''} ${item.change != null ? `${item.change > 0 ? '+' : ''}${item.change}%` : ''}`,
+        ),
         qty: '', status: 'pending', alert: null,
         stop_loss: item.stop_loss,
         stop_loss_pct: item.stop_loss_pct,
@@ -424,7 +484,9 @@ export default function Workbench() {
                   <div key={i} style={{ marginBottom: 2 }}>
                     <div className="plan-row" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6 }}>
                       <span style={{ fontSize: 12, color: '#e0e0e0' }}>{p.stock || (type === 'watch' ? (p.sector || '') : '') || '--'}</span>
-                      <span style={{ fontSize: 10, color: '#888' }}>{type === 'watch' ? (p.focus || '') : (p.condition || '')}</span>
+                      <span style={{ fontSize: 10, color: '#888' }}>{p.condition || (type === 'watch' ? (p.focus || '') : '')}</span>
+                      {p.action_when_triggered && <span style={{ fontSize: 10, color: '#4ecdc4' }}>→ {p.action_when_triggered}</span>}
+                      {type === 'watch' && p.focus && p.focus !== p.condition && <span style={{ fontSize: 9, color: '#666' }}>依据：{p.focus}</span>}
                       {(p.stop_loss != null || p.stop_loss_pct != null) && (
                         <span style={{ fontSize: 10, color: '#ff9800', whiteSpace: 'nowrap' }}>
                           {p.stop_loss != null ? `止损${p.stop_loss}` : ''}
@@ -439,6 +501,13 @@ export default function Workbench() {
                       </span>
                       <span style={{ color: '#e94560', cursor: 'pointer', fontSize: 11, marginLeft: 'auto' }} onClick={() => removePlanRow(type, i)}>✕</span>
                     </div>
+                    {(p.invalidation_condition || p.stop_condition || p.valid_for) && (
+                      <div style={{ padding: '1px 8px 5px', color: '#666', fontSize: 9, lineHeight: 1.6 }}>
+                        {p.invalidation_condition && <div>失效：{p.invalidation_condition}</div>}
+                        {p.stop_condition && <div style={{ color: p.plan_readiness === 'needs_stop' ? '#ff9800' : '#777' }}>止损：{p.stop_condition}</div>}
+                        {p.valid_for && <div>有效：{p.valid_for}</div>}
+                      </div>
+                    )}
                     {/* 报警配置（行内展开） */}
                     {p.alert && (
                       <div style={{ display: 'flex', gap: 6, padding: '4px 8px 4px 14px', background: 'rgba(255,152,0,0.06)', borderRadius: 4, marginTop: 2 }}>
@@ -598,13 +667,13 @@ function YesterdayPlan({ date }: { date: string }) {
         const plan = data.plan || {}
         const parts: string[] = []
         if ((plan.buy || []).length > 0) {
-          parts.push('🟢 买入：' + plan.buy.map((p: any) => `${p.stock || '--'}(${p.condition || ''})`).join('、'))
+          parts.push('🟢 买入：' + plan.buy.map((p: PlanItem) => `${p.stock || '--'}（${formatYesterdayPlanItem(p, 'buy')}）`).join('、'))
         }
         if ((plan.sell || []).length > 0) {
-          parts.push('🔴 卖出：' + plan.sell.map((p: any) => `${p.stock || '--'}(${p.condition || ''})`).join('、'))
+          parts.push('🔴 卖出：' + plan.sell.map((p: PlanItem) => `${p.stock || '--'}（${formatYesterdayPlanItem(p, 'sell')}）`).join('、'))
         }
         if ((plan.watch || []).length > 0) {
-          parts.push('👁️ 观察：' + plan.watch.map((p: any) => `${p.stock || p.sector || '--'}→${p.focus || ''}`).join('、'))
+          parts.push('👁️ 观察：' + plan.watch.map((p: PlanItem) => `${p.stock || p.sector || '--'}（${formatYesterdayPlanItem(p, 'watch')}）`).join('、'))
         }
         if (parts.length === 0) parts.push('昨日无计划')
         setPrevPlan(parts.join('<br>'))
