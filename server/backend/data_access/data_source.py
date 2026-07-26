@@ -8,7 +8,7 @@
     )
 """
 
-import json, os, sys, tempfile, time
+import json, math, os, sys, tempfile, time
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional
@@ -211,6 +211,27 @@ def get_ths_index_names(type_code='I'):
     return [(r['name'], type_code) for r in rows]
 
 
+def _finite_number(value, default=None):
+    """只接受有限数值；行情缺失值不得以 NaN/Inf 进入 MySQL。"""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if math.isfinite(number) else default
+
+
+def _normalize_trade_date(value):
+    """规范并校验板块交易日，拒绝 NaN、残缺日期和不存在的日历日期。"""
+    raw = str(value or '').strip()[:10].replace('-', '')
+    if len(raw) != 8 or not raw.isdigit():
+        return ''
+    try:
+        datetime.strptime(raw, '%Y%m%d')
+    except ValueError:
+        return ''
+    return raw
+
+
 def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
     """从 akshare 拉取板块K线并写入 ths_daily
 
@@ -315,16 +336,27 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
                 continue
             klines.sort(key=lambda x: x['date'])
             for i, k in enumerate(klines):
-                prev_close = klines[i - 1]['close'] if i > 0 else 0
-                pct = round((k['close'] - prev_close) / prev_close * 100, 2) if prev_close else 0
+                trade_date = _normalize_trade_date(k.get('date'))
+                prices = {
+                    key: _finite_number(k.get(key))
+                    for key in ('open', 'high', 'low', 'close')
+                }
+                # 收盘为0或用0补坏 OHLC 会被覆盖率误认为正式数据，必须整行拒绝。
+                if not trade_date or any(
+                    value is None or value <= 0 for value in prices.values()
+                ) or prices['low'] > prices['high']:
+                    continue
+                close = prices['close']
+                prev_close = _finite_number(klines[i - 1].get('close'), 0) if i > 0 else 0
+                pct = round((close - prev_close) / prev_close * 100, 2) if prev_close else 0
                 records.append({
                     'ts_code': ts_code,
-                    'trade_date': k['date'],
-                    'open': k.get('open', 0),
-                    'high': k.get('high', 0),
-                    'low': k.get('low', 0),
-                    'close': k.get('close', 0),
-                    'vol': k.get('volume', 0),
+                    'trade_date': trade_date,
+                    'open': prices['open'],
+                    'high': prices['high'],
+                    'low': prices['low'],
+                    'close': close,
+                    'vol': _finite_number(k.get('volume'), 0),
                     'pct_chg': pct,
                 })
 
@@ -615,32 +647,25 @@ def _convert_board_kline(df):
             present[col_map[cl]] = col
 
     for _, row in df.iterrows():
-        r = {}
         date_col = present.get('date')
-        if date_col:
-            raw = str(row[date_col])
-            r['date'] = raw[:10].replace('-', '') if '-' in raw else raw[:8]
-        else:
+        trade_date = _normalize_trade_date(row[date_col]) if date_col else ''
+        if not trade_date:
             continue
+        r = {'date': trade_date}
+        valid_prices = True
         for key in ('open', 'close', 'high', 'low'):
             col = present.get(key)
-            if col:
-                try:
-                    r[key] = round(float(row[col]), 2)
-                except (ValueError, TypeError):
-                    r[key] = 0.0
-            else:
-                r[key] = 0.0
+            value = _finite_number(row[col]) if col else None
+            if value is None or value <= 0:
+                valid_prices = False
+                break
+            r[key] = round(value, 2)
+        if not valid_prices or r['low'] > r['high']:
+            continue
         vol_col = present.get('volume')
-        if vol_col:
-            try:
-                r['volume'] = int(float(row[vol_col]))
-            except (ValueError, TypeError):
-                r['volume'] = 0
-        else:
-            r['volume'] = 0
-        if r.get('date'):
-            records.append(r)
+        volume = _finite_number(row[vol_col], 0) if vol_col else 0
+        r['volume'] = int(volume) if volume >= 0 else 0
+        records.append(r)
     return records
 
 

@@ -1021,25 +1021,134 @@ def _position_ratio(holding):
     return ratio
 
 
+MARKET_BUY_POINT_POLICY = {
+    'strong': {
+        'label': '强势市场',
+        'allowed_categories': {'breakout', 'continuation'},
+        'allowed_labels': ['突破买点', '中继/趋势回踩买点'],
+        'avoid_labels': ['未确认的反转拉升', '远离止损位的无计划追高'],
+    },
+    'neutral': {
+        'label': '震荡市场',
+        'allowed_categories': {'breakout', 'continuation'},
+        'allowed_labels': ['区间底部企稳/回踩买点', '区间顶部有效突破买点'],
+        'avoid_labels': ['区间中部买点', '未确认突破追涨'],
+    },
+    'weak': {
+        'label': '弱势市场',
+        'allowed_categories': {'panic', 'reversal'},
+        'allowed_labels': ['恐慌买点', '供应衰竭买点', '明确反转买点'],
+        'avoid_labels': ['普通突破追涨', '下降途中的缩量低吸'],
+    },
+    'unknown': {
+        'label': '市场环境待确认',
+        'allowed_categories': set(),
+        'allowed_labels': ['环境确认后的高质量买点'],
+        'avoid_labels': ['在环境不明时主动扩大风险'],
+    },
+}
+
+BUY_POINT_CATEGORY_LABELS = {
+    'breakout': '突破买点',
+    'continuation': '中继/回踩买点',
+    'reversal': '反转买点',
+    'panic': '恐慌/供应衰竭买点',
+    'unknown': '未识别买点',
+}
+
+
+def _classify_buy_point(item):
+    """把现有买点文案和结构化量价信号归一到3L四类买点。"""
+    bullish_signals = [
+        signal for signal in item.get('triggered_signals', [])
+        if signal.get('direction') == 'bullish'
+    ]
+    signal_keys = {
+        str(signal.get('key') or signal.get('signal_key') or '')
+        for signal in bullish_signals
+    }
+    signal_names = ' '.join(str(signal.get('name', '')) for signal in bullish_signals)
+    text = ' '.join(str(item.get(key, '') or '') for key in (
+        'buy_point', 'signal', 'fusion_reason',
+    )) + ' ' + signal_names
+
+    if item.get('trading_system') == 'trend' and any(
+        token in text for token in ('BIAS5乖离率买入', 'BIAS10乖离率买入')
+    ):
+        return 'continuation'
+
+    # 先判定语义更严格的左侧/反转信号，避免“恐慌后反转”被普通突破覆盖。
+    if 'supply_exhaustion' in signal_keys or any(token in text for token in ('恐慌', '供应衰竭')):
+        return 'panic'
+    if 'upward_reversal' in signal_keys or any(token in text for token in ('向上反转', '明确反转', '反转买点')):
+        return 'reversal'
+    if 'upward_breakout' in signal_keys or '突破' in text:
+        return 'breakout'
+    if 'upward_continuation' in signal_keys or any(token in text for token in ('中继', '回踩', '区间底部')):
+        return 'continuation'
+    return 'unknown'
+
+
+def _market_buy_compatibility(item, market_regime, risk_phase):
+    """按3L的市场强弱→个股结构/阶段→买点顺序执行门禁。"""
+    category = _classify_buy_point(item)
+    category_label = BUY_POINT_CATEGORY_LABELS[category]
+    if risk_phase == 'main_decline':
+        return False, '主跌风险阶段暂停新增仓位', category
+    policy = MARKET_BUY_POINT_POLICY.get(market_regime, MARKET_BUY_POINT_POLICY['unknown'])
+    if market_regime not in ('strong', 'neutral', 'weak'):
+        return False, '市场强弱尚未确认，暂按观察处理', category
+    if category == 'unknown':
+        return False, '无法将当前信号确认为3L四类买点，暂按观察处理', category
+    if risk_phase == 'risk_rising' and category == 'breakout':
+        return False, '波峰风险阶段避免突破追高', category
+    if category not in policy['allowed_categories']:
+        return False, f'{policy["label"]}不执行{category_label}', category
+
+    structure = item.get('structure', '')
+    stage = item.get('stage', '')
+    if market_regime == 'strong':
+        if category == 'continuation' and structure != '上涨趋势':
+            return False, '强势市场的中继/回踩买点需位于上涨趋势', category
+        if category == 'breakout' and not (
+            structure == '上涨趋势'
+            or (structure == '区间震荡' and stage in ('区间顶部', '突破位'))
+        ):
+            return False, '突破买点需来自上涨趋势或区间顶部的有效突破', category
+    elif market_regime == 'neutral':
+        if category == 'continuation' and not (
+            structure == '区间震荡' and stage == '区间底部'
+        ):
+            return False, '震荡市场的回踩买点只在区间底部成立', category
+        if category == 'breakout' and not (
+            structure == '区间震荡' and stage in ('区间顶部', '突破位')
+        ):
+            return False, '震荡市场的突破买点需要区间顶部有效突破', category
+    elif market_regime == 'weak' and not (
+        structure == '下降趋势'
+        or (structure == '区间震荡' and stage == '区间底部')
+    ):
+        return False, '弱势市场的恐慌/反转买点需位于下降末端或区间底部', category
+    return True, f'{policy["label"]}与{category_label}匹配', category
+
+
 def build_market_strategy(market_cycle, existing_holdings, holdings_action, buy_priority, market_filter):
     """把市场环境、风险阶段和逐笔交易动作合成为动态仓位策略。"""
     environment = market_cycle.get('market_regime') or {
         '上涨趋势': 'strong', '下降趋势': 'weak',
     }.get(market_cycle.get('structure', ''), 'neutral')
-    configs = {
-        'strong': ('强势市场', ['突破买点', '中继/浅回踩买点', '反转买点'],
-                   ['远离止损位的无计划追高'], '允许持股，让趋势利润延伸', '止盈可适当放宽，按卖点退出'),
-        'neutral': ('震荡市场', ['区间底部买点', '有效突破买点', '回踩确认买点'],
-                    ['区间中部频繁追涨杀跌'], '降低出手频率，优先强方向', '靠近区间上沿或出现卖点时主动兑现'),
-        'weak': ('弱势市场', ['恐慌买点', '供应衰竭买点', '明确反转买点'],
-                 ['普通突破追涨', '弱反弹中的模糊买点'], '缩短交易周期，只保留强方向和强个股',
-                 '收紧止盈和止损，反弹不强时及时退出'),
-        'unknown': ('市场环境待确认', ['数据确认后的高质量买点'], ['在环境不明时主动扩大风险'],
-                    '降低出手频率', '严格执行既定止损'),
-    }
-    if environment not in configs:
+    if environment not in MARKET_BUY_POINT_POLICY:
         environment = 'unknown'
-    label, allowed, avoid, holding_style, exit_style = configs[environment]
+    policy = MARKET_BUY_POINT_POLICY[environment]
+    label = policy['label']
+    allowed = policy['allowed_labels']
+    avoid = policy['avoid_labels']
+    holding_style, exit_style = {
+        'strong': ('允许持股，让趋势利润延伸', '止盈可适当放宽，按卖点退出'),
+        'neutral': ('降低出手频率，优先强方向', '靠近区间上沿或出现卖点时主动兑现'),
+        'weak': ('缩短交易周期，只保留强方向和强个股', '收紧止盈和止损，反弹不强时及时退出'),
+        'unknown': ('降低出手频率', '严格执行既定止损'),
+    }[environment]
     risk_phase = market_filter.get('risk_phase', 'normal')
     risk_labels = {
         'main_decline': '主跌风险', 'risk_rising': '风险升高',
@@ -1123,28 +1232,6 @@ def build_market_strategy(market_cycle, existing_holdings, holdings_action, buy_
             market_filter.get('reason', ''),
         ],
     }
-
-
-def _market_buy_compatibility(item, market_regime, risk_phase):
-    """判断重点买点是否符合当前环境；方向/质量分层仍由上游负责。"""
-    signal_names = ' '.join(
-        str(signal.get('name', '')) for signal in item.get('triggered_signals', [])
-        if signal.get('direction') == 'bullish'
-    )
-    text = ' '.join(str(item.get(key, '') or '') for key in (
-        'buy_point', 'signal', 'stage', 'fusion_reason',
-    )) + ' ' + signal_names
-    if risk_phase == 'main_decline':
-        return False, '主跌风险阶段暂停新增仓位'
-    if market_regime not in ('strong', 'neutral', 'weak'):
-        return False, '市场强弱尚未确认，暂按观察处理'
-    if risk_phase == 'risk_rising' and ('突破' in text or '追涨' in text):
-        return False, '波峰风险阶段避免突破追高'
-    if market_regime == 'weak':
-        weak_tokens = ('恐慌', '供应衰竭', '向上反转', '明确反转', '反转买点')
-        if not any(token in text for token in weak_tokens):
-            return False, '弱势市场只执行恐慌、供应衰竭或明确反转买点'
-    return True, '符合当前市场环境和风险阶段'
 
 
 def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_holdings,
@@ -1378,6 +1465,9 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         }.get(market_cycle.get('structure', ''), 'neutral')
 
     for item in plan['buy_priority']:
+        buy_point_category = _classify_buy_point(item)
+        item['buy_point_category'] = buy_point_category
+        item['buy_point_category_label'] = BUY_POINT_CATEGORY_LABELS[buy_point_category]
         score = item.get('score')
         # 项目内存在两种历史量纲：原生3L买点为3/4，扫描融合分为
         # 0-100；趋势系统的固定5只表示命中。仅对有质量含义的分数
@@ -1444,9 +1534,11 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         item['attention_reason'] = tier_reason
         if item.get('decision_status') != 'blocked':
             if tier == 'focus':
-                market_allows_execution, compatibility_reason = _market_buy_compatibility(
+                market_allows_execution, compatibility_reason, buy_point_category = _market_buy_compatibility(
                     item, market_regime, mf.get('risk_phase', 'normal'),
                 )
+                item['buy_point_category'] = buy_point_category
+                item['buy_point_category_label'] = BUY_POINT_CATEGORY_LABELS[buy_point_category]
                 item['market_compatible'] = market_allows_execution
                 item['market_compatibility_reason'] = compatibility_reason
                 if not market_allows_execution:
@@ -1555,6 +1647,10 @@ def apply_trading_plan_actions(buy_signals_review, trading_plan):
         signal['attention_reason'] = item.get('attention_reason', '')
         signal['quality_score'] = item.get('quality_score')
         signal['quality_basis'] = item.get('quality_basis', '')
+        signal['buy_point_category'] = item.get('buy_point_category', 'unknown')
+        signal['buy_point_category_label'] = item.get('buy_point_category_label', '未识别买点')
+        signal['market_compatible'] = item.get('market_compatible')
+        signal['market_compatibility_reason'] = item.get('market_compatibility_reason', '')
         signal['momentum_total'] = item.get('momentum_total')
         signal['momentum_source'] = item.get('momentum_source', '')
         signal['momentum_direction'] = item.get('momentum_direction', '')
@@ -1568,6 +1664,13 @@ def apply_trading_plan_actions(buy_signals_review, trading_plan):
             signal['action_reason'] = item.get('opp_reason') or item.get('reason') or '板块数据待补齐'
         elif decision_status in ('candidate', 'signal_only'):
             signal['action_reason'] = item.get('attention_reason', '')
+        elif item.get('market_compatibility_reason'):
+            original_reason = signal.get('action_reason', '')
+            compatibility_reason = item['market_compatibility_reason']
+            reasons = [original_reason] if original_reason else []
+            if compatibility_reason not in original_reason:
+                reasons.append(compatibility_reason)
+            signal['action_reason'] = '；'.join(reasons)
     return buy_signals_review
 
 

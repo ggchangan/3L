@@ -248,13 +248,8 @@ def update_sectors():
     import warnings
     warnings.filterwarnings('ignore')
 
-    # 非交易日跳过（push2test 返回的是旧缓存，不可信）
-    now = datetime.now()
-    if now.weekday() >= 5:
-        log('⏭️  非交易日，跳过板块更新')
-        return (0, 0)
-
-    # 目标日期是上一个已完成交易日
+    # 按“目标交易日”而非“当前是否周末”决定更新。
+    # 同花顺的周五正式板块日线在周六才齐，因此周六是必需的回填时窗。
     from backend.data_access.data_source import get_last_completed_trading_day
     today = get_last_completed_trading_day()
     log(f'📋  目标日期: {today}')

@@ -214,6 +214,10 @@ export interface BuySignalItem {
   momentum_direction?: string
   quality_score?: number | null
   quality_basis?: string
+  buy_point_category?: 'breakout' | 'continuation' | 'reversal' | 'panic' | 'unknown'
+  buy_point_category_label?: string
+  market_compatible?: boolean | null
+  market_compatibility_reason?: string
 }
 
 /** 止损预警API返回类型 */
