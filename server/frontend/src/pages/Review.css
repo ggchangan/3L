@@ -128,9 +128,31 @@
 .market-temperature-missing { color: #ff9800; }
 .market-temperature-empty { margin-top: 7px; color: #777; font-size: 11px; }
 
+.holdings-risk-exposure { margin-bottom: 14px; padding: 12px 14px; border: 1px solid #333; border-left: 4px solid #4ecdc4; border-radius: 8px; background: rgba(78, 205, 196, 0.045); }
+.holdings-risk-exposure.warning { border-left-color: #ff9800; background: rgba(255, 152, 0, 0.045); }
+.holdings-risk-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; color: #777; font-size: 11px; }
+.holdings-risk-header > div { display: flex; align-items: baseline; gap: 9px; }
+.holdings-risk-header strong { color: #ddd; font-size: 16px; }
+.holdings-risk-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.holdings-risk-metrics > div { padding: 8px 9px; border-radius: 6px; background: rgba(0, 0, 0, 0.16); }
+.holdings-risk-metrics span, .holdings-risk-metrics small { display: block; color: #777; font-size: 10px; }
+.holdings-risk-metrics strong { display: block; margin: 3px 0 1px; color: #ddd; font-size: 14px; }
+.holdings-risk-concentration { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 9px; color: #999; font-size: 11px; }
+.holdings-risk-alert { margin-top: 8px; color: #ff526d; font-size: 12px; font-weight: 600; }
+.holdings-risk-missing { margin-top: 6px; color: #ff9800; font-size: 11px; }
+.holdings-risk-details { margin-top: 8px; color: #777; font-size: 10px; }
+.holdings-risk-details summary { cursor: pointer; color: #58a6ff; }
+.holdings-risk-table { margin-top: 7px; }
+.holdings-risk-table > div { display: grid; grid-template-columns: minmax(130px, 1.5fr) repeat(4, minmax(72px, 1fr)); gap: 8px; padding: 5px 7px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #aaa; }
+.holdings-risk-table > div.breached { color: #ff526d; background: rgba(233, 69, 96, 0.06); }
+.holdings-risk-details p { margin: 8px 0 0; line-height: 1.6; }
+
 @media (max-width: 700px) {
   .market-temperature-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .market-temperature-header { align-items: flex-start; }
+  .holdings-risk-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .holdings-risk-table > div { grid-template-columns: 1fr 1fr; }
+  .holdings-risk-table > div strong { grid-column: 1 / -1; }
 }
 
 .market-regime-banner.strong { border-left-color: #e94560; background: rgba(233, 69, 96, 0.08); }
