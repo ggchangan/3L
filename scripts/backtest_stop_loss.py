@@ -56,13 +56,13 @@ def load_global_dates(db):
     )]
 
 
-def load_adjusted_klines(db, ts_code):
+def load_adjusted_klines(db, ts_code, cutoff):
     rows = db.execute_raw(
         "SELECT d.trade_date,d.open,d.high,d.low,d.close,d.vol,a.adj_factor "
         "FROM stock_daily d LEFT JOIN adj_factor a "
         "ON a.ts_code=d.ts_code AND a.trade_date=d.trade_date "
-        "WHERE d.ts_code=%s ORDER BY d.trade_date",
-        [ts_code],
+        "WHERE d.ts_code=%s AND d.trade_date<=%s ORDER BY d.trade_date",
+        [ts_code, cutoff],
     )
     if not rows:
         return [], 'no_daily'
@@ -200,7 +200,7 @@ def render_markdown(report):
         f"- 代码版本：`{meta['git_commit']}`",
         f"- 数据范围：{meta['data_start']} ～ {meta['data_end']}",
         f"- 股票池：{meta['stocks_used']}/{meta['stocks_selected']}（历史日线构造，固定哈希抽样={meta['sample_size']}）",
-        f"- 信号：原始 {meta['raw_signals']}，20日冷却后 {meta['primary_signals']}，近期删失 {meta['censored_recent']}",
+        f"- 信号：原始 {meta.get('raw_signals', 0)}，20日冷却后 {meta.get('primary_signals', 0)}，近期删失 {meta.get('censored_recent', 0)}",
         f"- 数据跳过：{json.dumps(meta['skipped'], ensure_ascii=False, sort_keys=True)}",
         '- 检测上下文：波中市场、假设属于主线；每个信号日强制截断 K 线，无未来数据。', '',
     ]
@@ -226,7 +226,13 @@ def main():
     args = parse_args()
     db = TushareDB()
     global_dates = load_global_dates(db)
-    end = args.end or global_dates[-1]
+    end = args.end or global_dates[-21]
+    if end not in global_dates:
+        raise SystemExit(f'--end {end} 不是数据库交易日')
+    end_index = global_dates.index(end)
+    if end_index + 20 >= len(global_dates):
+        raise SystemExit('--end 之后不足20个全市场交易日，无法完成观察窗')
+    price_cutoff = global_dates[end_index + 20]
     future_count = {date: len(global_dates) - i - 1 for i, date in enumerate(global_dates)}
     universe = load_universe(db, args.sample_size)
     outcomes = []
@@ -234,7 +240,7 @@ def main():
     totals = Counter()
     used = 0
     for number, code in enumerate(universe, 1):
-        klines, status = load_adjusted_klines(db, code)
+        klines, status = load_adjusted_klines(db, code, price_cutoff)
         if not klines:
             skipped[status] += 1
             continue
@@ -251,6 +257,7 @@ def main():
         'git_commit': git_commit,
         'data_start': args.start,
         'data_end': end,
+        'price_cutoff': price_cutoff,
         'calibration_end': args.calibration_end,
         'sample_size': args.sample_size,
         'stocks_selected': len(universe),
@@ -260,6 +267,8 @@ def main():
         'bootstrap_runs': args.bootstrap_runs,
         'signal_context': {'market_position': '波中', 'mainline_assumed': True},
     }
+    for key in ('raw_signals', 'primary_signals', 'censored_recent'):
+        metadata.setdefault(key, 0)
     report = build_report(outcomes, args.calibration_end, args.bootstrap_runs, metadata)
     os.makedirs(args.output_dir, exist_ok=True)
     suffix = f'sample{args.sample_size}' if args.sample_size else 'full'
