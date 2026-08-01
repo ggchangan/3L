@@ -13,6 +13,29 @@ STRUCTURE_BUFFERS = (0.0, 0.1, 0.2, 0.3)
 ROUND_TRIP_SIDE_COST = 0.001
 
 
+def validate_adjusted_continuity(rows, tolerance=0.005):
+    """用前收盘/除权昨收/复权因子校验相邻日线是否来自同一连续序列。"""
+    for index in range(1, len(rows)):
+        previous, current = rows[index - 1], rows[index]
+        prev_close = _positive(previous.get('close'))
+        prev_factor = _positive(previous.get('adj_factor'))
+        pre_close = _positive(current.get('pre_close'))
+        current_factor = _positive(current.get('adj_factor'))
+        if None in (prev_close, prev_factor, pre_close, current_factor):
+            return False, {'index': index, 'reason': 'missing_continuity_field'}
+        previous_adjusted = prev_close * prev_factor
+        current_reference = pre_close * current_factor
+        relative_gap = abs(previous_adjusted - current_reference) / max(previous_adjusted, current_reference)
+        if relative_gap > tolerance:
+            return False, {
+                'index': index,
+                'date': current.get('trade_date') or current.get('date'),
+                'reason': 'adjusted_pre_close_mismatch',
+                'relative_gap': round(relative_gap, 6),
+            }
+    return True, None
+
+
 def detect_buy_point_without_future(detector, code, klines, signal_idx, **kwargs):
     """只把截止信号日的数据交给生产检测器。"""
     visible = [dict(item) for item in klines[:signal_idx + 1]]

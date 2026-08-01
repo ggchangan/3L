@@ -24,6 +24,7 @@ from threel_core.stop_loss_validation import (
     detect_buy_point_without_future,
     simulate_stop_trade,
     summarize_results,
+    validate_adjusted_continuity,
 )
 
 
@@ -58,7 +59,7 @@ def load_global_dates(db):
 
 def load_adjusted_klines(db, ts_code, cutoff):
     rows = db.execute_raw(
-        "SELECT d.trade_date,d.open,d.high,d.low,d.close,d.vol,a.adj_factor "
+        "SELECT d.trade_date,d.open,d.high,d.low,d.close,d.pre_close,d.vol,a.adj_factor "
         "FROM stock_daily d LEFT JOIN adj_factor a "
         "ON a.ts_code=d.ts_code AND a.trade_date=d.trade_date "
         "WHERE d.ts_code=%s AND d.trade_date<=%s ORDER BY d.trade_date",
@@ -70,6 +71,9 @@ def load_adjusted_klines(db, ts_code, cutoff):
     ratios = [qfq_ratio(row.get('adj_factor'), base) for row in rows]
     if any(ratio is None for ratio in ratios):
         return [], 'factor_incomplete'
+    continuous, _detail = validate_adjusted_continuity(rows)
+    if not continuous:
+        return [], 'price_discontinuity'
     klines = []
     for row, ratio in zip(rows, ratios):
         prices = {}

@@ -6,6 +6,7 @@ from threel_core.stop_loss_validation import (
     detect_buy_point_without_future,
     simulate_stop_trade,
     summarize_results,
+    validate_adjusted_continuity,
 )
 
 
@@ -92,3 +93,20 @@ def test_summary_keeps_cancelled_signals_in_denominator_and_reports_tail():
     assert result['gap_cancel_rate_pct'] == 50
     assert result['false_stop_rate_pct'] == 100
     assert result['max_loss_pct'] == -5
+
+
+def test_adjusted_continuity_accepts_corporate_action_and_rejects_polluted_row():
+    valid = [
+        {'trade_date': '1', 'close': 100, 'pre_close': 99, 'adj_factor': 1},
+        # 除权参考价 50、因子 2，与前一日 100×1 连续。
+        {'trade_date': '2', 'close': 51, 'pre_close': 50, 'adj_factor': 2},
+    ]
+    ok, detail = validate_adjusted_continuity(valid)
+    assert ok is True and detail is None
+
+    polluted = valid + [
+        {'trade_date': '3', 'close': 2, 'pre_close': 1, 'adj_factor': 2},
+    ]
+    ok, detail = validate_adjusted_continuity(polluted)
+    assert ok is False
+    assert detail['reason'] == 'adjusted_pre_close_mismatch'
