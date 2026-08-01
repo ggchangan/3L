@@ -161,7 +161,7 @@ export default function BuySignalsArea() {
         <div className="empty" style={{ padding: '20px 0', color: '#888', fontSize: 13 }}>{searchQ ? '无匹配结果' : '暂无买点信号'}</div>
       ) : (
         pageItems.map((s, idx) => (
-          <StockCard key={`${s.code}-${idx}`} s={s} idx={pageStart + idx + 1} chartPrefix={`ms_${activeDir}_`} mode="monitor" />
+          <StockCard key={`${s.code}-${idx}`} s={s} idx={pageStart + idx + 1} chartPrefix={`ms_${activeDir}_`} mode="monitor" decisionContext="buy-signal" />
         ))
       )}
 

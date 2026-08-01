@@ -1124,11 +1124,18 @@ def _market_buy_compatibility(item, market_regime, risk_phase):
             structure == '区间震荡' and stage in ('区间顶部', '突破位')
         ):
             return False, '震荡市场的突破买点需要区间顶部有效突破', category
-    elif market_regime == 'weak' and not (
-        structure == '下降趋势'
-        or (structure == '区间震荡' and stage == '区间底部')
-    ):
-        return False, '弱势市场的恐慌/反转买点需位于下降末端或区间底部', category
+    elif market_regime == 'weak':
+        reversal_evidence = any(
+            signal.get('key') in ('upward_reversal', 'supply_exhaustion')
+            and float((signal.get('scores') or {}).get('drawdown_pct', 0) or 0) <= -7
+            for signal in item.get('triggered_signals', [])
+        )
+        if not (
+            structure == '下降趋势'
+            or (structure == '区间震荡' and stage == '区间底部')
+            or reversal_evidence
+        ):
+            return False, '弱势市场的恐慌/反转买点需有下降末端或区间底部证据', category
     return True, f'{policy["label"]}与{category_label}匹配', category
 
 

@@ -167,6 +167,10 @@ export interface BuySignalItem {
   code: string
   name: string
   signal: 'buy' | 'sell' | 'hold'
+  technical_signal?: 'buy' | 'sell' | 'hold'
+  execution_signal?: 'buy' | 'sell' | 'hold'
+  technical_confidence?: number
+  technical_reason?: string
   stage: string
   structure: string
   trading_system?: '3l' | 'trend'
@@ -195,6 +199,7 @@ export interface BuySignalItem {
     direction: 'bullish' | 'bearish' | 'neutral'
     confidence: number
     detail?: string
+    scores?: Record<string, unknown>
   }>
   fusion_type?: string
   fusion_reason?: string
