@@ -11,6 +11,7 @@ from .upward_reversal_detector import detect_upward_reversal
 from .downward_reversal import detect_downward_reversal
 from .demand_exhaustion import detect_demand_exhaustion
 from .supply_exhaustion import detect_supply_exhaustion
+from .panic_stagnation import detect_panic_stagnation
 
 __all__ = [
     'detect_upward_breakout',
@@ -22,6 +23,7 @@ __all__ = [
     'detect_downward_reversal',
     'detect_demand_exhaustion',
     'detect_supply_exhaustion',
+    'detect_panic_stagnation',
 ]
 
 SIGNAL_NAMES = {
@@ -34,4 +36,5 @@ SIGNAL_NAMES = {
     'downward_reversal': '向下反转',
     'demand_exhaustion': '需求衰竭',
     'supply_exhaustion': '供应衰竭',
+    'panic_stagnation': '恐慌滞跌',
 }

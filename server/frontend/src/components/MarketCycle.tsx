@@ -383,7 +383,7 @@ export default function MarketCycle({ mode = 'review', reviewMarket, reviewIndex
     weak: {
       title: '弱势市场',
       badge: '提高买点要求，缩短交易周期',
-      detail: '优先恐慌、供应衰竭和明确反转买点；弱势本身不设固定仓位，主跌风险才暂停新增仓位。',
+      detail: '优先天量滞跌的恐慌买点和明确反转买点；供应衰竭只作观察，弱势本身不设固定仓位，主跌风险才暂停新增仓位。',
     },
     unknown: {
       title: '市场强弱待确认',

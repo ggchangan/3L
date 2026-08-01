@@ -183,6 +183,12 @@ class TestSignalDetectors(unittest.TestCase):
         self._assert_signal_result(result)
         self.assertEqual(result['signal_key'], 'supply_exhaustion')
 
+    def test_panic_stagnation_called(self):
+        from backend.core.signal_detector.panic_stagnation import detect_panic_stagnation
+        result = detect_panic_stagnation(KLINES_DOWN)
+        self.assertIn('triggered', result)
+        self.assertEqual(result['signal_key'], 'panic_stagnation')
+
 
 # ══════════════════════════════════════════════════════════════════
 # 第2部分：融合判定引擎 — 8条规则分支
@@ -344,6 +350,22 @@ class TestFusionEngine(unittest.TestCase):
         self.assertEqual(result['technical_signal'], 'hold')
         self.assertEqual(result['detected_buy_point'], '')
         self.assertNotIn(result['fusion_type'], ('signal_buy', 'strong_buy'))
+
+    def test_huge_volume_stagnation_maps_to_panic_buy_point(self):
+        self.mock_get_signals.return_value = [
+            self._make_signal('panic_stagnation', '恐慌滞跌', 'bullish', 82)
+        ]
+        from backend.core.signal_detector.fusion import _run_fusion
+        result = _run_fusion(
+            self.klines, self.idx,
+            structure='下降趋势', stage='下行',
+            ema_arrangement='空头排列', bias5=-8,
+            main_line_names=self.main_line_names, sector=self.sector,
+            existing_signal='hold', existing_buy_point='',
+        )
+
+        self.assertEqual(result['technical_signal'], 'buy')
+        self.assertEqual(result['detected_buy_point'], '恐慌买点')
 
     def test_rule5_bearish_watch(self):
         """规则5: 关键点看空 + 无看空信号 → 持有但警惕"""

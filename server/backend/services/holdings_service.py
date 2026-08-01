@@ -56,12 +56,15 @@ BUY_POINT_TYPES = ('突破买点', '中继买点', '反转买点', '恐慌买点
 def _infer_entry_signal(klines, buy_idx):
     """只用买入日及之前的数据还原信号，避免未来函数。"""
     from backend.core.signal_detector import (
-        detect_upward_breakout, detect_upward_continuation, detect_upward_reversal,
+        detect_panic_stagnation, detect_upward_breakout,
+        detect_upward_continuation, detect_upward_reversal,
     )
+    panic = detect_panic_stagnation(klines, buy_idx)
+    if panic.get('triggered'):
+        return '恐慌买点', panic
     reversal = detect_upward_reversal(klines, buy_idx)
     if reversal.get('triggered'):
-        context = (reversal.get('scores') or {}).get('supply_context')
-        return ('恐慌买点' if context == 'panic_release' else '反转买点'), reversal
+        return '反转买点', reversal
     candidates = [
         ('突破买点', detect_upward_breakout(klines, buy_idx)),
         ('中继买点', detect_upward_continuation(klines, buy_idx)),
@@ -219,7 +222,7 @@ def get_stop_loss_recommendation(code, buy_date=None, buy_price=None, current_st
         if protective_stop is not None and protective_stop > existing:
             recommendation = protective_stop
             recommendation_type = 'raise_protective_stop'
-            reason = '最新价格结构已抬高，建议上移保护止损；不会自动覆盖手工值'
+            reason = '最新价格结构已抬高，建议上移保护止损；已有止损只会上移、不会放宽'
         else:
             recommendation = existing
             recommendation_type = 'keep_current_stop'
@@ -445,9 +448,30 @@ def save_holdings(data):
     if not isinstance(holdings, list):
         return {'success': False, 'error': 'holdings 必须为列表'}
 
+    # 动态保护止损是单向棘轮：常规持仓保存不得删除或下调已持久化的止损。
+    # 原始录入确需纠错时应删除后重新录入，不能混入日常编辑。
+    current_stop_by_code = {
+        str(item.get('code', '')): item.get('stop_loss_price')
+        for item in get_holdings().get('holdings', [])
+        if item.get('code') and item.get('stop_loss_price') not in (None, '')
+    }
+
     for idx, holding in enumerate(holdings, start=1):
         if not isinstance(holding, dict):
             return {'success': False, 'error': f'第 {idx} 条持仓格式无效'}
+        previous_stop = current_stop_by_code.get(str(holding.get('code', '')))
+        proposed_stop = holding.get('stop_loss_price')
+        if previous_stop not in (None, ''):
+            try:
+                is_lowered = proposed_stop in (None, '') or float(proposed_stop) < float(previous_stop)
+            except (TypeError, ValueError):
+                is_lowered = False  # 交给下方统一数值校验返回更准确的错误。
+            if is_lowered:
+                return {
+                    'success': False,
+                    'error': (f'第 {idx} 条持仓的止损不得低于已保存值 '
+                              f'{float(previous_stop):.2f}；如需纠错请删除后重新录入'),
+                }
         for field, label in (
             ('buy_price', '买入价'),
             ('stop_loss_price', '止损价'),

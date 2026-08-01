@@ -31,6 +31,7 @@ from backend.core.signal_detector import (
     detect_downward_reversal,
     detect_demand_exhaustion,
     detect_supply_exhaustion,
+    detect_panic_stagnation,
     SIGNAL_NAMES,
 )
 
@@ -39,6 +40,7 @@ SIGNAL_DIRECTION = {
     'upward_breakout': 'bullish',       # 向上突破 → 看多
     'upward_continuation': 'bullish',   # 上涨中继 → 看多
     'upward_reversal': 'bullish',       # 向上反转 → 看多
+    'panic_stagnation': 'bullish',      # 天量滞跌 → 恐慌买点
     # 供应衰竭只说明卖压减弱，不含需求确认；保留为观察事实，不能单独生成买点。
     'supply_exhaustion': 'neutral',
     'downward_breakout': 'bearish',     # 向下突破 → 看空
@@ -52,15 +54,13 @@ BUY_POINT_BY_SIGNAL = {
     'upward_breakout': '突破买点',
     'upward_continuation': '中继买点',
     'upward_reversal': '反转买点',
+    'panic_stagnation': '恐慌买点',
 }
 
 
 def _detected_buy_point(signal):
     if not signal:
         return ''
-    if (signal.get('key') == 'upward_reversal'
-            and (signal.get('scores') or {}).get('supply_context') == 'panic_release'):
-        return '恐慌买点'
     return BUY_POINT_BY_SIGNAL.get(signal.get('key'), '')
 
 DETECTORS = {
@@ -73,6 +73,7 @@ DETECTORS = {
     'downward_reversal': detect_downward_reversal,
     'demand_exhaustion': detect_demand_exhaustion,
     'supply_exhaustion': detect_supply_exhaustion,
+    'panic_stagnation': detect_panic_stagnation,
 }
 
 # ── 关键点方向判定 ──

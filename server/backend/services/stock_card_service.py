@@ -636,7 +636,8 @@ def get_stock_card(code, date_str, market_position='波中',
     if technical_signal == 'buy':
         bullish = next((s for s in triggered_signals
                         if s.get('key') in ('upward_reversal', 'supply_exhaustion',
-                                            'upward_breakout', 'upward_continuation')), None)
+                                            'panic_stagnation', 'upward_breakout',
+                                            'upward_continuation')), None)
         if bullish:
             scores_detail = bullish.get('scores', {})
             vr20 = scores_detail.get('volume_ratio_20')
@@ -644,6 +645,9 @@ def get_stock_card(code, date_str, market_position='波中',
             rule = scores_detail.get('volume_rule', '')
             if vr20 is not None and vr5 is not None:
                 vol_analysis = f'{rule}（较前20日{vr20:.2f}倍/前5日{vr5:.2f}倍）'
+            elif bullish.get('key') == 'panic_stagnation' and vr20 is not None:
+                max_ratio = scores_detail.get('volume_vs_prior_20d_max', 0)
+                vol_analysis = f'天量滞跌（较前20日均量{vr20:.2f}倍/前20日最大量{max_ratio:.2f}倍）'
 
     # 6. 止损（按买点类型）
     sl_result = _calc_stop_loss(klines, idx, buy_type=buy_point if buy_point else None,

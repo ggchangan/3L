@@ -354,7 +354,7 @@ def test_trading_plan_separates_focus_watch_and_ordinary_signals_in_weak_market(
         'watch': 1,
         'ordinary': 2,
         'market_regime': 'weak',
-        'conclusion': '当前为弱势市场，重点信号需符合恐慌、供应衰竭或明确反转买点后才可执行。',
+        'conclusion': '当前为弱势市场，重点信号需符合天量滞跌的恐慌买点或明确反转买点后才可执行。',
         'ranking_rule': '市场过滤 → 主线/强动量 → 个股买点质量 → 板块环境 → 止损风险',
     }
     assert plan['buy_priority'][0]['decision_status'] == 'candidate'
@@ -451,7 +451,7 @@ def test_dynamic_position_uses_actual_holdings_and_planned_sells_in_main_decline
     assert strategy['executable_buy_count'] == 0
     assert plan['position_level'] == '当前50% → 卖出后约40%'
     assert '七至八成' not in plan['position_detail']
-    assert '恐慌买点' in strategy['allowed_buy_points']
+    assert any('恐慌买点' in label for label in strategy['allowed_buy_points'])
 
 
 def test_dynamic_position_does_not_guess_when_any_holding_ratio_is_missing():
@@ -691,10 +691,11 @@ def test_market_strategy_and_execution_share_the_same_buy_point_policy():
         buy_signals_review=[{
             'code': '000001', 'name': '恐慌标的', 'industry': '主线方向',
             'mainline_level': '主线', 'score': 4, 'action_type': '买入',
-            'buy_point': '信号确认', 'structure': '下降趋势', 'stage': '恐慌',
+            'buy_point': '恐慌买点', 'structure': '下降趋势', 'stage': '恐慌',
             'triggered_signals': [{
-                'key': 'supply_exhaustion', 'name': '供应衰竭',
+                'key': 'panic_stagnation', 'name': '恐慌滞跌',
                 'direction': 'bullish', 'confidence': 80,
+                'scores': {'near_20d_low': True, 'background_loss_pct': -8.2},
             }],
             'stop_loss': 9.5,
         }],
@@ -704,8 +705,8 @@ def test_market_strategy_and_execution_share_the_same_buy_point_policy():
     item = plan['buy_priority'][0]
     assert item['decision_status'] == 'executable'
     assert item['buy_point_category'] == 'panic'
-    assert '恐慌买点' in plan['market_strategy']['allowed_buy_points']
-    assert '供应衰竭买点' in plan['market_strategy']['allowed_buy_points']
+    assert any('恐慌买点' in label for label in plan['market_strategy']['allowed_buy_points'])
+    assert all('供应衰竭' not in label for label in plan['market_strategy']['allowed_buy_points'])
 
 
 def test_executable_breakout_is_upgraded_to_a_complete_condition_plan():
