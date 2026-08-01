@@ -1,0 +1,2717 @@
+{
+  "metadata": {
+    "generated_at": "2026-08-01T09:26:53",
+    "git_commit": "0e985a2300fd543019a748d5c1d5bfe58bbd5f71",
+    "data_start": "20240401",
+    "data_end": "20260410",
+    "price_cutoff": "20260610",
+    "calibration_end": "20251231",
+    "sample_size": 1000,
+    "stocks_selected": 1000,
+    "stocks_used": 946,
+    "skipped": {
+      "price_discontinuity": 54
+    },
+    "raw_signals": 58508,
+    "primary_signals": 14823,
+    "censored_suspension": 33,
+    "bootstrap_runs": 1000,
+    "signal_context": {
+      "market_position": "波中",
+      "mainline_assumed": true
+    },
+    "censored_recent": 0
+  },
+  "summary": {
+    "primary": {
+      "calibration": {
+        "cost_2atr": {
+          "all": {
+            "signals": 12908,
+            "covered": 12908,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 12908,
+            "stop_5d_rate_pct": 17.0669,
+            "stop_10d_rate_pct": 31.3217,
+            "stop_20d_rate_pct": 44.2749,
+            "false_stop_rate_pct": 28.9414,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 8.3157,
+            "mean_return_pct": 1.3294,
+            "median_return_pct": -3.2489,
+            "win_rate_pct": 41.5324,
+            "p05_return_pct": -12.2984,
+            "cvar05_return_pct": -15.5222,
+            "max_loss_pct": -32.7374,
+            "mean_hold_return_pct": 2.0285,
+            "mean_gap_slippage_pct": 0.1661,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                1.1137,
+                1.5607
+              ],
+              "cvar05_return_pct": [
+                -15.9014,
+                -15.1528
+              ],
+              "false_stop_rate_pct": [
+                27.7893,
+                30.1699
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 9507,
+            "covered": 9507,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 9507,
+            "stop_5d_rate_pct": 13.0746,
+            "stop_10d_rate_pct": 27.2641,
+            "stop_20d_rate_pct": 40.7174,
+            "false_stop_rate_pct": 26.3239,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 8.7992,
+            "mean_return_pct": 1.2139,
+            "median_return_pct": -2.5367,
+            "win_rate_pct": 42.9894,
+            "p05_return_pct": -12.8736,
+            "cvar05_return_pct": -16.2859,
+            "max_loss_pct": -32.7374,
+            "mean_hold_return_pct": 1.9284,
+            "mean_gap_slippage_pct": 0.1832,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.9541,
+                1.4696
+              ],
+              "cvar05_return_pct": [
+                -16.723,
+                -15.8389
+              ],
+              "false_stop_rate_pct": [
+                25.0124,
+                27.6248
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 3401,
+            "covered": 3401,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 3401,
+            "stop_5d_rate_pct": 28.227,
+            "stop_10d_rate_pct": 42.6639,
+            "stop_20d_rate_pct": 54.2193,
+            "false_stop_rate_pct": 34.436,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 6.9641,
+            "mean_return_pct": 1.6522,
+            "median_return_pct": -4.6205,
+            "win_rate_pct": 37.4596,
+            "p05_return_pct": -10.647,
+            "cvar05_return_pct": -12.6998,
+            "max_loss_pct": -26.8441,
+            "mean_hold_return_pct": 2.3082,
+            "mean_gap_slippage_pct": 0.13,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                1.1171,
+                2.1792
+              ],
+              "cvar05_return_pct": [
+                -13.1247,
+                -12.2613
+              ],
+              "false_stop_rate_pct": [
+                32.3102,
+                36.5595
+              ]
+            }
+          }
+        },
+        "production_baseline": {
+          "all": {
+            "signals": 12908,
+            "covered": 12908,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.6972,
+            "trades": 12818,
+            "stop_5d_rate_pct": 34.5218,
+            "stop_10d_rate_pct": 48.4631,
+            "stop_20d_rate_pct": 59.5491,
+            "false_stop_rate_pct": 47.3601,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 5.6865,
+            "mean_return_pct": 0.9601,
+            "median_return_pct": -3.4445,
+            "win_rate_pct": 32.2281,
+            "p05_return_pct": -9.7782,
+            "cvar05_return_pct": -13.6927,
+            "max_loss_pct": -33.4236,
+            "mean_hold_return_pct": 2.0182,
+            "mean_gap_slippage_pct": 0.1382,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.7419,
+                1.1815
+              ],
+              "cvar05_return_pct": [
+                -14.0912,
+                -13.3026
+              ],
+              "false_stop_rate_pct": [
+                46.224,
+                48.4815
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 9507,
+            "covered": 9507,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.9046,
+            "trades": 9421,
+            "stop_5d_rate_pct": 42.0762,
+            "stop_10d_rate_pct": 56.9791,
+            "stop_20d_rate_pct": 67.5724,
+            "false_stop_rate_pct": 51.9007,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 4.0995,
+            "mean_return_pct": 0.7177,
+            "median_return_pct": -3.4688,
+            "win_rate_pct": 28.4422,
+            "p05_return_pct": -6.3905,
+            "cvar05_return_pct": -8.0808,
+            "max_loss_pct": -22.5964,
+            "mean_hold_return_pct": 1.913,
+            "mean_gap_slippage_pct": 0.1327,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.4984,
+                0.9356
+              ],
+              "cvar05_return_pct": [
+                -8.3153,
+                -7.8603
+              ],
+              "false_stop_rate_pct": [
+                50.6975,
+                53.0893
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 3401,
+            "covered": 3401,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.1176,
+            "trades": 3397,
+            "stop_5d_rate_pct": 13.5708,
+            "stop_10d_rate_pct": 24.8455,
+            "stop_20d_rate_pct": 37.2976,
+            "false_stop_rate_pct": 24.5462,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 10.0878,
+            "mean_return_pct": 1.6379,
+            "median_return_pct": -2.6818,
+            "win_rate_pct": 42.8109,
+            "p05_return_pct": -15.0805,
+            "cvar05_return_pct": -18.7346,
+            "max_loss_pct": -33.4236,
+            "mean_hold_return_pct": 2.3101,
+            "mean_gap_slippage_pct": 0.1659,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                1.0455,
+                2.2196
+              ],
+              "cvar05_return_pct": [
+                -19.4745,
+                -17.9726
+              ],
+              "false_stop_rate_pct": [
+                22.2137,
+                26.8795
+              ]
+            }
+          }
+        },
+        "structure_atr_0.0": {
+          "all": {
+            "signals": 12908,
+            "covered": 12398,
+            "coverage_pct": 96.049,
+            "gap_cancel_rate_pct": 12.373,
+            "trades": 10864,
+            "stop_5d_rate_pct": 72.9934,
+            "stop_10d_rate_pct": 79.9153,
+            "stop_20d_rate_pct": 84.6649,
+            "false_stop_rate_pct": 72.8093,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.3548,
+            "mean_return_pct": 0.2815,
+            "median_return_pct": -1.0219,
+            "win_rate_pct": 12.0584,
+            "p05_return_pct": -5.7061,
+            "cvar05_return_pct": -10.1343,
+            "max_loss_pct": -28.5946,
+            "mean_hold_return_pct": 2.1391,
+            "mean_gap_slippage_pct": 0.0493,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.1288,
+                0.4458
+              ],
+              "cvar05_return_pct": [
+                -10.5825,
+                -9.6461
+              ],
+              "false_stop_rate_pct": [
+                71.8961,
+                73.6769
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 9507,
+            "covered": 9018,
+            "coverage_pct": 94.8564,
+            "gap_cancel_rate_pct": 13.9721,
+            "trades": 7758,
+            "stop_5d_rate_pct": 79.4406,
+            "stop_10d_rate_pct": 85.5633,
+            "stop_20d_rate_pct": 89.5849,
+            "false_stop_rate_pct": 76.6619,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 1.4417,
+            "mean_return_pct": 0.1316,
+            "median_return_pct": -0.9228,
+            "win_rate_pct": 8.6715,
+            "p05_return_pct": -3.5959,
+            "cvar05_return_pct": -5.0939,
+            "max_loss_pct": -24.6586,
+            "mean_hold_return_pct": 2.0507,
+            "mean_gap_slippage_pct": 0.044,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.0128,
+                0.2735
+              ],
+              "cvar05_return_pct": [
+                -5.3058,
+                -4.8822
+              ],
+              "false_stop_rate_pct": [
+                75.7589,
+                77.7299
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 3401,
+            "covered": 3380,
+            "coverage_pct": 99.3825,
+            "gap_cancel_rate_pct": 8.1065,
+            "trades": 3106,
+            "stop_5d_rate_pct": 56.8899,
+            "stop_10d_rate_pct": 65.8081,
+            "stop_20d_rate_pct": 72.376,
+            "false_stop_rate_pct": 60.8986,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 4.6355,
+            "mean_return_pct": 0.6813,
+            "median_return_pct": -1.7016,
+            "win_rate_pct": 21.0947,
+            "p05_return_pct": -12.3606,
+            "cvar05_return_pct": -15.9275,
+            "max_loss_pct": -28.5946,
+            "mean_hold_return_pct": 2.3601,
+            "mean_gap_slippage_pct": 0.0658,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.258,
+                1.1317
+              ],
+              "cvar05_return_pct": [
+                -16.5949,
+                -15.1553
+              ],
+              "false_stop_rate_pct": [
+                58.9876,
+                62.6144
+              ]
+            }
+          }
+        },
+        "structure_atr_0.1": {
+          "all": {
+            "signals": 12908,
+            "covered": 12881,
+            "coverage_pct": 99.7908,
+            "gap_cancel_rate_pct": 6.7619,
+            "trades": 12010,
+            "stop_5d_rate_pct": 69.7086,
+            "stop_10d_rate_pct": 77.4188,
+            "stop_20d_rate_pct": 83.0058,
+            "false_stop_rate_pct": 70.6189,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.5589,
+            "mean_return_pct": 0.3893,
+            "median_return_pct": -1.3251,
+            "win_rate_pct": 14.3079,
+            "p05_return_pct": -6.0772,
+            "cvar05_return_pct": -10.3546,
+            "max_loss_pct": -28.9165,
+            "mean_hold_return_pct": 2.0831,
+            "mean_gap_slippage_pct": 0.0558,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.2207,
+                0.5524
+              ],
+              "cvar05_return_pct": [
+                -10.7846,
+                -9.9032
+              ],
+              "false_stop_rate_pct": [
+                69.7465,
+                71.4403
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 9507,
+            "covered": 9480,
+            "coverage_pct": 99.716,
+            "gap_cancel_rate_pct": 7.2574,
+            "trades": 8792,
+            "stop_5d_rate_pct": 75.3753,
+            "stop_10d_rate_pct": 82.4955,
+            "stop_20d_rate_pct": 87.4886,
+            "false_stop_rate_pct": 74.038,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 1.716,
+            "mean_return_pct": 0.2506,
+            "median_return_pct": -1.2307,
+            "win_rate_pct": 11.2025,
+            "p05_return_pct": -4.1275,
+            "cvar05_return_pct": -5.691,
+            "max_loss_pct": -25.3918,
+            "mean_hold_return_pct": 2.0116,
+            "mean_gap_slippage_pct": 0.0511,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.0889,
+                0.4086
+              ],
+              "cvar05_return_pct": [
+                -5.9166,
+                -5.4636
+              ],
+              "false_stop_rate_pct": [
+                73.0849,
+                74.9707
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 3401,
+            "covered": 3401,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 5.3808,
+            "trades": 3218,
+            "stop_5d_rate_pct": 54.2262,
+            "stop_10d_rate_pct": 63.5488,
+            "stop_20d_rate_pct": 70.7582,
+            "false_stop_rate_pct": 59.069,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 4.8618,
+            "mean_return_pct": 0.7757,
+            "median_return_pct": -1.9375,
+            "win_rate_pct": 22.9638,
+            "p05_return_pct": -12.5669,
+            "cvar05_return_pct": -16.0217,
+            "max_loss_pct": -28.9165,
+            "mean_hold_return_pct": 2.2783,
+            "mean_gap_slippage_pct": 0.0719,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.3311,
+                1.2365
+              ],
+              "cvar05_return_pct": [
+                -16.7278,
+                -15.3272
+              ],
+              "false_stop_rate_pct": [
+                57.0487,
+                60.8697
+              ]
+            }
+          }
+        },
+        "structure_atr_0.2": {
+          "all": {
+            "signals": 12908,
+            "covered": 12903,
+            "coverage_pct": 99.9613,
+            "gap_cancel_rate_pct": 3.5883,
+            "trades": 12440,
+            "stop_5d_rate_pct": 65.6913,
+            "stop_10d_rate_pct": 74.5177,
+            "stop_20d_rate_pct": 80.7154,
+            "false_stop_rate_pct": 67.6626,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.8763,
+            "mean_return_pct": 0.474,
+            "median_return_pct": -1.6354,
+            "win_rate_pct": 16.7713,
+            "p05_return_pct": -6.5187,
+            "cvar05_return_pct": -10.7129,
+            "max_loss_pct": -29.2384,
+            "mean_hold_return_pct": 2.027,
+            "mean_gap_slippage_pct": 0.0658,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.2974,
+                0.6485
+              ],
+              "cvar05_return_pct": [
+                -11.138,
+                -10.2775
+              ],
+              "false_stop_rate_pct": [
+                66.7967,
+                68.4331
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 9507,
+            "covered": 9502,
+            "coverage_pct": 99.9474,
+            "gap_cancel_rate_pct": 3.6098,
+            "trades": 9159,
+            "stop_5d_rate_pct": 70.7392,
+            "stop_10d_rate_pct": 79.037,
+            "stop_20d_rate_pct": 84.8455,
+            "false_stop_rate_pct": 70.7245,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.0769,
+            "mean_return_pct": 0.3392,
+            "median_return_pct": -1.5498,
+            "win_rate_pct": 13.9971,
+            "p05_return_pct": -4.7531,
+            "cvar05_return_pct": -6.3782,
+            "max_loss_pct": -26.125,
+            "mean_hold_return_pct": 1.9233,
+            "mean_gap_slippage_pct": 0.0623,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.1616,
+                0.5054
+              ],
+              "cvar05_return_pct": [
+                -6.6174,
+                -6.1467
+              ],
+              "false_stop_rate_pct": [
+                69.7928,
+                71.6915
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 3401,
+            "covered": 3401,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 3.5284,
+            "trades": 3281,
+            "stop_5d_rate_pct": 51.6001,
+            "stop_10d_rate_pct": 61.9019,
+            "stop_20d_rate_pct": 69.1862,
+            "false_stop_rate_pct": 57.1806,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 5.1079,
+            "mean_return_pct": 0.8505,
+            "median_return_pct": -2.1663,
+            "win_rate_pct": 24.5222,
+            "p05_return_pct": -12.7756,
+            "cvar05_return_pct": -16.273,
+            "max_loss_pct": -29.2384,
+            "mean_hold_return_pct": 2.3165,
+            "mean_gap_slippage_pct": 0.0775,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.386,
+                1.349
+              ],
+              "cvar05_return_pct": [
+                -16.9889,
+                -15.5434
+              ],
+              "false_stop_rate_pct": [
+                55.1869,
+                59.1089
+              ]
+            }
+          }
+        },
+        "structure_atr_0.3": {
+          "all": {
+            "signals": 12908,
+            "covered": 12908,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 2.0375,
+            "trades": 12645,
+            "stop_5d_rate_pct": 60.4982,
+            "stop_10d_rate_pct": 70.779,
+            "stop_20d_rate_pct": 77.8569,
+            "false_stop_rate_pct": 64.3677,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 3.2437,
+            "mean_return_pct": 0.5879,
+            "median_return_pct": -1.9402,
+            "win_rate_pct": 19.5305,
+            "p05_return_pct": -7.0824,
+            "cvar05_return_pct": -11.1706,
+            "max_loss_pct": -29.5604,
+            "mean_hold_return_pct": 2.0009,
+            "mean_gap_slippage_pct": 0.0827,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.393,
+                0.766
+              ],
+              "cvar05_return_pct": [
+                -11.5799,
+                -10.7513
+              ],
+              "false_stop_rate_pct": [
+                63.4755,
+                65.1982
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 9507,
+            "covered": 9507,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 1.9985,
+            "trades": 9317,
+            "stop_5d_rate_pct": 64.9243,
+            "stop_10d_rate_pct": 74.8632,
+            "stop_20d_rate_pct": 81.6465,
+            "false_stop_rate_pct": 67.0567,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.4799,
+            "mean_return_pct": 0.4581,
+            "median_return_pct": -1.8621,
+            "win_rate_pct": 17.0401,
+            "p05_return_pct": -5.3632,
+            "cvar05_return_pct": -7.1906,
+            "max_loss_pct": -22.5964,
+            "mean_hold_return_pct": 1.8914,
+            "mean_gap_slippage_pct": 0.0831,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.2587,
+                0.6638
+              ],
+              "cvar05_return_pct": [
+                -7.4485,
+                -6.929
+              ],
+              "false_stop_rate_pct": [
+                66.1212,
+                68.0333
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 3401,
+            "covered": 3401,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 2.1464,
+            "trades": 3328,
+            "stop_5d_rate_pct": 48.107,
+            "stop_10d_rate_pct": 59.345,
+            "stop_20d_rate_pct": 67.2476,
+            "false_stop_rate_pct": 55.2279,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 5.3822,
+            "mean_return_pct": 0.9507,
+            "median_return_pct": -2.3821,
+            "win_rate_pct": 26.4922,
+            "p05_return_pct": -12.9285,
+            "cvar05_return_pct": -16.5355,
+            "max_loss_pct": -29.5604,
+            "mean_hold_return_pct": 2.3072,
+            "mean_gap_slippage_pct": 0.0815,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.4698,
+                1.443
+              ],
+              "cvar05_return_pct": [
+                -17.232,
+                -15.8186
+              ],
+              "false_stop_rate_pct": [
+                53.0735,
+                57.1044
+              ]
+            }
+          }
+        }
+      },
+      "validation": {
+        "cost_2atr": {
+          "all": {
+            "signals": 1909,
+            "covered": 1909,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 1909,
+            "stop_5d_rate_pct": 17.3389,
+            "stop_10d_rate_pct": 31.3253,
+            "stop_20d_rate_pct": 53.0644,
+            "false_stop_rate_pct": 23.692,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 8.2677,
+            "mean_return_pct": -0.6647,
+            "median_return_pct": -4.7918,
+            "win_rate_pct": 31.9539,
+            "p05_return_pct": -11.9314,
+            "cvar05_return_pct": -14.6579,
+            "max_loss_pct": -35.2387,
+            "mean_hold_return_pct": -0.6249,
+            "mean_gap_slippage_pct": 0.1586,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.1873,
+                -0.1202
+              ],
+              "cvar05_return_pct": [
+                -15.7028,
+                -13.7918
+              ],
+              "false_stop_rate_pct": [
+                21.3316,
+                26.2755
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 1410,
+            "covered": 1410,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 1410,
+            "stop_5d_rate_pct": 10.7801,
+            "stop_10d_rate_pct": 25.2482,
+            "stop_20d_rate_pct": 49.1489,
+            "false_stop_rate_pct": 19.6248,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 8.8455,
+            "mean_return_pct": -0.8742,
+            "median_return_pct": -4.5733,
+            "win_rate_pct": 33.1915,
+            "p05_return_pct": -12.358,
+            "cvar05_return_pct": -15.3814,
+            "max_loss_pct": -35.2387,
+            "mean_hold_return_pct": -0.7112,
+            "mean_gap_slippage_pct": 0.181,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.4961,
+                -0.2655
+              ],
+              "cvar05_return_pct": [
+                -16.5587,
+                -14.3579
+              ],
+              "false_stop_rate_pct": [
+                16.6911,
+                22.4888
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 499,
+            "covered": 499,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 499,
+            "stop_5d_rate_pct": 35.8717,
+            "stop_10d_rate_pct": 48.497,
+            "stop_20d_rate_pct": 64.1283,
+            "false_stop_rate_pct": 32.5,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 6.635,
+            "mean_return_pct": -0.0729,
+            "median_return_pct": -5.1116,
+            "win_rate_pct": 28.4569,
+            "p05_return_pct": -10.5961,
+            "cvar05_return_pct": -12.0532,
+            "max_loss_pct": -16.9371,
+            "mean_hold_return_pct": -0.3809,
+            "mean_gap_slippage_pct": 0.1101,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.2667,
+                1.1877
+              ],
+              "cvar05_return_pct": [
+                -12.8368,
+                -11.2238
+              ],
+              "false_stop_rate_pct": [
+                27.2699,
+                37.9128
+              ]
+            }
+          }
+        },
+        "production_baseline": {
+          "all": {
+            "signals": 1909,
+            "covered": 1909,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.5238,
+            "trades": 1899,
+            "stop_5d_rate_pct": 33.0174,
+            "stop_10d_rate_pct": 48.2359,
+            "stop_20d_rate_pct": 68.0358,
+            "false_stop_rate_pct": 40.3251,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 5.3712,
+            "mean_return_pct": -0.572,
+            "median_return_pct": -3.6646,
+            "win_rate_pct": 24.5155,
+            "p05_return_pct": -9.6062,
+            "cvar05_return_pct": -12.2749,
+            "max_loss_pct": -23.8227,
+            "mean_hold_return_pct": -0.5732,
+            "mean_gap_slippage_pct": 0.1534,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.9947,
+                -0.087
+              ],
+              "cvar05_return_pct": [
+                -13.1121,
+                -11.5114
+              ],
+              "false_stop_rate_pct": [
+                37.616,
+                42.7926
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 1410,
+            "covered": 1410,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.7092,
+            "trades": 1400,
+            "stop_5d_rate_pct": 37.0714,
+            "stop_10d_rate_pct": 53.6429,
+            "stop_20d_rate_pct": 74.2143,
+            "false_stop_rate_pct": 44.7546,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 4.1959,
+            "mean_return_pct": -0.7225,
+            "median_return_pct": -3.5869,
+            "win_rate_pct": 21.4184,
+            "p05_return_pct": -6.6018,
+            "cvar05_return_pct": -8.3391,
+            "max_loss_pct": -21.3553,
+            "mean_hold_return_pct": -0.6418,
+            "mean_gap_slippage_pct": 0.1366,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.1859,
+                -0.2527
+              ],
+              "cvar05_return_pct": [
+                -9.3065,
+                -7.6071
+              ],
+              "false_stop_rate_pct": [
+                41.6573,
+                47.831
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 499,
+            "covered": 499,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 499,
+            "stop_5d_rate_pct": 21.6433,
+            "stop_10d_rate_pct": 33.0661,
+            "stop_20d_rate_pct": 50.7014,
+            "false_stop_rate_pct": 22.1344,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 8.6685,
+            "mean_return_pct": -0.1468,
+            "median_return_pct": -5.5799,
+            "win_rate_pct": 33.2665,
+            "p05_return_pct": -12.5549,
+            "cvar05_return_pct": -15.5755,
+            "max_loss_pct": -23.8227,
+            "mean_hold_return_pct": -0.3809,
+            "mean_gap_slippage_pct": 0.2226,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.326,
+                1.1345
+              ],
+              "cvar05_return_pct": [
+                -17.241,
+                -13.9658
+              ],
+              "false_stop_rate_pct": [
+                17.0717,
+                27.3445
+              ]
+            }
+          }
+        },
+        "structure_atr_0.0": {
+          "all": {
+            "signals": 1909,
+            "covered": 1846,
+            "coverage_pct": 96.6998,
+            "gap_cancel_rate_pct": 13.4886,
+            "trades": 1597,
+            "stop_5d_rate_pct": 73.1371,
+            "stop_10d_rate_pct": 80.2129,
+            "stop_20d_rate_pct": 88.7915,
+            "false_stop_rate_pct": 70.0282,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.099,
+            "mean_return_pct": -0.2884,
+            "median_return_pct": -1.1676,
+            "win_rate_pct": 8.9924,
+            "p05_return_pct": -4.9214,
+            "cvar05_return_pct": -7.4462,
+            "max_loss_pct": -19.9586,
+            "mean_hold_return_pct": -0.7259,
+            "mean_gap_slippage_pct": 0.0386,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.582,
+                0.0033
+              ],
+              "cvar05_return_pct": [
+                -8.2359,
+                -6.7491
+              ],
+              "false_stop_rate_pct": [
+                67.7389,
+                72.265
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 1410,
+            "covered": 1351,
+            "coverage_pct": 95.8156,
+            "gap_cancel_rate_pct": 15.396,
+            "trades": 1143,
+            "stop_5d_rate_pct": 75.853,
+            "stop_10d_rate_pct": 83.2021,
+            "stop_20d_rate_pct": 91.776,
+            "false_stop_rate_pct": 73.1173,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 1.5931,
+            "mean_return_pct": -0.373,
+            "median_return_pct": -1.0215,
+            "win_rate_pct": 6.6617,
+            "p05_return_pct": -3.8327,
+            "cvar05_return_pct": -5.6365,
+            "max_loss_pct": -19.9586,
+            "mean_hold_return_pct": -0.6896,
+            "mean_gap_slippage_pct": 0.0495,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.6491,
+                -0.058
+              ],
+              "cvar05_return_pct": [
+                -6.4325,
+                -4.9804
+              ],
+              "false_stop_rate_pct": [
+                70.1421,
+                75.8355
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 499,
+            "covered": 495,
+            "coverage_pct": 99.1984,
+            "gap_cancel_rate_pct": 8.2828,
+            "trades": 454,
+            "stop_5d_rate_pct": 66.2996,
+            "stop_10d_rate_pct": 72.6872,
+            "stop_20d_rate_pct": 81.2775,
+            "false_stop_rate_pct": 61.2466,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 3.3728,
+            "mean_return_pct": -0.0575,
+            "median_return_pct": -1.7875,
+            "win_rate_pct": 15.3535,
+            "p05_return_pct": -7.6158,
+            "cvar05_return_pct": -9.9864,
+            "max_loss_pct": -14.6708,
+            "mean_hold_return_pct": -0.8174,
+            "mean_gap_slippage_pct": 0.0077,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.74,
+                0.6448
+              ],
+              "cvar05_return_pct": [
+                -11.0956,
+                -8.6199
+              ],
+              "false_stop_rate_pct": [
+                56.182,
+                65.9221
+              ]
+            }
+          }
+        },
+        "structure_atr_0.1": {
+          "all": {
+            "signals": 1909,
+            "covered": 1907,
+            "coverage_pct": 99.8952,
+            "gap_cancel_rate_pct": 7.8133,
+            "trades": 1758,
+            "stop_5d_rate_pct": 68.942,
+            "stop_10d_rate_pct": 77.4175,
+            "stop_20d_rate_pct": 87.4858,
+            "false_stop_rate_pct": 66.71,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.3328,
+            "mean_return_pct": -0.2983,
+            "median_return_pct": -1.5113,
+            "win_rate_pct": 10.6974,
+            "p05_return_pct": -5.3962,
+            "cvar05_return_pct": -7.8855,
+            "max_loss_pct": -19.9586,
+            "mean_hold_return_pct": -0.83,
+            "mean_gap_slippage_pct": 0.05,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.6088,
+                0.045
+              ],
+              "cvar05_return_pct": [
+                -8.6267,
+                -7.2057
+              ],
+              "false_stop_rate_pct": [
+                64.5267,
+                68.9412
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 1410,
+            "covered": 1408,
+            "coverage_pct": 99.8582,
+            "gap_cancel_rate_pct": 8.3807,
+            "trades": 1290,
+            "stop_5d_rate_pct": 70.9302,
+            "stop_10d_rate_pct": 79.845,
+            "stop_20d_rate_pct": 90.2326,
+            "false_stop_rate_pct": 68.9863,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 1.8586,
+            "mean_return_pct": -0.4434,
+            "median_return_pct": -1.3686,
+            "win_rate_pct": 8.5938,
+            "p05_return_pct": -4.3212,
+            "cvar05_return_pct": -6.1648,
+            "max_loss_pct": -19.9586,
+            "mean_hold_return_pct": -0.7924,
+            "mean_gap_slippage_pct": 0.0621,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.742,
+                -0.1015
+              ],
+              "cvar05_return_pct": [
+                -6.9097,
+                -5.5419
+              ],
+              "false_stop_rate_pct": [
+                66.0877,
+                71.6034
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 499,
+            "covered": 499,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 6.2124,
+            "trades": 468,
+            "stop_5d_rate_pct": 63.4615,
+            "stop_10d_rate_pct": 70.7265,
+            "stop_20d_rate_pct": 79.9145,
+            "false_stop_rate_pct": 59.6257,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 3.6399,
+            "mean_return_pct": 0.1113,
+            "median_return_pct": -2.0597,
+            "win_rate_pct": 16.6333,
+            "p05_return_pct": -8.1031,
+            "cvar05_return_pct": -10.4177,
+            "max_loss_pct": -15.1698,
+            "mean_hold_return_pct": -0.9336,
+            "mean_gap_slippage_pct": 0.0124,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.6397,
+                0.9194
+              ],
+              "cvar05_return_pct": [
+                -11.4581,
+                -9.1549
+              ],
+              "false_stop_rate_pct": [
+                54.6195,
+                64.4453
+              ]
+            }
+          }
+        },
+        "structure_atr_0.2": {
+          "all": {
+            "signals": 1909,
+            "covered": 1909,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 4.1907,
+            "trades": 1829,
+            "stop_5d_rate_pct": 64.2428,
+            "stop_10d_rate_pct": 74.9043,
+            "stop_20d_rate_pct": 86.1673,
+            "false_stop_rate_pct": 63.8325,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.6453,
+            "mean_return_pct": -0.4378,
+            "median_return_pct": -1.8485,
+            "win_rate_pct": 12.2577,
+            "p05_return_pct": -5.8399,
+            "cvar05_return_pct": -8.476,
+            "max_loss_pct": -21.3553,
+            "mean_hold_return_pct": -0.7294,
+            "mean_gap_slippage_pct": 0.0786,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.7733,
+                -0.0803
+              ],
+              "cvar05_return_pct": [
+                -9.4287,
+                -7.6601
+              ],
+              "false_stop_rate_pct": [
+                61.6832,
+                66.1245
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 1410,
+            "covered": 1410,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 4.2553,
+            "trades": 1350,
+            "stop_5d_rate_pct": 65.5556,
+            "stop_10d_rate_pct": 77.037,
+            "stop_20d_rate_pct": 88.7407,
+            "false_stop_rate_pct": 65.5259,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.2085,
+            "mean_return_pct": -0.6039,
+            "median_return_pct": -1.7286,
+            "win_rate_pct": 10.2837,
+            "p05_return_pct": -4.9359,
+            "cvar05_return_pct": -6.9103,
+            "max_loss_pct": -21.3553,
+            "mean_hold_return_pct": -0.7036,
+            "mean_gap_slippage_pct": 0.0916,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.9383,
+                -0.2543
+              ],
+              "cvar05_return_pct": [
+                -7.9833,
+                -6.1013
+              ],
+              "false_stop_rate_pct": [
+                62.7184,
+                68.2161
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 499,
+            "covered": 499,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 4.008,
+            "trades": 479,
+            "stop_5d_rate_pct": 60.5428,
+            "stop_10d_rate_pct": 68.8935,
+            "stop_20d_rate_pct": 78.9144,
+            "false_stop_rate_pct": 58.4656,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 3.8766,
+            "mean_return_pct": 0.0314,
+            "median_return_pct": -2.334,
+            "win_rate_pct": 17.8357,
+            "p05_return_pct": -8.3348,
+            "cvar05_return_pct": -10.94,
+            "max_loss_pct": -15.7312,
+            "mean_hold_return_pct": -0.8023,
+            "mean_gap_slippage_pct": 0.0375,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.7458,
+                0.8427
+              ],
+              "cvar05_return_pct": [
+                -12.0625,
+                -9.5205
+              ],
+              "false_stop_rate_pct": [
+                53.3874,
+                63.3777
+              ]
+            }
+          }
+        },
+        "structure_atr_0.3": {
+          "all": {
+            "signals": 1909,
+            "covered": 1909,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 2.8287,
+            "trades": 1855,
+            "stop_5d_rate_pct": 58.8679,
+            "stop_10d_rate_pct": 70.9434,
+            "stop_20d_rate_pct": 83.4501,
+            "false_stop_rate_pct": 60.2067,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 3.0164,
+            "mean_return_pct": -0.3638,
+            "median_return_pct": -2.1463,
+            "win_rate_pct": 14.6674,
+            "p05_return_pct": -6.309,
+            "cvar05_return_pct": -8.889,
+            "max_loss_pct": -21.3553,
+            "mean_hold_return_pct": -0.6063,
+            "mean_gap_slippage_pct": 0.0895,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.7243,
+                0.0145
+              ],
+              "cvar05_return_pct": [
+                -9.8237,
+                -8.1282
+              ],
+              "false_stop_rate_pct": [
+                57.9288,
+                62.5725
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 1410,
+            "covered": 1410,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 2.8369,
+            "trades": 1370,
+            "stop_5d_rate_pct": 59.3431,
+            "stop_10d_rate_pct": 72.4818,
+            "stop_20d_rate_pct": 85.8394,
+            "false_stop_rate_pct": 61.3095,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.613,
+            "mean_return_pct": -0.5115,
+            "median_return_pct": -2.0644,
+            "win_rate_pct": 12.8369,
+            "p05_return_pct": -5.399,
+            "cvar05_return_pct": -7.4478,
+            "max_loss_pct": -21.3553,
+            "mean_hold_return_pct": -0.6537,
+            "mean_gap_slippage_pct": 0.1061,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.8974,
+                -0.116
+              ],
+              "cvar05_return_pct": [
+                -8.5377,
+                -6.6508
+              ],
+              "false_stop_rate_pct": [
+                58.4739,
+                64.1182
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 499,
+            "covered": 499,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 2.8056,
+            "trades": 485,
+            "stop_5d_rate_pct": 57.5258,
+            "stop_10d_rate_pct": 66.5979,
+            "stop_20d_rate_pct": 76.701,
+            "false_stop_rate_pct": 56.7204,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 4.156,
+            "mean_return_pct": 0.0537,
+            "median_return_pct": -2.4863,
+            "win_rate_pct": 19.8397,
+            "p05_return_pct": -8.5816,
+            "cvar05_return_pct": -11.3031,
+            "max_loss_pct": -16.2302,
+            "mean_hold_return_pct": -0.4723,
+            "mean_gap_slippage_pct": 0.0372,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.7351,
+                0.9667
+              ],
+              "cvar05_return_pct": [
+                -12.4606,
+                -9.8354
+              ],
+              "false_stop_rate_pct": [
+                51.442,
+                61.8535
+              ]
+            }
+          }
+        }
+      }
+    },
+    "all_signals_sensitivity": {
+      "calibration": {
+        "cost_2atr": {
+          "all": {
+            "signals": 50645,
+            "covered": 50645,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 50645,
+            "stop_5d_rate_pct": 15.5889,
+            "stop_10d_rate_pct": 28.9861,
+            "stop_20d_rate_pct": 41.6369,
+            "false_stop_rate_pct": 26.7985,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 8.7814,
+            "mean_return_pct": 1.1752,
+            "median_return_pct": -2.8476,
+            "win_rate_pct": 42.0081,
+            "p05_return_pct": -12.3991,
+            "cvar05_return_pct": -15.6105,
+            "max_loss_pct": -82.3467,
+            "mean_hold_return_pct": 1.9176,
+            "mean_gap_slippage_pct": 0.188,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.9604,
+                1.3884
+              ],
+              "cvar05_return_pct": [
+                -16.024,
+                -15.2163
+              ],
+              "false_stop_rate_pct": [
+                26.0115,
+                27.5646
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 41718,
+            "covered": 41718,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 41718,
+            "stop_5d_rate_pct": 11.2326,
+            "stop_10d_rate_pct": 24.6536,
+            "stop_20d_rate_pct": 37.7031,
+            "false_stop_rate_pct": 24.3372,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 9.1032,
+            "mean_return_pct": 1.2899,
+            "median_return_pct": -1.8913,
+            "win_rate_pct": 44.0865,
+            "p05_return_pct": -12.7103,
+            "cvar05_return_pct": -16.059,
+            "max_loss_pct": -82.3467,
+            "mean_hold_return_pct": 2.0235,
+            "mean_gap_slippage_pct": 0.202,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                1.0842,
+                1.5082
+              ],
+              "cvar05_return_pct": [
+                -16.5259,
+                -15.6079
+              ],
+              "false_stop_rate_pct": [
+                23.3404,
+                25.2372
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 8927,
+            "covered": 8927,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 8927,
+            "stop_5d_rate_pct": 35.9471,
+            "stop_10d_rate_pct": 49.2327,
+            "stop_20d_rate_pct": 60.0202,
+            "false_stop_rate_pct": 34.0239,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 7.2775,
+            "mean_return_pct": 0.6389,
+            "median_return_pct": -5.5688,
+            "win_rate_pct": 32.2953,
+            "p05_return_pct": -11.1303,
+            "cvar05_return_pct": -13.1039,
+            "max_loss_pct": -26.8441,
+            "mean_hold_return_pct": 1.4225,
+            "mean_gap_slippage_pct": 0.1469,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.1795,
+                1.1753
+              ],
+              "cvar05_return_pct": [
+                -13.4403,
+                -12.8131
+              ],
+              "false_stop_rate_pct": [
+                32.7284,
+                35.2444
+              ]
+            }
+          }
+        },
+        "production_baseline": {
+          "all": {
+            "signals": 50645,
+            "covered": 50645,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.6516,
+            "trades": 50315,
+            "stop_5d_rate_pct": 36.0012,
+            "stop_10d_rate_pct": 50.4621,
+            "stop_20d_rate_pct": 61.9318,
+            "false_stop_rate_pct": 47.2995,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 5.3474,
+            "mean_return_pct": 0.6609,
+            "median_return_pct": -3.5243,
+            "win_rate_pct": 30.9488,
+            "p05_return_pct": -9.1961,
+            "cvar05_return_pct": -13.3449,
+            "max_loss_pct": -34.6353,
+            "mean_hold_return_pct": 1.909,
+            "mean_gap_slippage_pct": 0.1428,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.483,
+                0.849
+              ],
+              "cvar05_return_pct": [
+                -13.5684,
+                -13.1259
+              ],
+              "false_stop_rate_pct": [
+                46.4192,
+                48.1297
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 41718,
+            "covered": 41718,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.7407,
+            "trades": 41409,
+            "stop_5d_rate_pct": 39.5373,
+            "stop_10d_rate_pct": 54.6934,
+            "stop_20d_rate_pct": 66.1257,
+            "false_stop_rate_pct": 50.1315,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 4.1693,
+            "mean_return_pct": 0.698,
+            "median_return_pct": -3.4912,
+            "win_rate_pct": 29.5724,
+            "p05_return_pct": -6.4373,
+            "cvar05_return_pct": -8.0758,
+            "max_loss_pct": -25.5901,
+            "mean_hold_return_pct": 2.0107,
+            "mean_gap_slippage_pct": 0.1331,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.5415,
+                0.8538
+              ],
+              "cvar05_return_pct": [
+                -8.2208,
+                -7.9287
+              ],
+              "false_stop_rate_pct": [
+                49.1943,
+                51.0599
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 8927,
+            "covered": 8927,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.2352,
+            "trades": 8906,
+            "stop_5d_rate_pct": 19.5598,
+            "stop_10d_rate_pct": 30.7882,
+            "stop_20d_rate_pct": 42.4321,
+            "false_stop_rate_pct": 26.7796,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 10.8255,
+            "mean_return_pct": 0.4876,
+            "median_return_pct": -5.067,
+            "win_rate_pct": 37.381,
+            "p05_return_pct": -16.7843,
+            "cvar05_return_pct": -19.9232,
+            "max_loss_pct": -34.6353,
+            "mean_hold_return_pct": 1.4363,
+            "mean_gap_slippage_pct": 0.2132,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.0247,
+                1.034
+              ],
+              "cvar05_return_pct": [
+                -20.4054,
+                -19.4748
+              ],
+              "false_stop_rate_pct": [
+                25.2972,
+                28.3085
+              ]
+            }
+          }
+        },
+        "structure_atr_0.0": {
+          "all": {
+            "signals": 50645,
+            "covered": 48669,
+            "coverage_pct": 96.0983,
+            "gap_cancel_rate_pct": 11.796,
+            "trades": 42928,
+            "stop_5d_rate_pct": 75.4566,
+            "stop_10d_rate_pct": 82.1189,
+            "stop_20d_rate_pct": 86.5938,
+            "false_stop_rate_pct": 73.1821,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.2658,
+            "mean_return_pct": 0.0284,
+            "median_return_pct": -1.069,
+            "win_rate_pct": 10.6803,
+            "p05_return_pct": -5.3865,
+            "cvar05_return_pct": -10.359,
+            "max_loss_pct": -32.2088,
+            "mean_hold_return_pct": 1.9274,
+            "mean_gap_slippage_pct": 0.0455,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.0697,
+                0.1335
+              ],
+              "cvar05_return_pct": [
+                -10.5852,
+                -10.1494
+              ],
+              "false_stop_rate_pct": [
+                72.6292,
+                73.7749
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 41718,
+            "covered": 39901,
+            "coverage_pct": 95.6446,
+            "gap_cancel_rate_pct": 12.6037,
+            "trades": 34872,
+            "stop_5d_rate_pct": 79.0634,
+            "stop_10d_rate_pct": 85.3435,
+            "stop_20d_rate_pct": 89.6048,
+            "false_stop_rate_pct": 76.1897,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 1.4836,
+            "mean_return_pct": 0.0336,
+            "median_return_pct": -0.9895,
+            "win_rate_pct": 8.8168,
+            "p05_return_pct": -3.6281,
+            "cvar05_return_pct": -5.053,
+            "max_loss_pct": -25.5901,
+            "mean_hold_return_pct": 1.9932,
+            "mean_gap_slippage_pct": 0.04,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.0392,
+                0.1073
+              ],
+              "cvar05_return_pct": [
+                -5.1796,
+                -4.9224
+              ],
+              "false_stop_rate_pct": [
+                75.5664,
+                76.8117
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 8927,
+            "covered": 8768,
+            "coverage_pct": 98.2189,
+            "gap_cancel_rate_pct": 8.1204,
+            "trades": 8056,
+            "stop_5d_rate_pct": 59.8436,
+            "stop_10d_rate_pct": 68.1604,
+            "stop_20d_rate_pct": 73.5601,
+            "false_stop_rate_pct": 57.3237,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 5.6519,
+            "mean_return_pct": 0.0046,
+            "median_return_pct": -2.013,
+            "win_rate_pct": 19.1606,
+            "p05_return_pct": -14.7415,
+            "cvar05_return_pct": -18.3954,
+            "max_loss_pct": -32.2088,
+            "mean_hold_return_pct": 1.6426,
+            "mean_gap_slippage_pct": 0.0744,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.4049,
+                0.4608
+              ],
+              "cvar05_return_pct": [
+                -18.9678,
+                -17.9409
+              ],
+              "false_stop_rate_pct": [
+                56.047,
+                58.5143
+              ]
+            }
+          }
+        },
+        "structure_atr_0.1": {
+          "all": {
+            "signals": 50645,
+            "covered": 50538,
+            "coverage_pct": 99.7887,
+            "gap_cancel_rate_pct": 6.037,
+            "trades": 47487,
+            "stop_5d_rate_pct": 71.489,
+            "stop_10d_rate_pct": 79.2069,
+            "stop_20d_rate_pct": 84.501,
+            "false_stop_rate_pct": 70.9871,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.5105,
+            "mean_return_pct": 0.1212,
+            "median_return_pct": -1.3891,
+            "win_rate_pct": 13.2257,
+            "p05_return_pct": -5.9066,
+            "cvar05_return_pct": -10.6641,
+            "max_loss_pct": -32.2088,
+            "mean_hold_return_pct": 1.9096,
+            "mean_gap_slippage_pct": 0.056,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.0036,
+                0.2442
+              ],
+              "cvar05_return_pct": [
+                -10.8842,
+                -10.4546
+              ],
+              "false_stop_rate_pct": [
+                70.4547,
+                71.5598
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 41718,
+            "covered": 41611,
+            "coverage_pct": 99.7435,
+            "gap_cancel_rate_pct": 6.0489,
+            "trades": 39094,
+            "stop_5d_rate_pct": 74.5127,
+            "stop_10d_rate_pct": 81.9896,
+            "stop_20d_rate_pct": 87.1643,
+            "false_stop_rate_pct": 73.7352,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 1.7807,
+            "mean_return_pct": 0.1349,
+            "median_return_pct": -1.3133,
+            "win_rate_pct": 11.646,
+            "p05_return_pct": -4.1775,
+            "cvar05_return_pct": -5.6982,
+            "max_loss_pct": -25.5901,
+            "mean_hold_return_pct": 1.9961,
+            "mean_gap_slippage_pct": 0.0502,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.0403,
+                0.2248
+              ],
+              "cvar05_return_pct": [
+                -5.8258,
+                -5.5516
+              ],
+              "false_stop_rate_pct": [
+                73.0912,
+                74.3886
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 8927,
+            "covered": 8927,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 5.9819,
+            "trades": 8393,
+            "stop_5d_rate_pct": 57.405,
+            "stop_10d_rate_pct": 66.2457,
+            "stop_20d_rate_pct": 72.0958,
+            "false_stop_rate_pct": 55.5115,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 5.9095,
+            "mean_return_pct": 0.0571,
+            "median_return_pct": -2.279,
+            "win_rate_pct": 20.5892,
+            "p05_return_pct": -14.9621,
+            "cvar05_return_pct": -18.3886,
+            "max_loss_pct": -32.2088,
+            "mean_hold_return_pct": 1.5063,
+            "mean_gap_slippage_pct": 0.0889,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.3727,
+                0.5231
+              ],
+              "cvar05_return_pct": [
+                -18.9412,
+                -17.9445
+              ],
+              "false_stop_rate_pct": [
+                54.1272,
+                56.7167
+              ]
+            }
+          }
+        },
+        "structure_atr_0.2": {
+          "all": {
+            "signals": 50645,
+            "covered": 50619,
+            "coverage_pct": 99.9487,
+            "gap_cancel_rate_pct": 3.0937,
+            "trades": 49053,
+            "stop_5d_rate_pct": 66.369,
+            "stop_10d_rate_pct": 75.4898,
+            "stop_20d_rate_pct": 81.7972,
+            "false_stop_rate_pct": 67.7599,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.8626,
+            "mean_return_pct": 0.203,
+            "median_return_pct": -1.7332,
+            "win_rate_pct": 16.0098,
+            "p05_return_pct": -6.4155,
+            "cvar05_return_pct": -11.0212,
+            "max_loss_pct": -32.2088,
+            "mean_hold_return_pct": 1.9149,
+            "mean_gap_slippage_pct": 0.0695,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.0739,
+                0.3384
+              ],
+              "cvar05_return_pct": [
+                -11.2385,
+                -10.8056
+              ],
+              "false_stop_rate_pct": [
+                67.2222,
+                68.3441
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 41718,
+            "covered": 41692,
+            "coverage_pct": 99.9377,
+            "gap_cancel_rate_pct": 2.8567,
+            "trades": 40501,
+            "stop_5d_rate_pct": 68.7613,
+            "stop_10d_rate_pct": 77.7981,
+            "stop_20d_rate_pct": 84.1313,
+            "false_stop_rate_pct": 70.2148,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.1673,
+            "mean_return_pct": 0.2299,
+            "median_return_pct": -1.6583,
+            "win_rate_pct": 14.7582,
+            "p05_return_pct": -4.8021,
+            "cvar05_return_pct": -6.4218,
+            "max_loss_pct": -26.125,
+            "mean_hold_return_pct": 2.006,
+            "mean_gap_slippage_pct": 0.0649,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.1206,
+                0.3286
+              ],
+              "cvar05_return_pct": [
+                -6.5761,
+                -6.2679
+              ],
+              "false_stop_rate_pct": [
+                69.5256,
+                70.864
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 8927,
+            "covered": 8927,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 4.2007,
+            "trades": 8552,
+            "stop_5d_rate_pct": 55.0398,
+            "stop_10d_rate_pct": 64.558,
+            "stop_20d_rate_pct": 70.7437,
+            "false_stop_rate_pct": 53.9339,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 6.1553,
+            "mean_return_pct": 0.0772,
+            "median_return_pct": -2.5492,
+            "win_rate_pct": 21.855,
+            "p05_return_pct": -15.2459,
+            "cvar05_return_pct": -18.5192,
+            "max_loss_pct": -32.2088,
+            "mean_hold_return_pct": 1.4834,
+            "mean_gap_slippage_pct": 0.0952,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.3778,
+                0.5559
+              ],
+              "cvar05_return_pct": [
+                -19.0344,
+                -18.1038
+              ],
+              "false_stop_rate_pct": [
+                52.4901,
+                55.2139
+              ]
+            }
+          }
+        },
+        "structure_atr_0.3": {
+          "all": {
+            "signals": 50645,
+            "covered": 50640,
+            "coverage_pct": 99.9901,
+            "gap_cancel_rate_pct": 1.7417,
+            "trades": 49758,
+            "stop_5d_rate_pct": 60.8927,
+            "stop_10d_rate_pct": 71.2931,
+            "stop_20d_rate_pct": 78.7652,
+            "false_stop_rate_pct": 64.0845,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 3.2589,
+            "mean_return_pct": 0.3024,
+            "median_return_pct": -2.061,
+            "win_rate_pct": 18.8606,
+            "p05_return_pct": -7.0117,
+            "cvar05_return_pct": -11.4492,
+            "max_loss_pct": -32.2088,
+            "mean_hold_return_pct": 1.9122,
+            "mean_gap_slippage_pct": 0.0863,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.155,
+                0.4619
+              ],
+              "cvar05_return_pct": [
+                -11.6628,
+                -11.2259
+              ],
+              "false_stop_rate_pct": [
+                63.4867,
+                64.7079
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 41718,
+            "covered": 41713,
+            "coverage_pct": 99.988,
+            "gap_cancel_rate_pct": 1.5415,
+            "trades": 41070,
+            "stop_5d_rate_pct": 62.7124,
+            "stop_10d_rate_pct": 73.1824,
+            "stop_20d_rate_pct": 80.8035,
+            "false_stop_rate_pct": 66.1815,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.5904,
+            "mean_return_pct": 0.3435,
+            "median_return_pct": -1.9849,
+            "win_rate_pct": 17.8985,
+            "p05_return_pct": -5.4372,
+            "cvar05_return_pct": -7.1936,
+            "max_loss_pct": -25.5901,
+            "mean_hold_return_pct": 2.0038,
+            "mean_gap_slippage_pct": 0.0821,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                0.2199,
+                0.4548
+              ],
+              "cvar05_return_pct": [
+                -7.3553,
+                -7.0266
+              ],
+              "false_stop_rate_pct": [
+                65.4645,
+                66.8844
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 8927,
+            "covered": 8927,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 2.6773,
+            "trades": 8688,
+            "stop_5d_rate_pct": 52.2905,
+            "stop_10d_rate_pct": 62.3619,
+            "stop_20d_rate_pct": 69.1298,
+            "false_stop_rate_pct": 52.4975,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 6.4191,
+            "mean_return_pct": 0.11,
+            "median_return_pct": -2.7975,
+            "win_rate_pct": 23.3561,
+            "p05_return_pct": -15.4684,
+            "cvar05_return_pct": -18.6566,
+            "max_loss_pct": -32.2088,
+            "mean_hold_return_pct": 1.4791,
+            "mean_gap_slippage_pct": 0.1095,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.3465,
+                0.5791
+              ],
+              "cvar05_return_pct": [
+                -19.1608,
+                -18.2489
+              ],
+              "false_stop_rate_pct": [
+                51.0679,
+                53.7734
+              ]
+            }
+          }
+        }
+      },
+      "validation": {
+        "cost_2atr": {
+          "all": {
+            "signals": 7830,
+            "covered": 7830,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 7830,
+            "stop_5d_rate_pct": 14.3295,
+            "stop_10d_rate_pct": 29.0038,
+            "stop_20d_rate_pct": 51.4815,
+            "false_stop_rate_pct": 20.4912,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 8.6316,
+            "mean_return_pct": -1.2234,
+            "median_return_pct": -4.867,
+            "win_rate_pct": 31.3538,
+            "p05_return_pct": -12.4451,
+            "cvar05_return_pct": -14.7151,
+            "max_loss_pct": -35.2387,
+            "mean_hold_return_pct": -1.262,
+            "mean_gap_slippage_pct": 0.1528,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.6944,
+                -0.7695
+              ],
+              "cvar05_return_pct": [
+                -15.281,
+                -14.167
+              ],
+              "false_stop_rate_pct": [
+                18.8289,
+                22.2746
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 6562,
+            "covered": 6562,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 6562,
+            "stop_5d_rate_pct": 10.0884,
+            "stop_10d_rate_pct": 24.8095,
+            "stop_20d_rate_pct": 48.4913,
+            "false_stop_rate_pct": 17.1904,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 8.9247,
+            "mean_return_pct": -1.2488,
+            "median_return_pct": -4.6304,
+            "win_rate_pct": 32.231,
+            "p05_return_pct": -12.5621,
+            "cvar05_return_pct": -14.9658,
+            "max_loss_pct": -35.2387,
+            "mean_hold_return_pct": -1.2127,
+            "mean_gap_slippage_pct": 0.1488,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.7195,
+                -0.7713
+              ],
+              "cvar05_return_pct": [
+                -15.5892,
+                -14.3938
+              ],
+              "false_stop_rate_pct": [
+                15.3518,
+                18.9786
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 1268,
+            "covered": 1268,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.0,
+            "trades": 1268,
+            "stop_5d_rate_pct": 36.2776,
+            "stop_10d_rate_pct": 50.7098,
+            "stop_20d_rate_pct": 66.9558,
+            "false_stop_rate_pct": 32.8622,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 7.1149,
+            "mean_return_pct": -1.0918,
+            "median_return_pct": -5.641,
+            "win_rate_pct": 26.8139,
+            "p05_return_pct": -11.6683,
+            "cvar05_return_pct": -13.2417,
+            "max_loss_pct": -17.2682,
+            "mean_hold_return_pct": -1.5173,
+            "mean_gap_slippage_pct": 0.1681,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.9436,
+                -0.2718
+              ],
+              "cvar05_return_pct": [
+                -13.7949,
+                -12.6598
+              ],
+              "false_stop_rate_pct": [
+                29.5829,
+                36.2802
+              ]
+            }
+          }
+        },
+        "production_baseline": {
+          "all": {
+            "signals": 7830,
+            "covered": 7830,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.5619,
+            "trades": 7786,
+            "stop_5d_rate_pct": 34.2153,
+            "stop_10d_rate_pct": 51.6054,
+            "stop_20d_rate_pct": 71.5643,
+            "false_stop_rate_pct": 39.878,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 4.9527,
+            "mean_return_pct": -0.9788,
+            "median_return_pct": -3.7207,
+            "win_rate_pct": 22.3116,
+            "p05_return_pct": -8.8534,
+            "cvar05_return_pct": -12.0108,
+            "max_loss_pct": -26.5552,
+            "mean_hold_return_pct": -1.2294,
+            "mean_gap_slippage_pct": 0.1141,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.3195,
+                -0.6493
+              ],
+              "cvar05_return_pct": [
+                -12.5444,
+                -11.5098
+              ],
+              "false_stop_rate_pct": [
+                37.9268,
+                41.9384
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 6562,
+            "covered": 6562,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.6248,
+            "trades": 6521,
+            "stop_5d_rate_pct": 36.5128,
+            "stop_10d_rate_pct": 54.8382,
+            "stop_20d_rate_pct": 75.2032,
+            "false_stop_rate_pct": 42.0677,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 4.1239,
+            "mean_return_pct": -0.9128,
+            "median_return_pct": -3.6637,
+            "win_rate_pct": 20.5882,
+            "p05_return_pct": -6.5507,
+            "cvar05_return_pct": -8.1034,
+            "max_loss_pct": -21.3553,
+            "mean_hold_return_pct": -1.1813,
+            "mean_gap_slippage_pct": 0.1023,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.2348,
+                -0.5346
+              ],
+              "cvar05_return_pct": [
+                -8.5631,
+                -7.7464
+              ],
+              "false_stop_rate_pct": [
+                39.8823,
+                44.1213
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 1268,
+            "covered": 1268,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 0.2366,
+            "trades": 1265,
+            "stop_5d_rate_pct": 22.3715,
+            "stop_10d_rate_pct": 34.9407,
+            "stop_20d_rate_pct": 52.8063,
+            "false_stop_rate_pct": 23.8024,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 9.2252,
+            "mean_return_pct": -1.3201,
+            "median_return_pct": -5.9909,
+            "win_rate_pct": 31.2303,
+            "p05_return_pct": -14.2714,
+            "cvar05_return_pct": -17.177,
+            "max_loss_pct": -26.5552,
+            "mean_hold_return_pct": -1.4774,
+            "mean_gap_slippage_pct": 0.2006,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -2.1556,
+                -0.4803
+              ],
+              "cvar05_return_pct": [
+                -18.2063,
+                -16.2403
+              ],
+              "false_stop_rate_pct": [
+                20.4301,
+                27.2209
+              ]
+            }
+          }
+        },
+        "structure_atr_0.0": {
+          "all": {
+            "signals": 7830,
+            "covered": 7560,
+            "coverage_pct": 96.5517,
+            "gap_cancel_rate_pct": 14.5503,
+            "trades": 6460,
+            "stop_5d_rate_pct": 75.5728,
+            "stop_10d_rate_pct": 83.4056,
+            "stop_20d_rate_pct": 90.7585,
+            "false_stop_rate_pct": 70.1177,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 1.9013,
+            "mean_return_pct": -0.4876,
+            "median_return_pct": -1.0762,
+            "win_rate_pct": 7.381,
+            "p05_return_pct": -4.7482,
+            "cvar05_return_pct": -7.5736,
+            "max_loss_pct": -26.1172,
+            "mean_hold_return_pct": -1.3083,
+            "mean_gap_slippage_pct": 0.0484,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.6543,
+                -0.3332
+              ],
+              "cvar05_return_pct": [
+                -8.0649,
+                -7.1124
+              ],
+              "false_stop_rate_pct": [
+                68.6264,
+                71.6041
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 6562,
+            "covered": 6314,
+            "coverage_pct": 96.2207,
+            "gap_cancel_rate_pct": 15.3627,
+            "trades": 5344,
+            "stop_5d_rate_pct": 77.3391,
+            "stop_10d_rate_pct": 85.1984,
+            "stop_20d_rate_pct": 92.384,
+            "false_stop_rate_pct": 71.744,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 1.5018,
+            "mean_return_pct": -0.4333,
+            "median_return_pct": -1.0103,
+            "win_rate_pct": 6.1451,
+            "p05_return_pct": -3.8079,
+            "cvar05_return_pct": -5.355,
+            "max_loss_pct": -20.0277,
+            "mean_hold_return_pct": -1.2997,
+            "mean_gap_slippage_pct": 0.0486,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.5819,
+                -0.273
+              ],
+              "cvar05_return_pct": [
+                -5.7052,
+                -5.0326
+              ],
+              "false_stop_rate_pct": [
+                70.3007,
+                73.2216
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 1268,
+            "covered": 1246,
+            "coverage_pct": 98.265,
+            "gap_cancel_rate_pct": 10.4334,
+            "trades": 1116,
+            "stop_5d_rate_pct": 67.1147,
+            "stop_10d_rate_pct": 74.8208,
+            "stop_20d_rate_pct": 82.9749,
+            "false_stop_rate_pct": 61.4471,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 3.8146,
+            "mean_return_pct": -0.7628,
+            "median_return_pct": -1.9449,
+            "win_rate_pct": 13.6437,
+            "p05_return_pct": -9.319,
+            "cvar05_return_pct": -12.8515,
+            "max_loss_pct": -26.1172,
+            "mean_hold_return_pct": -1.3492,
+            "mean_gap_slippage_pct": 0.0474,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.2857,
+                -0.1909
+              ],
+              "cvar05_return_pct": [
+                -14.1417,
+                -11.5936
+              ],
+              "false_stop_rate_pct": [
+                58.0241,
+                64.848
+              ]
+            }
+          }
+        },
+        "structure_atr_0.1": {
+          "all": {
+            "signals": 7830,
+            "covered": 7819,
+            "coverage_pct": 99.8595,
+            "gap_cancel_rate_pct": 7.9933,
+            "trades": 7194,
+            "stop_5d_rate_pct": 70.7256,
+            "stop_10d_rate_pct": 80.1362,
+            "stop_20d_rate_pct": 88.9908,
+            "false_stop_rate_pct": 66.4167,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.1639,
+            "mean_return_pct": -0.5237,
+            "median_return_pct": -1.4307,
+            "win_rate_pct": 9.4513,
+            "p05_return_pct": -5.3082,
+            "cvar05_return_pct": -8.1066,
+            "max_loss_pct": -26.1172,
+            "mean_hold_return_pct": -1.3009,
+            "mean_gap_slippage_pct": 0.0587,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.7153,
+                -0.3507
+              ],
+              "cvar05_return_pct": [
+                -8.5982,
+                -7.6218
+              ],
+              "false_stop_rate_pct": [
+                64.8304,
+                67.9736
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 6562,
+            "covered": 6551,
+            "coverage_pct": 99.8324,
+            "gap_cancel_rate_pct": 8.1362,
+            "trades": 6018,
+            "stop_5d_rate_pct": 71.9508,
+            "stop_10d_rate_pct": 81.5553,
+            "stop_20d_rate_pct": 90.4453,
+            "false_stop_rate_pct": 67.7568,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 1.7834,
+            "mean_return_pct": -0.4748,
+            "median_return_pct": -1.3506,
+            "win_rate_pct": 8.3804,
+            "p05_return_pct": -4.3118,
+            "cvar05_return_pct": -5.9594,
+            "max_loss_pct": -20.0277,
+            "mean_hold_return_pct": -1.247,
+            "mean_gap_slippage_pct": 0.057,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.6626,
+                -0.2822
+              ],
+              "cvar05_return_pct": [
+                -6.3805,
+                -5.6066
+              ],
+              "false_stop_rate_pct": [
+                66.1053,
+                69.3455
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 1268,
+            "covered": 1268,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 7.2555,
+            "trades": 1176,
+            "stop_5d_rate_pct": 64.4558,
+            "stop_10d_rate_pct": 72.8741,
+            "stop_20d_rate_pct": 81.5476,
+            "false_stop_rate_pct": 58.8113,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 4.1109,
+            "mean_return_pct": -0.7763,
+            "median_return_pct": -2.2439,
+            "win_rate_pct": 14.9842,
+            "p05_return_pct": -9.7483,
+            "cvar05_return_pct": -13.0579,
+            "max_loss_pct": -26.1172,
+            "mean_hold_return_pct": -1.5768,
+            "mean_gap_slippage_pct": 0.068,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.3349,
+                -0.1866
+              ],
+              "cvar05_return_pct": [
+                -14.3595,
+                -11.9135
+              ],
+              "false_stop_rate_pct": [
+                55.6332,
+                62.2341
+              ]
+            }
+          }
+        },
+        "structure_atr_0.2": {
+          "all": {
+            "signals": 7830,
+            "covered": 7830,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 4.3678,
+            "trades": 7488,
+            "stop_5d_rate_pct": 65.5048,
+            "stop_10d_rate_pct": 76.7094,
+            "stop_20d_rate_pct": 87.1127,
+            "false_stop_rate_pct": 62.9925,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.501,
+            "mean_return_pct": -0.6091,
+            "median_return_pct": -1.7799,
+            "win_rate_pct": 11.4559,
+            "p05_return_pct": -5.8205,
+            "cvar05_return_pct": -8.5525,
+            "max_loss_pct": -26.1172,
+            "mean_hold_return_pct": -1.2613,
+            "mean_gap_slippage_pct": 0.0686,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.8176,
+                -0.4163
+              ],
+              "cvar05_return_pct": [
+                -9.0775,
+                -8.0322
+              ],
+              "false_stop_rate_pct": [
+                61.2648,
+                64.5804
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 6562,
+            "covered": 6562,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 4.2518,
+            "trades": 6283,
+            "stop_5d_rate_pct": 66.2263,
+            "stop_10d_rate_pct": 77.8291,
+            "stop_20d_rate_pct": 88.4132,
+            "false_stop_rate_pct": 64.1944,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.145,
+            "mean_return_pct": -0.5654,
+            "median_return_pct": -1.7019,
+            "win_rate_pct": 10.5151,
+            "p05_return_pct": -4.929,
+            "cvar05_return_pct": -6.5951,
+            "max_loss_pct": -21.3553,
+            "mean_hold_return_pct": -1.2013,
+            "mean_gap_slippage_pct": 0.0671,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.78,
+                -0.3318
+              ],
+              "cvar05_return_pct": [
+                -7.098,
+                -6.1944
+              ],
+              "false_stop_rate_pct": [
+                62.4293,
+                65.8327
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 1268,
+            "covered": 1268,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 4.9685,
+            "trades": 1205,
+            "stop_5d_rate_pct": 61.7427,
+            "stop_10d_rate_pct": 70.8714,
+            "stop_20d_rate_pct": 80.332,
+            "false_stop_rate_pct": 56.095,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 4.3572,
+            "mean_return_pct": -0.835,
+            "median_return_pct": -2.5122,
+            "win_rate_pct": 16.3249,
+            "p05_return_pct": -9.9906,
+            "cvar05_return_pct": -13.3951,
+            "max_loss_pct": -26.1172,
+            "mean_hold_return_pct": -1.5742,
+            "mean_gap_slippage_pct": 0.0774,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.4172,
+                -0.2195
+              ],
+              "cvar05_return_pct": [
+                -14.6543,
+                -12.2345
+              ],
+              "false_stop_rate_pct": [
+                52.7346,
+                59.5466
+              ]
+            }
+          }
+        },
+        "structure_atr_0.3": {
+          "all": {
+            "signals": 7830,
+            "covered": 7830,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 2.7586,
+            "trades": 7614,
+            "stop_5d_rate_pct": 58.8127,
+            "stop_10d_rate_pct": 71.8282,
+            "stop_20d_rate_pct": 84.4497,
+            "false_stop_rate_pct": 58.7247,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.8862,
+            "mean_return_pct": -0.6213,
+            "median_return_pct": -2.1091,
+            "win_rate_pct": 13.8697,
+            "p05_return_pct": -6.3027,
+            "cvar05_return_pct": -9.0059,
+            "max_loss_pct": -26.1172,
+            "mean_hold_return_pct": -1.2281,
+            "mean_gap_slippage_pct": 0.0762,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.8669,
+                -0.3936
+              ],
+              "cvar05_return_pct": [
+                -9.5214,
+                -8.5012
+              ],
+              "false_stop_rate_pct": [
+                56.9271,
+                60.403
+              ]
+            }
+          },
+          "中继买点": {
+            "signals": 6562,
+            "covered": 6562,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 2.6821,
+            "trades": 6386,
+            "stop_5d_rate_pct": 58.8945,
+            "stop_10d_rate_pct": 72.5806,
+            "stop_20d_rate_pct": 85.7031,
+            "false_stop_rate_pct": 59.5834,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 2.5514,
+            "mean_return_pct": -0.6005,
+            "median_return_pct": -2.0396,
+            "win_rate_pct": 12.9686,
+            "p05_return_pct": -5.4558,
+            "cvar05_return_pct": -7.2137,
+            "max_loss_pct": -21.3553,
+            "mean_hold_return_pct": -1.1883,
+            "mean_gap_slippage_pct": 0.075,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -0.8315,
+                -0.3365
+              ],
+              "cvar05_return_pct": [
+                -7.7177,
+                -6.8151
+              ],
+              "false_stop_rate_pct": [
+                57.6555,
+                61.2875
+              ]
+            }
+          },
+          "突破买点": {
+            "signals": 1268,
+            "covered": 1268,
+            "coverage_pct": 100.0,
+            "gap_cancel_rate_pct": 3.1546,
+            "trades": 1228,
+            "stop_5d_rate_pct": 58.3876,
+            "stop_10d_rate_pct": 67.9153,
+            "stop_20d_rate_pct": 77.9316,
+            "false_stop_rate_pct": 53.814,
+            "terminal_exit_rate_pct": 0.0,
+            "mean_initial_risk_pct": 4.6271,
+            "mean_return_pct": -0.7288,
+            "median_return_pct": -2.6723,
+            "win_rate_pct": 18.5331,
+            "p05_return_pct": -10.2644,
+            "cvar05_return_pct": -13.7797,
+            "max_loss_pct": -26.1172,
+            "mean_hold_return_pct": -1.4353,
+            "mean_gap_slippage_pct": 0.0825,
+            "bootstrap_95": {
+              "mean_return_pct": [
+                -1.3481,
+                -0.0903
+              ],
+              "cvar05_return_pct": [
+                -15.0608,
+                -12.5419
+              ],
+              "false_stop_rate_pct": [
+                50.5153,
+                57.1305
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "decisions": {
+    "structure_atr_0.0": {
+      "all": {
+        "accepted": false,
+        "reasons": [
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.2836,
+        "false_stop_improvement_pp": -29.7031
+      },
+      "突破买点": {
+        "accepted": false,
+        "reasons": [
+          "平均收益/假止损率未达到改善门槛",
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.0893,
+        "false_stop_improvement_pp": -39.1122
+      },
+      "中继买点": {
+        "accepted": false,
+        "reasons": [
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.3495,
+        "false_stop_improvement_pp": -28.3627
+      }
+    },
+    "structure_atr_0.1": {
+      "all": {
+        "accepted": false,
+        "reasons": [
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.2737,
+        "false_stop_improvement_pp": -26.3849
+      },
+      "突破买点": {
+        "accepted": false,
+        "reasons": [
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.2581,
+        "false_stop_improvement_pp": -37.4913
+      },
+      "中继买点": {
+        "accepted": false,
+        "reasons": [
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.2791,
+        "false_stop_improvement_pp": -24.2317
+      }
+    },
+    "structure_atr_0.2": {
+      "all": {
+        "accepted": false,
+        "reasons": [
+          "平均收益/假止损率未达到改善门槛",
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.1342,
+        "false_stop_improvement_pp": -23.5074
+      },
+      "突破买点": {
+        "accepted": false,
+        "reasons": [
+          "平均收益/假止损率未达到改善门槛",
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.1782,
+        "false_stop_improvement_pp": -36.3312
+      },
+      "中继买点": {
+        "accepted": false,
+        "reasons": [
+          "平均收益/假止损率未达到改善门槛",
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.1186,
+        "false_stop_improvement_pp": -20.7713
+      }
+    },
+    "structure_atr_0.3": {
+      "all": {
+        "accepted": false,
+        "reasons": [
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.2082,
+        "false_stop_improvement_pp": -19.8816
+      },
+      "突破买点": {
+        "accepted": false,
+        "reasons": [
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.2005,
+        "false_stop_improvement_pp": -34.586
+      },
+      "中继买点": {
+        "accepted": false,
+        "reasons": [
+          "假止损率恶化>2pp"
+        ],
+        "mean_return_improvement_pp": 0.211,
+        "false_stop_improvement_pp": -16.5549
+      }
+    }
+  }
+}
