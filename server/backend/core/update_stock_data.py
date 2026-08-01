@@ -9,7 +9,7 @@
     python -m backend.core.update_stock_data --phase full
 """
 
-import argparse, json, os, sys, time
+import argparse, json, os, subprocess, sys, time
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -50,6 +50,7 @@ from backend.data_access.data_layer import (
 )
 
 CACHE_DIR = os.path.join(DATA_DIR, '.cache')
+ISOLATED_STAGE_MARKER = '__3L_STAGE_RESULT__='
 
 
 def log(msg):
@@ -598,20 +599,28 @@ def run_full_phase():
     log('━━━ 个股更新 ━━━')
     s1 = update_stocks()
 
-    # 阶段2: 指数
+    # 指数与板块依赖不同的网络/原生库，分别放进干净子进程。生产曾出现
+    # 指数阶段结束时 native segfault，不能让它直接跳过后续正式板块补数。
     log('━━━ 指数更新 ━━━')
-    s2 = update_index()
+    failures = []
+    try:
+        s2 = _run_full_stage_isolated('index')
+    except Exception as exc:
+        s2 = (0, '')
+        failures.append(f'指数更新: {exc}')
+        log(f'🚨 指数更新子进程失败，继续尝试板块更新: {exc}')
 
-    # 阶段3: 板块
     log('━━━ 板块更新 ━━━')
     try:
-        s3 = update_sectors()
-    except Exception as e:
-        log(f'🚨 板块更新失败: {e}')
-        import traceback
-        for line in traceback.format_exc().splitlines():
-            log(f'  {line}')
-        raise  # 非零退出码让cron感知
+        s3 = _run_full_stage_isolated('sectors')
+    except Exception as exc:
+        s3 = (0, 0)
+        failures.append(f'板块更新: {exc}')
+        log(f'🚨 板块更新子进程失败: {exc}')
+
+    if any(item.startswith('板块更新:') for item in failures):
+        # 正式板块失败时不能生成伪装成完整的复盘。
+        raise RuntimeError('; '.join(failures))
 
     # 板块数据更新后，清除依赖的主线缓存（避免页面读到过期数据）
     _clear_mainline_cache()
@@ -619,10 +628,41 @@ def run_full_phase():
     from backend.data_access.data_source import get_last_completed_trading_day
     _refresh_review_cache(get_last_completed_trading_day())
 
+    if failures:
+        # 板块已恢复且复盘已刷新；仍用非零退出码暴露指数子进程异常。
+        raise RuntimeError('; '.join(failures))
+
     elapsed = time.time() - t0
     log(f'{"━"*30}')
     log(f'📊 汇总: 个股{s1[0]+s1[1]}只变动 | 指数{s2[0]}条新增 | 板块{s3[0]+s3[1]}只变动')
     log(f'⏱️  总耗时 {elapsed:.1f}s')
+
+
+def _run_full_stage_isolated(stage):
+    """在全新解释器中运行易受 native 依赖影响的阶段并取回结构化结果。"""
+    completed = subprocess.run(
+        [sys.executable, '-m', 'backend.core.update_stock_data', '--isolated-stage', stage],
+        cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        capture_output=True, text=True,
+    )
+    for line in completed.stdout.splitlines():
+        if not line.startswith(ISOLATED_STAGE_MARKER):
+            print(line, flush=True)
+    if completed.stderr:
+        print(completed.stderr, file=sys.stderr, end='', flush=True)
+    marker = next(
+        (line[len(ISOLATED_STAGE_MARKER):] for line in reversed(completed.stdout.splitlines())
+         if line.startswith(ISOLATED_STAGE_MARKER)),
+        '',
+    )
+    if completed.returncode != 0:
+        signal = -completed.returncode if completed.returncode < 0 else None
+        detail = f'被信号 {signal} 终止' if signal else f'退出码 {completed.returncode}'
+        raise RuntimeError(f'{stage} 子进程{detail}')
+    if not marker:
+        raise RuntimeError(f'{stage} 子进程缺少结果标记')
+    result = json.loads(marker)
+    return tuple(result)
 
 
 def main(argv=None):
@@ -633,10 +673,16 @@ def main(argv=None):
     )
     parser.add_argument('--max-attempts', type=int, default=1, help='close 阶段最大尝试次数')
     parser.add_argument('--retry-interval', type=int, default=900, help='重试间隔秒数')
+    parser.add_argument('--isolated-stage', choices=('index', 'sectors'), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
     os.environ['TQDM_DISABLE'] = '1'
     os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
+
+    if args.isolated_stage:
+        result = update_index() if args.isolated_stage == 'index' else update_sectors()
+        print(f'{ISOLATED_STAGE_MARKER}{json.dumps(result, ensure_ascii=False)}', flush=True)
+        return 0
 
     if args.phase == 'full':
         run_full_phase()
