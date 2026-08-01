@@ -134,13 +134,56 @@ def test_full_phase_refreshes_review_after_sector_update(tmp_path):
          patch.object(update_stock_data, 'update_industry_map'), \
          patch.object(update_stock_data, 'update_concept_maps'), \
          patch.object(update_stock_data, 'update_stocks', return_value=(0, 0, 0)), \
-         patch.object(update_stock_data, 'update_index', return_value=(0, '20260721')), \
-         patch.object(update_stock_data, 'update_sectors', return_value=(319, 20)), \
+         patch.object(update_stock_data, '_run_full_stage_isolated', side_effect=[
+             (2000, '20260721'), (319, 20),
+         ]), \
          patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
          patch.object(update_stock_data, '_refresh_review_cache') as refresh:
         update_stock_data.run_full_phase()
 
     refresh.assert_called_once_with('20260721')
+
+
+def test_full_phase_still_attempts_sectors_after_index_native_failure(tmp_path):
+    from backend.core import update_stock_data
+
+    with patch.object(update_stock_data, 'DATA_DIR', str(tmp_path)), \
+         patch.object(update_stock_data, '_fetch_tushare_daily_incremental'), \
+         patch.object(update_stock_data, '_ensure_all_stock_codes'), \
+         patch.object(update_stock_data, 'update_industry_map'), \
+         patch.object(update_stock_data, 'update_concept_maps'), \
+         patch.object(update_stock_data, 'update_stocks', return_value=(0, 0, 0)), \
+         patch.object(update_stock_data, '_run_full_stage_isolated', side_effect=[
+             RuntimeError('index 子进程被信号 11 终止'), (319, 20),
+         ]) as isolated, \
+         patch.object(update_stock_data, '_refresh_review_cache') as refresh:
+        try:
+            update_stock_data.run_full_phase()
+            assert False, '阶段失败必须让 cron 收到非零退出'
+        except RuntimeError as exc:
+            assert '信号 11' in str(exc)
+
+    assert isolated.call_args_list[0].args == ('index',)
+    assert isolated.call_args_list[1].args == ('sectors',)
+    refresh.assert_called_once()
+
+
+def test_isolated_stage_reports_signal_without_losing_other_output(capsys):
+    from backend.core import update_stock_data
+
+    crashed = type('Result', (), {
+        'returncode': -11,
+        'stdout': '[stage] index wrote data\n',
+        'stderr': '',
+    })()
+    with patch.object(update_stock_data.subprocess, 'run', return_value=crashed):
+        try:
+            update_stock_data._run_full_stage_isolated('index')
+            assert False, 'native signal must fail the stage'
+        except RuntimeError as exc:
+            assert '信号 11' in str(exc)
+
+    assert 'index wrote data' in capsys.readouterr().out
 
 
 def test_production_review_refresh_persists_current_cache_and_daily_snapshot():
