@@ -5,6 +5,7 @@ from threel_core.stop_loss_validation import (
     calculate_stop_candidates,
     calc_recent_atr,
     detect_buy_point_without_future,
+    is_confirmed_terminal,
     simulate_stop_trade,
     summarize_results,
     validate_adjusted_continuity,
@@ -102,6 +103,14 @@ def test_stopped_trade_is_not_marked_as_terminal_exit_when_history_is_short():
 
     assert result['stop_hit'] is True
     assert result['terminal_exit'] is False
+
+
+def test_terminal_requires_stock_to_have_stopped_inside_loaded_price_window():
+    assert is_confirmed_terminal(5, 20, '20260701', '20260731', '20260701', '20260710') is True
+    # 退市虽已在数据库中确认，但最后交易发生在本次价格窗口之后，不能提前结算。
+    assert is_confirmed_terminal(5, 20, '20260720', '20260731', '20260718', '20260710') is False
+    assert is_confirmed_terminal(5, 20, '', '20260731', '20260701', '20260710') is False
+    assert is_confirmed_terminal(20, 20, '20260701', '20260731', '20260701', '20260710') is False
 
 
 def test_summary_keeps_cancelled_signals_in_denominator_and_reports_tail():

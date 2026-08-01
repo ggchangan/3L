@@ -22,6 +22,7 @@ from threel_core.price_adjustment import qfq_ratio
 from threel_core.stop_loss_validation import (
     calculate_stop_candidates,
     detect_buy_point_without_future,
+    is_confirmed_terminal,
     simulate_stop_trade,
     summarize_results,
     validate_adjusted_continuity,
@@ -94,7 +95,8 @@ def load_adjusted_klines(db, ts_code, cutoff):
     return klines, 'qfq'
 
 
-def scan_stock(code, klines, start, end, global_future_count, delist_date, database_end):
+def scan_stock(code, klines, start, end, global_future_count, delist_date, database_end,
+               last_trade_date, price_cutoff):
     local_code = code.split('.')[0]
     detect_buy_point._ind_map = {local_code: {'ths_industry': '回测统一主线'}}
     outcomes = []
@@ -119,10 +121,9 @@ def scan_stock(code, klines, start, end, global_future_count, delist_date, datab
             counters['censored_recent'] += 1
             continue
         available_future = len(klines) - idx - 1
-        terminal_if_short = (
-            available_future < 20
-            and bool(delist_date)
-            and str(delist_date) <= database_end
+        terminal_if_short = is_confirmed_terminal(
+            available_future, 20, delist_date, database_end,
+            last_trade_date, price_cutoff,
         )
         if available_future < 20 and not terminal_if_short:
             counters['censored_suspension'] += 1
@@ -265,6 +266,7 @@ def main():
         stock_outcomes, counters = scan_stock(
             code, klines, args.start, end, future_count,
             str(universe_row.get('delist_date') or ''), global_dates[-1],
+            str(universe_row.get('last_trade_date') or ''), price_cutoff,
         )
         outcomes.extend(stock_outcomes)
         totals.update(counters)

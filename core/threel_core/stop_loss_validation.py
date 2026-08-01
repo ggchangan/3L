@@ -12,6 +12,18 @@ STRUCTURE_BUFFERS = (0.0, 0.1, 0.2, 0.3)
 ROUND_TRIP_SIDE_COST = 0.001
 
 
+def is_confirmed_terminal(available_future, horizon, delist_date, database_end,
+                          last_trade_date, price_cutoff):
+    """仅把已在价格窗口内停止交易且数据库已确认退市的短序列视为终止。"""
+    return (
+        available_future < horizon
+        and bool(delist_date)
+        and str(delist_date) <= str(database_end)
+        and bool(last_trade_date)
+        and str(last_trade_date) <= str(price_cutoff)
+    )
+
+
 def calc_recent_atr(klines, period=14):
     """预注册口径：截至信号日最近 period 个 TR 的算术均值。"""
     if len(klines) < period + 1:
