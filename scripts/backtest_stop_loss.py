@@ -94,7 +94,7 @@ def load_adjusted_klines(db, ts_code, cutoff):
     return klines, 'qfq'
 
 
-def scan_stock(code, klines, start, end, global_future_count, stock_last_trade, price_cutoff):
+def scan_stock(code, klines, start, end, global_future_count, delist_date, database_end):
     local_code = code.split('.')[0]
     detect_buy_point._ind_map = {local_code: {'ths_industry': '回测统一主线'}}
     outcomes = []
@@ -119,7 +119,11 @@ def scan_stock(code, klines, start, end, global_future_count, stock_last_trade, 
             counters['censored_recent'] += 1
             continue
         available_future = len(klines) - idx - 1
-        terminal_if_short = available_future < 20 and stock_last_trade <= price_cutoff
+        terminal_if_short = (
+            available_future < 20
+            and bool(delist_date)
+            and str(delist_date) <= database_end
+        )
         if available_future < 20 and not terminal_if_short:
             counters['censored_suspension'] += 1
             continue
@@ -211,7 +215,7 @@ def render_markdown(report):
         f"- 代码版本：`{meta['git_commit']}`",
         f"- 数据范围：{meta['data_start']} ～ {meta['data_end']}",
         f"- 股票池：{meta['stocks_used']}/{meta['stocks_selected']}（历史日线构造，固定哈希抽样={meta['sample_size']}）",
-        f"- 信号：原始 {meta.get('raw_signals', 0)}，20日冷却后 {meta.get('primary_signals', 0)}，近期删失 {meta.get('censored_recent', 0)}",
+        f"- 信号：原始 {meta.get('raw_signals', 0)}，20日冷却后 {meta.get('primary_signals', 0)}，近期删失 {meta.get('censored_recent', 0)}，停牌删失 {meta.get('censored_suspension', 0)}",
         f"- 数据跳过：{json.dumps(meta['skipped'], ensure_ascii=False, sort_keys=True)}",
         '- 检测上下文：波中市场、假设属于主线；每个信号日强制截断 K 线，无未来数据。', '',
     ]
@@ -237,7 +241,9 @@ def main():
     args = parse_args()
     db = TushareDB()
     global_dates = load_global_dates(db)
-    end = args.end or global_dates[-21]
+    if args.calendar_buffer < 20:
+        raise SystemExit('--calendar-buffer 不能小于20')
+    end = args.end or global_dates[-args.calendar_buffer - 1]
     if end not in global_dates:
         raise SystemExit(f'--end {end} 不是数据库交易日')
     end_index = global_dates.index(end)
@@ -258,7 +264,7 @@ def main():
             continue
         stock_outcomes, counters = scan_stock(
             code, klines, args.start, end, future_count,
-            str(universe_row['last_trade_date']), price_cutoff,
+            str(universe_row.get('delist_date') or ''), global_dates[-1],
         )
         outcomes.extend(stock_outcomes)
         totals.update(counters)
