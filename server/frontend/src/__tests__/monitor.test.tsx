@@ -181,6 +181,22 @@ describe('StockCard', () => {
     expect(screen.queryByText(/可执行买入计划/)).toBeNull()
   })
 
+  it('个股分析页的技术信号不冒充已完成复盘门禁', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      signal: 'hold',
+      technical_signal: 'buy',
+      execution_signal: 'hold',
+      action_type: '技术信号',
+      action_reason: '关键点中性，暂不执行',
+    }} idx={1} decisionContext="analysis" />)
+
+    expect(screen.getByText('技术信号', { selector: '.v' })).toBeTruthy()
+    expect(screen.getByText(/尚未叠加复盘市场环境和方向优先级/)).toBeTruthy()
+    expect(screen.getByText(/最终操作以复盘页为准/)).toBeTruthy()
+    expect(screen.queryByText(/不进入当前核心交易计划/)).toBeNull()
+  })
+
   it('候选买点显示观察而不是买入', () => {
     render(<StockCard s={{
       ...buySignal,

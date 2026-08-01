@@ -106,6 +106,19 @@ export default function StockAnalysis() {
       structure: d.structure,
       trading_system: d.trading_system as '3l' | 'trend' | undefined,
       buy_point: d.buy_point,
+      technical_signal: d.technical_signal,
+      execution_signal: d.execution_signal,
+      technical_confidence: d.technical_confidence,
+      technical_reason: d.technical_reason,
+      triggered_signals: d.triggered_signals,
+      fusion_type: d.fusion_type,
+      fusion_reason: d.fusion_reason,
+      wave_position: d.wave_position,
+      action_type: d.action_type,
+      action_signal: d.action_signal,
+      action_priority: d.action_priority,
+      action_reason: d.action_reason,
+      decision_status: d.decision_status,
       stop_loss: d.stop_loss != null ? parseFloat(String(d.stop_loss)) : undefined,
       stop_loss_pct: d.stop_loss_pct != null ? parseFloat(String(d.stop_loss_pct)) : undefined,
       profit_model1: d.profit_model1,
@@ -295,7 +308,14 @@ export default function StockAnalysis() {
         <div id="resultArea">
           {loading && <div className="loading"><div className="spinner"></div>正在分析...</div>}
           {error && <div className="error-box">❌ {error}</div>}
-          {!loading && !error && analysis && <StockCard s={toBuySignalItem(analysis)} idx={0} />}
+          {!loading && !error && analysis && (
+            <>
+              <div style={{ marginBottom: 8, color: '#888', fontSize: 11 }}>
+                本页展示个股原始量价与融合信号；复盘页会再叠加市场环境和方向优先级，因此最终操作层级可能不同。
+              </div>
+              <StockCard s={toBuySignalItem(analysis)} idx={0} decisionContext="analysis" />
+            </>
+          )}
           {!loading && !error && !analysis && (
             <div className="no-result">输入股票代码或名称开始分析</div>
           )}

@@ -21,7 +21,7 @@ interface StockCardProps {
   idx: number
   chartPrefix?: string
   mode?: 'review' | 'monitor'
-  decisionContext?: 'buy-signal' | 'holding'
+  decisionContext?: 'buy-signal' | 'holding' | 'analysis'
   opportunityMap?: Record<string, string>
 }
 
@@ -115,7 +115,9 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
     conclusion = `${s.buy_point || '买点'}技术信号已触发；${s.action_reason || '尚未满足当前市场执行条件'}，列入观察，尚非可执行买入`
     conclusionColor = '#ffd700'
   } else if (isSignalOnly) {
-    conclusion = `${s.buy_point || '买点'}技术信号已触发；${s.action_reason || '当前方向优先级不足'}，不进入当前核心交易计划`
+    conclusion = decisionContext === 'analysis'
+      ? `${s.buy_point || '买点'}技术信号已触发；本页尚未叠加复盘市场环境和方向优先级，最终操作以复盘页为准`
+      : `${s.buy_point || '买点'}技术信号已触发；${s.action_reason || '当前方向优先级不足'}，不进入当前核心交易计划`
     conclusionColor = '#888'
   } else if (isBuy) {
     const slText = (s.stop_loss && s.stop_loss_pct)
