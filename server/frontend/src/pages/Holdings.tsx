@@ -81,18 +81,21 @@ export default function Holdings() {
   const [modalSaving, setModalSaving] = useState(false)
   const [modalBuyPrice, setModalBuyPrice] = useState('')
   const [modalBuyDate, setModalBuyDate] = useState('')
-  const [modalSignalType, setModalSignalType] = useState('自动识别')
   const [directions, setDirections] = useState<string[]>([])
   const [cachedPrice, setCachedPrice] = useState<number | null>(null)
   const [stopRecommendation, setStopRecommendation] = useState<StopRecommendation | null>(null)
   const [stopRecommendationLoading, setStopRecommendationLoading] = useState(false)
+  const [stopRecommendationError, setStopRecommendationError] = useState('')
+  const [manualStopEdited, setManualStopEdited] = useState(false)
 
   // Confirm state
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleteIdx, setDeleteIdx] = useState(-1)
   const [deleteName, setDeleteName] = useState('')
 
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>()
+  const stopRequestSeq = useRef(0)
+  const searchRequestSeq = useRef(0)
+  const manualStopEditedRef = useRef(false)
 
   useEffect(() => { loadData() }, [])
   useEffect(() => {
@@ -259,8 +262,9 @@ export default function Holdings() {
     setEditIdx(-1); setSelectedStock(null); setSearchQ(''); setModalDirection('')
     setModalRatio(''); setModalStopLoss(''); setOriginalModalStopLoss(''); setModalBuyPrice('')
     setModalBuyDate(localToday()); setCachedPrice(null)
-    setModalSignalType('自动识别')
     setStopRecommendation(null)
+    setStopRecommendationError('')
+    setManualStopEdited(false); manualStopEditedRef.current = false
     setSearchResults([]); setModalOpen(true)
     loadDirections()
   }
@@ -274,9 +278,10 @@ export default function Holdings() {
     setModalRatio(String(h.ratio || '')); setModalStopLoss(savedStop); setOriginalModalStopLoss(savedStop)
     setModalBuyPrice(h.buy_price ? String(h.buy_price) : '')
     setModalBuyDate(h.buy_date || '')
-    setModalSignalType(h.entry_signal_type || '自动识别')
     setCachedPrice(h.price ?? null); setSearchResults([])
     setStopRecommendation(null)
+    setStopRecommendationError('')
+    setManualStopEdited(false); manualStopEditedRef.current = false
     setModalOpen(true)
     loadDirections()
   }
@@ -285,63 +290,96 @@ export default function Holdings() {
 
   function handleSearch(q: string) {
     setSearchQ(q)
+    const requestSeq = ++searchRequestSeq.current
     if (q.length < 1) { setSearchResults([]); return }
     ;(async () => {
       try {
         const r = await fetch('/api/directions/stocks?q=' + encodeURIComponent(q))
         const d = await r.json()
-        setSearchResults((d.stocks || []).slice(0, 10))
+        if (requestSeq === searchRequestSeq.current) {
+          setSearchResults((d.stocks || []).slice(0, 10))
+        }
       } catch {
-        setSearchResults([])
+        if (requestSeq === searchRequestSeq.current) setSearchResults([])
       }
     })()
   }
 
-  function selectStock(name: string, code: string, price: number) {
+  function selectStock(name: string, code: string, price: number, direction?: string) {
     setSelectedStock({ name, code })
     setSearchQ(name); setSearchResults([])
-    if (price > 0) setCachedPrice(price)
-    else setCachedPrice(null)
+    if (price > 0) {
+      setCachedPrice(price)
+      setModalBuyPrice(String(price))
+    }
+    else { setCachedPrice(null); setModalBuyPrice('') }
+    setModalDirection(direction || '')
+    if (direction) {
+      setDirections(current => current.includes(direction) ? current : [...current, direction])
+    }
     setStopRecommendation(null)
+    setStopRecommendationError('')
+    setModalStopLoss(''); setOriginalModalStopLoss('')
+    setManualStopEdited(false); manualStopEditedRef.current = false
   }
 
-  async function calculateStopRecommendation() {
-    if (!selectedStock) { showToast('请先选择股票', true); return }
-    setStopRecommendationLoading(true)
-    setStopRecommendation(null)
-    try {
-      const previous = editIdx >= 0 ? data?.holdings[editIdx] : undefined
-      const usePersistedEntry = Boolean(
-        previous && modalBuyDate === (previous.buy_date || '')
-        && Number(modalBuyPrice || 0) === Number(previous.buy_price || 0)
-        && (modalSignalType === '自动识别' || modalSignalType === previous.entry_signal_type)
-      )
-      const r = await fetch('/api/holdings/recommended-stop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: selectedStock.code,
-          buy_date: modalBuyDate || null,
-          buy_price: modalBuyPrice ? parseFloat(modalBuyPrice) : null,
-          current_stop: modalStopLoss ? parseFloat(modalStopLoss) : null,
-          entry_signal_type: usePersistedEntry
-            ? previous?.entry_signal_type || modalSignalType
-            : modalSignalType,
-          entry_signal_date: usePersistedEntry ? previous?.entry_signal_date || null : null,
-          entry_anchor_price: usePersistedEntry ? previous?.entry_anchor_price || null : null,
-          original_stop_loss_price: usePersistedEntry ? previous?.original_stop_loss_price || null : null,
-        }),
-      })
-      const d = await r.json()
-      if (!d.success) { showToast(d.error || '无法获取止损建议', true); return }
-      setStopRecommendation(d)
-      if (d.price) setCachedPrice(d.price)
-    } catch {
-      showToast('止损建议请求失败', true)
-    } finally {
+  useEffect(() => {
+    const buyPrice = Number(modalBuyPrice)
+    if (!modalOpen || !selectedStock || !modalBuyDate || !Number.isFinite(buyPrice) || buyPrice <= 0) {
+      stopRequestSeq.current += 1
       setStopRecommendationLoading(false)
+      return
     }
-  }
+
+    const requestSeq = ++stopRequestSeq.current
+    setStopRecommendationLoading(true)
+    setStopRecommendationError('')
+    setStopRecommendation(null)
+    const timer = setTimeout(async () => {
+      try {
+        const previous = editIdx >= 0 ? data?.holdings[editIdx] : undefined
+        const usePersistedEntry = Boolean(
+          previous && modalBuyDate === (previous.buy_date || '')
+          && buyPrice === Number(previous.buy_price || 0)
+        )
+        const r = await fetch('/api/holdings/recommended-stop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: selectedStock.code,
+            buy_date: modalBuyDate,
+            buy_price: buyPrice,
+            current_stop: (manualStopEditedRef.current ? modalStopLoss : originalModalStopLoss)
+              ? parseFloat(manualStopEditedRef.current ? modalStopLoss : originalModalStopLoss)
+              : null,
+            entry_signal_type: usePersistedEntry ? previous?.entry_signal_type || null : null,
+            entry_signal_date: usePersistedEntry ? previous?.entry_signal_date || null : null,
+            entry_anchor_price: usePersistedEntry ? previous?.entry_anchor_price || null : null,
+            original_stop_loss_price: usePersistedEntry ? previous?.original_stop_loss_price || null : null,
+          }),
+        })
+        const d = await r.json()
+        if (requestSeq !== stopRequestSeq.current) return
+        if (!d.success) {
+          setStopRecommendationError(d.error || '数据不足，请手工填写止损')
+          return
+        }
+        setStopRecommendation(d)
+        if (d.price) setCachedPrice(d.price)
+        if (Number(d.stop_loss) > 0 && !manualStopEditedRef.current) {
+          setModalStopLoss(String(d.stop_loss))
+          setManualStopEdited(false)
+        }
+      } catch {
+        if (requestSeq === stopRequestSeq.current) setStopRecommendationError('止损建议请求失败，请手工填写止损')
+      } finally {
+        if (requestSeq === stopRequestSeq.current) setStopRecommendationLoading(false)
+      }
+    }, 350)
+
+    return () => clearTimeout(timer)
+    // 止损输入不参与依赖：自动建议只由股票、买入日期和买入价触发，避免覆盖用户随后手工修正的止损。
+  }, [modalOpen, selectedStock?.code, modalBuyDate, modalBuyPrice, editIdx])
 
   function calcStopLossPct(): string {
     const slVal = parseFloat(modalStopLoss)
@@ -361,20 +399,28 @@ export default function Holdings() {
     if (isNaN(ratio) || ratio <= 0) { alert('请输入有效仓位比例'); return }
     const slVal = modalStopLoss.trim() !== '' ? parseFloat(modalStopLoss) : null
     if (slVal !== null && (isNaN(slVal) || slVal <= 0)) { alert('请输入有效止损价'); return }
+    const previous = editIdx >= 0 ? data?.holdings[editIdx] : undefined
+    const previousStop = previous?.stop_loss_price
+    if (previousStop != null && (slVal == null || slVal < previousStop)) {
+      alert(`已有止损 ${previousStop.toFixed(2)} 元只能维持或上调；如需纠正原始录入，请删除该持仓后重新添加`)
+      return
+    }
 
     setModalSaving(true)
     try {
       const holdings = [...(data?.holdings || [])]
-      const previous = editIdx >= 0 ? data?.holdings[editIdx] : undefined
       const preservingEntryMetadata = Boolean(
         previous && modalBuyDate === (previous.buy_date || '')
         && Number(modalBuyPrice || 0) === Number(previous.buy_price || 0)
-        && (modalSignalType === '自动识别' || modalSignalType === previous.entry_signal_type)
       )
       const adoptedRecommendation = Boolean(
-        stopRecommendation && Number(modalStopLoss) === stopRecommendation.stop_loss
+        stopRecommendation && !manualStopEdited
+        && Number(modalStopLoss) === stopRecommendation.stop_loss
       )
-      const stopWasManuallyChanged = modalStopLoss !== originalModalStopLoss && !adoptedRecommendation
+      const stopWasManuallyChanged = manualStopEdited
+      const stopValueUnchanged = Boolean(
+        previous && previous.stop_loss_price != null && slVal === previous.stop_loss_price
+      )
       const item: HoldingItem = {
         name: selectedStock.name, code: selectedStock.code,
         ratio, direction: modalDirection, stop_loss_price: slVal,
@@ -383,16 +429,17 @@ export default function Holdings() {
         sector: previous?.sector || '', structure: '--', stage: '--',
         buy_date: modalBuyDate || null,
         entry_signal_type: stopRecommendation?.entry_signal_type
-          || (modalSignalType === '自动识别' ? previous?.entry_signal_type || null : modalSignalType),
+          || (preservingEntryMetadata ? previous?.entry_signal_type || null : null),
         entry_signal_date: stopRecommendation?.entry_signal_type
           ? (stopRecommendation.buy_date_used || modalBuyDate)
           : (preservingEntryMetadata ? previous?.entry_signal_date || null : null),
         entry_anchor_price: stopRecommendation?.initial_stop_anchor?.price
           ?? (preservingEntryMetadata ? previous?.entry_anchor_price || null : null),
-        stop_loss_source: adoptedRecommendation
-          ? stopRecommendation.recommendation_type
+        stop_loss_source: stopValueUnchanged
+          ? previous?.stop_loss_source || null
           : (stopWasManuallyChanged ? 'manual'
-            : (preservingEntryMetadata ? previous?.stop_loss_source || null : 'manual')),
+            : (adoptedRecommendation ? stopRecommendation.recommendation_type
+              : (preservingEntryMetadata ? previous?.stop_loss_source || null : 'manual'))),
         original_stop_loss_price: stopRecommendation?.initial_stop
           ?? (preservingEntryMetadata ? previous?.original_stop_loss_price || null : null),
       }
@@ -631,7 +678,7 @@ export default function Holdings() {
                 {searchResults.length > 0 && (
                   <div className="search-results">
                     {searchResults.map((s: any) => (
-                      <div key={s.code} className="result-item" onClick={() => selectStock(s.name, s.code, s.price || 0)}>
+                      <div key={s.code} className="result-item" onClick={() => selectStock(s.name, s.code, s.price || 0, s.direction)}>
                         <span>{s.name} <span style={{ color: '#4ecdc4', fontSize: 11 }}>{s.price ? s.price.toFixed(2) : ''}</span></span>
                         <span className="ri-code">{s.code}</span>
                       </div>
@@ -656,6 +703,9 @@ export default function Holdings() {
               <label htmlFor="holding-direction">方向</label>
               <select id="holding-direction" value={modalDirection} onChange={e => setModalDirection(e.target.value)}>
                 <option value="">请选择方向</option>
+                {modalDirection && !directions.includes(modalDirection) && (
+                  <option value={modalDirection}>{modalDirection}</option>
+                )}
                 {directions.map(d => (
                   <option key={d} value={d}>{d}</option>
                 ))}
@@ -688,32 +738,32 @@ export default function Holdings() {
             </div>
 
             <div className="form-row">
-              <label htmlFor="holding-entry-signal">建仓买点类型</label>
-              <select id="holding-entry-signal" value={modalSignalType}
-                onChange={e => { setModalSignalType(e.target.value); setStopRecommendation(null) }}>
-                <option value="自动识别">自动识别</option>
-                <option value="突破买点">突破买点</option>
-                <option value="中继买点">中继买点</option>
-                <option value="反转买点">反转买点</option>
-                <option value="恐慌买点">恐慌买点</option>
-                <option value="手工设置">手工设置</option>
-              </select>
-              <div className="hint">买点类型决定“什么价格行为证明建仓逻辑失效”；自动识别只使用买入日及之前数据。</div>
+              <label>建仓买点识别</label>
+              <div data-testid="entry-signal-status" style={{ color: stopRecommendation?.entry_signal_type ? '#4ecdc4' : '#aaa', fontWeight: 600 }}>
+                {stopRecommendationLoading
+                  ? '识别中…'
+                  : stopRecommendation?.entry_signal_type || (stopRecommendation ? '无买点' : '等待股票、买入日期和买入价')}
+              </div>
+              <div className="hint">系统只使用买入日及之前的数据自动识别；没有符合 3L 定义的信号时显示“无买点”。</div>
             </div>
 
             <div className="form-row">
               <label htmlFor="holding-stop-loss">止损价 (元) — <span style={{ color: '#888' }}>不填则不设止损</span></label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input id="holding-stop-loss" type="number" step="0.01" min="0" placeholder="0.00"
-                  value={modalStopLoss} onChange={e => { setModalStopLoss(e.target.value); setStopRecommendation(null) }}
+                  value={modalStopLoss} onChange={e => {
+                    setModalStopLoss(e.target.value)
+                    setManualStopEdited(true); manualStopEditedRef.current = true
+                  }}
                   style={{ flex: 1 }} />
-                <button className="btn-sm" onClick={calculateStopRecommendation}
-                  disabled={stopRecommendationLoading}
-                  style={{ padding: '6px 12px', fontSize: 12, background: '#4ecdc4', color: '#000',
-                    border: 'none', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                >{stopRecommendationLoading ? '计算中...' : '计算止损建议'}</button>
               </div>
+              <div className="hint">股票、买入日期和买入价确定后自动计算并默认采用；你仍可手工修正。已有持仓只维持或上调保护位。</div>
               <div className="hint" dangerouslySetInnerHTML={{ __html: calcStopLossPct() }} />
+              {stopRecommendationError && (
+                <div className="hint" role="alert" style={{ color: '#ffd700' }}>
+                  {stopRecommendationError}；系统未覆盖已有止损。
+                </div>
+              )}
               {stopRecommendation && (
                 <div className="stop-recommendation" data-testid="stop-recommendation">
                   <div><strong>建议 {stopRecommendation.stop_loss.toFixed(2)} 元</strong>（距现价 {stopRecommendation.stop_loss_pct.toFixed(2)}%）</div>
@@ -737,23 +787,14 @@ export default function Holdings() {
                       {stopRecommendation.protective_anchor?.date ? `（${stopRecommendation.protective_anchor.date}）` : ''}
                     </div>
                   )}
-                  {Number(modalStopLoss) !== stopRecommendation.stop_loss && (
-                    <button type="button" className="btn-apply-stop"
-                      onClick={() => {
-                        setModalStopLoss(String(stopRecommendation.stop_loss))
-                        if (stopRecommendation.entry_signal_type) setModalSignalType(stopRecommendation.entry_signal_type)
-                      }}>
-                      采用建议
-                    </button>
-                  )}
                 </div>
               )}
             </div>
 
             <div className="btn-row">
               <button className="btn-cancel" onClick={closeModal}>取消</button>
-              <button className="btn-save" onClick={saveModal} disabled={modalSaving}>
-                {modalSaving ? '保存中...' : '保存'}
+              <button className="btn-save" onClick={saveModal} disabled={modalSaving || stopRecommendationLoading}>
+                {modalSaving ? '保存中...' : stopRecommendationLoading ? '自动计算中...' : '保存'}
               </button>
             </div>
           </div>

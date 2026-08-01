@@ -108,6 +108,27 @@ def test_save_rejects_invalid_price_and_future_date_without_writing():
     assert '买入日期不能晚于今天' in holdings_service.save_holdings(future)['error']
 
 
+def test_save_rejects_lowering_or_removing_existing_stop(monkeypatch):
+    monkeypatch.setattr(holdings_service, 'get_holdings', lambda: {
+        'cash_ratio': 90,
+        'holdings': [{'code': '000001', 'stop_loss_price': 100}],
+    })
+    base = {
+        'cash_ratio': 90,
+        'holdings': [{'code': '000001', 'name': '测试', 'ratio': 10}],
+    }
+
+    lowered = holdings_service.save_holdings({
+        **base,
+        'holdings': [{**base['holdings'][0], 'stop_loss_price': 90}],
+    })
+    removed = holdings_service.save_holdings(base)
+
+    assert lowered['success'] is False
+    assert removed['success'] is False
+    assert '止损不得低于已保存值 100.00' in lowered['error']
+
+
 def test_reversal_stop_uses_signal_kline_low_and_has_no_same_day_raise(monkeypatch):
     rows = _klines()
     rows[-1].update(low=287.98, close=303.65)

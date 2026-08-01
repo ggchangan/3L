@@ -62,7 +62,7 @@ describe('MarketCycle dynamic position strategy', () => {
           position_mode: 'defensive', position_action: '暂停新增仓位，先执行卖出与止损计划',
           current_position_pct: 50, planned_exit_pct: 10, position_after_exits_pct: 40,
           executable_buy_count: 0,
-          allowed_buy_points: ['恐慌买点', '供应衰竭买点', '明确反转买点'],
+          allowed_buy_points: ['天量滞跌恐慌买点', '明确反转买点'],
           avoid_buy_points: ['普通突破追涨'],
           holding_style: '缩短交易周期，只保留强方向和强个股',
           exit_style: '收紧止盈和止损',
@@ -79,7 +79,7 @@ describe('MarketCycle dynamic position strategy', () => {
     expect(screen.getAllByText('波中').length).toBeGreaterThan(0)
     expect(screen.getByText('50% → 40%')).toBeTruthy()
     expect(screen.getByText('明确卖出 10%')).toBeTruthy()
-    expect(screen.getByText(/适用买点：恐慌买点、供应衰竭买点、明确反转买点/)).toBeTruthy()
+    expect(screen.getByText(/适用买点：天量滞跌恐慌买点、明确反转买点/)).toBeTruthy()
     expect(screen.queryByText(/建议仓位/)).toBeNull()
     expect(screen.queryByText(/七至八成/)).toBeNull()
   })

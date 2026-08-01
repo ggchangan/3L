@@ -1037,7 +1037,7 @@ MARKET_BUY_POINT_POLICY = {
     'weak': {
         'label': '弱势市场',
         'allowed_categories': {'panic', 'reversal'},
-        'allowed_labels': ['恐慌买点', '供应衰竭买点', '明确反转买点'],
+        'allowed_labels': ['天量滞跌恐慌买点', '明确反转买点'],
         'avoid_labels': ['普通突破追涨', '下降途中的缩量低吸'],
     },
     'unknown': {
@@ -1052,7 +1052,7 @@ BUY_POINT_CATEGORY_LABELS = {
     'breakout': '突破买点',
     'continuation': '中继/回踩买点',
     'reversal': '反转买点',
-    'panic': '恐慌/供应衰竭买点',
+    'panic': '恐慌买点（天量滞跌）',
     'unknown': '未识别买点',
 }
 
@@ -1078,7 +1078,7 @@ def _classify_buy_point(item):
         return 'continuation'
 
     # 先判定语义更严格的左侧/反转信号，避免“恐慌后反转”被普通突破覆盖。
-    if 'supply_exhaustion' in signal_keys or any(token in text for token in ('恐慌', '供应衰竭')):
+    if 'panic_stagnation' in signal_keys or '恐慌' in text:
         return 'panic'
     if 'upward_reversal' in signal_keys or any(token in text for token in ('向上反转', '明确反转', '反转买点')):
         return 'reversal'
@@ -1126,8 +1126,17 @@ def _market_buy_compatibility(item, market_regime, risk_phase):
             return False, '震荡市场的突破买点需要区间顶部有效突破', category
     elif market_regime == 'weak':
         reversal_evidence = any(
-            signal.get('key') in ('upward_reversal', 'supply_exhaustion')
-            and float((signal.get('scores') or {}).get('drawdown_pct', 0) or 0) <= -7
+            (
+                signal.get('key') == 'upward_reversal'
+                and float((signal.get('scores') or {}).get('drawdown_pct', 0) or 0) <= -7
+            ) or (
+                signal.get('key') == 'panic_stagnation'
+                and bool((signal.get('scores') or {}).get('near_20d_low'))
+                and (
+                    float((signal.get('scores') or {}).get('background_loss_pct', 0) or 0) <= -3
+                    or bool((signal.get('scores') or {}).get('breaks_20d_low'))
+                )
+            )
             for signal in item.get('triggered_signals', [])
         )
         if not (
@@ -1330,8 +1339,8 @@ def _build_buy_condition_plan(item):
             '反转确认失败、再次放量创新低或供应重新占优时',
         ),
         'panic': (
-            '恐慌释放后停止创新低，并出现供应衰竭和需求进入确认时',
-            '恐慌下跌延续、继续放量创新低或没有需求确认时',
+            '下降末端或区间底部出现天量，急跌后不收在最低并形成锤头、小实体或明显收回时',
+            '未达到天量、仍收在日内最低，或随后跌破恐慌K线低点时',
         ),
         'unknown': (
             '买点类型、市场门禁和方向优先级全部确认后',
@@ -1730,7 +1739,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     elif market_regime == 'weak' and tier_counts['focus'] and not any(
         item.get('decision_status') == 'executable' for item in plan['buy_priority']
     ):
-        conclusion = '当前为弱势市场，重点信号需符合恐慌、供应衰竭或明确反转买点后才可执行。'
+        conclusion = '当前为弱势市场，重点信号需符合天量滞跌的恐慌买点或明确反转买点后才可执行。'
     elif tier_counts['focus']:
         conclusion = f'优先跟踪 {tier_counts["focus"]} 个主线/强动量买点。'
     elif tier_counts['watch']:
