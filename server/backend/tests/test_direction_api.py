@@ -84,9 +84,16 @@ class TestApiGet:
         assert 'categories' in h.sent
         assert 'sub_directions' in h.sent
         assert 'active' in h.sent
+        assert 'active_ordered' in h.sent
         assert 'version' in h.sent
         assert '科技' in str(h.sent['categories'])
         assert '科技.半导体' in h.sent['sub_directions']
+        assert h.sent['active_ordered'] == ['科技.半导体', '科技.算力', '医药.创新药']
+
+        ds.set_sub_direction_enabled('科技', '半导体', False)
+        disabled = MockHandler()
+        api._handle_get(disabled, '/api/directions/get')
+        assert disabled.sent['active_ordered'] == ['科技.算力', '医药.创新药']
 
     def test_get_empty_state(self, ds, api):
         h = MockHandler()
@@ -95,6 +102,7 @@ class TestApiGet:
         assert h.sent['categories'] == []
         assert h.sent['sub_directions'] == {}
         assert h.sent['active'] == []
+        assert h.sent['active_ordered'] == []
         assert h.sent['version'] == 2
 
 

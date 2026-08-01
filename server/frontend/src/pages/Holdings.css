@@ -148,6 +148,38 @@
   border: 1px solid #2a2a4e; border-radius: 8px;
   padding: 8px 12px; font-size: 14px; box-sizing: border-box;
 }
+
+.modal .form-row input[type="date"] {
+  color-scheme: dark;
+}
+
+.modal .form-row input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: .85;
+}
+
+.stop-recommendation {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(78, 205, 196, .35);
+  border-radius: 7px;
+  background: rgba(78, 205, 196, .07);
+  color: #aaa;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.stop-recommendation strong { color: #4ecdc4; }
+
+.btn-apply-stop {
+  margin-top: 7px;
+  padding: 5px 12px;
+  border: 1px solid #4ecdc4;
+  border-radius: 5px;
+  background: transparent;
+  color: #4ecdc4;
+  cursor: pointer;
+}
 .modal .form-row input:focus, .modal .form-row select:focus {
   border-color: #4ecdc4; outline: none;
 }
