@@ -490,6 +490,7 @@ def _refresh_review_cache(target_date):
     """同步生成复盘缓存，保证命令退出前页面已经可用。"""
     from backend.services.review_service import (
         compute_review_real_time, review_refresh_file_lock, save_review_data,
+        save_review_snapshot,
     )
     from backend.services.market_temperature_service import invalidate_market_temperature_cache
 
@@ -501,6 +502,7 @@ def _refresh_review_cache(target_date):
         review = compute_review_real_time(date_str)
         review['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
         save_review_data(review)
+        save_review_snapshot(review)
     log('✅  当日复盘缓存已生成')
 
 
