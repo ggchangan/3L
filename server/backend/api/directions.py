@@ -326,10 +326,27 @@ def _handle_get(h, path):
             {'code': codes[i], 'name': names[i]} if i < len(names) else {'code': codes[i], 'name': codes[i]}
             for i in range(len(codes))
         ]
+    category_order = {item['name']: item['order'] for item in categories_arr}
+    active_ordered = [
+        key for key, sd in sorted(
+            sub_dirs.items(),
+            key=lambda item: (
+                category_order.get(item[1].get('category', ''), 10_000),
+                item[1].get('order', 10_000),
+                item[0],
+            ),
+        )
+        if sd.get('enabled', True)
+        and next(
+            (cat['enabled'] for cat in categories_arr if cat['name'] == sd.get('category')),
+            True,
+        )
+    ]
     h.send_json({
         'categories': categories_arr,
         'sub_directions': sub_dirs,
         'active': get_active(),
+        'active_ordered': active_ordered,
         'version': 2,
     })
 

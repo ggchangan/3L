@@ -1,10 +1,10 @@
 """
 持仓/交易服务 — 持仓、交易数据读写
 """
-import json, os, requests, tempfile
+import json, math, os, requests, tempfile
 from backend.core.logger import get_logger
 log = get_logger(__name__)
-from datetime import datetime
+from datetime import date, datetime
 from backend.core.config import HOLDINGS_PATH, TRADES_PATH
 
 # ── 个股持仓卡片缓存（个股粒度，K线不变不重算）──
@@ -44,6 +44,119 @@ def _get_cached_card(code):
     if code in _CARD_CACHE and now < _CARD_CACHE_EXPIRY.get(code, 0):
         return _CARD_CACHE[code]
     return None
+
+
+def _kline_date(kline):
+    return str(kline.get('date', '')).replace('-', '')
+
+
+def get_stop_loss_recommendation(code, buy_date=None, buy_price=None, current_stop=None):
+    """计算持仓止损建议，但不修改用户保存的手工止损。
+
+    初始止损使用买入日之前可见的 K 线和买入价；保护止损使用最新价格结构。
+    已有止损只允许上移，不能被建议值下调。
+    """
+    from backend.data_access.data_layer import get_stock_klines
+    from backend.core.buy_point_detection import calc_stop_loss
+
+    klines = get_stock_klines(code)
+    if not klines or len(klines) < 11:
+        return {'success': False, 'error': 'K线数据不足，无法计算止损建议'}
+
+    current_idx = len(klines) - 1
+    current_price = float(klines[current_idx]['close'])
+    try:
+        existing = float(current_stop) if current_stop not in (None, '') else None
+        cost = float(buy_price) if buy_price not in (None, '') else None
+    except (TypeError, ValueError):
+        return {'success': False, 'error': '买入价或当前止损不是有效数字'}
+    if any(value is not None and not math.isfinite(value) for value in (existing, cost)):
+        return {'success': False, 'error': '买入价或当前止损不是有效数字'}
+    if existing is not None and existing <= 0:
+        return {'success': False, 'error': '当前止损必须大于0'}
+    if cost is not None and cost <= 0:
+        return {'success': False, 'error': '买入价必须大于0'}
+
+    initial_stop = None
+    raw_buy_date_text = str(buy_date or '')
+    normalized_buy_date = raw_buy_date_text.replace('-', '')
+    parsed_buy_date = None
+    if normalized_buy_date:
+        try:
+            parsed_buy_date = datetime.strptime(raw_buy_date_text, '%Y-%m-%d').date()
+        except ValueError:
+            return {'success': False, 'error': '买入日期格式应为 YYYY-MM-DD'}
+        if parsed_buy_date.isoformat() != raw_buy_date_text:
+            return {'success': False, 'error': '买入日期格式应为 YYYY-MM-DD'}
+        if parsed_buy_date > date.today():
+            return {'success': False, 'error': '买入日期不能晚于今天'}
+    buy_date_used = None
+    if normalized_buy_date and cost and cost > 0:
+        eligible = [i for i, k in enumerate(klines) if _kline_date(k) <= normalized_buy_date]
+        if not eligible:
+            return {'success': False, 'error': '买入日期早于现有K线范围'}
+        buy_idx = eligible[-1]
+        buy_date_used = _kline_date(klines[buy_idx])
+        buy_date_used = f'{buy_date_used[:4]}-{buy_date_used[4:6]}-{buy_date_used[6:]}'
+        initial_stop, _ = calc_stop_loss(
+            klines, buy_idx, close_price=cost, cost_price=cost,
+            buy_date=normalized_buy_date,
+        )
+        if initial_stop is not None:
+            initial_stop = round(float(initial_stop), 2)
+
+    protective_stop, _ = calc_stop_loss(klines, current_idx, close_price=current_price)
+    if protective_stop is not None:
+        protective_stop = round(float(protective_stop), 2)
+        if protective_stop >= current_price:
+            protective_stop = None
+
+    if existing is not None and existing >= current_price:
+        recommendation = existing
+        recommendation_type = 'stop_reached'
+        reason = '现价已到达或跌破手工止损，应先执行风险处置，不应继续放宽止损'
+    elif existing is not None:
+        if protective_stop is not None and protective_stop > existing:
+            recommendation = protective_stop
+            recommendation_type = 'raise_protective_stop'
+            reason = '最新价格结构已抬高，建议上移保护止损；不会自动覆盖手工值'
+        else:
+            recommendation = existing
+            recommendation_type = 'keep_current_stop'
+            reason = '当前结构尚未支持上移止损，建议维持现有手工止损'
+    elif initial_stop is not None:
+        if initial_stop >= current_price:
+            recommendation = initial_stop
+            recommendation_type = 'stop_reached'
+            reason = '现价已到达或跌破按建仓结构计算的初始止损，应先执行风险处置'
+        elif protective_stop is not None and protective_stop > initial_stop:
+            recommendation = protective_stop
+            recommendation_type = 'protective_stop'
+            reason = '持仓结构已较建仓时抬高，建议采用更高的当前结构保护位'
+        else:
+            recommendation = initial_stop
+            recommendation_type = 'initial_risk_stop'
+            reason = '根据买入日期、买入价及当时可见K线计算初始风险止损'
+    elif protective_stop is not None:
+        recommendation = protective_stop
+        recommendation_type = 'structure_stop'
+        reason = '缺少完整买入信息，按最新价格结构计算参考止损'
+    else:
+        return {'success': False, 'error': '当前数据无法形成有效止损建议'}
+
+    return {
+        'success': True,
+        'stop_loss': round(float(recommendation), 2),
+        'recommendation_type': recommendation_type,
+        'reason': reason,
+        'price': round(current_price, 2),
+        'initial_stop': initial_stop,
+        'buy_date_used': buy_date_used,
+        'protective_stop': protective_stop,
+        'current_stop': existing,
+        'can_raise': recommendation_type == 'raise_protective_stop',
+        'stop_loss_pct': round((float(recommendation) - current_price) / current_price * 100, 2),
+    }
 
 # ── 公共函数 ────────────────────────────────────────
 
@@ -210,6 +323,35 @@ def save_holdings(data):
     holdings = data.get('holdings', [])
     if not isinstance(holdings, list):
         return {'success': False, 'error': 'holdings 必须为列表'}
+
+    for idx, holding in enumerate(holdings, start=1):
+        if not isinstance(holding, dict):
+            return {'success': False, 'error': f'第 {idx} 条持仓格式无效'}
+        for field, label in (
+            ('buy_price', '买入价'),
+            ('stop_loss_price', '止损价'),
+        ):
+            raw = holding.get(field)
+            if raw in (None, ''):
+                continue
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                return {'success': False, 'error': f'第 {idx} 条持仓的{label}不是有效数字'}
+            if not math.isfinite(value) or value <= 0:
+                return {'success': False, 'error': f'第 {idx} 条持仓的{label}必须为大于0的有限数字'}
+
+        raw_buy_date = holding.get('buy_date')
+        if raw_buy_date not in (None, ''):
+            try:
+                raw_buy_date_text = str(raw_buy_date)
+                parsed = datetime.strptime(raw_buy_date_text, '%Y-%m-%d').date()
+            except ValueError:
+                return {'success': False, 'error': f'第 {idx} 条持仓的买入日期格式应为 YYYY-MM-DD'}
+            if parsed.isoformat() != raw_buy_date_text:
+                return {'success': False, 'error': f'第 {idx} 条持仓的买入日期格式应为 YYYY-MM-DD'}
+            if parsed > date.today():
+                return {'success': False, 'error': f'第 {idx} 条持仓的买入日期不能晚于今天'}
 
     cash_ratio = data.get('cash_ratio', 100)
     if not isinstance(cash_ratio, (int, float)):

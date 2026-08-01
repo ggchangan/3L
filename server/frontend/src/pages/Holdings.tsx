@@ -19,6 +19,19 @@ interface HoldingsData {
   update_date?: string
 }
 
+interface StopRecommendation {
+  stop_loss: number
+  recommendation_type: string
+  reason: string
+  price: number
+  initial_stop: number | null
+  buy_date_used: string | null
+  protective_stop: number | null
+  current_stop: number | null
+  can_raise: boolean
+  stop_loss_pct: number
+}
+
 const PIE_COLORS = [
   '#e94560', '#2196f3', '#4CAF50', '#ff9800', '#a855f7',
   '#00bcd4', '#ff5722', '#8bc34a', '#e91e63', '#3f51b5',
@@ -30,6 +43,11 @@ const STAGE_COLORS: Record<string, string> = {
   '滞涨': '#ff6b6b', '转弱': '#ff6b6b', '下行': '#666',
   '加速跌': '#e94560', '转强': '#4ecdc4',
   '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560',
+}
+
+function localToday(): string {
+  const now = new Date()
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().split('T')[0]
 }
 
 export default function Holdings() {
@@ -53,6 +71,8 @@ export default function Holdings() {
   const [modalBuyDate, setModalBuyDate] = useState('')
   const [directions, setDirections] = useState<string[]>([])
   const [cachedPrice, setCachedPrice] = useState<number | null>(null)
+  const [stopRecommendation, setStopRecommendation] = useState<StopRecommendation | null>(null)
+  const [stopRecommendationLoading, setStopRecommendationLoading] = useState(false)
 
   // Confirm state
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -87,7 +107,9 @@ export default function Holdings() {
       const r = await fetch('/api/directions/get')
       const d = await r.json()
       // 新分层格式：active 数组；旧格式：directions 字典
-      if (d.active && d.active.length > 0) {
+      if (d.active_ordered && d.active_ordered.length > 0) {
+        setDirections(d.active_ordered)
+      } else if (d.active && d.active.length > 0) {
         setDirections(d.active)
       } else {
         const dirs = Object.keys(d.directions || {})
@@ -223,7 +245,8 @@ export default function Holdings() {
   function openAddModal() {
     setEditIdx(-1); setSelectedStock(null); setSearchQ(''); setModalDirection('')
     setModalRatio(''); setModalStopLoss(''); setModalBuyPrice('')
-    setModalBuyDate(new Date().toISOString().split('T')[0]); setCachedPrice(null)
+    setModalBuyDate(localToday()); setCachedPrice(null)
+    setStopRecommendation(null)
     setSearchResults([]); setModalOpen(true)
     loadDirections()
   }
@@ -235,8 +258,9 @@ export default function Holdings() {
     setSearchQ(''); setModalDirection(h.direction || '')
     setModalRatio(String(h.ratio || '')); setModalStopLoss(h.stop_loss_price ? String(h.stop_loss_price) : '')
     setModalBuyPrice(h.buy_price ? String(h.buy_price) : '')
-    setModalBuyDate(h.buy_date || new Date().toISOString().split('T')[0])
+    setModalBuyDate(h.buy_date || '')
     setCachedPrice(h.price ?? null); setSearchResults([])
+    setStopRecommendation(null)
     setModalOpen(true)
     loadDirections()
   }
@@ -262,6 +286,33 @@ export default function Holdings() {
     setSearchQ(name); setSearchResults([])
     if (price > 0) setCachedPrice(price)
     else setCachedPrice(null)
+    setStopRecommendation(null)
+  }
+
+  async function calculateStopRecommendation() {
+    if (!selectedStock) { showToast('请先选择股票', true); return }
+    setStopRecommendationLoading(true)
+    setStopRecommendation(null)
+    try {
+      const r = await fetch('/api/holdings/recommended-stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: selectedStock.code,
+          buy_date: modalBuyDate || null,
+          buy_price: modalBuyPrice ? parseFloat(modalBuyPrice) : null,
+          current_stop: modalStopLoss ? parseFloat(modalStopLoss) : null,
+        }),
+      })
+      const d = await r.json()
+      if (!d.success) { showToast(d.error || '无法获取止损建议', true); return }
+      setStopRecommendation(d)
+      if (d.price) setCachedPrice(d.price)
+    } catch {
+      showToast('止损建议请求失败', true)
+    } finally {
+      setStopRecommendationLoading(false)
+    }
   }
 
   function calcStopLossPct(): string {
@@ -536,7 +587,6 @@ export default function Holdings() {
                     ))}
                   </div>
                 )}
-                <div style={{ fontSize: 10, color: '#555', marginTop: 2 }}>debug: q="{searchQ}" hits={searchResults.length}</div>
               </div>
             )}
 
@@ -552,8 +602,8 @@ export default function Holdings() {
             </div>
 
             <div className="form-row">
-              <label>方向</label>
-              <select value={modalDirection} onChange={e => setModalDirection(e.target.value)}>
+              <label htmlFor="holding-direction">方向</label>
+              <select id="holding-direction" value={modalDirection} onChange={e => setModalDirection(e.target.value)}>
                 <option value="">请选择方向</option>
                 {directions.map(d => (
                   <option key={d} value={d}>{d}</option>
@@ -562,15 +612,17 @@ export default function Holdings() {
             </div>
 
             <div className="form-row">
-              <label>买入日期</label>
-              <input type="date" value={modalBuyDate} onChange={e => setModalBuyDate(e.target.value)} />
+              <label htmlFor="holding-buy-date">买入日期</label>
+              <input id="holding-buy-date" type="date" max={localToday()}
+                value={modalBuyDate} onChange={e => { setModalBuyDate(e.target.value); setStopRecommendation(null) }} />
+              <div className="hint">用于还原买入当日可见的价格结构，计算初始风险止损</div>
             </div>
 
             <div className="form-row">
               <label>买入价格 (元)</label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input type="number" step="0.01" min="0" placeholder="0.00"
-                  value={modalBuyPrice} onChange={e => setModalBuyPrice(e.target.value)}
+                  value={modalBuyPrice} onChange={e => { setModalBuyPrice(e.target.value); setStopRecommendation(null) }}
                   style={{ flex: 1 }} />
                 <span style={{ fontSize: 11, color: '#888' }}>
                   当前价: {cachedPrice !== null ? cachedPrice.toFixed(2) : '--'}
@@ -585,42 +637,38 @@ export default function Holdings() {
             </div>
 
             <div className="form-row">
-              <label>止损价 (元) — <span style={{ color: '#888' }}>不填则不设止损</span></label>
+              <label htmlFor="holding-stop-loss">止损价 (元) — <span style={{ color: '#888' }}>不填则不设止损</span></label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="number" step="0.01" min="0" placeholder="0.00"
-                  value={modalStopLoss} onChange={e => setModalStopLoss(e.target.value)}
+                <input id="holding-stop-loss" type="number" step="0.01" min="0" placeholder="0.00"
+                  value={modalStopLoss} onChange={e => { setModalStopLoss(e.target.value); setStopRecommendation(null) }}
                   style={{ flex: 1 }} />
-                <button className="btn-sm"
-                  onClick={async () => {
-                    if (!selectedStock) { showToast('请先选择股票', true); return }
-                    try {
-                      const r = await fetch('/api/holdings/recommended-stop', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ code: selectedStock.code }),
-                      })
-                      const d = await r.json()
-                      if (d.success) {
-                        setModalStopLoss(String(d.stop_loss))
-                        if (d.price) setCachedPrice(d.price)
-                        showToast(`推荐止损 ${d.stop_loss}（${d.stop_loss_pct?.toFixed(2)}%）`)
-                      } else {
-                        showToast(d.error || '无法获取推荐止损', true)
-                      }
-                    } catch {
-                      showToast('请求失败', true)
-                    }
-                  }}
+                <button className="btn-sm" onClick={calculateStopRecommendation}
+                  disabled={stopRecommendationLoading}
                   style={{ padding: '6px 12px', fontSize: 12, background: '#4ecdc4', color: '#000',
                     border: 'none', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                >🔄 更新止损</button>
+                >{stopRecommendationLoading ? '计算中...' : '计算止损建议'}</button>
               </div>
               <div className="hint" dangerouslySetInnerHTML={{ __html: calcStopLossPct() }} />
-            </div>
-
-            <div className="form-row">
-              <label>买入日期</label>
-              <input type="date" value={modalBuyDate} onChange={e => setModalBuyDate(e.target.value)} />
+              {stopRecommendation && (
+                <div className="stop-recommendation" data-testid="stop-recommendation">
+                  <div><strong>建议 {stopRecommendation.stop_loss.toFixed(2)} 元</strong>（距现价 {stopRecommendation.stop_loss_pct.toFixed(2)}%）</div>
+                  <div>{stopRecommendation.reason}</div>
+                  {stopRecommendation.initial_stop !== null && (
+                    <div>建仓初始止损：{stopRecommendation.initial_stop.toFixed(2)} 元
+                      {stopRecommendation.buy_date_used ? `（按 ${stopRecommendation.buy_date_used} K线）` : ''}
+                    </div>
+                  )}
+                  {stopRecommendation.protective_stop !== null && (
+                    <div>当前结构保护位：{stopRecommendation.protective_stop.toFixed(2)} 元</div>
+                  )}
+                  {Number(modalStopLoss) !== stopRecommendation.stop_loss && (
+                    <button type="button" className="btn-apply-stop"
+                      onClick={() => setModalStopLoss(String(stopRecommendation.stop_loss))}>
+                      采用建议
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="btn-row">
