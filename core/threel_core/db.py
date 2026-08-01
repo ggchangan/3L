@@ -15,6 +15,7 @@ from typing import List, Dict, Optional
 
 import pymysql
 from pymysql.cursors import DictCursor
+from .price_adjustment import qfq_ratio
 
 
 def _get_config() -> dict:
@@ -93,7 +94,7 @@ def _apply_qfq_batch(conn, ts_code: str, rows: List[dict],
                       dates: List[str]) -> List[dict]:
     """对单个股票的一组K线数据应用前复权
 
-    前复权价 = 原始价 × latest_adj / adj_factor[t]
+    前复权价 = 原始价 × adj_factor[t] / latest_adj
     """
     if not rows or not dates:
         return []
@@ -113,8 +114,9 @@ def _apply_qfq_batch(conn, ts_code: str, rows: List[dict],
     # 最新一条的 adj_factor 作为基准
     latest_date = dates[0]  # 因为按 trade_date DESC 排序
     latest_adj = adj_map.get(latest_date)
-    if not latest_adj:
-        # 没有复权因子，返回原始数据（但仍需升序排列）
+    ratios = {date: qfq_ratio(adj_map.get(date), latest_adj) for date in dates}
+    if not latest_adj or any(ratio is None for ratio in ratios.values()):
+        # 任一因子缺失时整段统一返回原始价，绝不把原价混入前复权序列。
         result = []
         for r in reversed(rows):
             result.append({
@@ -124,13 +126,13 @@ def _apply_qfq_batch(conn, ts_code: str, rows: List[dict],
                 'high': float(r['high']) if r['high'] else 0,
                 'low': float(r['low']) if r['low'] else 0,
                 'volume': int(r['vol']) if r['vol'] else 0,
+                'adjustment_status': 'raw_factor_incomplete',
             })
         return result
 
     result = []
     for r in reversed(rows):  # 正序返回
-        adj_factor = adj_map.get(r['trade_date'])
-        ratio = latest_adj / adj_factor if (adj_factor and adj_factor > 0) else 1.0
+        ratio = ratios[r['trade_date']]
         result.append({
             'date': r['trade_date'],
             'open': round(float(r['open']) * ratio, 2) if r['open'] else None,
@@ -138,5 +140,6 @@ def _apply_qfq_batch(conn, ts_code: str, rows: List[dict],
             'high': round(float(r['high']) * ratio, 2) if r['high'] else None,
             'low': round(float(r['low']) * ratio, 2) if r['low'] else None,
             'volume': int(r['vol']) if r['vol'] else 0,
+            'adjustment_status': 'qfq',
         })
     return result

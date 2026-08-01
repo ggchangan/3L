@@ -11,6 +11,7 @@ from datetime import datetime
 
 import pymysql
 from pymysql.cursors import DictCursor
+from threel_core.price_adjustment import qfq_ratio
 
 from backend.core.config import (
     MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE,
@@ -454,7 +455,7 @@ class TushareDB:
     def _apply_qfq(self, rows: List[dict], ts_code: str) -> List[dict]:
         """对原始K线数据应用前复权
 
-        前复权价 = 原始价 × latest_adj / adj_factor[t]
+        前复权价 = 原始价 × adj_factor[t] / latest_adj
         """
         dates = [r['trade_date'] for r in rows]
         placeholders = ','.join(['%s'] * len(dates))
@@ -465,16 +466,26 @@ class TushareDB:
         )
         adj_map = {r['trade_date']: r['adj_factor'] for r in adj_rows}
 
-        latest = self.query_one('adj_factor', ts_code=ts_code,
-                                trade_date=rows[0]['trade_date'])
-        if not latest or not latest.get('adj_factor'):
-            return self._to_kline_format(rows)
-        latest_adj = float(latest['adj_factor'])
+        latest_adj = adj_map.get(rows[0]['trade_date'])
+        if qfq_ratio(latest_adj, latest_adj) is None:
+            raw = self._to_kline_format(rows)
+            for item in raw:
+                item['adjustment_status'] = 'raw_factor_incomplete'
+            return raw
+
+        ratios = {
+            date: qfq_ratio(adj_map.get(date), latest_adj)
+            for date in dates
+        }
+        if any(ratio is None for ratio in ratios.values()):
+            raw = self._to_kline_format(rows)
+            for item in raw:
+                item['adjustment_status'] = 'raw_factor_incomplete'
+            return raw
 
         result = []
         for r in rows:
-            adj_factor = adj_map.get(r['trade_date'])
-            ratio = latest_adj / float(adj_factor) if (adj_factor and float(adj_factor) > 0) else 1.0
+            ratio = ratios[r['trade_date']]
             result.append({
                 'date': r['trade_date'],
                 'open': round(float(r['open']) * ratio, 2) if r['open'] else None,
@@ -482,6 +493,7 @@ class TushareDB:
                 'high': round(float(r['high']) * ratio, 2) if r['high'] else None,
                 'low': round(float(r['low']) * ratio, 2) if r['low'] else None,
                 'volume': int(r['vol']) if r['vol'] else 0,
+                'adjustment_status': 'qfq',
             })
         return result
 
