@@ -32,6 +32,7 @@ interface Props {
   data: MainlineData | null | undefined
   dates: string[]
   currentDate: string
+  previousTradingDate?: string
 }
 
 const TAB_STYLE_BASE = { padding: '6px 16px', fontSize: 13, borderRadius: '6px 6px 0 0', cursor: 'pointer', border: 'none', fontWeight: 600 } as const
@@ -61,7 +62,7 @@ const chgSign = (v?: number) => {
   return '+'
 }
 
-export default function MainlineSection({ data, dates, currentDate }: Props) {
+export default function MainlineSection({ data, dates, currentDate, previousTradingDate }: Props) {
   const [prevRanked, setPrevRanked] = useState<string[] | null>(null)
   const [comparisonDate, setComparisonDate] = useState('')
   const [comparisonStatus, setComparisonStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable' | 'error'>('idle')
@@ -89,8 +90,8 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
       setComparisonStatus('idle')
       return
     }
-    const prevDate = dates.filter(d => d < currentDate).sort().reverse()[0]
-    if (!prevDate) {
+    const prevDate = previousTradingDate || ''
+    if (!prevDate || !dates.includes(prevDate)) {
       setComparisonStatus('unavailable')
       return
     }
@@ -108,7 +109,7 @@ export default function MainlineSection({ data, dates, currentDate }: Props) {
         if (!cancelled) setComparisonStatus('error')
       })
     return () => { cancelled = true }
-  }, [data, dates, currentDate, tab])
+  }, [data, dates, currentDate, previousTradingDate, tab])
 
   // 轮动检测
   const escapeAlerts: { name: string; chg_1d: number }[] = []

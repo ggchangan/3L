@@ -337,6 +337,7 @@ export interface MarketStrategy {
 }
 
 export interface ReviewData {
+  previous_trading_date?: string
   date?: string
   data_status?: ReviewDataStatus
   /** @deprecated v3 客户端使用 data_status */

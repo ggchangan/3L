@@ -101,6 +101,7 @@ def test_background_refresh_is_single_flight(monkeypatch):
     entered = threading.Event()
     release = threading.Event()
     saved = []
+    archived = []
 
     def fake_compute(date_str):
         assert date_str == '2026-07-21'
@@ -111,6 +112,7 @@ def test_background_refresh_is_single_flight(monkeypatch):
     monkeypatch.setattr(review_service, 'compute_review_real_time', fake_compute)
     monkeypatch.setattr(review_service, 'get_completed_review_date', lambda: '2026-07-21')
     monkeypatch.setattr(review_service, 'save_review_data', saved.append)
+    monkeypatch.setattr(review_service, 'save_review_snapshot', archived.append)
     # 单飞测试不依赖跨进程文件锁，避免与正在运行的生产服务互相等待。
     monkeypatch.setattr(review_service, 'review_refresh_file_lock', nullcontext)
     with review_service._review_refresh_lock:
@@ -132,6 +134,7 @@ def test_background_refresh_is_single_flight(monkeypatch):
     assert review_service.get_review_refresh_status()['status'] == 'completed'
     assert saved[0]['date'] == '2026-07-21'
     assert saved[0]['cache_generated_at']
+    assert archived == saved
 
 
 def test_completed_review_date_uses_last_completed_trading_day(monkeypatch):
@@ -141,6 +144,15 @@ def test_completed_review_date_uses_last_completed_trading_day(monkeypatch):
     )
 
     assert review_service.get_completed_review_date() == '2026-07-20'
+
+
+def test_previous_review_date_uses_trade_calendar(monkeypatch):
+    monkeypatch.setattr(
+        'backend.data_access.data_source.get_previous_trading_day',
+        lambda reference: '20260717',
+    )
+
+    assert review_service.get_previous_review_date('2026-07-20') == '2026-07-17'
 
 
 def test_trading_plan_joins_opportunity_by_canonical_industry():
