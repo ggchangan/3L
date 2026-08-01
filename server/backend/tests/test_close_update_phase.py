@@ -1,4 +1,5 @@
 from datetime import datetime
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -140,6 +141,24 @@ def test_full_phase_refreshes_review_after_sector_update(tmp_path):
         update_stock_data.run_full_phase()
 
     refresh.assert_called_once_with('20260721')
+
+
+def test_production_review_refresh_persists_current_cache_and_daily_snapshot():
+    from backend.core import update_stock_data
+    from backend.services import market_temperature_service, review_service
+
+    review = {'date': '2026-07-21', 'mainline': {'all_ranked': []}}
+    with patch.object(review_service, 'compute_review_real_time', return_value=review), \
+         patch.object(review_service, 'review_refresh_file_lock', return_value=nullcontext()), \
+         patch.object(review_service, 'save_review_data') as save_current, \
+         patch.object(review_service, 'save_review_snapshot') as save_snapshot, \
+         patch.object(market_temperature_service, 'invalidate_market_temperature_cache'):
+        update_stock_data._refresh_review_cache('20260721')
+
+    saved = save_current.call_args.args[0]
+    assert saved['date'] == '2026-07-21'
+    assert saved['cache_generated_at']
+    save_snapshot.assert_called_once_with(saved)
 
 
 def test_close_phase_keeps_review_available_and_requests_retry_when_sector_snapshot_fails():

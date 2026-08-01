@@ -82,7 +82,7 @@ describe('MainlineSection', () => {
     expect(screen.queryByText('主线回调机会')).toBeNull()
   })
 
-  it('严格使用当前复盘日前最近归档运行轮动比较', async () => {
+  it('严格使用交易日历给出的上一交易日归档运行轮动比较', async () => {
     vi.mocked(fetchReviewByDate).mockResolvedValue({
       mainline: { all_ranked: [{ name: '旧方向', chg_20d: 10 }] },
     })
@@ -93,6 +93,7 @@ describe('MainlineSection', () => {
       }}
       dates={['2026-07-24', '2026-07-22', '2026-07-21']}
       currentDate="2026-07-23"
+      previousTradingDate="2026-07-22"
     />)
 
     await waitFor(() => expect(fetchReviewByDate).toHaveBeenCalledWith('2026-07-22'))
@@ -101,11 +102,12 @@ describe('MainlineSection', () => {
     expect(screen.getByText(/跌出前10: 旧方向/)).toBeTruthy()
   })
 
-  it('没有更早归档时明确说明轮动比较尚未建立', async () => {
+  it('缺少上一交易日归档时不使用更早快照冒充轮动比较', async () => {
     render(<MainlineSection
       data={{ all_ranked: [{ name: '方向A', chg_20d: 10 }] }}
       dates={['2026-07-24', '2026-07-23']}
       currentDate="2026-07-23"
+      previousTradingDate="2026-07-22"
     />)
 
     expect(await screen.findByText('缺少上一交易日复盘，轮动比较待建立')).toBeTruthy()

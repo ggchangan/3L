@@ -25,9 +25,9 @@ from backend.core.logger import get_logger
 from backend.services.review_contract import build_review_data_status, normalize_review_response
 from backend.services.review_cache_service import (
     _review_refresh_lock, _review_refresh_state, compute_review_serialized,
-    get_archive, get_archive_dates, get_completed_review_date, get_latest_archive,
+    get_archive, get_archive_dates, get_completed_review_date, get_previous_review_date, get_latest_archive,
     get_mainline_archive, get_review_refresh_status, load_current_review,
-    request_review_refresh, review_refresh_file_lock, save_review, save_review_data,
+    request_review_refresh, review_refresh_file_lock, save_review, save_review_data, save_review_snapshot,
 )
 
 log = get_logger(__name__)
@@ -362,6 +362,7 @@ def generate_daily_review(date_str=None):
     # 组装
     review = {
         'date': date_str,
+        'previous_trading_date': get_previous_review_date(date_str),
         'market': {
             **market_cycle,
             'date': date_str,
@@ -759,6 +760,7 @@ def compute_review_real_time(date_str=None):
 
     review = {
         'date': date_str,
+        'previous_trading_date': get_previous_review_date(date_str),
         'market': {**market_cycle, 'date': date_str},
         'mainline': mainline_data,
         'data_stale': _data_status.get('overall') != 'ready',

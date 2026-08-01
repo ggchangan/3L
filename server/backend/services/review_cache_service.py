@@ -44,6 +44,15 @@ def get_completed_review_date():
     return datetime.strptime(target, '%Y%m%d').strftime('%Y-%m-%d')
 
 
+def get_previous_review_date(date_str):
+    """返回指定复盘日的上一有效交易日，供严格相邻日轮动比较。"""
+    from backend.data_access.data_source import get_previous_trading_day
+
+    reference = datetime.strptime(date_str, '%Y-%m-%d').date()
+    target = get_previous_trading_day(reference)
+    return datetime.strptime(target, '%Y%m%d').strftime('%Y-%m-%d')
+
+
 def compute_review_serialized(date_str=None):
     from backend.services import review_service
 
@@ -89,6 +98,16 @@ def save_review_data(data):
     config.atomic_json_dump(data, REVIEW_DATA_PATH, indent=2)
 
 
+def save_review_snapshot(data):
+    """把已完成的实时复盘保存为当日快照，供下一交易日轮动比较。"""
+    date_str = str(data.get('date') or '')
+    parsed = datetime.strptime(date_str, '%Y-%m-%d').strftime('%Y-%m-%d')
+    if parsed != date_str:
+        raise ValueError('复盘快照日期必须为 YYYY-MM-DD')
+    os.makedirs(REVIEW_ARCHIVE_DIR, exist_ok=True)
+    config.atomic_json_dump(data, os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'), indent=2)
+
+
 def get_review_refresh_status():
     with _review_refresh_lock:
         state = dict(_review_refresh_state)
@@ -132,6 +151,7 @@ def request_review_refresh(force=False):
                 data['cache_generated_at'] = datetime.now().isoformat(timespec='seconds')
                 # 通过编排模块调用，保留可替换测试边界和旧扩展点。
                 review_service.save_review_data(data)
+                review_service.save_review_snapshot(data)
             with _review_refresh_lock:
                 _review_refresh_state.update({
                     'status': 'completed',
