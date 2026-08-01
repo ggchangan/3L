@@ -4,12 +4,81 @@
 import json, os
 from backend.core.config import REVIEW_CHARTS_DIR, BT_RESULTS_PATH
 from backend.data_access.data_layer import get_all_stocks, get_watchlist, resolve_stock, search_stock_full_market
-from backend.core.buy_point_detection import (
-    detect_buy_point,
-    detect_huicai_buy_point, find_idx,
-)
-from backend.core.trend_trading import detect_trend_buy
-from backend.core.scan_buy_signals import get_full_mainlines
+from backend.core.buy_point_detection import find_idx
+
+
+def _stock_card_signal_contract(card):
+    """提取个股分析与复盘共用的统一信号契约。"""
+    execution_signal = card.get('signal', 'hold')
+    technical_signal = card.get('technical_signal', execution_signal)
+    triggered_signals = card.get('triggered_signals', [])
+    decision = dict(card.get('decision') or {})
+    fields = {
+        'signal': execution_signal,
+        'execution_signal': execution_signal,
+        'technical_signal': technical_signal,
+        'technical_confidence': card.get('technical_confidence', card.get('score', 0)),
+        'technical_reason': card.get('technical_reason', ''),
+        'buy_point': card.get('buy_point', ''),
+        'triggered_signals': triggered_signals,
+        'fusion_type': card.get('fusion_type', ''),
+        'fusion_reason': card.get('fusion_reason', ''),
+        'wave_position': card.get('wave_position', ''),
+        'action_type': card.get('action_type', '持有'),
+        'action_signal': card.get('action_signal', ''),
+        'action_priority': card.get('action_priority', '低'),
+        'action_reason': card.get('action_reason', ''),
+        'decision': decision,
+    }
+    if technical_signal == 'buy' and execution_signal == 'hold':
+        fields['action_type'] = '技术信号'
+        fields['action_reason'] = fields['fusion_reason'] or '个股买点已触发，尚未叠加复盘市场与方向门禁'
+        decision.update({
+            'action': '技术信号',
+            'reason': fields['action_reason'],
+        })
+    fields['buy_score'] = fields['technical_confidence']
+    key_by_buy_point = {
+        '突破买点': 'upward_breakout',
+        '中继买点': 'upward_continuation',
+        '反转买点': 'upward_reversal',
+        '恐慌买点': 'panic_stagnation',
+    }
+    preferred_key = key_by_buy_point.get(fields['buy_point'])
+    bullish = next((
+        signal for signal in triggered_signals
+        if signal.get('direction') == 'bullish'
+        and (not preferred_key or signal.get('key') == preferred_key)
+    ), None)
+    if bullish:
+        fields['buy_detail'] = {
+            **(bullish.get('scores') or {}),
+            'reason': bullish.get('detail') or fields['technical_reason'],
+            'signal_key': bullish.get('key'),
+            'signal_name': bullish.get('name'),
+            'confidence': bullish.get('confidence'),
+        }
+    else:
+        fields['buy_detail'] = (
+            {'reason': fields['technical_reason']}
+            if fields['buy_point'] and fields['technical_reason'] else None
+        )
+    return fields
+
+
+def _review_market_position_for_stock_date(stock_date):
+    """读取同交易日复盘的大盘位置，确保个股分析与复盘使用同一检测上下文。"""
+    try:
+        from backend.services.review_cache_service import load_current_review
+
+        review = load_current_review()
+        review_date = str(review.get('date') or '').replace('-', '')
+        normalized_stock_date = str(stock_date or '').replace('-', '')
+        if review_date and review_date == normalized_stock_date:
+            return (review.get('market') or {}).get('position') or '波中'
+    except Exception:
+        pass
+    return '波中'
 
 
 def search_and_analyze(query, stocks=None, wl=None):
@@ -74,13 +143,9 @@ def _analyze(code, direction, name, stocks, wl_codes):
     """执行完整的个股分析 — 基于 StockCardService 统一数据"""
     from backend.services.stock_card_service import get_stock_card
     from backend.data_access.data_layer import get_all_stocks as _get_all
-    from backend.core.buy_point_detection import (
-        detect_buy_point, check_trend_stock, check_profit_model1,
-        detect_huicai_buy_point, find_idx,
-    )
+    from backend.core.buy_point_detection import detect_huicai_buy_point
     from backend.core.trend_trading import detect_trend_buy
     from backend.core.scan_buy_signals import get_full_mainlines
-    from backend.core.ema_utils import ema_list
 
     kls = stocks[direction][code]
     if not kls or len(kls) < 30:
@@ -92,11 +157,12 @@ def _analyze(code, direction, name, stocks, wl_codes):
 
     # 通过 StockCardService 获取核心数据（含行业+概念主线）
     _mainlines = get_full_mainlines()
+    market_position = _review_market_position_for_stock_date(today_str)
     try:
         card = get_stock_card(
             code=code,
             date_str=today_fmt,
-            market_position='波中',
+            market_position=market_position,
             main_lines=_mainlines,
             direction=direction,
             klines=kls,
@@ -125,8 +191,6 @@ def _analyze(code, direction, name, stocks, wl_codes):
         'profit_model1': card.get('profit_model1', False),
         'trading_system': card.get('trading_system', '3l'),
         'trading_reason': card.get('trading_reason', ''),
-        'signal': card.get('signal', 'hold'),
-        'decision': card.get('decision', {}),
         'stop_loss': card.get('stop_loss'),
         'stop_loss_pct': card.get('stop_loss_pct'),
         'mainline_level': card.get('mainline_level', ''),
@@ -135,20 +199,15 @@ def _analyze(code, direction, name, stocks, wl_codes):
         'sector_chg': card.get('sector_chg'),
         'conclusion': card.get('conclusion', ''),
     }
+    result.update(_stock_card_signal_contract(card))
 
     # 补充分析特有字段
     # SVG图表路径
     svg_abs = os.path.join(REVIEW_CHARTS_DIR, f'{code}.svg')
     result['has_chart'] = os.path.exists(svg_abs)
 
-    # 买点详情（需再次调用 detect_buy_point 获取 detail）
-    sub_stocks = {direction: {code: kls}}
-    bt = detect_buy_point(code, today_fmt, sub_stocks)
-    result['buy_point'] = bt.get('buy_type', '') if bt else ''
-    result['buy_score'] = bt.get('score', 0) if bt else 0
-    result['buy_detail'] = bt.get('detail', {}) if bt else None
-
     # 回踩买点
+    sub_stocks = {direction: {code: kls}}
     hc = detect_huicai_buy_point(code, today_fmt, sub_stocks)
     result['huicai_detail'] = hc.get('detail', {}) if hc else None
 
