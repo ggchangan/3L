@@ -375,7 +375,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             continue
 
         # 信号只看最新K线 — 用 get_stock_card 确认
-        if card.get("signal") != "buy":
+        if card.get("technical_signal", card.get("signal")) != "buy":
             continue
 
         result.append({
@@ -401,7 +401,11 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             "decision": card.get('decision', {}),
             "structure": card['structure'],
             "stage": card['stage'],
-            "signal": card['signal'],
+            "signal": "buy",
+            "execution_signal": card.get('execution_signal', card.get('signal', 'hold')),
+            "technical_signal": card.get('technical_signal', card.get('signal', 'buy')),
+            "technical_confidence": card.get('technical_confidence', card.get('score', 0)),
+            "technical_reason": card.get('technical_reason', ''),
             "ema": card['ema'],
             "vol_analysis": card['vol_analysis'],
             "flags": card.get('flags', ''),

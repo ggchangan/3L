@@ -50,7 +50,56 @@ def _kline_date(kline):
     return str(kline.get('date', '')).replace('-', '')
 
 
-def get_stop_loss_recommendation(code, buy_date=None, buy_price=None, current_stop=None):
+BUY_POINT_TYPES = ('突破买点', '中继买点', '反转买点', '恐慌买点')
+
+
+def _infer_entry_signal(klines, buy_idx):
+    """只用买入日及之前的数据还原信号，避免未来函数。"""
+    from backend.core.signal_detector import (
+        detect_upward_breakout, detect_upward_continuation, detect_upward_reversal,
+    )
+    reversal = detect_upward_reversal(klines, buy_idx)
+    if reversal.get('triggered'):
+        context = (reversal.get('scores') or {}).get('supply_context')
+        return ('恐慌买点' if context == 'panic_release' else '反转买点'), reversal
+    candidates = [
+        ('突破买点', detect_upward_breakout(klines, buy_idx)),
+        ('中继买点', detect_upward_continuation(klines, buy_idx)),
+    ]
+    triggered = [(label, result) for label, result in candidates if result.get('triggered')]
+    if triggered:
+        return max(triggered, key=lambda pair: pair[1].get('confidence', 0))
+    return '', None
+
+
+def _post_entry_protective_stop(klines, buy_idx, current_idx):
+    """仅用建仓后已经确认的更高低点抬升保护位。"""
+    if buy_idx is None or current_idx <= buy_idx + 1:
+        return None, None
+    entry_low = float(klines[buy_idx]['low'])
+    candidates = []
+    # 局部低点需右侧至少一根K线确认，故不会把当天低点误称为“结构抬高”。
+    for i in range(buy_idx + 1, current_idx):
+        low = float(klines[i]['low'])
+        if low <= float(klines[i - 1]['low']) and low <= float(klines[i + 1]['low']):
+            if low > entry_low * 1.01:
+                candidates.append((i, low))
+    if not candidates:
+        return None, None
+    anchor_idx, anchor = candidates[-1]
+    stop = round(anchor * 0.97, 2)
+    if stop >= float(klines[current_idx]['close']):
+        return None, None
+    return stop, {
+        'date': str(klines[anchor_idx].get('date', '')),
+        'price': round(anchor, 2),
+        'kind': 'post_entry_higher_low',
+    }
+
+
+def get_stop_loss_recommendation(code, buy_date=None, buy_price=None, current_stop=None,
+                                 entry_signal_type=None, entry_signal_date=None,
+                                 entry_anchor_price=None, original_stop_loss_price=None):
     """计算持仓止损建议，但不修改用户保存的手工止损。
 
     初始止损使用买入日之前可见的 K 线和买入价；保护止损使用最新价格结构。
@@ -68,17 +117,24 @@ def get_stop_loss_recommendation(code, buy_date=None, buy_price=None, current_st
     try:
         existing = float(current_stop) if current_stop not in (None, '') else None
         cost = float(buy_price) if buy_price not in (None, '') else None
+        persisted_anchor = float(entry_anchor_price) if entry_anchor_price not in (None, '') else None
+        persisted_initial = float(original_stop_loss_price) if original_stop_loss_price not in (None, '') else None
     except (TypeError, ValueError):
         return {'success': False, 'error': '买入价或当前止损不是有效数字'}
-    if any(value is not None and not math.isfinite(value) for value in (existing, cost)):
+    if any(value is not None and not math.isfinite(value)
+           for value in (existing, cost, persisted_anchor, persisted_initial)):
         return {'success': False, 'error': '买入价或当前止损不是有效数字'}
     if existing is not None and existing <= 0:
         return {'success': False, 'error': '当前止损必须大于0'}
     if cost is not None and cost <= 0:
         return {'success': False, 'error': '买入价必须大于0'}
+    if any(value is not None and value <= 0 for value in (persisted_anchor, persisted_initial)):
+        return {'success': False, 'error': '已保存的止损锚点或初始止损无效'}
 
     initial_stop = None
-    raw_buy_date_text = str(buy_date or '')
+    initial_stop_source = None
+    entry_signal_detail = None
+    raw_buy_date_text = str(entry_signal_date or buy_date or '')
     normalized_buy_date = raw_buy_date_text.replace('-', '')
     parsed_buy_date = None
     if normalized_buy_date:
@@ -91,6 +147,13 @@ def get_stop_loss_recommendation(code, buy_date=None, buy_price=None, current_st
         if parsed_buy_date > date.today():
             return {'success': False, 'error': '买入日期不能晚于今天'}
     buy_date_used = None
+    buy_idx = None
+    normalized_signal_type = str(entry_signal_type or '').strip()
+    if normalized_signal_type in ('自动识别', 'auto'):
+        normalized_signal_type = ''
+    if normalized_signal_type and normalized_signal_type not in BUY_POINT_TYPES and normalized_signal_type != '手工设置':
+        return {'success': False, 'error': '买点类型无效'}
+
     if normalized_buy_date and cost and cost > 0:
         eligible = [i for i, k in enumerate(klines) if _kline_date(k) <= normalized_buy_date]
         if not eligible:
@@ -98,18 +161,55 @@ def get_stop_loss_recommendation(code, buy_date=None, buy_price=None, current_st
         buy_idx = eligible[-1]
         buy_date_used = _kline_date(klines[buy_idx])
         buy_date_used = f'{buy_date_used[:4]}-{buy_date_used[4:6]}-{buy_date_used[6:]}'
-        initial_stop, _ = calc_stop_loss(
-            klines, buy_idx, close_price=cost, cost_price=cost,
-            buy_date=normalized_buy_date,
+        if not normalized_signal_type:
+            normalized_signal_type, entry_signal_detail = _infer_entry_signal(klines, buy_idx)
+        quality_incomplete = any(
+            str(k.get('adjustment_status', '')).lower() in
+            ('raw_factor_incomplete', 'incomplete', 'unadjusted')
+            for k in klines[:buy_idx + 1]
         )
+        if persisted_initial is not None:
+            initial_stop = persisted_initial
+            initial_stop_source = 'persisted_entry_stop'
+        elif persisted_anchor is not None and normalized_signal_type in BUY_POINT_TYPES:
+            initial_stop = round(persisted_anchor * 0.97, 2)
+            initial_stop_source = 'persisted_entry_anchor'
+        elif normalized_signal_type in BUY_POINT_TYPES:
+            initial_stop, _ = calc_stop_loss(
+                klines, buy_idx, close_price=cost, buy_type=normalized_signal_type,
+                entry_idx=buy_idx, buy_date=normalized_buy_date,
+            )
+            initial_stop_source = 'entry_signal_low'
+        elif normalized_signal_type == '手工设置':
+            initial_stop = existing
+            initial_stop_source = 'manual'
+        elif quality_incomplete:
+            return {
+                'success': False,
+                'error': '复权因子不完整且未识别出3L买点，不能用ATR生成正式止损；请确认买点类型或手工设置止损',
+                'requires_manual_stop': True,
+                'data_quality': 'raw_factor_incomplete',
+            }
+        else:
+            initial_stop, _ = calc_stop_loss(
+                klines, buy_idx, close_price=cost, cost_price=cost,
+                buy_date=normalized_buy_date,
+            )
+            initial_stop_source = 'atr_fallback'
         if initial_stop is not None:
             initial_stop = round(float(initial_stop), 2)
 
-    protective_stop, _ = calc_stop_loss(klines, current_idx, close_price=current_price)
-    if protective_stop is not None:
-        protective_stop = round(float(protective_stop), 2)
-        if protective_stop >= current_price:
-            protective_stop = None
+    protective_anchor = None
+    if buy_idx is not None:
+        protective_stop, protective_anchor = _post_entry_protective_stop(
+            klines, buy_idx, current_idx,
+        )
+    else:
+        protective_stop, _ = calc_stop_loss(klines, current_idx, close_price=current_price)
+        if protective_stop is not None:
+            protective_stop = round(float(protective_stop), 2)
+            if protective_stop >= current_price:
+                protective_stop = None
 
     if existing is not None and existing >= current_price:
         recommendation = existing
@@ -152,7 +252,23 @@ def get_stop_loss_recommendation(code, buy_date=None, buy_price=None, current_st
         'price': round(current_price, 2),
         'initial_stop': initial_stop,
         'buy_date_used': buy_date_used,
+        'entry_signal_type': normalized_signal_type or None,
+        'entry_signal_confidence': (entry_signal_detail or {}).get('confidence'),
+        'entry_signal_reason': (entry_signal_detail or {}).get('detail', ''),
+        'initial_stop_source': initial_stop_source,
+        'initial_stop_anchor': (
+            {
+                'date': buy_date_used,
+                'price': round(float(persisted_anchor), 2) if persisted_anchor is not None
+                else round(float(initial_stop) / 0.97, 2),
+                'kind': ('signal_kline_low' if normalized_signal_type in ('反转买点', '恐慌买点', '中继买点')
+                         else 'breakout_invalidation'),
+            }
+            if buy_idx is not None and initial_stop is not None
+            and normalized_signal_type in BUY_POINT_TYPES else None
+        ),
         'protective_stop': protective_stop,
+        'protective_anchor': protective_anchor,
         'current_stop': existing,
         'can_raise': recommendation_type == 'raise_protective_stop',
         'stop_loss_pct': round((float(recommendation) - current_price) / current_price * 100, 2),
@@ -185,6 +301,11 @@ def get_holdings():
                     'stop_loss_price': r.get('stop_loss_price'),
                     'sector': r.get('sector', ''),
                     'buy_date': r.get('buy_date', ''),
+                    'entry_signal_type': r.get('entry_signal_type'),
+                    'entry_signal_date': r.get('entry_signal_date'),
+                    'entry_anchor_price': r.get('entry_anchor_price'),
+                    'stop_loss_source': r.get('stop_loss_source'),
+                    'original_stop_loss_price': r.get('original_stop_loss_price'),
                 })
             cash_ratio = round(max(0, 100 - total_ratio), 2)
             return {'holdings': holdings, 'cash_ratio': cash_ratio}
@@ -330,6 +451,8 @@ def save_holdings(data):
         for field, label in (
             ('buy_price', '买入价'),
             ('stop_loss_price', '止损价'),
+            ('entry_anchor_price', '建仓锚点'),
+            ('original_stop_loss_price', '初始止损价'),
         ):
             raw = holding.get(field)
             if raw in (None, ''):
@@ -353,6 +476,18 @@ def save_holdings(data):
             if parsed > date.today():
                 return {'success': False, 'error': f'第 {idx} 条持仓的买入日期不能晚于今天'}
 
+        entry_signal_type = holding.get('entry_signal_type')
+        if entry_signal_type not in (None, '', *BUY_POINT_TYPES, '手工设置'):
+            return {'success': False, 'error': f'第 {idx} 条持仓的建仓买点类型无效'}
+        entry_signal_date = holding.get('entry_signal_date')
+        if entry_signal_date not in (None, ''):
+            try:
+                entry_date = datetime.strptime(str(entry_signal_date), '%Y-%m-%d').date()
+            except ValueError:
+                return {'success': False, 'error': f'第 {idx} 条持仓的信号日期格式应为 YYYY-MM-DD'}
+            if entry_date > date.today():
+                return {'success': False, 'error': f'第 {idx} 条持仓的信号日期不能晚于今天'}
+
     cash_ratio = data.get('cash_ratio', 100)
     if not isinstance(cash_ratio, (int, float)):
         return {'success': False, 'error': 'cash_ratio 必须为数字'}
@@ -374,8 +509,14 @@ def save_holdings(data):
                 'stop_loss_price': h.get('stop_loss_price') or None,
                 'sector': h.get('sector', ''),
                 'buy_date': h.get('buy_date') or None,
+                'entry_signal_type': h.get('entry_signal_type') or None,
+                'entry_signal_date': h.get('entry_signal_date') or None,
+                'entry_anchor_price': h.get('entry_anchor_price') or None,
+                'stop_loss_source': h.get('stop_loss_source') or None,
+                'original_stop_loss_price': h.get('original_stop_loss_price') or None,
             })
-        _dl_save(1, _db_list)
+        if not _dl_save(1, _db_list):
+            return {'success': False, 'error': 'DB写入失败，原持仓已保留'}
     except Exception as e:
         log.error('holdings DB save failed: %s', e)
         return {'success': False, 'error': f'DB写入失败: {e}'}

@@ -147,7 +147,7 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
         except Exception:
             continue
 
-        if card.get('signal') != 'buy':
+        if card.get('technical_signal', card.get('signal')) != 'buy':
             continue
         if card.get('buy_point') in ('', None):
             continue
@@ -171,7 +171,11 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
             'decision': card.get('decision', {}),
             'structure': card['structure'],
             'stage': card['stage'],
-            'signal': card['signal'],
+            'signal': 'buy',
+            'execution_signal': card['signal'],
+            'technical_signal': card.get('technical_signal', card['signal']),
+            'technical_confidence': card.get('technical_confidence', card.get('score', 0)),
+            'technical_reason': card.get('technical_reason', ''),
             'profit_model1': card['profit_model1'],
             'trend_stock': card.get('trend_stock', False),
             'trading_system': card['trading_system'],

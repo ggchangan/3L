@@ -8,6 +8,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/home/ubuntu/3l-server
 EnvironmentFile=/home/ubuntu/3l-server/.env
+ExecStartPre=/home/ubuntu/3l-server/.venv/bin/python /home/ubuntu/3l-server/scripts/migrate_holdings_entry_metadata.py
 ExecStart=/home/ubuntu/3l-server/.venv/bin/python /home/ubuntu/3l-server/server.py
 Restart=always
 RestartSec=5

@@ -32,8 +32,9 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
   const isCandidate = decisionAction === '观察'
   const isSignalOnly = decisionAction === '技术信号'
   const isNonExecutable = isBlocked || isCandidate || isSignalOnly
-  const cls = isNonExecutable ? 'hold' : s.signal === 'sell' ? 'danger' : s.signal === 'buy' ? 'warn' : 'hold'
-  const signalText = isBlocked ? '⏳待确认' : isCandidate ? '👀观察' : isSignalOnly ? '📡技术信号' : s.signal === 'hold' ? '✅持有' : s.signal === 'buy' ? '⚡买入' : s.signal === 'sell' ? '❌卖出' : '--'
+  const executionSignal = s.execution_signal || s.signal
+  const cls = isNonExecutable ? 'hold' : executionSignal === 'sell' ? 'danger' : executionSignal === 'buy' ? 'warn' : 'hold'
+  const signalText = isBlocked ? '⏳待确认' : isCandidate ? '👀观察' : isSignalOnly ? '📡技术信号' : executionSignal === 'hold' ? '✅持有' : executionSignal === 'buy' ? '⚡买入' : executionSignal === 'sell' ? '❌卖出' : '--'
   // 操作文字：主操作用 action_type（买入/卖出/持有/加仓/减仓/换股）
   // action_signal 作为补充说明用小字显示
   const displayAction = decisionAction || signalText
@@ -47,7 +48,7 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
   const stageColor = STAGE_COLORS[s.stage] || '#888'
   const structIcon = STRUCT_ICONS[s.structure] || ''
 
-  const isBuy = s.signal === 'buy'
+  const isBuy = s.technical_signal === 'buy' || s.signal === 'buy'
   const chartId = `${chartPrefix}chart_${idx}`
   const modeParam = mode ? `&mode=${mode}` : ''
   const slParam = (s.stop_loss !== undefined && s.stop_loss !== null) ? `&stop_loss=${s.stop_loss}` : ''

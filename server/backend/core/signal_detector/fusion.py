@@ -39,13 +39,29 @@ SIGNAL_DIRECTION = {
     'upward_breakout': 'bullish',       # 向上突破 → 看多
     'upward_continuation': 'bullish',   # 上涨中继 → 看多
     'upward_reversal': 'bullish',       # 向上反转 → 看多
-    'supply_exhaustion': 'bullish',     # 供应衰竭 → 看多（抄底信号）
+    # 供应衰竭只说明卖压减弱，不含需求确认；保留为观察事实，不能单独生成买点。
+    'supply_exhaustion': 'neutral',
     'downward_breakout': 'bearish',     # 向下突破 → 看空
     'downward_reversal': 'bearish',     # 向下反转 → 看空
     'demand_exhaustion': 'bearish',     # 需求衰竭 → 看空
     'downward_continuation': 'bearish', # 下跌中继 → 看空
     'range_continuation': 'neutral',    # 区间震荡中继 → 中性
 }
+
+BUY_POINT_BY_SIGNAL = {
+    'upward_breakout': '突破买点',
+    'upward_continuation': '中继买点',
+    'upward_reversal': '反转买点',
+}
+
+
+def _detected_buy_point(signal):
+    if not signal:
+        return ''
+    if (signal.get('key') == 'upward_reversal'
+            and (signal.get('scores') or {}).get('supply_context') == 'panic_release'):
+        return '恐慌买点'
+    return BUY_POINT_BY_SIGNAL.get(signal.get('key'), '')
 
 DETECTORS = {
     'upward_breakout': detect_upward_breakout,
@@ -162,6 +178,16 @@ def _run_fusion(klines: List[Dict], idx: int, structure: str,
         'confidence': 0,
         'fusion_type': '',
         'reason': '',
+        # 技术信号是量价事实；signal 是结合位置后的执行倾向。两者不可互相覆盖。
+        'technical_signal': ('buy' if (best_bullish or buy_point_active)
+                             else ('sell' if best_bearish else 'hold')),
+        'detected_buy_point': _detected_buy_point(best_bullish) or (
+            existing_buy_point if buy_point_active else ''
+        ),
+        'technical_confidence': (best_bullish['confidence'] if best_bullish
+                                 else (60 if buy_point_active else 0)),
+        'technical_reason': (best_bullish['detail'] if best_bullish
+                             else (f'{existing_buy_point}已由原3L/趋势检测确认' if buy_point_active else '')),
     }
 
     # 规则1: 关键点看多 + 看多信号 + 买点已确认 → 🟢 买入

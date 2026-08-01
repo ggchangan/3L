@@ -307,6 +307,9 @@ class TestFusionEngine(unittest.TestCase):
         )
         self.assertEqual(result['signal'], 'hold')
         self.assertEqual(result['fusion_type'], 'conflict_bullish')
+        self.assertEqual(result['technical_signal'], 'buy')
+        self.assertEqual(result['detected_buy_point'], '反转买点')
+        self.assertEqual(result['technical_confidence'], 65)
 
     def test_rule4_buy_point_only(self):
         """规则4: 已有盈利模式买点但无信号 → 维持买点"""
@@ -322,6 +325,25 @@ class TestFusionEngine(unittest.TestCase):
         )
         self.assertEqual(result['signal'], 'buy')
         self.assertEqual(result['fusion_type'], 'buy_point_only')
+        self.assertEqual(result['technical_signal'], 'buy')
+        self.assertEqual(result['detected_buy_point'], '盈利模式1')
+
+    def test_supply_exhaustion_without_demand_is_not_a_panic_buy_point(self):
+        self.mock_get_signals.return_value = [
+            self._make_signal('supply_exhaustion', '供应衰竭', 'neutral', 70)
+        ]
+        from backend.core.signal_detector.fusion import _run_fusion
+        result = _run_fusion(
+            self.klines, self.idx,
+            structure='下降趋势', stage='下行',
+            ema_arrangement='空头排列', bias5=-5,
+            main_line_names=self.main_line_names, sector=self.sector,
+            existing_signal='hold', existing_buy_point='',
+        )
+
+        self.assertEqual(result['technical_signal'], 'hold')
+        self.assertEqual(result['detected_buy_point'], '')
+        self.assertNotIn(result['fusion_type'], ('signal_buy', 'strong_buy'))
 
     def test_rule5_bearish_watch(self):
         """规则5: 关键点看空 + 无看空信号 → 持有但警惕"""

@@ -476,6 +476,7 @@ def get_stock_card(code, date_str, market_position='波中',
     stop_loss = None
     stop_loss_pct = None
     _3l_detail = {}
+    structure_sell_only = False
 
     date_clean = date_str.replace('-', '')
 
@@ -540,6 +541,7 @@ def get_stock_card(code, date_str, market_position='波中',
         stage = struct_info.get('stage', '')
         if struct == '下降趋势' or stage in ('转弱', '滞涨', '放量滞涨', '缩量滞涨', '下行', '加速跌'):
             signal = 'sell'
+            structure_sell_only = True
             signal_text = signal_text or f'{stage}·建议减仓'
 
     # 5c. 关键点×关键信号融合判定
@@ -555,6 +557,18 @@ def get_stock_card(code, date_str, market_position='波中',
         triggered_signals = f_result.get('triggered_signals', [])
         fusion_type = f_result.get('fusion_type', '')
         fusion_reason = f_result.get('reason', '')
+        technical_signal = f_result.get('technical_signal', 'hold')
+        detected_buy_point = f_result.get('detected_buy_point', '')
+        technical_confidence = f_result.get('technical_confidence', 0)
+        technical_reason = f_result.get('technical_reason', '')
+
+        # 下降结构可以降低执行优先级，但不能抹掉已经发生的反转/恐慌量价事实。
+        if technical_signal == 'buy' and detected_buy_point and not buy_point:
+            buy_point = detected_buy_point
+            score = max(score, technical_confidence)
+            if structure_sell_only:
+                signal = 'hold'
+                signal_text = f'{detected_buy_point}已出现，结合环境等待执行确认'
 
         # 融合判定覆盖规则：
         # - 已有买点+融合确认→增强置信度
@@ -576,6 +590,10 @@ def get_stock_card(code, date_str, market_position='波中',
         triggered_signals = []
         fusion_type = ''
         fusion_reason = ''
+        technical_signal = 'hold'
+        detected_buy_point = ''
+        technical_confidence = 0
+        technical_reason = ''
 
     # 5d. 独立卖点引擎（补充融合判定未覆盖的场景）
     if signal != 'sell':
@@ -589,7 +607,8 @@ def get_stock_card(code, date_str, market_position='波中',
                 if sell_cf > score:  # 卖点置信度更高才覆盖
                     signal = 'sell'
                     signal_text = sp.get('sell_type', '')
-                    buy_point = ''
+                    if technical_signal != 'buy':
+                        buy_point = ''
                     score = sell_cf
                     # 追加一个卖点信号到triggered_signals
                     triggered_signals.append({
@@ -612,6 +631,19 @@ def get_stock_card(code, date_str, market_position='波中',
     except Exception:
         wave_position = ''
         wave_stage = ''
+
+    # 技术信号的量比统一使用“不含当日”的基准，并直接说明比较窗口。
+    if technical_signal == 'buy':
+        bullish = next((s for s in triggered_signals
+                        if s.get('key') in ('upward_reversal', 'supply_exhaustion',
+                                            'upward_breakout', 'upward_continuation')), None)
+        if bullish:
+            scores_detail = bullish.get('scores', {})
+            vr20 = scores_detail.get('volume_ratio_20')
+            vr5 = scores_detail.get('volume_ratio_5')
+            rule = scores_detail.get('volume_rule', '')
+            if vr20 is not None and vr5 is not None:
+                vol_analysis = f'{rule}（较前20日{vr20:.2f}倍/前5日{vr5:.2f}倍）'
 
     # 6. 止损（按买点类型）
     sl_result = _calc_stop_loss(klines, idx, buy_type=buy_point if buy_point else None,
@@ -704,6 +736,9 @@ def get_stock_card(code, date_str, market_position='波中',
         'triggered_signals': triggered_signals,
         'fusion_type': fusion_type,
         'fusion_reason': fusion_reason,
+        'technical_signal': technical_signal,
+        'technical_confidence': technical_confidence,
+        'technical_reason': technical_reason,
         'wave_position': wave_position,
         # 操作建议（卡片统一推导）
         'decision': decision.to_dict(),

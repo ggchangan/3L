@@ -47,6 +47,10 @@ mkdir -p /data/private /data/cache /data/charts
 echo "Data directory ready."
 # ==== 种子数据结束 ====
 
+# 持仓表迁移必须先于服务启动；失败时由 set -e 阻止带不兼容结构的代码上线。
+echo "Running database migrations..."
+python3 -m backend.migrations.holdings_entry_metadata
+
 # 启动 cron（定时数据更新）
 echo "Starting cron daemon for scheduled data updates..."
 service cron start

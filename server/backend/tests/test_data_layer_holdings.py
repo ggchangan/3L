@@ -14,7 +14,7 @@ from backend.data_access.data_layer import get_holdings, save_holdings
 
 # 测试用的持仓数据
 _TEST_HOLDINGS = [
-    {'code': '300620', 'name': '光库科技', 'direction': '算力硬件.CPO', 'target_ratio': 6.86, 'cost_price': 343.05, 'stop_loss_price': 288.21, 'sector': '通信设备'},
+    {'code': '300620', 'name': '光库科技', 'direction': '算力硬件.CPO', 'target_ratio': 6.86, 'cost_price': 343.05, 'stop_loss_price': 288.21, 'sector': '通信设备', 'entry_signal_type': '反转买点', 'entry_signal_date': '2026-07-31', 'entry_anchor_price': 297.12, 'stop_loss_source': 'initial_risk_stop', 'original_stop_loss_price': 288.21},
     {'code': '600176', 'name': '中国巨石', 'direction': '算力硬件.PCB', 'target_ratio': 8.24, 'cost_price': 45.77, 'stop_loss_price': 38.49, 'sector': '玻璃玻纤'},
     {'code': '688008', 'name': '澜起科技', 'direction': '算力硬件.存储', 'target_ratio': 4.8, 'cost_price': 240.1, 'stop_loss_price': 206.61, 'sector': '半导体'},
 ]
@@ -72,6 +72,11 @@ class TestDataLayerHoldings:
                 assert h['name'] == '光库科技'
                 assert h['direction'] == '算力硬件.CPO'
                 assert h['target_ratio'] == 6.86
+                assert h['entry_signal_type'] == '反转买点'
+                assert h['entry_signal_date'] == '2026-07-31'
+                assert h['entry_anchor_price'] == 297.12
+                assert h['stop_loss_source'] == 'initial_risk_stop'
+                assert h['original_stop_loss_price'] == 288.21
 
     def test_save_replaces_old_data(self, holdings_test_user_id):
         """重新保存应替换旧数据（先删后插）"""

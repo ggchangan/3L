@@ -217,6 +217,19 @@ describe('StockCard', () => {
     expect(screen.queryByText(/可执行买入计划/)).toBeNull()
   })
 
+  it('技术买点与执行持有并存时不会描述为可执行买入', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      signal: 'buy',
+      technical_signal: 'buy',
+      execution_signal: 'hold',
+      action_type: '持有',
+    }} idx={1} mode="monitor" decisionContext="buy-signal" />)
+
+    expect(screen.getByText('技术信号', { selector: '.v' })).toBeTruthy()
+    expect(screen.queryByText(/可执行买入计划/)).toBeNull()
+  })
+
   it('复盘持仓卡片没有决策字段时保留持仓操作', () => {
     render(<StockCard s={{
       ...buySignal,

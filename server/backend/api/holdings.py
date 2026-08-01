@@ -32,6 +32,10 @@ def _handle_recommended_stop(h, path, body):
             buy_date=data.get('buy_date'),
             buy_price=data.get('buy_price'),
             current_stop=data.get('current_stop'),
+            entry_signal_type=data.get('entry_signal_type'),
+            entry_signal_date=data.get('entry_signal_date'),
+            entry_anchor_price=data.get('entry_anchor_price'),
+            original_stop_loss_price=data.get('original_stop_loss_price'),
         ))
     except Exception as e:
         raise APIError(f"持仓操作异常: {e}") from e
