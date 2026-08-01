@@ -3,6 +3,7 @@ import pytest
 
 from threel_core.stop_loss_validation import (
     calculate_stop_candidates,
+    calc_recent_atr,
     detect_buy_point_without_future,
     simulate_stop_trade,
     summarize_results,
@@ -74,6 +75,33 @@ def test_holding_gap_below_stop_executes_at_open_and_records_slippage():
     assert result['stop_day'] == 2
     assert result['gross_return_pct'] == -10
     assert result['gap_slippage_pct'] == 5
+
+
+def test_recent_atr_uses_only_latest_fourteen_true_ranges():
+    klines = _klines(30)
+    klines[1].update({'high': 200, 'low': 1})  # 早期异常波动不得进入最近14日ATR。
+
+    assert calc_recent_atr(klines, 14) == pytest.approx(4.0)
+
+
+def test_false_stop_includes_recovery_on_stop_day_close():
+    klines = _klines(23)
+    klines[21].update({'open': 100, 'high': 103, 'low': 94, 'close': 102})
+
+    result = simulate_stop_trade(klines, 20, stop=95, horizon=2)
+
+    assert result['stop_hit'] is True
+    assert result['false_stop'] is True
+
+
+def test_stopped_trade_is_not_marked_as_terminal_exit_when_history_is_short():
+    klines = _klines(22)
+    klines[21].update({'open': 100, 'high': 101, 'low': 94, 'close': 96})
+
+    result = simulate_stop_trade(klines, 20, stop=95, horizon=20, terminal_if_short=True)
+
+    assert result['stop_hit'] is True
+    assert result['terminal_exit'] is False
 
 
 def test_summary_keeps_cancelled_signals_in_denominator_and_reports_tail():

@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument('--end', default='')
     parser.add_argument('--sample-size', type=int, default=0, help='0=全部股票；否则按代码哈希固定抽样')
     parser.add_argument('--bootstrap-runs', type=int, default=1000)
+    parser.add_argument('--calendar-buffer', type=int, default=40, help='end后额外加载的全市场交易日数')
     parser.add_argument('--output-dir', default=os.path.join(ROOT, 'docs', 'stop-loss-validation', 'results'))
     parser.add_argument('--progress-every', type=int, default=100)
     return parser.parse_args()
@@ -42,13 +43,14 @@ def parse_args():
 
 def load_universe(db, sample_size):
     rows = db.execute_raw(
-        "SELECT ts_code, COUNT(*) AS bars FROM stock_daily "
-        "GROUP BY ts_code HAVING COUNT(*) >= 81"
+        "SELECT d.ts_code, COUNT(*) AS bars, MAX(d.trade_date) AS last_trade_date, "
+        "MAX(s.delist_date) AS delist_date FROM stock_daily d "
+        "LEFT JOIN stock_basic s ON s.ts_code=d.ts_code "
+        "GROUP BY d.ts_code HAVING COUNT(*) >= 81"
     )
-    codes = [row['ts_code'] for row in rows]
-    if sample_size and sample_size < len(codes):
-        codes = sorted(codes, key=lambda code: hashlib.sha256(code.encode()).hexdigest())[:sample_size]
-    return sorted(codes)
+    if sample_size and sample_size < len(rows):
+        rows = sorted(rows, key=lambda row: hashlib.sha256(row['ts_code'].encode()).hexdigest())[:sample_size]
+    return sorted(rows, key=lambda row: row['ts_code'])
 
 
 def load_global_dates(db):
@@ -92,7 +94,7 @@ def load_adjusted_klines(db, ts_code, cutoff):
     return klines, 'qfq'
 
 
-def scan_stock(code, klines, start, end, global_future_count):
+def scan_stock(code, klines, start, end, global_future_count, stock_last_trade, price_cutoff):
     local_code = code.split('.')[0]
     detect_buy_point._ind_map = {local_code: {'ths_industry': '回测统一主线'}}
     outcomes = []
@@ -116,12 +118,17 @@ def scan_stock(code, klines, start, end, global_future_count):
         if global_future_count.get(signal_date, 0) < 20:
             counters['censored_recent'] += 1
             continue
+        available_future = len(klines) - idx - 1
+        terminal_if_short = available_future < 20 and stock_last_trade <= price_cutoff
+        if available_future < 20 and not terminal_if_short:
+            counters['censored_suspension'] += 1
+            continue
         next_open = klines[idx + 1].get('open')
         candidates = calculate_stop_candidates(klines, idx, result.get('buy_type', ''), next_open=next_open)
         for candidate, stop in candidates.items():
             outcome = simulate_stop_trade(
                 klines, idx, stop, horizon=20,
-                market_has_full_horizon=True,
+                terminal_if_short=terminal_if_short,
             )
             outcome.update({
                 'code': local_code,
@@ -234,21 +241,25 @@ def main():
     if end not in global_dates:
         raise SystemExit(f'--end {end} 不是数据库交易日')
     end_index = global_dates.index(end)
-    if end_index + 20 >= len(global_dates):
-        raise SystemExit('--end 之后不足20个全市场交易日，无法完成观察窗')
-    price_cutoff = global_dates[end_index + 20]
+    if end_index + args.calendar_buffer >= len(global_dates):
+        raise SystemExit('--end 之后不足 calendar-buffer 个全市场交易日')
+    price_cutoff = global_dates[end_index + args.calendar_buffer]
     future_count = {date: len(global_dates) - i - 1 for i, date in enumerate(global_dates)}
     universe = load_universe(db, args.sample_size)
     outcomes = []
     skipped = Counter()
     totals = Counter()
     used = 0
-    for number, code in enumerate(universe, 1):
+    for number, universe_row in enumerate(universe, 1):
+        code = universe_row['ts_code']
         klines, status = load_adjusted_klines(db, code, price_cutoff)
         if not klines:
             skipped[status] += 1
             continue
-        stock_outcomes, counters = scan_stock(code, klines, args.start, end, future_count)
+        stock_outcomes, counters = scan_stock(
+            code, klines, args.start, end, future_count,
+            str(universe_row['last_trade_date']), price_cutoff,
+        )
         outcomes.extend(stock_outcomes)
         totals.update(counters)
         used += 1
@@ -271,7 +282,7 @@ def main():
         'bootstrap_runs': args.bootstrap_runs,
         'signal_context': {'market_position': '波中', 'mainline_assumed': True},
     }
-    for key in ('raw_signals', 'primary_signals', 'censored_recent'):
+    for key in ('raw_signals', 'primary_signals', 'censored_recent', 'censored_suspension'):
         metadata.setdefault(key, 0)
     report = build_report(outcomes, args.calibration_end, args.bootstrap_runs, metadata)
     os.makedirs(args.output_dir, exist_ok=True)

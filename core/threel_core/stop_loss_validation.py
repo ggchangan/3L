@@ -5,12 +5,27 @@ import math
 import random
 import statistics
 
-from .atr import calc_atr
 from .buy_point_detection import calc_stop_loss
 
 
 STRUCTURE_BUFFERS = (0.0, 0.1, 0.2, 0.3)
 ROUND_TRIP_SIDE_COST = 0.001
+
+
+def calc_recent_atr(klines, period=14):
+    """预注册口径：截至信号日最近 period 个 TR 的算术均值。"""
+    if len(klines) < period + 1:
+        return None
+    true_ranges = []
+    for index in range(len(klines) - period, len(klines)):
+        current = klines[index]
+        previous_close = _positive(klines[index - 1].get('close'))
+        high = _positive(current.get('high'))
+        low = _positive(current.get('low'))
+        if None in (previous_close, high, low):
+            return None
+        true_ranges.append(max(high - low, abs(high - previous_close), abs(low - previous_close)))
+    return statistics.fmean(true_ranges)
 
 
 def validate_adjusted_continuity(rows, tolerance=0.005):
@@ -53,7 +68,7 @@ def calculate_stop_candidates(klines, signal_idx, buy_type, next_open=None):
     signal = visible[-1]
     close = _positive(signal.get('close'))
     low = _positive(signal.get('low'))
-    atr = calc_atr(visible, 14)
+    atr = calc_recent_atr(visible, 14)
     if close is None or low is None or not atr or atr <= 0:
         return {}
 
@@ -80,7 +95,7 @@ def calculate_stop_candidates(klines, signal_idx, buy_type, next_open=None):
 
 
 def simulate_stop_trade(klines, signal_idx, stop, horizon=20, side_cost=ROUND_TRIP_SIDE_COST,
-                        market_has_full_horizon=True):
+                        terminal_if_short=False):
     """信号次日开盘入场，按日线保守模拟止损或第20根收盘退出。"""
     if stop is None or signal_idx + 1 >= len(klines):
         return {'covered': False}
@@ -111,11 +126,12 @@ def simulate_stop_trade(klines, signal_idx, stop, horizon=20, side_cost=ROUND_TR
             gap_slippage = max(0.0, (stop - exit_price) / entry * 100)
             break
 
-    terminal = len(future) < horizon and market_has_full_horizon
+    terminal = False
     if exit_price is None:
         exit_price = _positive(future[-1].get('close'))
         if exit_price is None:
             return {'covered': False}
+        terminal = len(future) < horizon and terminal_if_short
     proceeds = exit_price * (1 - side_cost)
     gross_return = (exit_price - entry) / entry * 100
     net_return = (proceeds - entry_cost) / entry_cost * 100
@@ -124,7 +140,7 @@ def simulate_stop_trade(klines, signal_idx, stop, horizon=20, side_cost=ROUND_TR
     if stop_idx is not None:
         false_stop = any(
             (_positive(bar.get('close')) or 0) > entry
-            for bar in future[stop_idx + 1:]
+            for bar in future[stop_idx:]
         )
     hold_exit = _positive(future[-1].get('close'))
     hold_return = None
