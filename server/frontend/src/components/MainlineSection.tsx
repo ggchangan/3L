@@ -3,6 +3,9 @@ import { fetchReviewByDate } from '../lib/api'
 import type { LineItem } from '../lib/types'
 
 interface MainlineData {
+  model_type?: string
+  model_label?: string
+  is_l1_model?: boolean
   ranking_status?: 'confirmed' | 'estimated' | 'partial' | 'stale'
   ranking_date?: string
   base_date?: string
@@ -37,11 +40,11 @@ interface Props {
 
 const TAB_STYLE_BASE = { padding: '6px 16px', fontSize: 13, borderRadius: '6px 6px 0 0', cursor: 'pointer', border: 'none', fontWeight: 600 } as const
 
-// 主线/动量决定方向优先级；板块量价阶段只在行内提供环境提示。
+// 当前数据只是板块自身20日涨幅代理榜，不等同于 L1 动量主线。
 const DIRECTION_GROUPS = [
-  { key: 'mainline', label: '主线方向', emoji: '🔥', color: '#e94560', bg: 'rgba(233,69,96,0.10)' },
-  { key: 'secondary', label: '次级主线', emoji: '⚡', color: '#ffd700', bg: 'rgba(255,215,0,0.08)' },
-  { key: 'other', label: '其他动量方向', emoji: '📊', color: '#888', bg: 'rgba(136,136,136,0.05)' },
+  { key: 'mainline', label: '20日强度前5候选', emoji: '🔥', color: '#e94560', bg: 'rgba(233,69,96,0.10)' },
+  { key: 'secondary', label: '20日强度6–10候选', emoji: '⚡', color: '#ffd700', bg: 'rgba(255,215,0,0.08)' },
+  { key: 'other', label: '20日强度榜外', emoji: '📊', color: '#888', bg: 'rgba(136,136,136,0.05)' },
 ] as const
 
 const STAGE_ICONS: Record<string, string> = {
@@ -140,7 +143,7 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
     return `对比 ${comparisonDate} · ${detail}`
   })()
 
-  if (!data) return <div className="empty">暂无主线数据</div>
+  if (!data) return <div className="empty">暂无板块强度数据</div>
 
   const directionGroups = DIRECTION_GROUPS.map(group => ({
     ...group,
@@ -165,7 +168,7 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
             background: tab === 'industry' ? '#1a1a2e' : '#2a2a3e',
             color: tab === 'industry' ? '#e94560' : '#888',
           }}
-        >🏭 行业主线</button>
+        >🏭 行业强度候选</button>
         <button
           onClick={() => setTab('concept')}
           style={{
@@ -173,7 +176,11 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
             background: tab === 'concept' ? '#1a1a2e' : '#2a2a3e',
             color: tab === 'concept' ? '#4ecdc4' : '#888',
           }}
-        >💡 概念主线</button>
+        >💡 概念强度候选</button>
+      </div>
+
+      <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#9ca3af', background: 'rgba(255,255,255,0.04)', lineHeight: 1.6 }}>
+        当前模型仅按板块自身20日涨幅排序；前5和第6–10名是强度候选，不是知识库定义的 L1 动量主线。
       </div>
 
       {activeData?.ranking_status === 'estimated' && (
@@ -229,7 +236,7 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
       )}
 
       <div style={{ marginBottom: 12, color: '#888', fontSize: 11, lineHeight: 1.6 }}>
-        阅读顺序：先看主线/次级主线的动量排名，再看板块所处阶段。波谷是加分项，波中和波峰中的个股仍可能出现有效买点。
+        阅读顺序：先看20日板块强度候选，再看板块所处阶段。强度候选只提供方向线索；波谷是加分项，个股买点仍需独立判断。
       </div>
 
       {/* 按方向层级展示，避免用板块阶段替代机会判断 */}
@@ -278,7 +285,7 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                     <span style={{ color: '#888', fontSize: 10 }}>{persistDays[item.name]}天</span>
                   ) : null}
                   <span style={{ color, fontSize: 10, fontWeight: 600 }}>
-                    {key === 'mainline' ? '主线' : key === 'secondary' ? '次级主线' : `动量#${allRanked.indexOf(item) + 1}`}
+                    {key === 'mainline' ? '前5候选' : key === 'secondary' ? '6–10候选' : `强度#${allRanked.indexOf(item) + 1}`}
                   </span>
                   {leaders.length > 0 && (
                     <span
@@ -350,8 +357,8 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
               const days = persistDays[l.name] || 0
               const stage = l.stage || '--'
               const stageIcon = STAGE_ICONS[stage] || '•'
-              const level = mainNames.has(l.name) ? '主线' : secNames.has(l.name) ? '次级主线' : '其他动量'
-              const levelColor = level === '主线' ? '#e94560' : level === '次级主线' ? '#ffd700' : '#888'
+              const level = mainNames.has(l.name) ? '前5候选' : secNames.has(l.name) ? '6–10候选' : '榜外'
+              const levelColor = mainNames.has(l.name) ? '#e94560' : secNames.has(l.name) ? '#ffd700' : '#888'
 
               let chgDisplay = <span style={{ color: '#555' }}>--</span>
               if (prevRanked?.length) {
@@ -393,7 +400,7 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
           </tbody>
         </table>
         <div style={{ marginTop: 4, color: '#555', fontSize: 10, textAlign: 'right' }}>
-          20日涨幅排序 · 方向层级优先展示 · 板块阶段仅作环境提示
+          板块自身20日涨幅排序 · 强度候选优先展示 · 板块阶段仅作环境提示
         </div>
       </details>
     </>

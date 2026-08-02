@@ -12,6 +12,12 @@ const STAGE_COLORS: Record<string, string> = {
   '区间底部': '#4ecdc4', '区间中段': '#ffd700', '区间顶部': '#e94560',
 }
 const STRUCT_ICONS: Record<string, string> = { '上涨趋势': '📈', '区间震荡': '➡️', '下降趋势': '📉' }
+const strengthLevelLabel = (level?: string) => {
+  if (level === '主线') return '20日强度前5候选'
+  if (level === '次级主线') return '20日强度6–10候选'
+  if (level === '非主线') return '20日强度榜外'
+  return level || ''
+}
 
 import type { BuySignalItem } from '../lib/types'
 import { buyDecisionAction } from '../lib/buyDecision'
@@ -199,7 +205,7 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
         {s.mainline_level ? (
           <div className="field">
             <span className="l">定位:</span>
-            <span className="v" style={{ color: s.mainline_level === '主线' ? '#e94560' : s.mainline_level === '次级主线' ? '#ffd700' : '#666', fontSize: 11 }}>{s.mainline_level}</span>
+            <span className="v" style={{ color: s.mainline_level === '主线' ? '#e94560' : s.mainline_level === '次级主线' ? '#ffd700' : '#666', fontSize: 11 }}>{strengthLevelLabel(s.mainline_level)}</span>
           </div>
         ) : null}
       </div>

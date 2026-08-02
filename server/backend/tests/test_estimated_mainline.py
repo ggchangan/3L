@@ -87,12 +87,18 @@ def test_mainline_uses_close_snapshot_for_estimated_20d_ranking(monkeypatch, tmp
     result = review_compute_service.get_mainline_data('2026-07-21')
 
     assert result['ranking_status'] == 'estimated'
+    assert result['model_type'] == 'sector_return_20d_proxy'
+    assert result['model_label'] == '20日行业板块强度候选'
+    assert result['is_l1_model'] is False
     assert result['ranking_date'] == '20260721'
     assert result['base_date'] == '20260720'
     assert result['estimate_coverage'] == 0.9
     assert [item['name'] for item in result['all_ranked']] == ['A', 'B']
     assert result['all_ranked'][0]['chg_20d'] == 10.0
     assert result['all_ranked'][0]['estimate_applied'] is True
+    assert result['all_ranked'][0]['strength_rank'] == 1
+    assert result['all_ranked'][0]['strength_tier'] == 'top5_candidate'
+    assert result['all_ranked'][0]['is_l1_mainline'] is None
     assert all(rows[-1]['date'] == '20260721' for rows in judged_rows)
     estimated_a = next(rows[-1] for rows in judged_rows if rows[-1]['close'] == 110)
     assert estimated_a == {

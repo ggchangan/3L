@@ -256,8 +256,8 @@ export default function StrongTrendCandidates() {
                     ) : (
                       <span className="sig-badge sig-3l">3L</span>
                     )}
-                    {c.mainline_level === '主线' && <span className="sig-badge sig-mainline">主线</span>}
-                    {c.mainline_level === '次级主线' && <span className="sig-badge sig-submain">次级主线</span>}
+                    {c.mainline_level === '主线' && <span className="sig-badge sig-mainline">20日强度前5候选</span>}
+                    {c.mainline_level === '次级主线' && <span className="sig-badge sig-submain">20日强度6–10候选</span>}
                     {c.stop_loss_pct != null && (
                       <span className="sig-badge sig-sl">止损{c.stop_loss_pct.toFixed(1)}%</span>
                     )}
