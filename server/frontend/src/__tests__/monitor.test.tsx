@@ -329,7 +329,7 @@ describe('StockCard', () => {
       mainline_level: '主线',
     }
     render(<StockCard s={mainlineSignal} idx={1} />)
-    expect(screen.getByText('主线')).toBeTruthy()
+    expect(screen.getByText('20日强度前5候选')).toBeTruthy()
   })
 
   it('null sector_chg 不崩溃', () => {

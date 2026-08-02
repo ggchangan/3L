@@ -56,12 +56,12 @@ describe('MarketCycle', () => {
 describe('MainlineSection', () => {
   beforeEach(() => vi.mocked(fetchReviewByDate).mockReset())
 
-  it('空数据时显示暂无主线', () => {
+  it('空数据时显示暂无板块强度数据', () => {
     render(<MainlineSection data={null} dates={[]} currentDate="" />)
-    expect(screen.getByText('暂无主线数据')).toBeTruthy()
+    expect(screen.getByText('暂无板块强度数据')).toBeTruthy()
   })
 
-  it('按主线层级展示方向，并把波峰波谷保留为板块阶段', () => {
+  it('按20日板块强度候选分层，并把波峰波谷保留为板块阶段', () => {
     render(<MainlineSection
       data={{
         lines: [{ name: '主线A', chg_20d: 18, stage: '波峰' }],
@@ -76,8 +76,8 @@ describe('MainlineSection', () => {
       currentDate="2026-07-23"
     />)
 
-    expect(screen.getByText('主线方向')).toBeTruthy()
-    expect(screen.getAllByText('次级主线').length).toBeGreaterThan(0)
+    expect(screen.getByText('20日强度前5候选')).toBeTruthy()
+    expect(screen.getByText('20日强度6–10候选')).toBeTruthy()
     expect(screen.getByText(/波谷是加分项/)).toBeTruthy()
     expect(screen.queryByText('主线回调机会')).toBeNull()
   })
@@ -320,9 +320,9 @@ describe('持仓真实风险暴露', () => {
 
 describe('板块环境语义', () => {
   it('不把波谷和趋势阶段直接称为机会', () => {
-    expect(formatSectorEnvironment('主线回调')).toBe('主线 · 波谷')
-    expect(formatSectorEnvironment('次线机会')).toBe('次级主线 · 波谷')
-    expect(formatSectorEnvironment('见顶风险', '主线')).toBe('主线 · 波峰风险')
+    expect(formatSectorEnvironment('主线回调')).toBe('20日强度前5候选 · 波谷')
+    expect(formatSectorEnvironment('次线机会')).toBe('20日强度6–10候选 · 波谷')
+    expect(formatSectorEnvironment('见顶风险', '主线')).toBe('20日强度前5候选 · 波峰风险')
     expect(formatSectorEnvironment('趋势延续')).toBe('板块 · 上升/波中')
   })
 })

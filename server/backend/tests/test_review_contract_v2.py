@@ -175,7 +175,7 @@ def test_trading_plan_joins_opportunity_by_canonical_industry():
     assert item['industry'] == '数字芯片设计'
     assert item['sector'] == '数字芯片设计'
     assert item['opportunity'] == '主线回调'
-    assert item['sector_context'] == '主线·波谷'
+    assert item['sector_context'] == '20日强度前5候选·波谷'
     assert item['opp_reason'] == ''
     assert item['decision_status'] == 'candidate'
     assert item['buy_point_category'] == 'unknown'
@@ -355,7 +355,7 @@ def test_trading_plan_separates_focus_watch_and_ordinary_signals_in_weak_market(
         'ordinary': 2,
         'market_regime': 'weak',
         'conclusion': '当前为弱势市场，重点信号需符合天量滞跌的恐慌买点或明确反转买点后才可执行。',
-        'ranking_rule': '市场过滤 → 主线/强动量 → 个股买点质量 → 板块环境 → 止损风险',
+        'ranking_rule': '市场过滤 → 20日板块强度候选/强动量 → 个股买点质量 → 板块环境 → 止损风险',
     }
     assert plan['buy_priority'][0]['decision_status'] == 'candidate'
     assert plan['buy_priority'][0]['action_type'] == '观察'
@@ -420,7 +420,7 @@ def test_trading_plan_valley_recovery_allows_focus_to_be_executable():
     assert item['decision_status'] == 'executable'
     assert item['priority'] == '高'
     assert plan['market_strategy']['risk_phase'] == 'valley_recovery'
-    assert '随主线/强动量中的有效买点逐步增加仓位' in plan['market_strategy']['position_action']
+    assert '随20日板块强度候选/强动量中的有效买点逐步增加仓位' in plan['market_strategy']['position_action']
 
 
 def test_dynamic_position_uses_actual_holdings_and_planned_sells_in_main_decline():

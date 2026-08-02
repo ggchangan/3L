@@ -84,7 +84,7 @@ export default function Review() {
       <NavBar />
       <div className="header">
         <h1>📋 3L 每日复盘</h1>
-        <div className="sub">① 大盘强弱 · ② 主线动量 · ③ 板块环境 · ④ 个股买点</div>
+        <div className="sub">① 大盘强弱 · ② 20日板块强度候选 · ③ 板块环境 · ④ 个股买点</div>
         <div className="date-badge" id="todayDate">
           复盘交易日 {reviewDate} 星期{WDS[weekday]}
         </div>
@@ -130,12 +130,12 @@ export default function Review() {
               />
             </div>
 
-            {/* STEP 2 + 3: 主线动量与板块环境 */}
+            {/* STEP 2 + 3: 20日板块强度候选与板块环境 */}
             {data?.mainline && (
               <div className="section">
                 <div className="section-title">
                   <span className="step">STEP 2–3</span>
-                  主线动量与板块环境
+                  20日板块强度候选与板块环境
                   <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 方向决定优先级，阶段只作加分和风险提示</span>
                 </div>
                 <div id="mainlineContainer">
