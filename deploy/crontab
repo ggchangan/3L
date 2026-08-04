@@ -7,7 +7,11 @@
 30 17 * * 1-5 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 /usr/bin/flock -n /tmp/3l-close-update.lock /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data --phase close --max-attempts 7 --retry-interval 900 >> /home/ubuntu/3l-server/logs/update-close.log 2>&1
 
 # 每个交日的次日6:00补齐上一个交易日数据；周六必须补周五
-0 6 * * 2-6 cd /home/ubuntu/3l-server/server && TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data --phase full >> /home/ubuntu/3l-server/logs/update.log 2>&1
+0 6 * * 2-6 cd /home/ubuntu/3l-server/server && for i in 1 2 3; do TQDM_DISABLE=1 /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data --phase full >> /home/ubuntu/3l-server/logs/update.log 2>&1 && break; echo "[$(date '+\%F \%T')] full update 第${i}次失败，30s后重试" >> /home/ubuntu/3l-server/logs/update.log; sleep 30; done
+
+# 交易日20:00 板块正式数据更新（Tushare ths_daily 15000分，当日数据已齐）；22:00 条件补齐
+0 20 * * 1-5 cd /home/ubuntu/3l-server && bash server/scripts/run_sector_evening.sh main >> /home/ubuntu/3l-server/logs/sector-evening.log 2>&1
+0 22 * * 1-5 cd /home/ubuntu/3l-server && bash server/scripts/run_sector_evening.sh catchup >> /home/ubuntu/3l-server/logs/sector-evening.log 2>&1
 
 # 6:30 数据源验证
 30 6 * * 1-5 cd /home/ubuntu/3l-server && bash server/scripts/run_verify.sh >> /home/ubuntu/3l-server/logs/verify.log 2>&1
