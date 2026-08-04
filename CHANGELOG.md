@@ -1,5 +1,42 @@
 # Changelog
 
+## [v3.10.2] — 2026-08-04
+
+### 新增：交易日 20:00 板块正式数据更新 + 22:00 条件补齐
+
+**背景：** Tushare ths_daily（15000分）当日板块/概念数据约 20:00~22:00 更新完毕，但此前板块正式数据只在次日 06:00 full 阶段拉取，复盘页当天只能显示"待补齐"。实测 22:04 手动更新可当天确认（行业 710/710、概念 177/177）。
+
+**改动：**
+- 新增 `server/scripts/run_sector_evening.sh`：
+  - `main` 模式（20:00）：跑 `--isolated-stage sectors`（Tushare ths_daily 主路径，复用子进程隔离 + native 崩溃自动重试 + 覆盖门禁），通过门禁后打当日标记并刷新复盘缓存
+  - `catchup` 模式（22:00）：标记存在则跳过（20:00 已确认），否则补跑一次
+- `deploy/crontab` 新增两条任务：`0 20 * * 1-5`（main）+ `0 22 * * 1-5`（catchup），并同步 06:00 full 的重试循环
+- 复盘页当天 20:00 后即可确认当日行业/概念数据，不再等次日 06:00
+
+### 修复：追踪概念清单对齐 Tushare 权威名（纯数据修复）
+
+**背景：** Tushare 官方将部分概念改名（数据中心→数据中心(AIDC)、Sora概念(文生视频)→AI视频），`concept_list.json` 仍存旧名导致 Tushare 主路径按名字匹配失败，误判为缺失走直连补漏（直连同样按名字匹配失败）→ 复盘页"待补齐"。
+
+**改动：**
+- `update_concept_maps()` 从 DB（ths_index + ths_member）重建 `concept_list.json` + `stock_concept.json`，名字自动对齐 Tushare 权威名
+- 顺带修正 `884112.TI`（人工智能→实为冰洗，I 类型行业）被误标为概念的问题：重建后自动过滤，真·人工智能（885728.TI，1062 只）保留
+- AI视频（886068.TI）历史数据停留在 06-12 导致 `source_inactive` 被排除追踪 → 从 Tushare 补写当日数据 + 37 条历史空洞（6/15~8/3），恢复追踪
+- 验证：概念覆盖 174/176 → **177/177 全绿**，`concept_status: confirmed`，确认日期当天生效
+
+## [v3.10.1] — 2026-08-04
+
+### 修复：板块K线改走 Tushare 高权限接口，绕开 py_mini_racer V8 崩溃
+
+**背景：** akshare 的同花顺板块接口依赖 py_mini_racer 内嵌 V8 执行 hexin-v JS 解密，在 Ubuntu 24.04 (glibc 2.39) 上创建 isolate 时偶发 SIGSEGV（信号 11）。07-31 起连续 3 次全量更新命中，导致 ths_daily 板块数据停在 07-31、复盘页"待补齐"。
+
+**改动：**
+- 板块数据新增 **Tushare 15000分代理通道**（`TUSHARE_THS_TOKEN`/`TUSHARE_THS_URL`），`ths_daily` 按 `trade_date` 一次批量拉取全市场板块日线（含当日正式数据）
+- `fetch_ths_daily_klines_akshare` 主路径 = Tushare ths_daily；**fallback = 直连同花顺原始K线接口**（`d.10jqka.com.cn/v4/line/bk_{code}`，零鉴权）
+- 新增 `ths_index` 全量同步 + `ths_member` 增量同步（新板块/概念自动进表，顺带解决新概念缺失反例）
+- `_run_full_stage_isolated` 增加 native 信号终止自动重试（最多 3 次，间隔 30s）；退出码非 0/缺标记属代码缺陷不重试
+- crontab 全量更新命令加 shell 层重试循环（兜底主进程 native 崩溃场景）
+- 测试：Tushare 主路径/fallback 直连/代理解析/清单同步，共 36 个用例
+
 ## [v3.10.0] — 2026-06-10
 
 ### 新增：复盘页多指数支持

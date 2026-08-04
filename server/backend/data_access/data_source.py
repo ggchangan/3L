@@ -19,6 +19,8 @@ from backend.core.config import (
     STOCK_CONCEPT_MAP_PATH,
     SECTOR_DATA_PROVIDER,
     SECTOR_AUXILIARY_PROVIDER,
+    TUSHARE_THS_TOKEN,
+    TUSHARE_THS_URL,
 )
 from backend.services.source_health import (
     report_success, report_failure, is_source_available, get_all_health
@@ -232,8 +234,53 @@ def _normalize_trade_date(value):
     return raw
 
 
+def _call_ths_proxy(api_name: str, params: dict, fields: str = '') -> list:
+    """调用同花顺板块 Tushare 代理接口（15000分），返回 [{field: value}, ...]。
+
+    Args:
+        api_name: Tushare 接口名（ths_index / ths_daily / ths_member）
+        params: 接口参数，如 {'trade_date': '20260804'}
+        fields: 可选字段列表（逗号分隔），为空则返回全部字段
+
+    Returns:
+        记录列表，每项为 {字段名: 值} 字典
+
+    Raises:
+        DataSourceError: 未配置代理 / 接口返回非零 code
+    """
+    import requests
+    if not TUSHARE_THS_TOKEN or not TUSHARE_THS_URL:
+        raise DataSourceError('板块 Tushare 代理未配置（TUSHARE_THS_TOKEN/TUSHARE_THS_URL）')
+    resp = requests.post(
+        TUSHARE_THS_URL,
+        json={
+            'api_name': api_name,
+            'token': TUSHARE_THS_TOKEN,
+            'params': params,
+            'fields': fields,
+        },
+        headers={'Accept-Encoding': 'gzip'},
+        timeout=30,
+    )
+    payload = resp.json()
+    if payload.get('code') != 0:
+        raise DataSourceError(
+            f'板块 Tushare 接口 {api_name} 失败: {payload.get("msg") or payload.get("code")}'
+        )
+    data = payload.get('data') or {}
+    field_list = data.get('fields', [])
+    return [
+        dict(zip(field_list, row))
+        for row in data.get('items', [])
+    ]
+
+
 def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
-    """从 akshare 拉取板块K线并写入 ths_daily
+    """拉取同花顺板块K线并写入 ths_daily。
+
+    主路径：Tushare ths_daily（15000分代理，一次请求返回全市场板块日线，
+    含当日正式数据，无 akshare/py_mini_racer V8 崩溃风险）。
+    fallback：直连同花顺原始K线接口（d.10jqka.com.cn，零鉴权）。
 
     Args:
         names_to_update: [(name, type), ...] — (板块名, 'industry'|'concept')
@@ -242,56 +289,93 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
     Returns:
         (written_count, requested_count)
     """
-    import akshare as ak
-    import warnings
-    warnings.filterwarnings('ignore')
-
     db = _get_tushare_db()
     if not db or not names_to_update:
         return (0, 0)
+    try:
+        return _fetch_ths_daily_klines_tushare(db, names_to_update, today)
+    except Exception as exc:
+        log.warning('Tushare ths_daily 拉取失败(%s)，回退直连同花顺', exc)
+        return _fetch_ths_daily_klines_direct(db, names_to_update, today)
 
+
+def _fetch_ths_daily_klines_tushare(db, names_to_update: list, today: str) -> tuple:
+    """Tushare ths_daily 批量拉取：一次请求全市场，过滤出目标板块后写入。"""
+    rows = _call_ths_proxy('ths_daily', {'trade_date': today})
+    if not rows:
+        raise DataSourceError(f'ths_daily {today} 返回空')
+
+    idx_rows = db.execute_raw(
+        "SELECT ts_code, name FROM ths_index WHERE type IN ('I','N')"
+    )
+    name_code_map = {r['name']: r['ts_code'] for r in idx_rows}
+    requested_codes = {
+        name_code_map[name]
+        for name, _ in names_to_update
+        if name in name_code_map
+    }
+    if not requested_codes:
+        raise DataSourceError('ths_index 无匹配板块')
+
+    records = []
+    for row in rows:
+        ts_code = row.get('ts_code')
+        if ts_code not in requested_codes:
+            continue
+        trade_date = str(row.get('trade_date', '')).replace('-', '')
+        if trade_date != today:
+            continue
+        records.append({
+            'ts_code': ts_code,
+            'trade_date': trade_date,
+            'open': row.get('open'),
+            'high': row.get('high'),
+            'low': row.get('low'),
+            'close': row.get('close'),
+            'pre_close': row.get('pre_close'),
+            'change': row.get('change'),
+            'pct_chg': row.get('pct_chg'),
+            'vol': row.get('vol'),
+            'amount': row.get('amount'),
+        })
+
+    if not records:
+        raise DataSourceError(f'ths_daily {today} 无匹配板块数据')
+
+    written = db.upsert_many_from_dicts('ths_daily', records)
+    return (written, len(names_to_update))
+
+
+def _fetch_ths_daily_klines_direct(db, names_to_update: list, today: str) -> tuple:
+    """直连同花顺原始K线接口（d.10jqka.com.cn），Tushare 代理不可用时的兜底。
+
+    覆盖 881/884/885/886 全部同花顺板块代码；GICS/申万等非 88 前缀无内码，
+    直连不可达，按现状返回空。
+    """
     # 查 ts_code 映射
     idx_rows = db.execute_raw(
         "SELECT ts_code, name FROM ths_index WHERE type IN ('I','N')"
     )
     name_code_map = {r['name']: r['ts_code'] for r in idx_rows}
-    idx_types = {}
-    for r in idx_rows:
-        idx_types[r['name']] = r['ts_code']
 
-    name_type_map = dict(names_to_update)
     start = str(int(today) - 20000)
 
     def _fetch_one(name):
-        try:
-            stype = name_type_map[name]
-            if stype == 'industry':
-                df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)
-            else:
-                df = ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=today)
-            if df is not None and not df.empty:
-                return name, _convert_board_kline(df)
-        except Exception:
-            pass
-
-        # Fallback: akshare 查不到时（名不在那90个一级行业列表里），
-        # 从 ths_index 拿到 ts_code，直连同花顺原始K线接口
-        # 仅对同花顺原生行业代码（88开头）做 fallback，GICS/申万分类跳过
-        try:
-            ts_code = name_code_map.get(name)
-            if not ts_code or not ts_code.startswith('88'):
-                return name, []
-            bk_code = ts_code.replace('.TI', '')
-            import requests, re, json
-            current_year = int(today[:4])
-            all_rows = []
-            for year in [current_year]:
-                url = f"https://d.10jqka.com.cn/v4/line/bk_{bk_code}/01/{year}.js"
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Referer": "http://q.10jqka.com.cn",
-                    "Host": "d.10jqka.com.cn",
-                }
+        # GICS/申万等非 88 前缀代码无同花顺板块内码，直连不可达，保持现状返回空。
+        ts_code = name_code_map.get(name)
+        if not ts_code or not ts_code.startswith('88'):
+            return name, []
+        bk_code = ts_code.replace('.TI', '')
+        import requests, re, json
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "http://q.10jqka.com.cn",
+            "Host": "d.10jqka.com.cn",
+        }
+        all_rows = []
+        for year in range(int(start[:4]), int(today[:4]) + 1):
+            url = f"https://d.10jqka.com.cn/v4/line/bk_{bk_code}/01/{year}.js"
+            try:
                 r = requests.get(url, headers=headers, timeout=10)
                 if r.status_code != 200:
                     continue
@@ -313,14 +397,14 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
                             'volume': float(parts[5]),
                             'amount': float(parts[6]),
                         })
-            if not all_rows:
-                return name, []
-            # 按日期过滤
-            all_rows.sort(key=lambda x: x['date'])
-            filtered = [r for r in all_rows if start <= r['date'] <= today]
-            return name, filtered
-        except Exception:
+            except Exception:
+                continue
+        if not all_rows:
             return name, []
+        # 按日期过滤
+        all_rows.sort(key=lambda x: x['date'])
+        filtered = [r for r in all_rows if start <= r['date'] <= today]
+        return name, filtered
 
     records = []
     names_list = [n for n, _ in names_to_update]
@@ -365,6 +449,69 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
 
     written = db.upsert_many_from_dicts('ths_daily', records)
     return (written, len(names_list))
+
+
+def sync_ths_index_from_tushare() -> int:
+    """Tushare ths_index 全量同步（upsert 不删除），新板块自动进表。
+
+    Returns:
+        写入条数
+    """
+    rows = _call_ths_proxy('ths_index', {'exchange': 'A'})
+    if not rows:
+        return 0
+    records = [{
+        'ts_code': r.get('ts_code'),
+        'name': r.get('name'),
+        'count': r.get('count'),
+        'list_date': r.get('list_date'),
+        'type': r.get('type'),
+    } for r in rows if r.get('ts_code') and r.get('name')]
+    db = _get_tushare_db()
+    if not db or not records:
+        return 0
+    return db.upsert_many_from_dicts('ths_index', records)
+
+
+def sync_ths_member_from_tushare() -> int:
+    """Tushare ths_member 增量同步：仅拉取 ths_index 中尚无成分记录的板块。
+
+    首次运行全量（约 390 个概念），之后每天只补新增概念。失败不阻断。
+
+    Returns:
+        写入条数
+    """
+    db = _get_tushare_db()
+    if not db:
+        return 0
+    idx_rows = db.execute_raw("SELECT ts_code FROM ths_index WHERE type='N'")
+    all_codes = {r['ts_code'] for r in idx_rows}
+    if not all_codes:
+        return 0
+    filled_rows = db.execute_raw("SELECT DISTINCT ts_code FROM ths_member")
+    filled = {r['ts_code'] for r in filled_rows}
+    missing = sorted(all_codes - filled)
+    if not missing:
+        return 0
+
+    total = 0
+    for ts_code in missing:
+        try:
+            rows = _call_ths_proxy('ths_member', {'ts_code': ts_code})
+            if rows:
+                records = [{
+                    'ts_code': r.get('ts_code'),
+                    'con_code': r.get('con_code'),
+                    'con_name': r.get('con_name'),
+                    'weight': r.get('weight'),
+                } for r in rows if r.get('con_code')]
+                if records:
+                    total += db.upsert_many_from_dicts('ths_member', records)
+        except Exception as exc:
+            log.warning('ths_member 同步失败 [%s]: %s', ts_code, exc)
+        time.sleep(0.5)  # 限频 150次/分钟
+    log.info('ths_member 增量同步: %d 个新板块, 写入 %d 条', len(missing), total)
+    return total
 
 
 def get_ths_concept_latest_dates(names, reference_date=None) -> dict:
