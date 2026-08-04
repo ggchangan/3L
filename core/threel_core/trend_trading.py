@@ -295,7 +295,8 @@ def is_smooth_trend(code, date_str, data):
 # ==================== 手动指定趋势交易 ====================
 
 _DATA_DIR = os.environ.get('DATA_DIR', '/home/ubuntu/data/3l')
-MANUAL_TREND_PATH = os.path.join(_DATA_DIR, 'private', 'manual_trend_stocks.json')
+# R2 目录调整后配置文件统一在 config/ 下（config.py: MANUAL_TREND_PATH）
+MANUAL_TREND_PATH = os.path.join(_DATA_DIR, 'config', 'manual_trend.json')
 _manual_trend_cache = None
 
 def _load_manual_trend():
