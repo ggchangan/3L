@@ -514,7 +514,7 @@ def compute_review_real_time(date_str=None):
         build_holdings_risk_exposure, generate_buy_signals_review, generate_holdings_review,
     )
     from backend.core.scan_buy_signals import get_main_lines
-    from backend.data_access.data_layer import get_watchlist, get_all_stocks, get_index_klines, get_concept_list, get_stock_concept_map
+    from backend.data_access.data_layer import get_watchlist, get_all_stocks, get_index_klines
 
     print(f"[3L复盘实时] 计算 {date_str} 复盘数据...")
 
@@ -645,19 +645,21 @@ def compute_review_real_time(date_str=None):
             from backend.data_access.tushare_db import TushareDB
             _tdb = TushareDB()
 
-            # 行业→成分股映射（单条 JOIN 查询，毫秒级）
+            # 行业+概念→成分股映射（单条 JOIN 查询，毫秒级）
+            # 统一使用 ths_member.con_code（带交易所后缀），与 stock_daily.ts_code 对齐
+            # 按 (type, name) 双键存储：避免跨类型重名板块（如家用电器 I/N）互相污染
             try:
                 _conn = _tdb._get_conn()
                 _cur = _conn.cursor()
                 _cur.execute("""
-                    SELECT ti.name, tm.con_code
+                    SELECT ti.type, ti.name, tm.con_code
                     FROM ths_member tm
                     JOIN ths_index ti ON tm.ts_code = ti.ts_code
-                    WHERE ti.type = 'I'
+                    WHERE ti.type IN ('I', 'N')
                 """)
                 for _r in _cur.fetchall():
                     vals = list(_r.values())
-                    _board_data.setdefault(vals[0], []).append(vals[1].upper().strip())
+                    _board_data.setdefault((vals[0], vals[1]), []).append(vals[2].upper().strip())
                 _cur.close()
                 _conn.close()
             except Exception:
@@ -721,24 +723,18 @@ def compute_review_real_time(date_str=None):
             _candidates.sort(key=lambda x: -x['chg_5d'])
             return _candidates[:top_n]
 
-        _concept_list = get_concept_list()
-
         if mainline_data.get('all_ranked'):
             for _entry in mainline_data['all_ranked']:
                 _sname = _entry.get('name', '')
-                _codes = _board_data.get(_sname, [])
+                _codes = _board_data.get(('I', _sname), [])
                 _entry['leaders'] = _calc_stock_leaders(_codes, _kline_index, _stock_names)
 
         _cm = mainline_data.get('concept_mainline', {})
         if _cm.get('all_ranked'):
             for _entry in _cm['all_ranked']:
                 _cname = _entry.get('name', '')
-                _ccode = None
-                for _cc, _ci in _concept_list.items():
-                    if _ci.get('name') == _cname:
-                        _ccode = _cc
-                        break
-                _concept_stocks = _concept_list.get(_ccode, {}).get('stocks', []) if _ccode else []
+                # 与行业一致，直接使用 ths_member 成分（带后缀，匹配 stock_daily）
+                _concept_stocks = _board_data.get(('N', _cname), [])
                 _entry['leaders'] = _calc_stock_leaders(_concept_stocks, _kline_index, _stock_names)
     except Exception as e:
         print(f'[3L复盘] ⚠️ 板块领涨股计算失败: {e}')
