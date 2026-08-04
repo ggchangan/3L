@@ -1,5 +1,19 @@
 # Changelog
 
+## [v3.10.1] — 2026-08-04
+
+### 修复：板块K线直连同花顺，绕开 py_mini_racer V8 崩溃
+
+**背景：** akshare 的同花顺板块接口依赖 py_mini_racer 内嵌 V8 执行 hexin-v JS 解密，在 Ubuntu 24.04 (glibc 2.39) 上创建 isolate 时偶发 SIGSEGV（信号 11）。07-31 起连续 3 次全量更新命中，导致 ths_daily 板块数据停在 07-31、复盘页"待补齐"。
+
+**改动：**
+- `fetch_ths_daily_klines_akshare` 改为直连同花顺原始K线接口（`d.10jqka.com.cn/v4/line/bk_{code}`），不再经过 akshare/py_mini_racer
+  - 覆盖 881/884/885/886 全部同花顺板块代码；GICS/申万等非 88 前缀保持现状返回空
+  - 按 start~today 年份范围逐年拉取（原 fallback 只拉当年，1 月有历史缺口）
+- `_run_full_stage_isolated` 增加 native 信号终止自动重试（最多 3 次，间隔 30s）；退出码非 0/缺标记属代码缺陷不重试
+- crontab 全量更新命令加 shell 层重试循环（兜底主进程 native 崩溃场景）
+- 测试更新：直连 mock（替换 FakeAkshare）、重试成功/耗尽、非 88 跳过，共 31 个用例
+
 ## [v3.10.0] — 2026-06-10
 
 ### 新增：复盘页多指数支持
