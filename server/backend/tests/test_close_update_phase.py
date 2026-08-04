@@ -719,6 +719,9 @@ def test_call_ths_proxy_parses_items(monkeypatch):
     """_call_ths_proxy 解析 Tushare 标准响应 {data:{fields, items}}。"""
     from backend.data_access import data_source
 
+    monkeypatch.setattr(data_source, 'TUSHARE_THS_TOKEN', 'test-token')
+    monkeypatch.setattr(data_source, 'TUSHARE_THS_URL', 'https://proxy.example.test')
+
     payload = {
         'code': 0, 'msg': '',
         'data': {
@@ -735,6 +738,9 @@ def test_call_ths_proxy_parses_items(monkeypatch):
 def test_call_ths_proxy_raises_on_error_code(monkeypatch):
     """接口返回非零 code 时抛 DataSourceError。"""
     from backend.data_access import data_source
+
+    monkeypatch.setattr(data_source, 'TUSHARE_THS_TOKEN', 'test-token')
+    monkeypatch.setattr(data_source, 'TUSHARE_THS_URL', 'https://proxy.example.test')
 
     payload = {'code': 10001, 'msg': '积分不足', 'data': None}
     with patch('requests.post', return_value=type('R', (), {'json': lambda self: payload})()):
