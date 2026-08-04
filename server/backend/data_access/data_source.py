@@ -233,7 +233,12 @@ def _normalize_trade_date(value):
 
 
 def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
-    """从 akshare 拉取板块K线并写入 ths_daily
+    """拉取同花顺板块K线并写入 ths_daily。
+
+    直连同花顺原始K线接口（d.10jqka.com.cn），不再经过 akshare：
+    akshare 的同花顺接口依赖 py_mini_racer 内嵌 V8 执行 hexin-v 解密，
+    在 Ubuntu 24.04 (glibc 2.39) 上创建 isolate 时偶发 SIGSEGV（信号 11）。
+    原始接口零鉴权、无 V8 依赖，且覆盖 881/884/885/886 全部同花顺板块代码。
 
     Args:
         names_to_update: [(name, type), ...] — (板块名, 'industry'|'concept')
@@ -242,10 +247,6 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
     Returns:
         (written_count, requested_count)
     """
-    import akshare as ak
-    import warnings
-    warnings.filterwarnings('ignore')
-
     db = _get_tushare_db()
     if not db or not names_to_update:
         return (0, 0)
@@ -255,43 +256,25 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
         "SELECT ts_code, name FROM ths_index WHERE type IN ('I','N')"
     )
     name_code_map = {r['name']: r['ts_code'] for r in idx_rows}
-    idx_types = {}
-    for r in idx_rows:
-        idx_types[r['name']] = r['ts_code']
 
-    name_type_map = dict(names_to_update)
     start = str(int(today) - 20000)
 
     def _fetch_one(name):
-        try:
-            stype = name_type_map[name]
-            if stype == 'industry':
-                df = ak.stock_board_industry_index_ths(symbol=name, start_date=start, end_date=today)
-            else:
-                df = ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=today)
-            if df is not None and not df.empty:
-                return name, _convert_board_kline(df)
-        except Exception:
-            pass
-
-        # Fallback: akshare 查不到时（名不在那90个一级行业列表里），
-        # 从 ths_index 拿到 ts_code，直连同花顺原始K线接口
-        # 仅对同花顺原生行业代码（88开头）做 fallback，GICS/申万分类跳过
-        try:
-            ts_code = name_code_map.get(name)
-            if not ts_code or not ts_code.startswith('88'):
-                return name, []
-            bk_code = ts_code.replace('.TI', '')
-            import requests, re, json
-            current_year = int(today[:4])
-            all_rows = []
-            for year in [current_year]:
-                url = f"https://d.10jqka.com.cn/v4/line/bk_{bk_code}/01/{year}.js"
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Referer": "http://q.10jqka.com.cn",
-                    "Host": "d.10jqka.com.cn",
-                }
+        # GICS/申万等非 88 前缀代码无同花顺板块内码，直连不可达，保持现状返回空。
+        ts_code = name_code_map.get(name)
+        if not ts_code or not ts_code.startswith('88'):
+            return name, []
+        bk_code = ts_code.replace('.TI', '')
+        import requests, re, json
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "http://q.10jqka.com.cn",
+            "Host": "d.10jqka.com.cn",
+        }
+        all_rows = []
+        for year in range(int(start[:4]), int(today[:4]) + 1):
+            url = f"https://d.10jqka.com.cn/v4/line/bk_{bk_code}/01/{year}.js"
+            try:
                 r = requests.get(url, headers=headers, timeout=10)
                 if r.status_code != 200:
                     continue
@@ -313,14 +296,14 @@ def fetch_ths_daily_klines_akshare(names_to_update: list, today: str) -> tuple:
                             'volume': float(parts[5]),
                             'amount': float(parts[6]),
                         })
-            if not all_rows:
-                return name, []
-            # 按日期过滤
-            all_rows.sort(key=lambda x: x['date'])
-            filtered = [r for r in all_rows if start <= r['date'] <= today]
-            return name, filtered
-        except Exception:
+            except Exception:
+                continue
+        if not all_rows:
             return name, []
+        # 按日期过滤
+        all_rows.sort(key=lambda x: x['date'])
+        filtered = [r for r in all_rows if start <= r['date'] <= today]
+        return name, filtered
 
     records = []
     names_list = [n for n, _ in names_to_update]

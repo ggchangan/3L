@@ -176,7 +176,8 @@ def test_isolated_stage_reports_signal_without_losing_other_output(capsys):
         'stdout': '[stage] index wrote data\n',
         'stderr': '',
     })()
-    with patch.object(update_stock_data.subprocess, 'run', return_value=crashed):
+    with patch.object(update_stock_data, 'STAGE_RETRY_INTERVAL', 0), \
+         patch.object(update_stock_data.subprocess, 'run', return_value=crashed):
         try:
             update_stock_data._run_full_stage_isolated('index')
             assert False, 'native signal must fail the stage'
@@ -546,24 +547,26 @@ def test_board_kline_conversion_rejects_bad_prices_and_sanitizes_volume():
 
 def test_board_fetch_never_writes_invalid_close_as_formal_coverage(monkeypatch):
     import math
-    import pandas as pd
     from backend.data_access import data_source
 
-    frame = pd.DataFrame([
-        {
-            '日期': '2026-07-23', '开盘价': 9, '收盘价': float('nan'),
-            '最高价': 11, '最低价': 8, '成交量': 100,
-        },
-        {
-            '日期': '2026-07-24', '开盘价': 9, '收盘价': 10,
-            '最高价': 11, '最低价': 8, '成交量': 100,
-        },
-    ])
+    # 模拟同花顺原始K线接口响应：第2行 close=0 属非法行情，必须整行拒绝。
+    # 直连按 start~today 的年份范围逐年请求文件，仅 2026 年文件返回有效数据。
+    class FakeResponse:
+        status_code = 200
 
-    class FakeAkshare:
-        @staticmethod
-        def stock_board_industry_index_ths(**kwargs):
-            return frame
+        def __init__(self, year):
+            self.year = year
+
+        @property
+        def text(self):
+            if self.year == 2026:
+                return ('quotebridge_v4_line_bk881001_2026({'
+                        '"data":"20260723,9,11,8,10,100,1000;20260724,9,11,8,0,100,1000"})')
+            return f'quotebridge_v4_line_bk881001_{self.year}({{"data":""}})'
+
+    def fake_get(url, **kwargs):
+        year = int(url.split('/01/')[1][:4])
+        return FakeResponse(year)
 
     class FakeDB:
         records = []
@@ -576,15 +579,15 @@ def test_board_fetch_never_writes_invalid_close_as_formal_coverage(monkeypatch):
             return len(records)
 
     db = FakeDB()
-    monkeypatch.setitem(__import__('sys').modules, 'akshare', FakeAkshare())
-    with patch.object(data_source, '_get_tushare_db', return_value=db):
+    with patch('requests.get', side_effect=fake_get), \
+         patch.object(data_source, '_get_tushare_db', return_value=db):
         written, requested = data_source.fetch_ths_daily_klines_akshare(
             [('A', 'industry')], '20260724',
         )
 
     assert (written, requested) == (1, 1)
     assert len(db.records) == 1
-    assert db.records[0]['trade_date'] == '20260724'
+    assert db.records[0]['trade_date'] == '20260723'
     assert db.records[0]['close'] == 10
     assert all(math.isfinite(value) for value in db.records[0].values() if isinstance(value, float))
 
@@ -636,3 +639,65 @@ def test_sector_update_rechecks_coverage_after_targeted_concept_retry():
     retry.assert_called_once_with('20260721', ['工业互联网'])
     assert get_coverage.call_count == 2
     save.assert_called_once_with('20260721', completed)
+
+
+def test_isolated_stage_retries_after_signal_then_succeeds():
+    """native 段错误是环境问题：首次信号终止后重跑同阶段应能成功。"""
+    from backend.core import update_stock_data
+
+    crashed = type('Result', (), {
+        'returncode': -11,
+        'stdout': '[stage] first attempt crashed\n',
+        'stderr': '',
+    })()
+    ok = type('Result', (), {
+        'returncode': 0,
+        'stdout': '__3L_STAGE_RESULT__=[319, 20]\n',
+        'stderr': '',
+    })()
+    with patch.object(update_stock_data.subprocess, 'run', side_effect=[crashed, ok]) as run_mock:
+        result = update_stock_data._run_full_stage_isolated('sectors', retry_interval=0)
+
+    assert result == (319, 20)
+    assert run_mock.call_count == 2
+
+
+def test_isolated_stage_gives_up_after_max_attempts():
+    """连续信号终止时按最大尝试次数放弃，并向 cron 暴露信号详情。"""
+    from backend.core import update_stock_data
+
+    crashed = type('Result', (), {
+        'returncode': -11,
+        'stdout': '',
+        'stderr': '',
+    })()
+    with patch.object(update_stock_data.subprocess, 'run', return_value=crashed) as run_mock:
+        try:
+            update_stock_data._run_full_stage_isolated(
+                'sectors', max_attempts=2, retry_interval=0,
+            )
+            assert False, '连续信号终止必须失败'
+        except RuntimeError as exc:
+            assert '信号 11' in str(exc)
+
+    assert run_mock.call_count == 2
+
+
+def test_board_fetch_skips_non_ths_codes():
+    """GICS/申万等非 88 前缀代码无法直连同花顺，按现状返回空并计入请求数。"""
+    from backend.data_access import data_source
+
+    class FakeDB:
+        def execute_raw(self, sql, params=None):
+            return [{'ts_code': '861001.TI', 'name': 'GICS行业'}]
+
+        def upsert_many_from_dicts(self, table, records):
+            return len(records)
+
+    db = FakeDB()
+    with patch.object(data_source, '_get_tushare_db', return_value=db):
+        written, requested = data_source.fetch_ths_daily_klines_akshare(
+            [('GICS行业', 'industry')], '20260724',
+        )
+
+    assert (written, requested) == (0, 1)

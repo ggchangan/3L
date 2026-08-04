@@ -52,6 +52,11 @@ from backend.data_access.data_layer import (
 CACHE_DIR = os.path.join(DATA_DIR, '.cache')
 ISOLATED_STAGE_MARKER = '__3L_STAGE_RESULT__='
 
+# native 子进程（akshare/pandas 等 C 扩展）被信号终止是低概率环境问题，
+# 重跑同阶段即可恢复；非信号错误（退出码非0/缺标记）是代码缺陷，不重试。
+STAGE_RETRY_INTERVAL = 30
+STAGE_MAX_ATTEMPTS = 3
+
 
 def log(msg):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -638,31 +643,48 @@ def run_full_phase():
     log(f'⏱️  总耗时 {elapsed:.1f}s')
 
 
-def _run_full_stage_isolated(stage):
-    """在全新解释器中运行易受 native 依赖影响的阶段并取回结构化结果。"""
-    completed = subprocess.run(
-        [sys.executable, '-m', 'backend.core.update_stock_data', '--isolated-stage', stage],
-        cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        capture_output=True, text=True,
-    )
-    for line in completed.stdout.splitlines():
-        if not line.startswith(ISOLATED_STAGE_MARKER):
-            print(line, flush=True)
-    if completed.stderr:
-        print(completed.stderr, file=sys.stderr, end='', flush=True)
-    marker = next(
-        (line[len(ISOLATED_STAGE_MARKER):] for line in reversed(completed.stdout.splitlines())
-         if line.startswith(ISOLATED_STAGE_MARKER)),
-        '',
-    )
-    if completed.returncode != 0:
-        signal = -completed.returncode if completed.returncode < 0 else None
-        detail = f'被信号 {signal} 终止' if signal else f'退出码 {completed.returncode}'
-        raise RuntimeError(f'{stage} 子进程{detail}')
-    if not marker:
-        raise RuntimeError(f'{stage} 子进程缺少结果标记')
-    result = json.loads(marker)
-    return tuple(result)
+def _run_full_stage_isolated(stage, max_attempts=None, retry_interval=None):
+    """在全新解释器中运行易受 native 依赖影响的阶段并取回结构化结果。
+
+    native 子进程被信号终止（如 akshare/pandas 的 SIGSEGV）时自动重跑同阶段；
+    退出码非0或缺少结果标记属于代码缺陷，直接失败不重试。
+    """
+    max_attempts = STAGE_MAX_ATTEMPTS if max_attempts is None else max_attempts
+    retry_interval = STAGE_RETRY_INTERVAL if retry_interval is None else retry_interval
+
+    last_detail = ''
+    for attempt in range(1, max_attempts + 1):
+        completed = subprocess.run(
+            [sys.executable, '-m', 'backend.core.update_stock_data', '--isolated-stage', stage],
+            cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            capture_output=True, text=True,
+        )
+        for line in completed.stdout.splitlines():
+            if not line.startswith(ISOLATED_STAGE_MARKER):
+                print(line, flush=True)
+        if completed.stderr:
+            print(completed.stderr, file=sys.stderr, end='', flush=True)
+        marker = next(
+            (line[len(ISOLATED_STAGE_MARKER):] for line in reversed(completed.stdout.splitlines())
+             if line.startswith(ISOLATED_STAGE_MARKER)),
+            '',
+        )
+        if completed.returncode != 0:
+            signal = -completed.returncode if completed.returncode < 0 else None
+            detail = f'被信号 {signal} 终止' if signal else f'退出码 {completed.returncode}'
+            if signal is not None and attempt < max_attempts:
+                log(
+                    f'⚠️ {stage} 子进程{detail}，'
+                    f'{retry_interval}s 后重试 (第{attempt}/{max_attempts - 1}次重试)'
+                )
+                time.sleep(retry_interval)
+                continue
+            raise RuntimeError(f'{stage} 子进程{detail}')
+        if not marker:
+            raise RuntimeError(f'{stage} 子进程缺少结果标记')
+        result = json.loads(marker)
+        return tuple(result)
+    raise RuntimeError(f'{stage} 子进程{last_detail}')
 
 
 def main(argv=None):
