@@ -474,6 +474,8 @@ def test_sector_update_advances_confirmation_only_after_gate_passes():
         'industry_names': ['A'],
     }
     with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
+         patch('backend.data_access.data_source.sync_ths_index_from_tushare', return_value=0), \
+         patch('backend.data_access.data_source.sync_ths_member_from_tushare', return_value=0), \
          patch.object(update_stock_data, 'datetime') as current_time, \
          patch.object(update_stock_data, 'get_tracked_concept_universe', return_value={
              'names': set(), 'excluded': {},
@@ -499,6 +501,8 @@ def test_sector_update_runs_on_saturday_to_confirm_friday_data():
         'industry_names': ['A'],
     }
     with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260724'), \
+         patch('backend.data_access.data_source.sync_ths_index_from_tushare', return_value=0), \
+         patch('backend.data_access.data_source.sync_ths_member_from_tushare', return_value=0), \
          patch.object(update_stock_data, 'get_tracked_concept_universe', return_value={
              'names': set(), 'excluded': {},
          }), \
@@ -579,7 +583,10 @@ def test_board_fetch_never_writes_invalid_close_as_formal_coverage(monkeypatch):
             return len(records)
 
     db = FakeDB()
+    # Tushare 主路径失败 → 回退直连（本测试验证直连的非法行情整行拒绝）
     with patch('requests.get', side_effect=fake_get), \
+         patch.object(data_source, '_call_ths_proxy',
+                      side_effect=data_source.DataSourceError('mock代理失败')), \
          patch.object(data_source, '_get_tushare_db', return_value=db):
         written, requested = data_source.fetch_ths_daily_klines_akshare(
             [('A', 'industry')], '20260724',
@@ -618,6 +625,8 @@ def test_sector_update_rechecks_coverage_after_targeted_concept_retry():
         'concept_names': ['大飞机', '工业互联网'],
     }
     with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260721'), \
+         patch('backend.data_access.data_source.sync_ths_index_from_tushare', return_value=0), \
+         patch('backend.data_access.data_source.sync_ths_member_from_tushare', return_value=0), \
          patch.object(update_stock_data, 'datetime') as current_time, \
          patch.object(update_stock_data, 'get_tracked_concept_universe', return_value={
              'names': {'大飞机', '工业互联网'}, 'excluded': {},
@@ -695,9 +704,139 @@ def test_board_fetch_skips_non_ths_codes():
             return len(records)
 
     db = FakeDB()
-    with patch.object(data_source, '_get_tushare_db', return_value=db):
+    # Tushare 主路径失败 → 回退直连（GICS 等非 88 前缀无内码，直连返回空）
+    with patch.object(data_source, '_call_ths_proxy',
+                      side_effect=data_source.DataSourceError('mock代理失败')), \
+         patch.object(data_source, '_get_tushare_db', return_value=db):
         written, requested = data_source.fetch_ths_daily_klines_akshare(
             [('GICS行业', 'industry')], '20260724',
         )
 
     assert (written, requested) == (0, 1)
+
+
+def test_call_ths_proxy_parses_items(monkeypatch):
+    """_call_ths_proxy 解析 Tushare 标准响应 {data:{fields, items}}。"""
+    from backend.data_access import data_source
+
+    payload = {
+        'code': 0, 'msg': '',
+        'data': {
+            'fields': ['ts_code', 'trade_date', 'close'],
+            'items': [['881271.TI', '20260804', 12018.1]],
+        },
+    }
+    with patch('requests.post', return_value=type('R', (), {'json': lambda self: payload})()):
+        rows = data_source._call_ths_proxy('ths_daily', {'trade_date': '20260804'})
+
+    assert rows == [{'ts_code': '881271.TI', 'trade_date': '20260804', 'close': 12018.1}]
+
+
+def test_call_ths_proxy_raises_on_error_code(monkeypatch):
+    """接口返回非零 code 时抛 DataSourceError。"""
+    from backend.data_access import data_source
+
+    payload = {'code': 10001, 'msg': '积分不足', 'data': None}
+    with patch('requests.post', return_value=type('R', (), {'json': lambda self: payload})()):
+        try:
+            data_source._call_ths_proxy('ths_daily', {'trade_date': '20260804'})
+            assert False, '非零 code 必须抛异常'
+        except data_source.DataSourceError as exc:
+            assert '积分不足' in str(exc)
+
+
+def test_fetch_board_klines_uses_tushare_as_primary():
+    """Tushare ths_daily 批量为主路径：一次请求全市场，过滤目标板块后写入。"""
+    import math
+    from backend.data_access import data_source
+
+    tushare_rows = [
+        {'ts_code': '881001.TI', 'trade_date': '20260724',
+         'open': 9, 'high': 11, 'low': 8, 'close': 10,
+         'pre_close': 9.5, 'change': 0.5, 'pct_chg': 5.26,
+         'vol': 100.0, 'amount': 1000.0},
+        {'ts_code': '999999.TI', 'trade_date': '20260724',
+         'open': 1, 'high': 1, 'low': 1, 'close': 1,
+         'pre_close': 1, 'change': 0, 'pct_chg': 0,
+         'vol': 1, 'amount': 1},  # 非目标板块，应被过滤
+    ]
+
+    class FakeDB:
+        records = []
+
+        def execute_raw(self, sql, params=None):
+            return [{'ts_code': '881001.TI', 'name': 'A'}]
+
+        def upsert_many_from_dicts(self, table, records):
+            self.records = records
+            return len(records)
+
+    db = FakeDB()
+    with patch.object(data_source, '_call_ths_proxy', return_value=tushare_rows), \
+         patch.object(data_source, '_get_tushare_db', return_value=db):
+        written, requested = data_source.fetch_ths_daily_klines_akshare(
+            [('A', 'industry')], '20260724',
+        )
+
+    assert (written, requested) == (1, 1)
+    assert len(db.records) == 1
+    assert db.records[0]['ts_code'] == '881001.TI'
+    assert db.records[0]['trade_date'] == '20260724'
+    assert db.records[0]['pct_chg'] == 5.26
+    assert db.records[0]['amount'] == 1000.0
+    assert all(math.isfinite(v) for v in db.records[0].values() if isinstance(v, float))
+
+
+def test_sync_ths_index_upserts_full_list():
+    """ths_index 全量同步：Tushare 返回的板块清单写入表。"""
+    from backend.data_access import data_source
+
+    rows = [
+        {'ts_code': '881001.TI', 'name': '半导体', 'count': 120, 'list_date': '20200101', 'type': 'I'},
+        {'ts_code': '885430.TI', 'name': '人形机器人', 'count': 60, 'list_date': '20240101', 'type': 'N'},
+    ]
+
+    class FakeDB:
+        def upsert_many_from_dicts(self, table, records):
+            self.saved = (table, records)
+            return len(records)
+
+    db = FakeDB()
+    with patch.object(data_source, '_call_ths_proxy', return_value=rows), \
+         patch.object(data_source, '_get_tushare_db', return_value=db):
+        written = data_source.sync_ths_index_from_tushare()
+
+    assert written == 2
+    assert db.saved[0] == 'ths_index'
+    assert db.saved[1][0]['type'] == 'I'
+
+
+def test_sync_ths_member_only_fetches_missing_concepts():
+    """ths_member 增量同步：仅为尚无成分记录的板块拉取。"""
+    from backend.data_access import data_source
+
+    class FakeDB:
+        def __init__(self):
+            self.saved = []
+
+        def execute_raw(self, sql, params=None):
+            if 'SELECT DISTINCT ts_code FROM ths_member' in sql:
+                return [{'ts_code': '885001.TI'}]  # 已有成分
+            return [{'ts_code': '885430.TI'}, {'ts_code': '885001.TI'}]  # ths_index 全量
+
+        def upsert_many_from_dicts(self, table, records):
+            self.saved.append(records)
+            return len(records)
+
+    db = FakeDB()
+    member_rows = [
+        {'ts_code': '885430.TI', 'con_code': '000027.SZ', 'con_name': '深圳能源'},
+    ]
+    with patch.object(data_source, '_call_ths_proxy', return_value=member_rows) as proxy_mock, \
+         patch.object(data_source, '_get_tushare_db', return_value=db), \
+         patch.object(data_source.time, 'sleep'):
+        written = data_source.sync_ths_member_from_tushare()
+
+    assert written == 1
+    assert db.saved[0][0]['con_name'] == '深圳能源'
+    assert proxy_mock.call_count == 1  # 只拉缺失的 885430

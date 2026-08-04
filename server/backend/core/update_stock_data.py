@@ -260,6 +260,20 @@ def update_sectors():
     today = get_last_completed_trading_day()
     log(f'📋  目标日期: {today}')
 
+    # 板块清单同步（Tushare 15000分）：新板块自动进表；失败不阻断主流程
+    try:
+        from backend.data_access.data_source import (
+            sync_ths_index_from_tushare, sync_ths_member_from_tushare,
+        )
+        synced = sync_ths_index_from_tushare()
+        if synced:
+            log(f'📋  板块清单同步: {synced} 条')
+        members = sync_ths_member_from_tushare()
+        if members:
+            log(f'📋  概念成分同步: {members} 条')
+    except Exception as e:
+        log(f'⚠️  板块清单同步失败(不阻断): {e}')
+
     # ── 确定追踪中的概念 ──
     try:
         concept_universe = get_tracked_concept_universe(

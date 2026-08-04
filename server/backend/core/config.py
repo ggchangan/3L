@@ -118,6 +118,10 @@ TUSHARE_TOKEN = _env('TUSHARE_TOKEN', '')
 TUSHARE_TOKEN_HIGH = _env('TUSHARE_TOKEN_HIGH', '') or TUSHARE_TOKEN
 TUSHARE_PROXY_URL = _env('TUSHARE_PROXY_URL', '')
 
+# 板块数据专用 Tushare 代理（15000分，ths_index/ths_daily/ths_member 高权限）
+TUSHARE_THS_TOKEN = _env('TUSHARE_THS_TOKEN', '')
+TUSHARE_THS_URL = _env('TUSHARE_THS_URL', '')
+
 # 板块数据源按“逻辑提供方（provider）”选择；同一 provider 下可以有多个
 # 获取通道（transport）。默认使用同花顺口径，Tushare 只是 THS 数据的首选
 # 获取通道，不应被当成另一套板块口径。
