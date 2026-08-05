@@ -214,7 +214,7 @@ export default function TrendCandidates() {
                         const r = await fetch(`/api/trend-candidates/toggle?code=${s.code}&enable=${e.target.checked}`)
                         const d = await r.json()
                         if (d.success === false && d.error) { showToast('❌ ' + d.error); return }
-                        showToast(e.target.checked ? `✅ ${s.code} 已加入趋势交易` : `❌ ${s.code} 已移除`)
+                        showToast(e.target.checked ? `✅ ${s.code} 已加入趋势交易` : `✅ ${s.code} 已移除趋势交易`)
                         const [r1, r2] = await Promise.all([
                           fetch('/api/trend-candidates'),
                           fetch('/api/trend-tracked'),
