@@ -210,11 +210,12 @@ export default function TrendCandidates() {
                   <input type="checkbox"
                     checked={s.in_manual || false}
                     onChange={async e => {
+                      const enable = e.target.checked  // 同步捕获，await 后 e.target 已被 React 恢复，不可再读
                       try {
-                        const r = await fetch(`/api/trend-candidates/toggle?code=${s.code}&enable=${e.target.checked}`)
+                        const r = await fetch(`/api/trend-candidates/toggle?code=${s.code}&enable=${enable}`)
                         const d = await r.json()
                         if (d.success === false && d.error) { showToast('❌ ' + d.error); return }
-                        showToast(e.target.checked ? `✅ ${s.code} 已加入趋势交易` : `✅ ${s.code} 已移除趋势交易`)
+                        showToast(enable ? `✅ ${s.code} 已加入趋势交易` : `✅ ${s.code} 已移除趋势交易`)
                         const [r1, r2] = await Promise.all([
                           fetch('/api/trend-candidates'),
                           fetch('/api/trend-tracked'),
