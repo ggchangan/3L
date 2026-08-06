@@ -443,3 +443,28 @@ class TestAuthAPI:
         _handle_me(h, '/api/auth/me')
         status, data = h.responses[-1]
         assert status == 401
+
+
+class TestChartEndpointsAuthWhitelist:
+    """图表端点必须免登录（前端 <img>/<object> 原生标签无法携带 Authorization header）。
+
+    2026-08-06 回归：多用户改造后所有 /api/* 强制登录，图表端点返回 401，
+    导致复盘/盯盘页面大盘与个股关键点图全部加载失败。修复后白名单包含
+    index-chart / stock-chart / sector-chart，此处锁定行为防止再次回归。
+    """
+
+    @pytest.mark.parametrize('path', [
+        '/api/index-chart',
+        '/api/stock-chart',
+        '/api/sector-chart',
+    ])
+    def test_chart_endpoints_anonymous_ok(self, path):
+        from server.server import Handler
+        assert path in Handler.AUTH_WHITELIST
+
+    def test_private_api_still_requires_auth(self):
+        """非白名单 /api/* 仍必须登录（数据隔离不放松）。"""
+        from server.server import Handler
+        assert '/api/watchlist' not in Handler.AUTH_WHITELIST
+        assert '/api/review' not in Handler.AUTH_WHITELIST
+        assert '/api/holdings' not in Handler.AUTH_WHITELIST

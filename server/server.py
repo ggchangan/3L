@@ -153,8 +153,12 @@ class Handler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=FE_DIR, **kwargs)
 
     # ── 用户认证：Authorization: Bearer <token> → 请求上下文 ──
-    # 白名单：登录/注册/健康检查（部署验证用），其余 /api/* 必须登录
-    AUTH_WHITELIST = {'/api/auth/login', '/api/auth/register', '/api/health'}
+    # 白名单：登录/注册/健康检查（部署验证用）+ 图表端点（前端 <img>/<object> 原生标签
+    # 无法携带 Authorization header，图表是只读行情数据不涉及用户私有数据）
+    AUTH_WHITELIST = {
+        '/api/auth/login', '/api/auth/register', '/api/health',
+        '/api/index-chart', '/api/stock-chart', '/api/sector-chart',
+    }
 
     def _resolve_user(self):
         """解析 Authorization 头，设置 thread-local 当前用户。
