@@ -70,10 +70,9 @@ def _handle_update(h, path, body):
         from . import get_server
         _srv = get_server()
         data = json.loads(body)
-        for k in ('market', 'mainlines', 'stocks'):
-            if k in data:
-                _srv.REVIEW_DATA[k] = data[k]
-        _srv.save_review_data()
+        partial = {k: data[k] for k in ('market', 'mainlines', 'stocks') if k in data}
+        if partial:
+            _srv.update_review_bucket(partial)
         h.send_json({'status': 'ok'})
     except Exception as e:
         raise APIError(f"系统模块异常: {e}") from e

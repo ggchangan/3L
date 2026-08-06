@@ -63,8 +63,8 @@ def search_watchlist_for_trend(query):
     from backend.core.trend_candidates import _load_manual_trend
     from backend.core import config
 
-    # 读取自选股
-    wl_path = config.WATCHLIST_PATH
+    # 读取自选股（按当前用户）
+    wl_path = config.get_user_config_path('watchlist.json')
     try:
         with open(wl_path) as f:
             import json

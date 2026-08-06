@@ -30,6 +30,24 @@ DATA_DIR = _DATA_DIR  # 暴露给测试
 DIRECTIONS_FILE = os.environ.get('DIRECTIONS_PATH',
                                  os.path.join(DATA_DIR, 'config', 'directions.json'))
 
+
+def _directions_path():
+    """当前用户的方向配置文件路径。
+
+    优先级：
+    1. 环境变量 DIRECTIONS_PATH（部署级覆盖）
+    2. 模块级 DIRECTIONS_FILE 被外部改过（测试注入 tmp 路径）
+    3. 默认：config/users/<uid>/directions.json（按当前用户隔离）
+    """
+    env = os.environ.get('DIRECTIONS_PATH')
+    if env:
+        return env
+    default = os.path.join(DATA_DIR, 'config', 'directions.json')
+    if DIRECTIONS_FILE != default:
+        return DIRECTIONS_FILE
+    from backend.core.config import get_user_config_path
+    return get_user_config_path('directions.json')
+
 # ── 概念数据路径 ──
 CONCEPT_LIST_PATH = os.path.join(DATA_DIR, 'map', 'concept_list.json')
 
@@ -60,9 +78,10 @@ def _default_v2():
 
 def _load():
     """加载数据，自动兼容 V1 → V2 升级"""
-    if os.path.isfile(DIRECTIONS_FILE):
+    path = _directions_path()
+    if os.path.isfile(path):
         try:
-            with open(DIRECTIONS_FILE, 'r') as f:
+            with open(path, 'r') as f:
                 content = f.read().strip()
             if not content:
                 return _default_v2()
@@ -88,10 +107,11 @@ def _load():
 
 def _save(data):
     """原子写入 JSON"""
-    dirname = os.path.dirname(DIRECTIONS_FILE)
+    path = _directions_path()
+    dirname = os.path.dirname(path)
     if dirname:
         os.makedirs(dirname, exist_ok=True)
-    with open(DIRECTIONS_FILE, 'w') as f:
+    with open(path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
@@ -139,10 +159,15 @@ def format_direction(category: str, sub_direction: str) -> str:
 
 
 def _update_watchlist_on_key_change(old_key: str, new_key: str):
-    """更新 watchlist 中所有引用 old_key 的股票为 new_key"""
+    """更新 watchlist 中所有引用 old_key 的股票为 new_key（按当前用户）"""
     if old_key == new_key:
         return
-    wl_path = os.path.join(DATA_DIR, 'watchlist.json')
+    # 测试注入（ds_mod.DATA_DIR 被 patch）时跟随 DATA_DIR，否则按用户隔离
+    if DATA_DIR != _DATA_DIR:
+        wl_path = os.path.join(DATA_DIR, 'watchlist.json')
+    else:
+        from backend.core.config import get_user_config_path
+        wl_path = get_user_config_path('watchlist.json')
     if not os.path.isfile(wl_path):
         return
     try:
@@ -768,12 +793,13 @@ def get_core_stocks() -> dict:
 
 def migrate_v1_to_v2() -> dict:
     """显式触发 V1 → V2 迁移"""
-    if not os.path.isfile(DIRECTIONS_FILE):
+    path = _directions_path()
+    if not os.path.isfile(path):
         return {'success': False, 'error': 'directions.json 不存在'}
 
     # 直接读原始文件，绕过 _load 的自动升级
     try:
-        with open(DIRECTIONS_FILE, 'r') as f:
+        with open(path, 'r') as f:
             content = f.read().strip()
         if not content:
             return {'success': False, 'error': 'directions.json 为空'}

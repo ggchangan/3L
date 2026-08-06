@@ -12,7 +12,8 @@ from backend.core.logger import get_logger
 log = get_logger(__name__)
 
 sys.path.insert(0, '/home/ubuntu/3l-server')
-from backend.data_access.data_layer import CACHE_DIR as DL_CACHE_DIR, REVIEW_ARCHIVE_DIR, REVIEW_CHARTS_DIR, INDUSTRY_LEADERS_PATH, SCRIPTS_DIR
+from backend.data_access.data_layer import CACHE_DIR as DL_CACHE_DIR, REVIEW_CHARTS_DIR, INDUSTRY_LEADERS_PATH, SCRIPTS_DIR
+from backend.core import config
 from backend.data_access.realtime_quotes import get_intraday_minutes, get_realtime_quote, get_realtime_quotes
 
 CACHE_DIR = DL_CACHE_DIR
@@ -247,9 +248,9 @@ def _calc_trading_progress():
         return 1
 
 def get_existing_holdings():
-    holdings_file = os.path.join(REVIEW_ARCHIVE_DIR, today_str() + '.json')
+    holdings_file = os.path.join(config.get_user_archive_dir(), today_str() + '.json')
     if not os.path.isfile(holdings_file):
-        archive_dir = REVIEW_ARCHIVE_DIR
+        archive_dir = config.get_user_archive_dir()
         os.makedirs(archive_dir, exist_ok=True)
         files = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')], reverse=True)
         if not files:

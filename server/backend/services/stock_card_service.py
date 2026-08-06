@@ -72,10 +72,11 @@ MANUAL_TREND_PATH = _MANUAL_TREND_PATH
 
 
 def _load_manual_trend():
-    """加载手动趋势股列表（每次读文件，不缓存）"""
+    """加载手动趋势股列表（每次读文件，不缓存，按当前用户隔离）"""
     try:
         import json
-        with open(MANUAL_TREND_PATH) as f:
+        from backend.core.config import get_user_config_path
+        with open(get_user_config_path('manual_trend.json')) as f:
             return set(json.load(f))
     except Exception:
         return set()

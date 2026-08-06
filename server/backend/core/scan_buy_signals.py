@@ -14,7 +14,8 @@ from datetime import datetime
 # 导入统一算法和数据获取函数
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from backend.core.buy_point_detection import get_realtime_kline
-from backend.data_access.data_layer import WATCHLIST_PATH, REVIEW_CHARTS_DIR, REVIEW_ARCHIVE_DIR, MAINLINES_CACHE_PATH
+from backend.data_access.data_layer import WATCHLIST_PATH, REVIEW_CHARTS_DIR, MAINLINES_CACHE_PATH
+from backend.core import config
 
 # 方向过滤：扫描全部
 FOCUS_DIRECTIONS = []
@@ -162,8 +163,7 @@ def gen_svg(name, code, klines, kps, output_path):
     with open(output_path, 'w') as f:
         f.write('\n'.join(sv))
 
-# 自选股名单
-WATCHLIST_FILE = WATCHLIST_PATH
+# 自选股名单（在 load_stock_list() 内按当前用户动态解析，避免模块级锁定 admin 路径）
 # 方向过滤：扫描全部
 FOCUS_DIRECTIONS = []
 # SVG输出目录
@@ -171,11 +171,16 @@ SVG_OUT_DIR = REVIEW_CHARTS_DIR
 
 
 def load_stock_list():
-    "从 watchlist.json 读取自选股名单（只读已启用方向）"
-    if not os.path.isfile(WATCHLIST_FILE):
+    """从 watchlist.json 读取自选股名单（只读已启用方向）
+
+    ⚠️ 路径必须在函数内动态解析：模块导入时无请求上下文，
+    模块级绑定会永远锁定 admin 的路径（导入者若是其他用户会读到错误数据）。
+    """
+    watchlist_file = config.get_user_config_path('watchlist.json')
+    if not os.path.isfile(watchlist_file):
         print(f"❌ watchlist.json 不存在", file=sys.stderr)
         return []
-    with open(WATCHLIST_FILE) as f:
+    with open(watchlist_file) as f:
         data = json.load(f)
     stocks = data.get('stocks', [])
     # 方向过滤：只返回已启用方向的自选股
@@ -188,7 +193,7 @@ def load_stock_list():
 
 def get_market_position():
     try:
-        archive_dir = REVIEW_ARCHIVE_DIR
+        archive_dir = config.get_user_archive_dir()
         if os.path.isdir(archive_dir):
             archives = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')])
             if archives:
@@ -201,17 +206,18 @@ def get_market_position():
 
 
 def get_main_lines():
-    """从主线缓存读取主线列表"""
+    """从主线缓存读取主线列表（按用户隔离；cron 无上下文默认 admin）"""
     try:
-        if os.path.isfile(MAINLINES_CACHE_PATH):
-            with open(MAINLINES_CACHE_PATH) as f:
+        mainlines_path = config.get_user_config_path('mainlines_cache.json')
+        if os.path.isfile(mainlines_path):
+            with open(mainlines_path) as f:
                 data = json.load(f)
             return data.get('lines', [])
     except:
         pass
     # 兜底：从复盘存档读（首次加载页面时缓存尚未写入，此时可能已有存档）
     try:
-        archive_dir = REVIEW_ARCHIVE_DIR
+        archive_dir = config.get_user_archive_dir()
         if os.path.isdir(archive_dir):
             archives = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')])
             if archives:
@@ -237,8 +243,9 @@ def get_full_mainlines():
     }
     """
     try:
-        if os.path.isfile(MAINLINES_CACHE_PATH):
-            with open(MAINLINES_CACHE_PATH) as f:
+        mainlines_path = config.get_user_config_path('mainlines_cache.json')
+        if os.path.isfile(mainlines_path):
+            with open(mainlines_path) as f:
                 data = json.load(f)
             # 兼容旧缓存格式：lines/secondary 可能是字符串列表或 dict 列表
             # -> 统一转为 dict 列表 [{'name': '...'}] 供 get_stock_card 消费
@@ -262,15 +269,16 @@ def get_full_mainlines():
 def get_sub_main_lines():
     """从主线缓存读取次级主线列表"""
     try:
-        if os.path.isfile(MAINLINES_CACHE_PATH):
-            with open(MAINLINES_CACHE_PATH) as f:
+        mainlines_path = config.get_user_config_path('mainlines_cache.json')
+        if os.path.isfile(mainlines_path):
+            with open(mainlines_path) as f:
                 data = json.load(f)
             return data.get('secondary', [])
     except:
         pass
     # 兜底：从复盘存档读
     try:
-        archive_dir = REVIEW_ARCHIVE_DIR
+        archive_dir = config.get_user_archive_dir()
         if os.path.isdir(archive_dir):
             archives = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')])
             if archives:

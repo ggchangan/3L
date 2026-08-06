@@ -314,8 +314,8 @@ def get_leader_dashboard():
     下区：龙头异动（领涨领跌+龙头切换）
     '''
     from backend.core.config import (
-        WATCHED_INDUSTRIES_PATH, INDUSTRY_LEADERS_PATH,
-        CACHE_DIR, HOLDINGS_PATH
+        INDUSTRY_LEADERS_PATH,
+        CACHE_DIR
     )
     from backend.core.monitor_data import (
         _batch_realtime_quotes, _norm_code,
@@ -394,13 +394,14 @@ def get_leader_dashboard():
         '房地产': '房地产',
     }
 
-    # 4a. 持仓行业
+    # 4a. 持仓行业（按当前用户，DB 主数据）
     watched_from_holdings = set()
     try:
-        with open(HOLDINGS_PATH, 'r') as f:
-            hd = json.load(f)
-        for h in hd.get('holdings', []):
-            sec = h.get('sector', '').strip()
+        from backend.data_access.data_layer import get_holdings as _dl_holdings
+        from backend.core.auth import get_current_user_id
+        rows = _dl_holdings(user_id=get_current_user_id()) or []
+        for h in rows:
+            sec = (h.get('sector') or '').strip()
             if not sec:
                 continue
             # 先查映射表
@@ -439,8 +440,10 @@ def get_leader_dashboard():
     # 4c. 手动关注的行业
     watched_from_manual = set()
     try:
-        if os.path.isfile(WATCHED_INDUSTRIES_PATH):
-            with open(WATCHED_INDUSTRIES_PATH, 'r') as f:
+        from backend.core.config import get_user_config_path
+        _wl_path = get_user_config_path('watched_industries.json')
+        if os.path.isfile(_wl_path):
+            with open(_wl_path, 'r') as f:
                 mw = json.load(f)
             for w in mw.get('industries', []):
                 if isinstance(w, str):
@@ -631,8 +634,8 @@ def get_leader_dashboard():
         tracked_codes = {c for c, cnt in concept_counts.items() if cnt >= 6}
         tracked_names = {concept_list.get(c, {}).get('name', c) for c in tracked_codes}
         # 读取手动添加的追踪概念
-        from backend.core.config import WATCHED_INDUSTRIES_PATH
-        watched_concepts_path = os.path.join(os.path.dirname(WATCHED_INDUSTRIES_PATH), 'watched_concepts.json')
+        from backend.core.config import get_user_config_path
+        watched_concepts_path = get_user_config_path('watched_concepts.json')
         if os.path.isfile(watched_concepts_path):
             with open(watched_concepts_path) as f:
                 wc = json.load(f)
@@ -688,38 +691,44 @@ def get_leader_dashboard():
     }
 
 
+def _watched_industries_path():
+    """当前用户的盯盘行业文件路径"""
+    from backend.core.config import get_user_config_path
+    return get_user_config_path('watched_industries.json')
+
+
 def add_watched_industry(industry_name):
     '''手动添加关注行业'''
-    from backend.core.config import WATCHED_INDUSTRIES_PATH
     import os
+    wl_path = _watched_industries_path()
     industries = []
-    if os.path.isfile(WATCHED_INDUSTRIES_PATH):
+    if os.path.isfile(wl_path):
         try:
-            with open(WATCHED_INDUSTRIES_PATH, 'r') as f:
+            with open(wl_path, 'r') as f:
                 d = json.load(f)
             industries = d.get('industries', [])
         except:
             industries = []
     if industry_name not in industries:
         industries.append(industry_name)
-    with open(WATCHED_INDUSTRIES_PATH, 'w') as f:
+    with open(wl_path, 'w') as f:
         json.dump({'industries': industries}, f, ensure_ascii=False)
     return True
 
 
 def remove_watched_industry(industry_name):
     '''移除手动关注行业'''
-    from backend.core.config import WATCHED_INDUSTRIES_PATH
     import os
-    if not os.path.isfile(WATCHED_INDUSTRIES_PATH):
+    wl_path = _watched_industries_path()
+    if not os.path.isfile(wl_path):
         return False
     try:
-        with open(WATCHED_INDUSTRIES_PATH, 'r') as f:
+        with open(wl_path, 'r') as f:
             d = json.load(f)
         industries = d.get('industries', [])
         if industry_name in industries:
             industries.remove(industry_name)
-        with open(WATCHED_INDUSTRIES_PATH, 'w') as f:
+        with open(wl_path, 'w') as f:
             json.dump({'industries': industries}, f, ensure_ascii=False)
         return True
     except:

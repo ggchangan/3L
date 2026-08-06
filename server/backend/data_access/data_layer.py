@@ -137,14 +137,43 @@ def fetch_index_klines_from_akshare(code, limit=500):
 
 
 def get_watchlist():
-    """返回自选股列表（缓存10s）"""
-    return cache.get('watchlist', _threel_get_watchlist, ttl=10)
+    """返回当前用户自选股列表（缓存10s，cache key 按用户隔离）"""
+    from backend.core.auth import get_current_user_id
+    uid = get_current_user_id()
+    return cache.get(
+        f'watchlist:{uid}',
+        lambda: _threel_get_watchlist_from_user(uid),
+        ttl=10,
+    )
+
+
+def _threel_get_watchlist_from_user(uid):
+    """按用户读取自选股（原 threel_core 全局读取逻辑，路径按用户）"""
+    from backend.core.config import get_user_config_path
+    import json as _json
+    wl_path = get_user_config_path('watchlist.json', uid)
+    try:
+        with open(wl_path, 'r', encoding='utf-8') as f:
+            data = _json.load(f)
+        if isinstance(data, dict):
+            stocks = data.get('stocks', [])
+            data['count'] = len(stocks) if isinstance(stocks, list) else 0
+            return data
+        if isinstance(data, list):
+            return {'stocks': data, 'count': len(data)}
+    except (OSError, ValueError):
+        pass
+    return {'stocks': [], 'count': 0}
 
 
 def get_watchlist_by_direction():
-    """返回 {direction: [{'code':..., 'name':...}, ...]}"""
-    from threel_core.data_layer import get_watchlist_by_direction
-    return get_watchlist_by_direction()
+    """返回 {direction: [{'code':..., 'name':...}, ...]}（按当前用户）"""
+    wl = get_watchlist().get('stocks', [])
+    result = {}
+    for s in wl:
+        d = s.get('direction', '其他')
+        result.setdefault(d, []).append(s)
+    return result
 
 
 def _concept_mainline_exclusion_reason(name):
@@ -767,8 +796,13 @@ def get_holdings(user_id=1):
         return _repo_get(user_id)
     except Exception as e:
         log.warning('get_holdings DB查询失败(%s)，回退JSON', e)
-    # 回退：旧 JSON 路径
-    return _load_json(HOLDINGS_PATH, [])
+    # 回退：旧 JSON 路径（按用户隔离）
+    from backend.core.config import get_user_config_path
+    data = _load_json(get_user_config_path('holdings.json'), {})
+    if isinstance(data, dict):
+        # 旧格式 {"update_date": ..., "holdings": [...]} 取 holdings 列表
+        return data.get('holdings', [])
+    return data if isinstance(data, list) else []
 
 
 def save_holdings(user_id, holdings_list):
@@ -783,16 +817,19 @@ def save_holdings(user_id, holdings_list):
         return _repo_save(user_id, holdings_list)
     except Exception as e:
         log.warning('save_holdings DB写入失败(%s)，回退JSON', e)
-        _save_json(HOLDINGS_PATH, holdings_list)
+        from backend.core.config import get_user_config_path
+        _save_json(get_user_config_path('holdings.json'), holdings_list)
         return False
 
 
 def get_trades():
-    return _load_json(TRADES_PATH, [])
+    from backend.core.config import get_user_config_path
+    return _load_json(get_user_config_path('trades.json'), [])
 
 
 def save_trades(data):
-    _save_json(TRADES_PATH, data)
+    from backend.core.config import get_user_config_path
+    _save_json(get_user_config_path('trades.json'), data)
 
 
 # ====== 扫描结果 ======
@@ -805,29 +842,38 @@ def save_latest_scan(data):
     _save_json(LATEST_SCAN_PATH, data)
 
 
-# ====== 复盘存档 ======
+# ====== 复盘存档（按用户隔离） ======
+
+def _archive_dir():
+    """当前用户的复盘存档目录"""
+    from backend.core.config import get_user_archive_dir
+    return get_user_archive_dir()
+
 
 def get_review_archive(date_str=None):
     """date_str: YYYY-MM-DD 或 None（读取最新）"""
+    archive_dir = _archive_dir()
     if date_str:
-        return _load_json(os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'), {})
-    if not os.path.isdir(REVIEW_ARCHIVE_DIR):
+        return _load_json(os.path.join(archive_dir, f'{date_str}.json'), {})
+    if not os.path.isdir(archive_dir):
         return {}
-    files = sorted([f for f in os.listdir(REVIEW_ARCHIVE_DIR) if f.endswith('.json')])
+    files = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')])
     if not files:
         return {}
-    return _load_json(os.path.join(REVIEW_ARCHIVE_DIR, files[-1]), {})
+    return _load_json(os.path.join(archive_dir, files[-1]), {})
 
 
 def save_review_archive(date_str, data):
-    _save_json(os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'), data)
+    archive_dir = _archive_dir()
+    _save_json(os.path.join(archive_dir, f'{date_str}.json'), data)
 
 
 def get_review_latest_date():
     """返回存档中最新复盘日期 YYYY-MM-DD"""
-    if not os.path.isdir(REVIEW_ARCHIVE_DIR):
+    archive_dir = _archive_dir()
+    if not os.path.isdir(archive_dir):
         return ''
-    files = sorted([f for f in os.listdir(REVIEW_ARCHIVE_DIR) if f.endswith('.json')])
+    files = sorted([f for f in os.listdir(archive_dir) if f.endswith('.json')])
     return files[-1].replace('.json', '') if files else ''
 
 

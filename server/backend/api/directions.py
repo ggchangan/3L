@@ -664,9 +664,10 @@ def _handle_remove(h, path, body):
         if not r.get('success'):
             h.send_json(r)
             return
-        # 从 watchlist 删除该方向的所有股票
+        # 从当前用户的 watchlist 删除该方向的所有股票
         removed = 0
-        wl_path = os.path.join(DATA_DIR, 'watchlist.json')
+        from backend.core.config import get_user_config_path
+        wl_path = get_user_config_path('watchlist.json')
         if os.path.isfile(wl_path):
             with open(wl_path, 'r', encoding='utf-8') as f:
                 wl = json.load(f)

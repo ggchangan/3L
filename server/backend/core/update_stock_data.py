@@ -17,7 +17,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 # dirname×1=core/  ×2=backend/  ×3=server/（backend 包所在位置）
 from backend.core.config import DATA_DIR, ALL_CODES_PATH, CONCEPT_LIST_PATH
 from backend.data_access.data_layer import (
-    get_watchlist,
     load_all_stocks_uncached,
     get_last_updated,
     get_industry_map,
@@ -90,12 +89,28 @@ def _flatten_stocks(sector_map):
     return result
 
 
+def _all_users_stock_codes():
+    """所有活跃用户自选股的并集（K线数据全局共享，各用户盯盘都有行情）"""
+    from backend.data_access.users_repo import list_users
+    from backend.core.config import get_user_config_path
+    import json as _json
+    codes = set()
+    for u in list_users():
+        try:
+            with open(get_user_config_path('watchlist.json', u['id']), encoding='utf-8') as f:
+                wl_data = _json.load(f)
+            for s in wl_data.get('stocks', []):
+                c = (s.get('code') or '')[-6:]
+                if c:
+                    codes.add(c)
+        except Exception:
+            continue
+    return sorted(codes)
+
+
 def update_stocks():
     """更新个股K线 — 从 stock_daily DB 批量拉取，不再用 mootdx"""
-    wl = get_watchlist()
-    codes = sorted(set(
-        s.get('code', '')[-6:] for s in wl if s.get('code')
-    ))
+    codes = _all_users_stock_codes()
     if not codes:
         log('⚠️  自选股列表为空，跳过个股更新')
         return (0, 0, 0)

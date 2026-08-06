@@ -4,8 +4,8 @@
 import json
 import os
 from backend.core import config as cfg
-from backend.core.config import WATCHLIST_PATH, ALL_CODES_PATH, PINYIN_PATH, INDUSTRY_MAP_PATH, ANALYSIS_CACHE_PATH
-from backend.core.config import atomic_json_dump, DATA_DIR
+from backend.core.config import ALL_CODES_PATH, PINYIN_PATH, INDUSTRY_MAP_PATH
+from backend.core.config import atomic_json_dump, DATA_DIR, get_user_config_path
 
 ALL_STOCKS_PATH = os.path.join(DATA_DIR, 'all_stocks_60d.json')
 
@@ -16,8 +16,9 @@ log = get_logger(__name__)
 
 def get_watchlist():
     """获取自选股列表"""
-    if os.path.isfile(WATCHLIST_PATH):
-        with open(WATCHLIST_PATH, 'r', encoding='utf-8') as f:
+    wl_path = get_user_config_path('watchlist.json')
+    if os.path.isfile(wl_path):
+        with open(wl_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         if isinstance(data, dict):
             stocks = data.get('stocks', [])
@@ -31,7 +32,7 @@ def get_watchlist():
 def save_watchlist(data, wl_path=None):
     """保存自选股列表（数据由 update_stock_data.py 统一更新）"""
     from backend.data_access.cache_layer import cache
-    p = wl_path or WATCHLIST_PATH
+    p = wl_path or get_user_config_path('watchlist.json')
     new_stocks = data.get('stocks', [])
     # 安全保护：禁止用少量股票覆盖大量自选股
     try:
@@ -109,7 +110,7 @@ def search_stocks(query):
 
 def _load_watchlist(path=None):
     """加载 watchlist.json，返回数据字典"""
-    p = path or WATCHLIST_PATH
+    p = path or get_user_config_path('watchlist.json')
     if os.path.isfile(p):
         with open(p, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -118,7 +119,7 @@ def _load_watchlist(path=None):
 
 def _save_watchlist_data(data, path=None):
     """保存 watchlist.json（线程安全）"""
-    p = path or WATCHLIST_PATH
+    p = path or get_user_config_path('watchlist.json')
     atomic_json_dump(data, p, indent=2)
 
 
@@ -248,19 +249,21 @@ def get_watchlist_analysis(stocks=None, wl=None):
       price, change, structure, stage, sector, trading_system,
       trend_bias, signal, trend_stock, profit_model1
 
-    走磁盘缓存（ANALYSIS_CACHE_PATH），
-    当 WATCHLIST_PATH 或 ALL_STOCKS_PATH 有变更时自动失效。
+    走磁盘缓存（按用户隔离的 analysis_cache.json），
+    当用户自选股列表或 ALL_STOCKS_PATH 有变更时自动失效。
     传入 stocks/wl 参数时跳过缓存（用于测试注入）。
     """
-    # 未传测试参数 → 尝试缓存
+    # 未传测试参数 → 尝试缓存（缓存按用户隔离）
     if stocks is None and wl is None:
         try:
-            if os.path.exists(ANALYSIS_CACHE_PATH):
-                cache_mtime = os.path.getmtime(ANALYSIS_CACHE_PATH)
-                wl_mtime = os.path.getmtime(WATCHLIST_PATH)
+            cache_path = get_user_config_path('analysis_cache.json')
+            wl_path = get_user_config_path('watchlist.json')
+            if os.path.exists(cache_path):
+                cache_mtime = os.path.getmtime(cache_path)
+                wl_mtime = os.path.getmtime(wl_path)
                 # 缓存比自选股列表新 → 有效（ALL_STOCKS_PATH 已不存在）
                 if cache_mtime > wl_mtime:
-                    with open(ANALYSIS_CACHE_PATH, 'r', encoding='utf-8') as f:
+                    with open(cache_path, 'r', encoding='utf-8') as f:
                         cached = json.load(f)
                     # 验证缓存股票数量与自选股一致
                     if cached.get('count') == len(_load_watchlist().get('stocks', [])):
@@ -361,10 +364,11 @@ def get_watchlist_analysis(stocks=None, wl=None):
 
     result = {'stocks': results, 'count': len(results)}
 
-    # 写缓存
+    # 写缓存（按用户隔离）
     try:
-        os.makedirs(os.path.dirname(ANALYSIS_CACHE_PATH), exist_ok=True)
-        atomic_json_dump(result, ANALYSIS_CACHE_PATH)
+        cache_path = get_user_config_path('analysis_cache.json')
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        atomic_json_dump(result, cache_path)
         log.info('watchlist_analysis: 缓存已更新 (%d只)', len(results))
     except Exception as e:
         log.warning('watchlist_analysis: 缓存写入失败 %s', e)

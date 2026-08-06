@@ -10,7 +10,7 @@
 import json, os, sys, shutil, subprocess
 from datetime import datetime
 from backend.core.config import (
-    REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH, REVIEW_CHARTS_DIR,
+    REVIEW_CHARTS_DIR,
     WWW_DIR, PRIVATE_DIR, SCRIPTS_DIR, MOMENTUM_CACHE_PREFIX,
     CHARTS_DIR, DATA_DIR, INDUSTRY_MAP_PATH, MAINLINES_CACHE_PATH,
     BOARD_CONSTITUENTS_PATH,
@@ -71,8 +71,9 @@ def load_review_data(date_str, existing, ww_dir):
     from backend.services.direction_service import get_active as get_active_dirs
     from backend.data_access.data_layer import get_all_stocks, get_holdings
 
-    # 从 DB 读取持仓（user_id=1 默认用户）
-    live_holdings = get_holdings(1)
+    # 从 DB 读取持仓（按当前用户；无上下文默认 admin）
+    from backend.core.auth import get_current_user_id
+    live_holdings = get_holdings(get_current_user_id())
     holdings = live_holdings or existing.get('holdings', []) or existing.get('stocks', {}).get('stocks', [])
 
     buy_signals = []
@@ -245,7 +246,7 @@ def generate_daily_review(date_str=None):
 
     print(f"[3L复盘] 生成 {date_str} 复盘数据...")
 
-    existing = load_cached_data(os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'))
+    existing = load_cached_data(os.path.join(config.get_user_archive_dir(), f'{date_str}.json'))
     if not existing:
         existing = {
             'date': date_str,
@@ -430,11 +431,11 @@ def generate_daily_review(date_str=None):
         print(f"[3L复盘] 保存行业板块排行失败: {e}")
 
     # 保存存档
-    save_json(os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'), review)
-    save_json(REVIEW_DATA_PATH, review)
+    save_json(os.path.join(config.get_user_archive_dir(), f'{date_str}.json'), review)
+    save_json(config.get_user_config_path('review_data.json'), review)
     print(f"[3L复盘] ✅ 已保存 {date_str} 复盘数据")
 
-    # 写入主线缓存（含行业+概念主线）
+    # 写入主线缓存（含行业+概念主线）——按用户隔离，防多用户互相覆盖
     _cm = mainline_data.get('concept_mainline', {})
     _mainlines_cache = {
         'lines': [l['name'] for l in mainline_data.get('lines', [])],
@@ -444,7 +445,7 @@ def generate_daily_review(date_str=None):
             'secondary': [l['name'] for l in _cm.get('secondary', [])],
         },
     }
-    save_json(MAINLINES_CACHE_PATH, _mainlines_cache)
+    save_json(config.get_user_config_path('mainlines_cache.json'), _mainlines_cache)
 
     # 生成买点信号的关键点图
     try:
@@ -483,7 +484,7 @@ def generate_daily_review(date_str=None):
             'index_chart': f'/pub/charts/archive/{date_str}/zzqz_key_points.svg',
             'fund_flow': f'/pub/charts/archive/{date_str}/fund_flow_chart.png',
         }
-        save_json(os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'), review)
+        save_json(os.path.join(config.get_user_archive_dir(), f'{date_str}.json'), review)
     except Exception as e:
         print(f"[3L复盘] 📊 图表归档失败: {e}")
 
@@ -562,7 +563,8 @@ def compute_review_real_time(date_str=None):
 
     # 先加载持仓股，合并到扫描范围
     from backend.data_access.data_layer import get_holdings
-    holdings = get_holdings(1)
+    from backend.core.auth import get_current_user_id
+    holdings = get_holdings(get_current_user_id())
 
     buy_signals, all_stocks_60d = scan_buy_signals_if_needed(
         [], all_stocks_60d,
@@ -623,7 +625,7 @@ def compute_review_real_time(date_str=None):
                                          opportunity_map=opp_map)
     apply_trading_plan_actions(buy_signals_review, trading_plan)
 
-    # 写入主线缓存（供趋势候选页读，含行业+概念主线）
+    # 写入主线缓存（供趋势候选页读，含行业+概念主线）——按用户隔离
     _cm = mainline_data.get('concept_mainline', {})
     _mainlines_cache = {
         'lines': [l['name'] for l in mainline_data.get('lines', [])],
@@ -633,7 +635,7 @@ def compute_review_real_time(date_str=None):
             'secondary': [l['name'] for l in _cm.get('secondary', [])],
         },
     }
-    save_json(MAINLINES_CACHE_PATH, _mainlines_cache)
+    save_json(config.get_user_config_path('mainlines_cache.json'), _mainlines_cache)
 
     # ── 板块领涨股（为每个行业/概念板块加 leaders 字段） ──
     try:
@@ -802,7 +804,7 @@ def generate_daily_achievements_pdf(date_str):
     weekdays = ['一','二','三','四','五','六','日']
     wd = weekdays[dt.weekday()]
 
-    review_file = os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json')
+    review_file = os.path.join(config.get_user_archive_dir(), f'{date_str}.json')
     market_cycle = '未知'
     mainline_count = 0
     if os.path.isfile(review_file):
@@ -873,13 +875,13 @@ h1{{font-size:22px;color:#2563eb;border-bottom:2px solid #2563eb;padding-bottom:
 
 def update_historical_archives():
     """为所有历史存档补充新字段"""
-    if not os.path.isdir(REVIEW_ARCHIVE_DIR):
+    if not os.path.isdir(config.get_user_archive_dir()):
         return
-    for fname in sorted(os.listdir(REVIEW_ARCHIVE_DIR)):
+    for fname in sorted(os.listdir(config.get_user_archive_dir())):
         if not fname.endswith('.json'):
             continue
         date_str = fname[:-5]
-        fp = os.path.join(REVIEW_ARCHIVE_DIR, fname)
+        fp = os.path.join(config.get_user_archive_dir(), fname)
         try:
             with open(fp) as f:
                 data = json.load(f)

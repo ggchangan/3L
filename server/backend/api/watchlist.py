@@ -127,8 +127,9 @@ def _handle_watchlist_boards(h, path):
                 'mcap': s.get('mcap', 0),
                 'in_watchlist': False,
             })
-        # 标记在自选股的
-        wl_path = os.path.join(DATA_DIR, 'watchlist.json')
+        # 标记在自选股的（按当前用户隔离）
+        from backend.core.config import get_user_config_path
+        wl_path = get_user_config_path('watchlist.json')
         if os.path.isfile(wl_path):
             with open(wl_path) as wf:
                 wld = json.load(wf)

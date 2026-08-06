@@ -94,12 +94,18 @@ def get_tips_list():
     return {'tips': tips}
 
 
+def _journal_file():
+    """当前用户的交易日志文件路径（按用户隔离，无上下文默认 admin）"""
+    from backend.core.config import get_user_config_path
+    return get_user_config_path('journal_entries.json')
+
+
 def get_journal_entries():
     """
     读取交易日志条目。
     Returns: dict {'entries': [...]}
     """
-    jf = os.path.join(PRIVATE_DIR, 'journal_entries.json')
+    jf = _journal_file()
     if os.path.isfile(jf):
         with open(jf, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -239,7 +245,7 @@ def save_journal_entry(entry):
         entry: dict，至少包含 date / content 等字段
     Returns: dict {'status': str, 'id': str}
     """
-    jf = os.path.join(PRIVATE_DIR, 'journal_entries.json')
+    jf = _journal_file()
     entries_data = {'entries': []}
     if os.path.isfile(jf):
         with open(jf, 'r', encoding='utf-8') as f:

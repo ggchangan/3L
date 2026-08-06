@@ -1,5 +1,12 @@
-"""测试 — 持仓数据库操作（users + holdings 表）"""
+"""测试 — 持仓数据库操作（users + holdings 表）
+
+⚠️ 集成测试直接连本机 MySQL，必须满足两个铁律：
+1. 专用随机用户名（pytest_holdings_*），绝不触碰真实用户（admin=1 等）
+2. 无论断言成败，teardown 必须清理干净（DELETE holdings + DELETE users），
+   绝不允许残留数据污染生产库（历史教训：test_user+光库科技曾残留生产库）。
+"""
 import os, sys
+from uuid import uuid4
 _test_dir = os.path.dirname(__file__)
 _server_root = os.path.join(_test_dir, '..', '..')
 for p in [_server_root]:
@@ -13,6 +20,21 @@ from backend.data_access.tushare_db import TushareDB, is_db_available
 @pytest.fixture
 def db():
     return TushareDB()
+
+
+@pytest.fixture
+def test_user(db):
+    """创建专用测试用户，teardown 时彻底清理（含其 holdings）。"""
+    username = f'pytest_holdings_{uuid4().hex[:16]}'
+    db.execute_raw(
+        "INSERT INTO users(username, display_name) VALUES(%s, %s)",
+        [username, '持仓数据库测试用户'],
+    )
+    rows = db.execute_raw("SELECT id FROM users WHERE username=%s", [username])
+    uid = rows[0]['id']
+    yield uid
+    db.execute_raw("DELETE FROM holdings WHERE user_id=%s", [uid])
+    db.execute_raw("DELETE FROM users WHERE id=%s", [uid])
 
 
 @pytest.mark.skipif(not is_db_available(), reason="MySQL not available in CI")
@@ -65,34 +87,20 @@ class TestHoldingsDB:
         rows2 = db.execute_raw("SHOW TABLES LIKE 'holdings'")
         assert len(rows2) == 1, "holdings 表应存在"
 
-    def test_insert_and_read_holdings(self, db):
-        """插入持仓数据后应能正确读回"""
-        # 清空测试数据
-        old_users = db.execute_raw("SELECT id FROM users WHERE username='test_user'")
-        for old_user in old_users:
-            db.execute_raw("DELETE FROM holdings WHERE user_id=%s", [old_user['id']])
-        db.execute_raw("DELETE FROM users WHERE username='test_user'")
-
-        # 插入测试用户
-        db.execute_raw(
-            "INSERT INTO users(username, display_name) VALUES(%s, %s)",
-            ['test_user', '测试用户']
-        )
-        rows = db.execute_raw("SELECT id FROM users WHERE username=%s", ['test_user'])
-        uid = rows[0]['id']
-
+    def test_insert_and_read_holdings(self, db, test_user):
+        """插入持仓数据后应能正确读回（使用专用测试用户）"""
         # 插入持仓
         db.execute_raw(
             "INSERT INTO holdings(user_id, code, name, direction, target_ratio, cost_price, stop_loss_price, sector) "
             "VALUES(%s, %s, %s, %s, %s, %s, %s, %s)",
-            [uid, '300620', '光库科技', '算力硬件.CPO', 6.86, 343.05, 288.21, '通信设备']
+            [test_user, '300620', '光库科技', '算力硬件.CPO', 6.86, 343.05, 288.21, '通信设备']
         )
 
         # 读取验证
         rows2 = db.execute_raw(
             "SELECT code, name, direction, target_ratio, cost_price, stop_loss_price, sector "
             "FROM holdings WHERE user_id=%s AND is_active=1",
-            [uid]
+            [test_user]
         )
         assert len(rows2) == 1
         assert rows2[0]['code'] == '300620'
@@ -102,25 +110,32 @@ class TestHoldingsDB:
         assert float(rows2[0]['cost_price']) == 343.05
         assert float(rows2[0]['stop_loss_price']) == 288.21
 
-    def test_unique_constraint(self, db):
+    def test_unique_constraint(self, db, test_user):
         """同一用户下不能重复插入同一股票"""
-        rows = db.execute_raw("SELECT id FROM users WHERE username=%s", ['test_user'])
-        uid = rows[0]['id']
-        # 尝试插入相同 code
+        # 先插入一条
+        db.execute_raw(
+            "INSERT INTO holdings(user_id, code, name, direction, target_ratio) "
+            "VALUES(%s, %s, %s, %s, %s)",
+            [test_user, '300620', '光库科技', '算力硬件.CPO', 5.0]
+        )
+        # 尝试插入相同 code（应触发唯一键冲突）
         with pytest.raises(Exception):
             db.execute_raw(
                 "INSERT INTO holdings(user_id, code, name, direction, target_ratio) "
                 "VALUES(%s, %s, %s, %s, %s)",
-                [uid, '300620', '光库科技', '算力硬件.CPO', 5.0]
+                [test_user, '300620', '光库科技', '算力硬件.CPO', 5.0]
             )
 
-    def test_cash_ratio_auto_calc(self, db):
+    def test_cash_ratio_auto_calc(self, db, test_user):
         """现金比例 = 100% - sum(target_ratio) 可在应用层验证"""
-        rows = db.execute_raw("SELECT id FROM users WHERE username=%s", ['test_user'])
-        uid = rows[0]['id']
+        db.execute_raw(
+            "INSERT INTO holdings(user_id, code, name, direction, target_ratio) "
+            "VALUES(%s, %s, %s, %s, %s)",
+            [test_user, '300620', '光库科技', '算力硬件.CPO', 30.0]
+        )
         rows2 = db.execute_raw(
             "SELECT SUM(target_ratio) as total FROM holdings WHERE user_id=%s AND is_active=1",
-            [uid]
+            [test_user]
         )
         total = float(rows2[0]['total']) if rows2[0]['total'] else 0
         cash = round(100 - total, 2)

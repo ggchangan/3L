@@ -64,7 +64,7 @@ def _handle_review_dates(h, path):
     """返回历史复盘日期列表"""
     import os
     from backend.core import config
-    archive_dir = config.REVIEW_ARCHIVE_DIR
+    archive_dir = config.get_user_archive_dir()
     dates = []
     if os.path.isdir(archive_dir):
         dates = sorted([
