@@ -10,6 +10,7 @@ from decimal import Decimal
 from backend.core.config import DATA_DIR
 
 # 与 migrations/migrate_plan_tracking_mysql.py 中 DDL 保持一致（幂等建表）
+_DB_INITIALIZED = False  # 进程内只建表一次，避免每次 GET 都跑 DDL
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS plan_records (
     id              INT AUTO_INCREMENT PRIMARY KEY,
@@ -64,10 +65,13 @@ CREATE TABLE IF NOT EXISTS plan_records (
 # ═══════════════════════════════════════════════════════════════
 
 def _init_db(db_path=None):
-    """初始化 MySQL plan_records 表结构（幂等）
+    """初始化 MySQL plan_records 表结构（幂等，进程内只执行一次）
 
     db_path 参数保留仅为兼容旧调用（SQLite 时代），实际已忽略。
     """
+    global _DB_INITIALIZED
+    if _DB_INITIALIZED:
+        return
     from backend.data_access.data_source import _get_tushare_db
     db = _get_tushare_db()
     if not db:
@@ -77,6 +81,7 @@ def _init_db(db_path=None):
         with conn.cursor() as cur:
             cur.execute(_SCHEMA_SQL)
         conn.commit()
+        _DB_INITIALIZED = True
     finally:
         conn.close()
 
@@ -477,10 +482,10 @@ def _save_plan_record(db_path: str, plan: dict):
     try:
         cols = ', '.join(row.keys())
         placeholders = ', '.join(['%s'] * len(row))
-        update_cols = ', '.join([f'{k}=VALUES({k})' for k in row.keys()
+        update_cols = ', '.join([f'{k}=new.{k}' for k in row.keys()
                                  if k not in ('user_id', 'date', 'code', 'created_at')])
         sql = f"""INSERT INTO plan_records ({cols})
-                  VALUES ({placeholders})
+                  VALUES ({placeholders}) AS new
                   ON DUPLICATE KEY UPDATE {update_cols}"""
         with conn.cursor() as cur:
             cur.execute(sql, list(row.values()))
@@ -553,7 +558,12 @@ def annotate_plan(db_path: str, date_str: str, code: str,
 
 
 def _execute_query(db_path: str, sql: str, params: list = None) -> list:
-    """执行SQL查询并返回dict列表"""
+    """执行SQL查询并返回dict列表
+
+    ⚠️ 注意：本函数不做 user_id 过滤、不转 Decimal——是 SQLite 时代遗留的
+    通用工具，当前无调用者。任何新调用必须改用 get_plans()（已按用户隔离），
+    或在调用处自行拼 user_id 条件并处理 Decimal→float。
+    """
     conn = _get_conn(db_path)
     try:
         with conn.cursor() as cur:

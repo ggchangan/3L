@@ -14,6 +14,9 @@ from uuid import uuid4
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 os.environ['TQDM_DISABLE'] = '1'
 
+import pytest  # noqa: E402
+from backend.data_access.tushare_db import is_db_available  # noqa: E402
+
 
 def _make_holdings_action(stock='测试A(000001)', action='持有不动', reason='上涨趋势·上行',
                           priority='高', stop_loss=None, stop_loss_pct=None, change=1.5):
@@ -56,6 +59,7 @@ def _make_kline(date, close=10.0, open_=10.0, high=11.0, low=9.5):
     return {'date': date, 'close': close, 'open': open_, 'high': high, 'low': low}
 
 
+@pytest.mark.skipif(not is_db_available(), reason="MySQL not available in CI")
 class TestPlanTrackingV2(unittest.TestCase):
     """计划追踪v2核心测试"""
 
@@ -428,12 +432,23 @@ class TestPlanTrackingV2(unittest.TestCase):
             'date': '2026-05-28', 'code': '000001', 'source': 'buy_priority',
             'result': 'success',
         })
-        # 切换到另一个用户（user2=36 真实用户，只读不写）
-        set_current_user({'id': 36, 'username': 'user2'})
+        # 切换到第二个随机用户（只读验证隔离，不写数据）
+        db = TushareDB()
+        other_name = f'pytest_plan2_{uuid4().hex[:12]}'
+        db.execute_raw(
+            "INSERT INTO users(username, display_name) VALUES(%s, %s)",
+            [other_name, '计划追踪隔离测试用户'],
+        )
+        rows = db.execute_raw("SELECT id FROM users WHERE username=%s", [other_name])
+        other_uid = rows[0]['id']
+        set_current_user({'id': other_uid, 'username': other_name})
         try:
             plans = get_plans(None)
-            self.assertEqual(len(plans), 0, 'user2 不应看到测试用户的数据')
+            self.assertEqual(len(plans), 0, '其他用户不应看到测试用户的数据')
         finally:
+            # 清理第二个测试用户
+            db.execute_raw("DELETE FROM plan_records WHERE user_id=%s", [other_uid])
+            db.execute_raw("DELETE FROM users WHERE id=%s", [other_uid])
             set_current_user({'id': self._uid, 'username': self._username})
 
     # ═══════════════════════════════════════════════════
