@@ -546,10 +546,21 @@ def get_sector_push2test():
 
 
 def get_sector_klines(sector_name, sector_type='industry'):
-    """获取单个板块历史K线数据（日期正序）"""
-    from backend.data_access.data_source import get_sector_klines as _ds_klines
-    rows = _ds_klines(sector_name, sector_type)
-    return sorted(rows or [], key=lambda row: str(row.get('date', '')))
+    """获取单个板块历史K线数据（日期正序）
+
+    板块K线是 T+1 数据（当日收盘后才更新），日内内容不变 → 60s TTL
+    缓存安全。2026-08-06 优化：get_stock_card 的 vs_sector_5d 对每只
+    自选股调用本函数，310 只自选股此前造成 310 次 MySQL 查询（56s+），
+    加缓存后同板块只查一次（60s 内），analysis 重算从 56s 降至秒级。
+    """
+    key = f'sector_klines:{sector_type}:{sector_name}'
+
+    def _load():
+        from backend.data_access.data_source import get_sector_klines as _ds_klines
+        rows = _ds_klines(sector_name, sector_type)
+        return sorted(rows or [], key=lambda row: str(row.get('date', '')))
+
+    return cache.get(key, _load, ttl=60)
 
 
 # ====== 概念快照 ======

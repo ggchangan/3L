@@ -21,6 +21,11 @@ FILES = [
     'manual_trend.json', 'alarms.json', 'journals.json',
     'watched_industries.json', 'review_data.json', 'holdings.json',
     'journal_entries.json',
+    # analysis_cache.json — 自选股分析磁盘缓存。2026-08-06 回归：
+    # 多用户改造后读 config/users/<uid>/analysis_cache.json，若迁移漏了
+    # 此文件，首次访问触发 310 只全量重算（板块K线逐只查 MySQL 56s+）
+    # 撞 nginx 60s 超时 → 自选股页信息全部加载失败。
+    'analysis_cache.json',
 ]
 
 # alarms.json 在 private/ 下，其余在 config/ 下
