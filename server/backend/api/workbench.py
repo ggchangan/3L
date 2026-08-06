@@ -31,7 +31,11 @@ def _handle_get(h, path):
     """GET /api/workbench/get?date=2026-05-25"""
     qs = parse_qs(urlparse(path).query)
     dt = qs.get('date', [None])[0]
-    h.send_json(get_log(dt))
+    try:
+        h.send_json(get_log(dt))
+    except ValueError as e:
+        # 非法日期（含路径穿越尝试）→ 400，不落 500
+        h.send_json({'success': False, 'error': str(e)}, 400)
 
 
 def _handle_save(h, path, body):
@@ -41,13 +45,18 @@ def _handle_save(h, path, body):
     """
     try:
         data = json.loads(body)
-        dt = data.get('date', '')
+        dt = (data.get('date') or '').strip()
         if not dt:
             h.send_json({'success': False, 'error': '缺少日期'})
             return
 
         # 保存日志
-        result = save_log(dt, data)
+        try:
+            result = save_log(dt, data)
+        except ValueError as e:
+            # 非法日期（含路径穿越尝试）→ 400
+            h.send_json({'success': False, 'error': str(e)}, 400)
+            return
 
         # 同步报警到 alarms.json（提取 plan 中所有启用的 alert）
         plan = data.get('plan', {})

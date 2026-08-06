@@ -174,9 +174,10 @@ def get_top_gainers(start, end, limit=50, stocks=None):
 def _load_main_lines():
     """简易主线数据加载（涨幅榜不需要精确主线，降低门槛）"""
     try:
-        from backend.core.config import MAINLINES_CACHE_PATH
-        if os.path.exists(MAINLINES_CACHE_PATH):
-            with open(MAINLINES_CACHE_PATH, 'r', encoding='utf-8') as f:
+        from backend.core.config import get_user_config_path
+        mainlines_path = get_user_config_path('mainlines_cache.json')
+        if os.path.exists(mainlines_path):
+            with open(mainlines_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
     except Exception:
         pass

@@ -91,7 +91,8 @@ def search_and_analyze(query, stocks=None, wl=None):
         stocks = get_all_stocks()
     if wl is None:
         wl = get_watchlist()
-    wl_codes = set(s['code'] for s in wl)
+    wl_stocks = wl.get('stocks', []) if isinstance(wl, dict) else wl
+    wl_codes = set(s['code'] for s in wl_stocks)
 
     q = query.strip()
 

@@ -63,7 +63,7 @@ def _handle_upload(h, path, body):
     try:
         data = json.loads(body)
         alarm_type = data.get('type', '')
-        file_name = data.get('name', 'upload.mp3')
+        file_name = os.path.basename(data.get('name', 'upload.mp3'))
         log.info('upload: type=%s name=%s size=%d chars', alarm_type, file_name, len(data.get('data','')))
 
         raw = base64.b64decode(data.get('data', ''))
@@ -72,6 +72,14 @@ def _handle_upload(h, path, body):
         valid_types = {'stop', 'stock', 'market', 'market_critical'}
         if alarm_type not in valid_types:
             h.send_json({'success': False, 'error': '无效的报警类型: ' + alarm_type})
+            return
+
+        # 防路径穿越：只允许音频扩展名，且限制体积（10MB）
+        if not file_name.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a')):
+            h.send_json({'success': False, 'error': '仅支持 mp3/wav/ogg/m4a 音频文件'})
+            return
+        if len(raw) > 10 * 1024 * 1024:
+            h.send_json({'success': False, 'error': '文件过大，上限 10MB'})
             return
 
         # 保存到 public/ + dist/（不再存 src/，避免 git 跟踪）

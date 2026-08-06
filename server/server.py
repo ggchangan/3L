@@ -2,11 +2,12 @@
 """
 3L Daily Achievements Web Server + Review API
 """
-import os, json, signal, sys, mimetypes, urllib.parse, time
+import os, json, signal, sys, mimetypes, urllib.parse, time, threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from urllib.parse import quote
 from backend.core import config
+from backend.core import auth
 from backend.core.logger import get_logger
 from backend.core.exceptions import ThreeLError
 
@@ -20,8 +21,29 @@ FE_DIR = os.path.join(WWW_DIR, 'server', 'frontend', 'dist')
 if not os.path.isdir(FE_DIR):
     FE_DIR = WWW_DIR
 
-REVIEW_DATA = {}
-DATA_FILE = config.REVIEW_DATA_PATH
+REVIEW_DATA = {}          # {user_id: {market/mainlines/stocks...}} 按用户分桶
+_REVIEW_DATA_LOCK = threading.Lock()
+
+
+def _review_data_file():
+    """当前用户的复盘缓存文件路径（动态按请求用户，无上下文默认 admin）"""
+    return config.get_user_config_path('review_data.json')
+
+
+def get_review_bucket(uid=None):
+    """返回当前（或指定）用户的复盘缓存桶（线程安全，浅拷贝）"""
+    uid = uid if uid is not None else auth.get_current_user_id()
+    with _REVIEW_DATA_LOCK:
+        return dict(REVIEW_DATA.get(uid, {}))
+
+
+def update_review_bucket(partial):
+    """合并更新当前用户的复盘缓存桶并落盘（api/system 保存用）"""
+    uid = auth.get_current_user_id()
+    with _REVIEW_DATA_LOCK:
+        bucket = REVIEW_DATA.setdefault(uid, {})
+        bucket.update(partial)
+    save_review_data()
 
 
 class RouteRegistry:
@@ -84,6 +106,7 @@ def register_api_routes(routes):
         'backend.api.strong_trend',
         'backend.api.hot_stocks',
         'backend.api.data_source_health',
+        'backend.api.auth',
     ]
     for mod_name in api_modules:
         mod = importlib.import_module(mod_name)
@@ -102,28 +125,68 @@ if os.path.isfile(EXTERNAL_MAPPING_PATH):
         pass
 
 def load_review_data():
-    global REVIEW_DATA
-    if os.path.exists(DATA_FILE):
+    """加载当前用户的复盘缓存到其分桶（须在鉴权解析用户之后调用）"""
+    data_file = _review_data_file()
+    loaded = {}
+    if os.path.exists(data_file):
         try:
-            with open(DATA_FILE) as f: 
-                loaded = json.load(f)
-                REVIEW_DATA.clear()
-                REVIEW_DATA.update(loaded)
-            log.info(f'load_review: loaded from %s, keys=%s, size=%d', DATA_FILE, list(REVIEW_DATA.keys())[:5], len(REVIEW_DATA))
-            return
+            with open(data_file) as f:
+                loaded = json.load(f) or {}
+            log.info(f'load_review: loaded from %s, keys=%s, size=%d', data_file, list(loaded.keys())[:5], len(loaded))
         except Exception as e:
             log.error('加载复盘缓存失败: %s', e)
+    uid = auth.get_current_user_id()
+    with _REVIEW_DATA_LOCK:
+        REVIEW_DATA[uid] = loaded
+
+
 def save_review_data():
-    global REVIEW_DATA
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    config.atomic_json_dump(REVIEW_DATA, DATA_FILE, indent=2)
+    data_file = _review_data_file()
+    os.makedirs(os.path.dirname(data_file), exist_ok=True)
+    uid = auth.get_current_user_id()
+    with _REVIEW_DATA_LOCK:
+        data = dict(REVIEW_DATA.get(uid, {}))
+    config.atomic_json_dump(data, data_file, indent=2)
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=FE_DIR, **kwargs)
 
+    # ── 用户认证：Authorization: Bearer <token> → 请求上下文 ──
+    # 白名单：登录/注册/健康检查（部署验证用）+ 图表端点（前端 <img>/<object> 原生标签
+    # 无法携带 Authorization header，图表是只读行情数据不涉及用户私有数据）
+    AUTH_WHITELIST = {
+        '/api/auth/login', '/api/auth/register', '/api/health',
+        '/api/index-chart', '/api/stock-chart', '/api/sector-chart',
+    }
+
+    def _resolve_user(self):
+        """解析 Authorization 头，设置 thread-local 当前用户。
+
+        每次请求先清空旧上下文：ThreadingHTTPServer 线程复用，
+        不清会继承上一请求的用户身份（keep-alive 串号）。
+        """
+        auth.set_current_user(None)
+        header = self.headers.get('Authorization', '') or ''
+        token = header[7:] if header.startswith('Bearer ') else header
+        user = auth.get_token_user(token) if token else None
+        if user:
+            auth.set_current_user(user)
+        return user
+
+    def _require_auth(self, path):
+        """API 鉴权：除白名单外 /api/* 必须登录，未登录返回 401。"""
+        if not path.startswith('/api/'):
+            return True
+        if path in self.AUTH_WHITELIST:
+            return True
+        if self._resolve_user():
+            return True
+        self.send_json({'success': False, 'error': '未登录或登录已过期'}, 401)
+        return False
+
     def handle_market(self):
-        self.send_json(REVIEW_DATA.get('market', {}))
+        self.send_json(get_review_bucket().get('market', {}))
 
     def _serve_file(self, fp, ct=None, no_cache=False, as_attachment=False):
         """Serve a file with proper headers."""
@@ -154,8 +217,15 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            load_review_data()
             path = self.path.split('?')[0]  # strip query string
+
+            # --- API 鉴权（静态资源/公开图表放行，/api/* 必须登录） ---
+            if not self._require_auth(path):
+                return
+
+            # --- 仅对 API 请求加载当前用户的复盘缓存 ---
+            if path.startswith('/api/'):
+                load_review_data()
 
             # --- Download endpoint (force attachment) ---
             if path.startswith('/download/'):
@@ -203,6 +273,7 @@ class Handler(SimpleHTTPRequestHandler):
                 '/concept-wave',
                 '/strong-trend-candidates',
                 '/hot-stocks',
+                '/login',
             }
             if path in spa_routes:
                 self.path = '/react.html'
@@ -226,7 +297,13 @@ class Handler(SimpleHTTPRequestHandler):
             # --- 后端生成的公开文件（/pub/ → data/public/）---
             if path.startswith('/pub/'):
                 rel = urllib.parse.unquote(path[len('/pub/'):]).lstrip('/')
-                fp = os.path.join(config.PUBLIC_DIR, rel)
+                fp = os.path.realpath(os.path.join(config.PUBLIC_DIR, rel))
+                pub_root = os.path.realpath(config.PUBLIC_DIR)
+                # 防目录穿越：必须落在 PUBLIC_DIR 内
+                if fp != pub_root and not fp.startswith(pub_root + os.sep):
+                    log.warning('pub 路径穿越被拦截: %s', path)
+                    self.send_error(404)
+                    return
                 if os.path.isdir(fp):
                     try:
                         files = sorted(f for f in os.listdir(fp) if not f.startswith('.'))
@@ -241,6 +318,17 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_error(404)
                 return
 
+            # --- SPA fallback：非 API/非静态文件的路径交给 react.html ---
+            # 覆盖 /logic-tracking/:id、/login?tab=xxx 等带参数/子路径的直达/刷新
+            is_api = path.startswith('/api/') or path == '/api'
+            is_special = path.startswith(('/pub/', '/download/'))
+            fe_file = os.path.join(FE_DIR, path.lstrip('/'))
+            if (not is_api and not is_special and not path.startswith('.')
+                    and not os.path.isfile(fe_file)
+                    and not os.path.isfile(os.path.join(WWW_DIR, path.lstrip('/')))):
+                self.path = '/react.html'
+                path = self.path
+
             super().do_GET()
         except Exception as e:
             log.exception('do_GET 未捕获异常: %s', e)
@@ -253,6 +341,19 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             cl = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(cl).decode() if cl > 0 else '{}'
+            path = self.path.split('?')[0]
+
+            # --- API 鉴权（auth 白名单放行，其余必须登录） ---
+            if not self._require_auth(path):
+                return
+
+            # --- 与 do_GET 一致：加载当前用户的复盘缓存桶 ---
+            # 缺失会导致 /api/update 的 update_review_bucket 用 setdefault 空桶
+            # + partial 直接落盘，进程重启后首次 POST 覆盖用户的完整复盘数据。
+            # 白名单（login/register）跳过：无用户上下文，加载无意义。
+            if path.startswith('/api/') and path not in self.AUTH_WHITELIST:
+                load_review_data()
+
             import importlib
             post_routes = {
                 '/api/review/save': ('backend.api.review', '_handle_review_save'),
@@ -302,11 +403,15 @@ class Handler(SimpleHTTPRequestHandler):
                 '/api/wxpush/config': ('backend.api.wxpush', '_handle_config'),
                 '/api/plan-tracking/annotate': ('backend.api.plan_tracking', '_handle_annotate'),
                 '/api/plan-tracking/refresh': ('backend.api.plan_tracking', '_handle_refresh'),
+                '/api/auth/login': ('backend.api.auth', '_handle_login'),
+                '/api/auth/register': ('backend.api.auth', '_handle_register'),
+                '/api/auth/change-password': ('backend.api.auth', '_handle_change_password'),
+                '/api/auth/logout': ('backend.api.auth', '_handle_logout'),
             }
-            if self.path in post_routes:
-                mod_name, func_name = post_routes[self.path]
+            if path in post_routes:
+                mod_name, func_name = post_routes[path]
                 mod = importlib.import_module(mod_name)
-                getattr(mod, func_name)(self, self.path, body)
+                getattr(mod, func_name)(self, path, body)
             else:
                 self.send_json({'status': 'error'}, 404)
         except Exception as e:

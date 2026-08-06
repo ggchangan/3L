@@ -7,11 +7,18 @@ log = get_logger(__name__)
 from datetime import date, datetime
 from backend.core.config import HOLDINGS_PATH, TRADES_PATH
 
-# ── 个股持仓卡片缓存（个股粒度，K线不变不重算）──
+# ── 个股持仓卡片缓存（按用户+个股粒度，K线不变不重算）──
 import time as _time
-_CARD_CACHE = {}       # {code: card_data}
-_CARD_CACHE_EXPIRY = {}  # {code: expiry_timestamp}
+_CARD_CACHE = {}       # {(user_id, code): card_data}
+_CARD_CACHE_EXPIRY = {}  # {(user_id, code): expiry_timestamp}
 _CARD_CACHE_TTL = 300   # 5分钟
+
+
+def _cache_key(code):
+    """缓存键必须带用户维度：卡片含用户相关字段（趋势系统/手动标记），
+    跨用户共享会泄漏 A 的趋势标记给 B。"""
+    from backend.core.auth import get_current_user_id
+    return (get_current_user_id(), code)
 
 
 def _get_cached_cards(codes):
@@ -19,8 +26,9 @@ def _get_cached_cards(codes):
     now = _time.time()
     result = {}
     for code in codes:
-        if code in _CARD_CACHE and now < _CARD_CACHE_EXPIRY.get(code, 0):
-            result[code] = _CARD_CACHE[code]
+        key = _cache_key(code)
+        if key in _CARD_CACHE and now < _CARD_CACHE_EXPIRY.get(key, 0):
+            result[code] = _CARD_CACHE[key]
     return result
 
 
@@ -28,21 +36,24 @@ def _set_cached_cards(cards):
     """批量写入缓存"""
     expiry = _time.time() + _CARD_CACHE_TTL
     for code, card in cards.items():
-        _CARD_CACHE[code] = card
-        _CARD_CACHE_EXPIRY[code] = expiry
+        key = _cache_key(code)
+        _CARD_CACHE[key] = card
+        _CARD_CACHE_EXPIRY[key] = expiry
 
 
 def _invalidate_card_cache(code):
-    """个股卡片缓存失效"""
-    _CARD_CACHE.pop(code, None)
-    _CARD_CACHE_EXPIRY.pop(code, None)
+    """个股卡片缓存失效（当前用户维度）"""
+    key = _cache_key(code)
+    _CARD_CACHE.pop(key, None)
+    _CARD_CACHE_EXPIRY.pop(key, None)
 
 
 def _get_cached_card(code):
     """获取单只个股卡片缓存，未命中返回 None"""
     now = _time.time()
-    if code in _CARD_CACHE and now < _CARD_CACHE_EXPIRY.get(code, 0):
-        return _CARD_CACHE[code]
+    key = _cache_key(code)
+    if key in _CARD_CACHE and now < _CARD_CACHE_EXPIRY.get(key, 0):
+        return _CARD_CACHE[key]
     return None
 
 
@@ -288,44 +299,65 @@ def get_holdings():
     """
     try:
         from backend.data_access.data_layer import get_holdings as _dl_holdings
-        rows = _dl_holdings(user_id=1)
-        if rows:
-            holdings = []
-            total_ratio = 0
-            for r in rows:
-                ratio = r.get('target_ratio', 0)
-                total_ratio += ratio
-                holdings.append({
-                    'code': r.get('code', ''),
-                    'name': r.get('name', ''),
-                    'direction': r.get('direction', ''),
-                    'ratio': ratio,
-                    'buy_price': float(r['cost_price']) if r.get('cost_price') is not None else None,
-                    'stop_loss_price': r.get('stop_loss_price'),
-                    'sector': r.get('sector', ''),
-                    'buy_date': r.get('buy_date', ''),
-                    'entry_signal_type': r.get('entry_signal_type'),
-                    'entry_signal_date': r.get('entry_signal_date'),
-                    'entry_anchor_price': r.get('entry_anchor_price'),
-                    'stop_loss_source': r.get('stop_loss_source'),
-                    'original_stop_loss_price': r.get('original_stop_loss_price'),
-                })
-            cash_ratio = round(max(0, 100 - total_ratio), 2)
-            return {'holdings': holdings, 'cash_ratio': cash_ratio}
+        from backend.core.auth import get_current_user_id
+        rows = _dl_holdings(user_id=get_current_user_id())
+        if rows is None:
+            raise RuntimeError('holdings DB 返回 None')
+        if not rows:
+            # 空持仓是合法状态：直接返回空，绝不能落到下方全局 JSON 回退
+            return {'holdings': [], 'cash_ratio': 100}
+        holdings = []
+        total_ratio = 0
+        for r in rows:
+            ratio = r.get('target_ratio', 0)
+            total_ratio += ratio
+            holdings.append({
+                'code': r.get('code', ''),
+                'name': r.get('name', ''),
+                'direction': r.get('direction', ''),
+                'ratio': ratio,
+                'buy_price': float(r['cost_price']) if r.get('cost_price') is not None else None,
+                'stop_loss_price': r.get('stop_loss_price'),
+                'sector': r.get('sector', ''),
+                'buy_date': r.get('buy_date', ''),
+                'entry_signal_type': r.get('entry_signal_type'),
+                'entry_signal_date': r.get('entry_signal_date'),
+                'entry_anchor_price': r.get('entry_anchor_price'),
+                'stop_loss_source': r.get('stop_loss_source'),
+                'original_stop_loss_price': r.get('original_stop_loss_price'),
+            })
+        cash_ratio = round(max(0, 100 - total_ratio), 2)
+        return {'holdings': holdings, 'cash_ratio': cash_ratio}
     except Exception:
         log.warning('get_holdings DB读取失败，回退JSON')
-    # 回退：JSON
-    if os.path.isfile(HOLDINGS_PATH):
-        with open(HOLDINGS_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {'holdings': []}
+    # 回退：JSON（按用户隔离路径；旧格式可能是 {"update_date", "holdings"}）
+    from backend.core.config import get_user_config_path
+    holdings_path = get_user_config_path('holdings.json')
+    if os.path.isfile(holdings_path):
+        with open(holdings_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            holdings = data.get('holdings', [])
+            cash = 100 - sum(float(h.get('target_ratio', h.get('ratio', 0))) or 0 for h in holdings)
+            return {'holdings': holdings, 'cash_ratio': round(max(0, cash), 2)}
+        return {'holdings': data if isinstance(data, list) else [], 'cash_ratio': 100}
+    return {'holdings': [], 'cash_ratio': 100}
 
 
 def get_trades():
-    """获取交易记录"""
-    if os.path.isfile(TRADES_PATH):
-        with open(TRADES_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
+    """获取交易记录（按用户隔离）
+
+    Returns:
+        dict: {"trades": [...]}（与旧全局版返回格式保持一致）
+    """
+    from backend.data_access.data_layer import get_trades as _dl_trades
+    try:
+        data = _dl_trades()
+        if isinstance(data, dict):
+            return data
+        return {'trades': data if isinstance(data, list) else []}
+    except Exception:
+        log.warning('get_trades 读取失败，返回空')
     return {'trades': []}
 
 
@@ -521,6 +553,7 @@ def save_holdings(data):
     # ── 写入 MySQL DB ──
     try:
         from backend.data_access.data_layer import save_holdings as _dl_save
+        from backend.core.auth import get_current_user_id
         _db_list = []
         for h in holdings:
             _db_list.append({
@@ -539,7 +572,7 @@ def save_holdings(data):
                 'stop_loss_source': h.get('stop_loss_source') or None,
                 'original_stop_loss_price': h.get('original_stop_loss_price') or None,
             })
-        if not _dl_save(1, _db_list):
+        if not _dl_save(get_current_user_id(), _db_list):
             return {'success': False, 'error': 'DB写入失败，原持仓已保留'}
     except Exception as e:
         log.error('holdings DB save failed: %s', e)

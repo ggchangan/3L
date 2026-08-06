@@ -1,4 +1,4 @@
-"""操作计划追踪 API 路由 — v2（SQLite + review数据源）"""
+"""操作计划追踪 API 路由 — v2（MySQL + review数据源）"""
 
 import json
 from backend.core.logger import get_logger
@@ -41,11 +41,8 @@ def _handle_annotate(h, path, body):
     """
     try:
         data = json.loads(body)
-        from backend.core.config import DATA_DIR
-        import os
-        db_path = os.path.join(DATA_DIR, 'private', 'plan_tracking.db')
         result = annotate_plan(
-            db_path=db_path,
+            db_path=None,
             date_str=data.get('date', ''),
             code=data.get('code', ''),
             executed=data.get('executed'),

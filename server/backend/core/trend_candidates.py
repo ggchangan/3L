@@ -15,7 +15,6 @@ from backend.core.trend_trading import _load_manual_trend
 from backend.core import config
 
 INDUSTRY_MAP_PATH = config.INDUSTRY_MAP_PATH
-MANUAL_TREND_PATH = config.MANUAL_TREND_PATH
 WATCHLIST_PATH = config.WATCHLIST_PATH
 REVIEW_CHARTS_DIR = config.REVIEW_CHARTS_DIR
 
@@ -213,13 +212,14 @@ def toggle_trend_stock(code, enable):
         changed = True
         _set_watchlist_trading_system(code, '3l')
     if changed:
-        config.atomic_json_dump(sorted(manual), MANUAL_TREND_PATH)
+        config.atomic_json_dump(sorted(manual), config.get_user_config_path('manual_trend.json'))
     return {'success': True, 'in_manual': code in manual}
 
 
 def _set_watchlist_trading_system(code, system):
     try:
-        wl = _load_json(WATCHLIST_PATH, {'stocks': []})
+        wl_path = config.get_user_config_path('watchlist.json')
+        wl = _load_json(wl_path, {'stocks': []})
         for s in wl.get('stocks', []):
             if s['code'] == code:
                 s['trading_system'] = system
@@ -227,7 +227,7 @@ def _set_watchlist_trading_system(code, system):
                     s['trend_stock'] = True
                 else:
                     s.pop('trend_stock', None)
-                with open(WATCHLIST_PATH, 'w') as f:
+                with open(wl_path, 'w') as f:
                     json.dump(wl, f, ensure_ascii=False, indent=2)
                 return
     except Exception:
@@ -237,7 +237,8 @@ def _set_watchlist_trading_system(code, system):
 
 def _ensure_in_watchlist(code):
     try:
-        wl = _load_json(WATCHLIST_PATH, {'stocks': []})
+        wl_path = config.get_user_config_path('watchlist.json')
+        wl = _load_json(wl_path, {'stocks': []})
         existing = {s['code'] for s in wl.get('stocks', [])}
         if code in existing:
             return
@@ -254,7 +255,7 @@ def _ensure_in_watchlist(code):
             'direction': info.get('direction', ''),
             'industry': info.get('ths_industry', ''),
         })
-        with open(WATCHLIST_PATH, 'w') as f:
+        with open(wl_path, 'w') as f:
             json.dump(wl, f, ensure_ascii=False, indent=2)
     except Exception:
         log.warning('自选股自动添加失败: %s', code)

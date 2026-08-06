@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from datetime import datetime
 
 from backend.core import config
-from backend.core.config import DATA_DIR, REVIEW_ARCHIVE_DIR, REVIEW_DATA_PATH
+from backend.core.config import DATA_DIR
 from backend.core.logger import get_logger
 from backend.services.review_contract import normalize_review_response
 
@@ -20,6 +20,18 @@ _review_refresh_lock = threading.RLock()
 _review_refresh_state = {
     'status': 'idle', 'started_at': '', 'completed_at': '', 'error': '',
 }
+
+
+def _review_data_path():
+    """当前用户的复盘缓存路径"""
+    from backend.core.config import get_user_config_path
+    return get_user_config_path('review_data.json')
+
+
+def _archive_dir():
+    """当前用户的复盘存档目录"""
+    from backend.core.config import get_user_archive_dir
+    return get_user_archive_dir()
 
 
 @contextmanager
@@ -61,16 +73,17 @@ def compute_review_serialized(date_str=None):
 
 
 def get_archive_dates():
-    if not os.path.isdir(REVIEW_ARCHIVE_DIR):
+    archive_dir = _archive_dir()
+    if not os.path.isdir(archive_dir):
         return []
     return sorted([
-        name.replace('.json', '') for name in os.listdir(REVIEW_ARCHIVE_DIR)
+        name.replace('.json', '') for name in os.listdir(archive_dir)
         if name.endswith('.json')
     ], reverse=True)
 
 
 def get_archive(date_str):
-    path = os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json')
+    path = os.path.join(_archive_dir(), f'{date_str}.json')
     if os.path.isfile(path):
         with open(path, 'r', encoding='utf-8') as file:
             return json.load(file)
@@ -83,9 +96,10 @@ def get_latest_archive():
 
 
 def load_current_review():
-    if os.path.isfile(REVIEW_DATA_PATH):
+    review_path = _review_data_path()
+    if os.path.isfile(review_path):
         try:
-            with open(REVIEW_DATA_PATH, 'r', encoding='utf-8') as file:
+            with open(review_path, 'r', encoding='utf-8') as file:
                 return normalize_review_response(json.load(file), source='cache')
         except (OSError, json.JSONDecodeError, TypeError):
             log.warning('当前复盘缓存不可读，返回空复盘契约', exc_info=True)
@@ -94,8 +108,9 @@ def load_current_review():
 
 
 def save_review_data(data):
-    os.makedirs(os.path.dirname(REVIEW_DATA_PATH), exist_ok=True)
-    config.atomic_json_dump(data, REVIEW_DATA_PATH, indent=2)
+    review_path = _review_data_path()
+    os.makedirs(os.path.dirname(review_path), exist_ok=True)
+    config.atomic_json_dump(data, review_path, indent=2)
 
 
 def save_review_snapshot(data):
@@ -104,15 +119,16 @@ def save_review_snapshot(data):
     parsed = datetime.strptime(date_str, '%Y-%m-%d').strftime('%Y-%m-%d')
     if parsed != date_str:
         raise ValueError('复盘快照日期必须为 YYYY-MM-DD')
-    os.makedirs(REVIEW_ARCHIVE_DIR, exist_ok=True)
-    config.atomic_json_dump(data, os.path.join(REVIEW_ARCHIVE_DIR, f'{date_str}.json'), indent=2)
+    archive_dir = _archive_dir()
+    os.makedirs(archive_dir, exist_ok=True)
+    config.atomic_json_dump(data, os.path.join(archive_dir, f'{date_str}.json'), indent=2)
 
 
 def get_review_refresh_status():
     with _review_refresh_lock:
         state = dict(_review_refresh_state)
     try:
-        mtime = os.path.getmtime(REVIEW_DATA_PATH)
+        mtime = os.path.getmtime(_review_data_path())
         age_seconds = max(0, int(time.time() - mtime))
         state.update({
             'cache_exists': True,
@@ -130,6 +146,8 @@ def get_review_refresh_status():
 
 def request_review_refresh(force=False):
     """单飞启动后台复盘计算；并发请求共享同一个任务。"""
+    from backend.core import auth
+    caller = auth.get_current_user()  # 捕获发起者，worker 线程恢复其上下文
     status = get_review_refresh_status()
     with _review_refresh_lock:
         if _review_refresh_state['status'] == 'running':
@@ -145,6 +163,8 @@ def request_review_refresh(force=False):
     def _worker():
         from backend.services import review_service
 
+        if caller:
+            auth.set_current_user(caller)  # 恢复发起者身份，按该用户计算/落盘
         try:
             with review_refresh_file_lock():
                 data = review_service.compute_review_real_time(review_service.get_completed_review_date())
@@ -175,13 +195,9 @@ def save_review(data):
     date = data.get('date', '')
     if not date:
         return {'status': 'error', 'msg': 'missing date'}
-    archive_dirs = [
-        os.path.join(os.path.dirname(REVIEW_ARCHIVE_DIR), 'data', 'review_archive'),
-        REVIEW_ARCHIVE_DIR,
-    ]
-    for directory in archive_dirs:
-        os.makedirs(directory, exist_ok=True)
-        config.atomic_json_dump(data, os.path.join(directory, f'{date}.json'), indent=2)
+    archive_dir = _archive_dir()
+    os.makedirs(archive_dir, exist_ok=True)
+    config.atomic_json_dump(data, os.path.join(archive_dir, f'{date}.json'), indent=2)
     return {'status': 'ok'}
 
 

@@ -56,6 +56,29 @@ MANUAL_TREND_PATH = os.path.join(CONFIG_DIR, 'manual_trend.json')
 MAINLINES_CACHE_PATH = os.path.join(CONFIG_DIR, 'mainlines_cache.json')
 REVIEW_DATA_PATH = os.path.join(CONFIG_DIR, 'review_data.json')
 
+
+def get_user_config_path(filename, user_id=None):
+    """用户个人数据路径：config/users/<user_id>/<filename>。
+
+    多用户隔离核心：缺省 user_id 时取当前请求用户（thread-local）；
+    无请求上下文（cron 批处理/脚本/子进程）默认 admin(id=1)，
+    与「批处理只扫主用户」的决策一致，天然向后兼容。
+    """
+    from backend.core.auth import get_current_user_id
+    uid = user_id if user_id is not None else get_current_user_id()
+    d = os.path.join(CONFIG_DIR, 'users', str(uid))
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, filename)
+
+
+def get_user_archive_dir(user_id=None):
+    """用户复盘存档目录：config/users/<user_id>/review_archive/"""
+    from backend.core.auth import get_current_user_id
+    uid = user_id if user_id is not None else get_current_user_id()
+    d = os.path.join(CONFIG_DIR, 'users', str(uid), 'review_archive')
+    os.makedirs(d, exist_ok=True)
+    return d
+
 # 计算结果（computed/）
 INDUSTRY_MAP_PATH = os.path.join(COMPUTED_DIR, 'stock_industry_map.json')
 SUB_SECTOR_CLUSTERS_PATH = os.path.join(COMPUTED_DIR, 'sub_sector_clusters.json')

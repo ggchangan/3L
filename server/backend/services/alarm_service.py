@@ -12,19 +12,28 @@ import re
 import time
 from datetime import date, datetime, timedelta
 
-from backend.core.config import DATA_DIR
+from backend.core.config import DATA_DIR, get_user_config_path
 
 ALARMS_DIR = os.path.join(DATA_DIR, 'private')
 ALARMS_PATH = os.path.join(ALARMS_DIR, 'alarms.json')
 os.makedirs(ALARMS_DIR, exist_ok=True)
 
 
+def _alarms_path():
+    """当前用户的报警文件路径（测试可通过覆盖 ALARMS_PATH 注入）"""
+    default = os.path.join(ALARMS_DIR, 'alarms.json')
+    if ALARMS_PATH != default:
+        return ALARMS_PATH
+    return get_user_config_path('alarms.json')
+
+
 def _load() -> dict:
     """读取 alarms.json，不存在返回空结构"""
-    if not os.path.isfile(ALARMS_PATH):
+    path = _alarms_path()
+    if not os.path.isfile(path):
         return {'alarms': []}
     try:
-        with open(ALARMS_PATH, 'r', encoding='utf-8') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (json.JSONDecodeError, Exception):
         return {'alarms': []}
@@ -32,7 +41,9 @@ def _load() -> dict:
 
 def _save(data: dict):
     """写入 alarms.json"""
-    with open(ALARMS_PATH, 'w', encoding='utf-8') as f:
+    path = _alarms_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 

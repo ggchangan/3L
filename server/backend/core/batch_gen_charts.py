@@ -239,8 +239,8 @@ def main():
             code = r['code']
             if code in all_codes:
                 need_codes[code] = '买点信号'
-    if os.path.exists(HOLDINGS_PATH):
-        with open(HOLDINGS_PATH) as f:
+    if os.path.exists(config.get_user_config_path('holdings.json')):
+        with open(config.get_user_config_path('holdings.json')) as f:
             hdata = json.load(f)
         for h in hdata.get('holdings', []):
             code = h.get('code', '')

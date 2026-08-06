@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
+import { isLoggedIn } from './lib/auth'
 
+const Login = lazy(() => import('./pages/Login'))
 const Monitor = lazy(() => import('./pages/Monitor'))
 const Review = lazy(() => import('./pages/Review'))
 const Workbench = lazy(() => import('./pages/Workbench'))
@@ -27,29 +29,32 @@ export default function App() {
     <BrowserRouter>
       <Suspense fallback={<div className="empty">加载中...</div>}>
         <Routes>
-        {/* 已迁移的 React 页面 */}
-        <Route path="/monitor" element={<Monitor />} />
-        <Route path="/review" element={<Review />} />
-        <Route path="/journal" element={<Workbench />} />
-        <Route path="/workbench" element={<Workbench />} />
-        <Route path="/watchlist" element={<Watchlist />} />
-        <Route path="/trend_candidates" element={<TrendCandidates />} />
-        <Route path="/holdings" element={<Holdings />} />
-        <Route path="/industry" element={<Industry />} />
-        <Route path="/macro" element={<Macro />} />
-        <Route path="/top_gainers" element={<TopGainers />} />
-        <Route path="/stock_analysis" element={<StockAnalysis />} />
-        <Route path="/tips" element={<Tips />} />
-        <Route path="/simulation" element={<Simulation />} />
-        <Route path="/skills" element={<Skills />} />
-        <Route path="/logic-tracking" element={<LogicTracking />} />
-        <Route path="/logic-tracking/:tagId" element={<LogicTrackingDetail />} />
-        <Route path="/alarm-sounds" element={<AlarmSounds />} />
-        <Route path="/plan-tracking" element={<PlanTracking />} />
-        <Route path="/concept-wave" element={<ConceptWaveTracking />} />
-        <Route path="/strong-trend-candidates" element={<StrongTrendCandidates />} />
-        <Route path="/hot-stocks" element={<HotStocks />} />
-        <Route path="/" element={<Monitor />} />
+        {/* 登录页（无需鉴权） */}
+        <Route path="/login" element={<Login />} />
+
+        {/* 已迁移的 React 页面（全部需要登录） */}
+        <Route path="/monitor" element={<RequireAuth><Monitor /></RequireAuth>} />
+        <Route path="/review" element={<RequireAuth><Review /></RequireAuth>} />
+        <Route path="/journal" element={<RequireAuth><Workbench /></RequireAuth>} />
+        <Route path="/workbench" element={<RequireAuth><Workbench /></RequireAuth>} />
+        <Route path="/watchlist" element={<RequireAuth><Watchlist /></RequireAuth>} />
+        <Route path="/trend_candidates" element={<RequireAuth><TrendCandidates /></RequireAuth>} />
+        <Route path="/holdings" element={<RequireAuth><Holdings /></RequireAuth>} />
+        <Route path="/industry" element={<RequireAuth><Industry /></RequireAuth>} />
+        <Route path="/macro" element={<RequireAuth><Macro /></RequireAuth>} />
+        <Route path="/top_gainers" element={<RequireAuth><TopGainers /></RequireAuth>} />
+        <Route path="/stock_analysis" element={<RequireAuth><StockAnalysis /></RequireAuth>} />
+        <Route path="/tips" element={<RequireAuth><Tips /></RequireAuth>} />
+        <Route path="/simulation" element={<RequireAuth><Simulation /></RequireAuth>} />
+        <Route path="/skills" element={<RequireAuth><Skills /></RequireAuth>} />
+        <Route path="/logic-tracking" element={<RequireAuth><LogicTracking /></RequireAuth>} />
+        <Route path="/logic-tracking/:tagId" element={<RequireAuth><LogicTrackingDetail /></RequireAuth>} />
+        <Route path="/alarm-sounds" element={<RequireAuth><AlarmSounds /></RequireAuth>} />
+        <Route path="/plan-tracking" element={<RequireAuth><PlanTracking /></RequireAuth>} />
+        <Route path="/concept-wave" element={<RequireAuth><ConceptWaveTracking /></RequireAuth>} />
+        <Route path="/strong-trend-candidates" element={<RequireAuth><StrongTrendCandidates /></RequireAuth>} />
+        <Route path="/hot-stocks" element={<RequireAuth><HotStocks /></RequireAuth>} />
+        <Route path="/" element={<RequireAuth><Monitor /></RequireAuth>} />
 
         {/* 旧 HTML 重定向到 React 路由 */}
         <Route path="/holdings.html" element={<LegacyRedirect to="/holdings" />} />
@@ -77,4 +82,12 @@ function LegacyRedirect({ to }: { to: string }) {
     window.location.href = to
   }
   return null
+}
+
+/** 登录守卫：未登录跳转 /login */
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  if (!isLoggedIn()) {
+    return <Navigate to="/login" replace />
+  }
+  return <>{children}</>
 }

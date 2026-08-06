@@ -1,6 +1,7 @@
 /** 左侧固定侧边栏 — 桌面固定 / 手机汉堡菜单 */
 import { useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { getUser, apiLogout } from '../lib/auth'
 
 interface NavItem {
   label: string
@@ -197,6 +198,7 @@ export default function NavBar() {
               >{link.label}</a>
             </span>
           ))}
+          <UserArea />
         </div>
       </div>
     </>
@@ -229,6 +231,40 @@ export function BottomNav() {
           </span>
         ))}
       </div>
+    </div>
+  )
+}
+
+/** 侧边栏用户区：当前用户 + 修改密码 + 退出登录 */
+function UserArea() {
+  const [user, setUser] = useState(getUser())
+  const [busy, setBusy] = useState(false)
+
+  const handleLogout = async () => {
+    if (busy) return
+    setBusy(true)
+    await apiLogout()
+    setUser(null)
+    window.location.href = '/login'
+  }
+
+  if (!user) return null
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #1f1f3a', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 12, color: '#4ecdc4', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        👤 {user.display_name || user.username}
+      </span>
+      <a href="/login?tab=password" style={{ fontSize: 11, color: '#777', textDecoration: 'none' }}>改密</a>
+      <button
+        onClick={handleLogout}
+        disabled={busy}
+        style={{
+          marginLeft: 'auto', fontSize: 11, padding: '3px 10px', borderRadius: 6,
+          background: 'transparent', border: '1px solid #e94560', color: '#e94560',
+          cursor: 'pointer',
+        }}
+      >{busy ? '...' : '退出'}</button>
     </div>
   )
 }

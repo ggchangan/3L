@@ -39,12 +39,12 @@ def _handle_market(h, path):
 
 def _handle_mainlines(h, path):
     _srv = get_server()
-    h.send_json(_srv.REVIEW_DATA.get('mainlines', {}))
+    h.send_json(_srv.get_review_bucket().get('mainlines', {}))
 
 
 def _handle_stocks(h, path):
     _srv = get_server()
-    h.send_json(_srv.REVIEW_DATA.get('stocks', {}))
+    h.send_json(_srv.get_review_bucket().get('stocks', {}))
 
 
 def _handle_momentum(h, path):
@@ -54,7 +54,7 @@ def _handle_momentum(h, path):
 
 def _handle_review_full(h, path):
     _srv = get_server()
-    h.send_json(_srv.REVIEW_DATA)
+    h.send_json(_srv.get_review_bucket())
 
 
 def _handle_index_chart(h, path):
