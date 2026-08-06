@@ -6,7 +6,7 @@
   alarms.json / journals.json / watched_industries.json / review_data.json /
   holdings.json（旧JSON回退副本）/ review_archive/*.json
 
-幂等：目标已存在则跳过（不覆盖）。plan_tracking.db 保持全局不动。
+幂等：目标已存在则跳过（不覆盖）。plan_tracking 已迁 MySQL（见 migrate_plan_tracking_mysql.py），不再有全局 SQLite。
 """
 import os
 import shutil

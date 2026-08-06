@@ -3,10 +3,13 @@
 操作计划追踪 v2 — 单元测试
 
 数据源: review trading_plan (holdings_action + buy_priority)
-存储: SQLite
+存储: MySQL plan_records 表（按 user_id 隔离）
+
+⚠️ DB 相关测试使用专用随机测试用户 + teardown 清理，绝不触碰 admin 数据。
 """
-import json, os, sqlite3, sys, tempfile, unittest
+import json, os, sys, unittest
 from datetime import datetime, timedelta
+from uuid import uuid4
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 os.environ['TQDM_DISABLE'] = '1'
@@ -56,25 +59,50 @@ def _make_kline(date, close=10.0, open_=10.0, high=11.0, low=9.5):
 class TestPlanTrackingV2(unittest.TestCase):
     """计划追踪v2核心测试"""
 
+    # ── 测试用户管理（MySQL 隔离） ──
+
+    def setUp(self):
+        """每个测试创建专用测试用户，隔离于 admin 数据"""
+        from backend.data_access.tushare_db import TushareDB
+        from backend.core.auth import set_current_user
+        db = TushareDB()
+        username = f'pytest_plan_{uuid4().hex[:12]}'
+        db.execute_raw(
+            "INSERT INTO users(username, display_name) VALUES(%s, %s)",
+            [username, '计划追踪测试用户'],
+        )
+        rows = db.execute_raw("SELECT id FROM users WHERE username=%s", [username])
+        self._uid = rows[0]['id']
+        self._username = username
+        set_current_user({'id': self._uid, 'username': username})
+        # 建表（幂等）
+        from backend.services.plan_tracking_service import _init_db
+        _init_db()
+
+    def tearDown(self):
+        """清理测试用户及其全部计划记录"""
+        from backend.data_access.tushare_db import TushareDB
+        from backend.core.auth import set_current_user
+        db = TushareDB()
+        db.execute_raw("DELETE FROM plan_records WHERE user_id=%s", [self._uid])
+        db.execute_raw("DELETE FROM users WHERE id=%s", [self._uid])
+        set_current_user(None)
+
+
     # ── Mock utilities ──
 
-    def _assert_db_has_table(self, db_path):
-        """验证数据库表结构正确"""
-        conn = sqlite3.connect(db_path)
-        try:
-            tables = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
-            self.assertIn(('plan_records',), tables)
-            cols = [row[1] for row in conn.execute("PRAGMA table_info(plan_records)")]
-            for required in ('date', 'code', 'source', 'buy_point', 'structure',
-                             'result', 'change_pct', 'is_main'):
-                self.assertIn(required, cols, f'缺少字段: {required}')
-        finally:
-            conn.close()
+    def _assert_db_has_table(self):
+        """验证 MySQL 表结构正确"""
+        from backend.data_access.tushare_db import TushareDB
+        db = TushareDB()
+        rows = db.execute_raw("SHOW COLUMNS FROM plan_records")
+        cols = [r['Field'] for r in rows]
+        for required in ('date', 'code', 'source', 'buy_point', 'structure',
+                         'result', 'change_pct', 'is_main', 'user_id'):
+            self.assertIn(required, cols, f'缺少字段: {required}')
 
-    def _insert_test_plan(self, db_path, **kwargs):
-        """向测试数据库插入一条计划记录"""
+    def _insert_test_plan(self, **kwargs):
+        """向测试用户插入一条计划记录"""
         defaults = dict(
             date='2026-05-28', code='000001', name='测试A',
             source='buy_priority', action='买入', reason='上涨趋势·上行',
@@ -83,18 +111,19 @@ class TestPlanTrackingV2(unittest.TestCase):
             plan_close=10.0, next_date=None,
             stop_loss=None, stop_loss_pct=None,
             executed=None, user_note='',
-            created_at='2026-05-28T10:00:00', updated_at='2026-05-28T10:00:00',
+            created_at='2026-05-28 10:00:00', updated_at='2026-05-28 10:00:00',
         )
         defaults.update(kwargs)
         from backend.services.plan_tracking_service import _save_plan_record
-        _save_plan_record(db_path, defaults)
+        _save_plan_record(None, defaults)
 
-    def _count_records(self, db_path):
-        conn = sqlite3.connect(db_path)
-        try:
-            return conn.execute("SELECT count(*) FROM plan_records").fetchone()[0]
-        finally:
-            conn.close()
+    def _count_records(self):
+        """统计当前测试用户记录数"""
+        from backend.data_access.tushare_db import TushareDB
+        db = TushareDB()
+        rows = db.execute_raw(
+            "SELECT COUNT(*) AS c FROM plan_records WHERE user_id=%s", [self._uid])
+        return rows[0]['c']
 
 
     # ═══════════════════════════════════════════════════
@@ -102,29 +131,15 @@ class TestPlanTrackingV2(unittest.TestCase):
     # ═══════════════════════════════════════════════════
 
     def test_db_init_creates_table(self):
-        """初始化SQLite时应创建plan_records表及索引"""
-        import tempfile
-        from backend.services.plan_tracking_service import _init_db
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            _init_db(db_path)
-            self._assert_db_has_table(db_path)
-        finally:
-            os.unlink(db_path)
+        """初始化MySQL时应创建plan_records表及字段"""
+        self._assert_db_has_table()
 
     def test_db_init_idempotent(self):
         """多次初始化不报错"""
-        import tempfile
         from backend.services.plan_tracking_service import _init_db
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            for _ in range(3):
-                _init_db(db_path)
-            self._assert_db_has_table(db_path)
-        finally:
-            os.unlink(db_path)
+        for _ in range(3):
+            _init_db()
+        self._assert_db_has_table()
 
     # ═══════════════════════════════════════════════════
     # 2. 从 trading_plan 提取计划
@@ -354,74 +369,72 @@ class TestPlanTrackingV2(unittest.TestCase):
         self.assertAlmostEqual(result['change_pct'], 8.0)
 
     # ═══════════════════════════════════════════════════
-    # 4. SQLite 存储与读取
+    # 4. MySQL 存储与读取（按用户隔离）
     # ═══════════════════════════════════════════════════
 
     def test_save_and_get_plan(self):
         """保存计划后能完整读回"""
-        import tempfile
-        from backend.services.plan_tracking_service import _init_db, _save_plan_record, get_plans
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            _init_db(db_path)
-            plan = {
-                'date': '2026-05-28', 'code': '000001', 'name': '测试A',
-                'source': 'buy_priority', 'action': '买入', 'reason': '上涨趋势·上行',
-                'structure': '上涨趋势', 'stage': '上行', 'buy_point': '中继买点',
-                'is_main': 1, 'result': 'success', 'change_pct': 5.0,
-            }
-            _save_plan_record(db_path, plan)
-            plans = get_plans(db_path)
-            self.assertEqual(len(plans), 1)
-            self.assertEqual(plans[0]['code'], '000001')
-            self.assertEqual(plans[0]['result'], 'success')
-        finally:
-            os.unlink(db_path)
+        from backend.services.plan_tracking_service import _save_plan_record, get_plans
+        plan = {
+            'date': '2026-05-28', 'code': '000001', 'name': '测试A',
+            'source': 'buy_priority', 'action': '买入', 'reason': '上涨趋势·上行',
+            'structure': '上涨趋势', 'stage': '上行', 'buy_point': '中继买点',
+            'is_main': 1, 'result': 'success', 'change_pct': 5.0,
+        }
+        _save_plan_record(None, plan)
+        plans = get_plans(None)
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]['code'], '000001')
+        self.assertEqual(plans[0]['result'], 'success')
+        self.assertEqual(plans[0]['user_id'], self._uid)
 
     def test_save_duplicate_unique_constraint(self):
-        """相同(date, code)记录应覆盖更新"""
-        import tempfile
-        from backend.services.plan_tracking_service import _init_db, _save_plan_record, get_plans
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            _init_db(db_path)
-            base = {
-                'date': '2026-05-28', 'code': '000001', 'name': '测试A',
-                'source': 'buy_priority',
-                'result': 'pending', 'change_pct': None,
-            }
-            _save_plan_record(db_path, base)
-            base['result'] = 'success'
-            base['change_pct'] = 5.0
-            _save_plan_record(db_path, base)
-            plans = get_plans(db_path)
-            self.assertEqual(len(plans), 1)
-            self.assertEqual(plans[0]['result'], 'success')
-        finally:
-            os.unlink(db_path)
+        """相同(user_id, date, code)记录应覆盖更新"""
+        from backend.services.plan_tracking_service import _save_plan_record, get_plans
+        base = {
+            'date': '2026-05-28', 'code': '000001', 'name': '测试A',
+            'source': 'buy_priority',
+            'result': 'pending', 'change_pct': None,
+        }
+        _save_plan_record(None, base)
+        base['result'] = 'success'
+        base['change_pct'] = 5.0
+        _save_plan_record(None, base)
+        plans = get_plans(None)
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]['result'], 'success')
 
     def test_annotate_executed(self):
         """标记执行状态后能正确更新"""
-        import tempfile
-        from backend.services.plan_tracking_service import _init_db, _save_plan_record, annotate_plan, get_plans
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
+        from backend.services.plan_tracking_service import _save_plan_record, annotate_plan, get_plans
+        plan = {
+            'date': '2026-05-28', 'code': '000001', 'name': '测试A',
+            'source': 'buy_priority', 'result': 'success',
+        }
+        _save_plan_record(None, plan)
+        result = annotate_plan(None, '2026-05-28', '000001', executed=True, user_note='按计划执行')
+        self.assertTrue(result['success'])
+        plans = get_plans(None)
+        self.assertEqual(plans[0]['executed'], 1)
+        self.assertEqual(plans[0]['user_note'], '按计划执行')
+
+    def test_user_isolation(self):
+        """不同用户的数据互相隔离（核心多用户验证）"""
+        from backend.data_access.tushare_db import TushareDB
+        from backend.core.auth import set_current_user
+        from backend.services.plan_tracking_service import _save_plan_record, get_plans
+        # 当前测试用户插入一条
+        _save_plan_record(None, {
+            'date': '2026-05-28', 'code': '000001', 'source': 'buy_priority',
+            'result': 'success',
+        })
+        # 切换到另一个用户（user2=36 真实用户，只读不写）
+        set_current_user({'id': 36, 'username': 'user2'})
         try:
-            _init_db(db_path)
-            plan = {
-                'date': '2026-05-28', 'code': '000001', 'name': '测试A',
-                'source': 'buy_priority', 'result': 'success',
-            }
-            _save_plan_record(db_path, plan)
-            result = annotate_plan(db_path, '2026-05-28', '000001', executed=True, user_note='按计划执行')
-            self.assertTrue(result['success'])
-            plans = get_plans(db_path)
-            self.assertEqual(plans[0]['executed'], 1)
-            self.assertEqual(plans[0]['user_note'], '按计划执行')
+            plans = get_plans(None)
+            self.assertEqual(len(plans), 0, 'user2 不应看到测试用户的数据')
         finally:
-            os.unlink(db_path)
+            set_current_user({'id': self._uid, 'username': self._username})
 
     # ═══════════════════════════════════════════════════
     # 5. 日期筛选
@@ -429,32 +442,24 @@ class TestPlanTrackingV2(unittest.TestCase):
 
     def test_date_filter(self):
         """日期筛选应只返回范围内的记录"""
-        import tempfile
-        from backend.services.plan_tracking_service import _init_db, _save_plan_record, get_plans
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            _init_db(db_path)
-            dates = ['2026-05-20', '2026-05-25', '2026-06-01']
-            for i, d in enumerate(dates):
-                _save_plan_record(db_path, {
-                    'date': d, 'code': f'00000{i}', 'name': f'测试{i}',
-                    'source': 'buy_priority', 'result': 'pending',
-                })
-            filtered = get_plans(db_path, start_date='2026-05-22', end_date='2026-05-30')
-            self.assertEqual(len(filtered), 1)
-            self.assertEqual(filtered[0]['date'], '2026-05-25')
-        finally:
-            os.unlink(db_path)
+        from backend.services.plan_tracking_service import _save_plan_record, get_plans
+        dates = ['2026-05-20', '2026-05-25', '2026-06-01']
+        for i, d in enumerate(dates):
+            _save_plan_record(None, {
+                'date': d, 'code': f'00000{i}', 'name': f'测试{i}',
+                'source': 'buy_priority', 'result': 'pending',
+            })
+        filtered = get_plans(None, start_date='2026-05-22', end_date='2026-05-30')
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]['date'], '2026-05-25')
 
     # ═══════════════════════════════════════════════════
     # 6. 多维统计摘要
     # ═══════════════════════════════════════════════════
 
-    def _setup_stats_db(self, db_path):
-        """准备一组统计数据"""
-        from backend.services.plan_tracking_service import _init_db, _save_plan_record
-        _init_db(db_path)
+    def _setup_stats_db(self):
+        """准备一组统计数据（当前测试用户）"""
+        from backend.services.plan_tracking_service import _save_plan_record
         records = [
             # buy_priority, 中继买点, 主线, 上涨趋势·上行
             {'date': '2026-05-20', 'code': '000001', 'source': 'buy_priority',
@@ -483,94 +488,64 @@ class TestPlanTrackingV2(unittest.TestCase):
              'buy_point': '中继买点', 'result': 'pending'},
         ]
         for r in records:
-            _save_plan_record(db_path, r)
+            _save_plan_record(None, r)
 
     def test_summary_basic(self):
         """统计摘要应正确计算成功率"""
-        import tempfile
         from backend.services.plan_tracking_service import get_tracking
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            self._setup_stats_db(db_path)
-            result = get_tracking(db_path)
-            s = result['summary']
-            # 6笔有结果(不包含pending)，3 success, 2 failure, 1 flat
-            self.assertEqual(s['total_plans'], 6)
-            self.assertEqual(s['success'], 3)
-            self.assertEqual(s['failure'], 2)
-            self.assertAlmostEqual(s['success_rate'], 60.0, delta=0.1)
-        finally:
-            os.unlink(db_path)
+        self._setup_stats_db()
+        result = get_tracking(None)
+        s = result['summary']
+        # 6笔有结果(不包含pending)，3 success, 2 failure, 1 flat
+        self.assertEqual(s['total_plans'], 6)
+        self.assertEqual(s['success'], 3)
+        self.assertEqual(s['failure'], 2)
+        self.assertAlmostEqual(s['success_rate'], 60.0, delta=0.1)
 
     def test_summary_by_buy_point(self):
         """按买点类型分组统计"""
-        import tempfile
         from backend.services.plan_tracking_service import get_tracking
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            self._setup_stats_db(db_path)
-            result = get_tracking(db_path)
-            bp = result['by_buy_point']
-            self.assertIn('中继买点', bp)
-            self.assertIn('涨停回踩', bp)
-            self.assertEqual(bp['中继买点']['total'], 3)
-            self.assertEqual(bp['中继买点']['success'], 2)
-            self.assertEqual(bp['中继买点']['failure'], 1)
-            self.assertEqual(bp['涨停回踩']['total'], 2)
-        finally:
-            os.unlink(db_path)
+        self._setup_stats_db()
+        result = get_tracking(None)
+        bp = result['by_buy_point']
+        self.assertIn('中继买点', bp)
+        self.assertIn('涨停回踩', bp)
+        self.assertEqual(bp['中继买点']['total'], 3)
+        self.assertEqual(bp['中继买点']['success'], 2)
+        self.assertEqual(bp['中继买点']['failure'], 1)
+        self.assertEqual(bp['涨停回踩']['total'], 2)
 
     def test_summary_by_structure(self):
         """按结构分组统计"""
-        import tempfile
         from backend.services.plan_tracking_service import get_tracking
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            self._setup_stats_db(db_path)
-            result = get_tracking(db_path)
-            bs = result['by_structure']
-            self.assertIn('上涨趋势', bs)
-            self.assertIn('区间震荡', bs)
-            self.assertEqual(bs['上涨趋势']['total'], 4)  # 3 buy_priority + 1 holdings_action
-            self.assertEqual(bs['区间震荡']['total'], 2)
-        finally:
-            os.unlink(db_path)
+        self._setup_stats_db()
+        result = get_tracking(None)
+        bs = result['by_structure']
+        self.assertIn('上涨趋势', bs)
+        self.assertIn('区间震荡', bs)
+        self.assertEqual(bs['上涨趋势']['total'], 4)  # 3 buy_priority + 1 holdings_action
+        self.assertEqual(bs['区间震荡']['total'], 2)
 
     def test_summary_by_is_main(self):
         """按是否主线分组统计"""
-        import tempfile
         from backend.services.plan_tracking_service import get_tracking
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            self._setup_stats_db(db_path)
-            result = get_tracking(db_path)
-            im = result['by_is_main']
-            self.assertIn('1', im)
-            self.assertIn('0', im)
-            self.assertEqual(im['1']['total'], 3)  # 3条主线
-        finally:
-            os.unlink(db_path)
+        self._setup_stats_db()
+        result = get_tracking(None)
+        im = result['by_is_main']
+        self.assertIn('1', im)
+        self.assertIn('0', im)
+        self.assertEqual(im['1']['total'], 3)  # 3条主线
 
     def test_summary_by_source(self):
         """按来源分组统计"""
-        import tempfile
         from backend.services.plan_tracking_service import get_tracking
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            self._setup_stats_db(db_path)
-            result = get_tracking(db_path)
-            bs = result['by_source']
-            self.assertIn('buy_priority', bs)
-            self.assertIn('holdings_action', bs)
-            self.assertEqual(bs['buy_priority']['total'], 5)
-            self.assertEqual(bs['holdings_action']['total'], 1)
-        finally:
-            os.unlink(db_path)
+        self._setup_stats_db()
+        result = get_tracking(None)
+        bs = result['by_source']
+        self.assertIn('buy_priority', bs)
+        self.assertIn('holdings_action', bs)
+        self.assertEqual(bs['buy_priority']['total'], 5)
+        self.assertEqual(bs['holdings_action']['total'], 1)
 
     # ═══════════════════════════════════════════════════
     # 7. 自动建议
@@ -578,72 +553,51 @@ class TestPlanTrackingV2(unittest.TestCase):
 
     def test_suggestions_too_few(self):
         """少于3条有结果的计划不生成建议"""
-        import tempfile
-        from backend.services.plan_tracking_service import _init_db, _save_plan_record, generate_suggestions_for_db
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            _init_db(db_path)
-            _save_plan_record(db_path, {
-                'date': '2026-05-20', 'code': '000001', 'source': 'buy_priority',
-                'result': 'success', 'buy_point': '中继买点',
-            })
-            sug = generate_suggestions_for_db(db_path)
-            self.assertEqual(sug, [])
-        finally:
-            os.unlink(db_path)
+        from backend.services.plan_tracking_service import _save_plan_record, generate_suggestions_for_db
+        _save_plan_record(None, {
+            'date': '2026-05-20', 'code': '000001', 'source': 'buy_priority',
+            'result': 'success', 'buy_point': '中继买点',
+        })
+        sug = generate_suggestions_for_db(None)
+        self.assertEqual(sug, [])
 
     def test_suggestions_low_rate_warning(self):
         """买点类型成功率<50%应生成warning"""
-        import tempfile
-        from backend.services.plan_tracking_service import _init_db, _save_plan_record, generate_suggestions_for_db
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            _init_db(db_path)
-            for i in range(3):
-                _save_plan_record(db_path, {
-                    'date': f'2026-05-{20+i}', 'code': f'00000{i}',
-                    'source': 'buy_priority', 'buy_point': '涨停回踩',
-                    'result': 'failure', 'change_pct': -2.0,
-                })
-            _save_plan_record(db_path, {
-                'date': '2026-05-23', 'code': '000003', 'source': 'buy_priority',
-                'buy_point': '中继买点', 'result': 'success', 'change_pct': 3.0,
+        from backend.services.plan_tracking_service import _save_plan_record, generate_suggestions_for_db
+        for i in range(3):
+            _save_plan_record(None, {
+                'date': f'2026-05-{20+i}', 'code': f'00000{i}',
+                'source': 'buy_priority', 'buy_point': '涨停回踩',
+                'result': 'failure', 'change_pct': -2.0,
             })
-            sug = generate_suggestions_for_db(db_path)
-            warnings = [s for s in sug if s['type'] == 'warning' and s['dimension'] == 'buy_point']
-            self.assertTrue(any('涨停回踩' in w['message'] for w in warnings))
-        finally:
-            os.unlink(db_path)
+        _save_plan_record(None, {
+            'date': '2026-05-23', 'code': '000003', 'source': 'buy_priority',
+            'buy_point': '中继买点', 'result': 'success', 'change_pct': 3.0,
+        })
+        sug = generate_suggestions_for_db(None)
+        warnings = [s for s in sug if s['type'] == 'warning' and s['dimension'] == 'buy_point']
+        self.assertTrue(any('涨停回踩' in w['message'] for w in warnings))
 
     def test_suggestions_by_mainline(self):
         """非主线成功率偏低应生成主线-非主线对比建议"""
-        import tempfile
-        from backend.services.plan_tracking_service import _init_db, _save_plan_record, generate_suggestions_for_db
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        try:
-            _init_db(db_path)
-            # 3条主线成功
-            for i in range(3):
-                _save_plan_record(db_path, {
-                    'date': f'2026-05-{20+i}', 'code': f'00000{i}',
-                    'source': 'buy_priority', 'is_main': 1,
-                    'buy_point': '中继买点', 'result': 'success', 'change_pct': 3.0,
-                })
-            # 3条非主线失败
-            for i in range(3, 6):
-                _save_plan_record(db_path, {
-                    'date': f'2026-05-{20+i}', 'code': f'00000{i}',
-                    'source': 'buy_priority', 'is_main': 0,
-                    'buy_point': '涨停回踩', 'result': 'failure', 'change_pct': -3.0,
-                })
-            sug = generate_suggestions_for_db(db_path)
-            mainline_sug = [s for s in sug if s['dimension'] == 'mainline']
-            self.assertTrue(len(mainline_sug) >= 1)
-        finally:
-            os.unlink(db_path)
+        from backend.services.plan_tracking_service import _save_plan_record, generate_suggestions_for_db
+        # 3条主线成功
+        for i in range(3):
+            _save_plan_record(None, {
+                'date': f'2026-05-{20+i}', 'code': f'00000{i}',
+                'source': 'buy_priority', 'is_main': 1,
+                'buy_point': '中继买点', 'result': 'success', 'change_pct': 3.0,
+            })
+        # 3条非主线失败
+        for i in range(3, 6):
+            _save_plan_record(None, {
+                'date': f'2026-05-{20+i}', 'code': f'00000{i}',
+                'source': 'buy_priority', 'is_main': 0,
+                'buy_point': '涨停回踩', 'result': 'failure', 'change_pct': -3.0,
+            })
+        sug = generate_suggestions_for_db(None)
+        mainline_sug = [s for s in sug if s['dimension'] == 'mainline']
+        self.assertTrue(len(mainline_sug) >= 1)
 
 
 if __name__ == '__main__':

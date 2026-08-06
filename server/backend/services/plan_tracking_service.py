@@ -2,53 +2,60 @@
 操作计划追踪服务 v2
 
 数据源: review 实时计算的 trading_plan (holdings_action + buy_priority)
-存储: SQLite（零外部依赖，适合多维度统计）
+存储: MySQL plan_records 表（多用户按 user_id 隔离）
 """
-import json, os, re, sqlite3
+import json, os, re
 from datetime import datetime, timedelta
+from decimal import Decimal
 from backend.core.config import DATA_DIR
 
-DB_PATH = os.path.join(DATA_DIR, 'private', 'plan_tracking.db')
-
+# 与 migrations/migrate_plan_tracking_mysql.py 中 DDL 保持一致（幂等建表）
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS plan_records (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    date            TEXT    NOT NULL,
-    code            TEXT    NOT NULL,
-    name            TEXT,
-    source          TEXT,
-    action          TEXT,
-    reason          TEXT,
-    structure       TEXT,
-    stage           TEXT,
-    buy_point       TEXT,
-    is_main         INTEGER DEFAULT 0,
-    priority        TEXT,
-    stop_loss       REAL,
-    stop_loss_pct   REAL,
-    plan_close      REAL,
-    next_date       TEXT,
-    next_open       REAL,
-    next_close      REAL,
-    next_high       REAL,
-    next_low        REAL,
-    change_pct      REAL,
-    max_gain        REAL,
-    max_loss        REAL,
-    hit_stop_loss   INTEGER DEFAULT 0,
-    result          TEXT,
-    executed        INTEGER,
-    user_note       TEXT DEFAULT '',
-    created_at      TEXT,
-    updated_at      TEXT,
-    UNIQUE(date, code)
-);
-CREATE INDEX IF NOT EXISTS idx_records_date      ON plan_records(date);
-CREATE INDEX IF NOT EXISTS idx_records_result    ON plan_records(result);
-CREATE INDEX IF NOT EXISTS idx_records_source    ON plan_records(source);
-CREATE INDEX IF NOT EXISTS idx_records_buy_point ON plan_records(buy_point);
-CREATE INDEX IF NOT EXISTS idx_records_structure ON plan_records(structure, stage);
-CREATE INDEX IF NOT EXISTS idx_records_is_main   ON plan_records(is_main);
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT NOT NULL DEFAULT 1 COMMENT '用户ID（多用户隔离）',
+    date            VARCHAR(10) NOT NULL COMMENT '计划日期 YYYY-MM-DD',
+    code            VARCHAR(10) NOT NULL COMMENT '6位股票代码',
+    name            VARCHAR(50) DEFAULT '',
+    source          VARCHAR(20) DEFAULT '',
+    action          VARCHAR(50) DEFAULT '',
+    reason          VARCHAR(200) DEFAULT '',
+    structure       VARCHAR(50) DEFAULT '',
+    stage           VARCHAR(50) DEFAULT '',
+    buy_point       VARCHAR(50) DEFAULT '',
+    is_main         TINYINT DEFAULT 0,
+    priority        VARCHAR(20) DEFAULT '',
+    stop_loss       DECIMAL(12,4) DEFAULT NULL,
+    stop_loss_pct   DECIMAL(8,4) DEFAULT NULL,
+    plan_close      DECIMAL(12,4) DEFAULT NULL,
+    next_date       VARCHAR(10) DEFAULT NULL,
+    next_open       DECIMAL(12,4) DEFAULT NULL,
+    next_close      DECIMAL(12,4) DEFAULT NULL,
+    next_high       DECIMAL(12,4) DEFAULT NULL,
+    next_low        DECIMAL(12,4) DEFAULT NULL,
+    change_pct      DECIMAL(10,4) DEFAULT NULL,
+    max_gain        DECIMAL(10,4) DEFAULT NULL,
+    max_loss        DECIMAL(10,4) DEFAULT NULL,
+    hit_stop_loss   TINYINT DEFAULT 0,
+    exit_date       VARCHAR(10) DEFAULT NULL,
+    exit_price      DECIMAL(12,4) DEFAULT NULL,
+    exit_reason     VARCHAR(50) DEFAULT '',
+    holding_days    INT DEFAULT NULL,
+    max_price       DECIMAL(12,4) DEFAULT NULL,
+    min_price       DECIMAL(12,4) DEFAULT NULL,
+    result          VARCHAR(20) DEFAULT '',
+    executed        TINYINT DEFAULT NULL,
+    user_note       VARCHAR(500) DEFAULT '',
+    created_at      DATETIME DEFAULT NULL,
+    updated_at      DATETIME DEFAULT NULL,
+    UNIQUE KEY uk_user_date_code (user_id, date, code),
+    KEY idx_date (date),
+    KEY idx_result (result),
+    KEY idx_source (source),
+    KEY idx_buy_point (buy_point),
+    KEY idx_structure (structure, stage),
+    KEY idx_is_main (is_main)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作计划追踪（多用户）'
 """
 
 
@@ -57,34 +64,33 @@ CREATE INDEX IF NOT EXISTS idx_records_is_main   ON plan_records(is_main);
 # ═══════════════════════════════════════════════════════════════
 
 def _init_db(db_path=None):
-    """初始化数据库表结构（幂等）"""
-    if db_path is None:
-        db_path = DB_PATH
-    if db_path != ':memory:':
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    """初始化 MySQL plan_records 表结构（幂等）
+
+    db_path 参数保留仅为兼容旧调用（SQLite 时代），实际已忽略。
+    """
+    from backend.data_access.data_source import _get_tushare_db
+    db = _get_tushare_db()
+    if not db:
+        raise RuntimeError('DB unavailable')
+    conn = db._get_conn()
     try:
-        conn.executescript(_SCHEMA_SQL)
-        # 兼容旧表：追加新列（幂等）
-        for col, col_type in [('exit_date', 'TEXT'), ('exit_price', 'REAL'),
-                               ('exit_reason', 'TEXT'), ('holding_days', 'INTEGER'),
-                               ('max_price', 'REAL'), ('min_price', 'REAL')]:
-            try:
-                conn.execute(f'ALTER TABLE plan_records ADD COLUMN {col} {col_type}')
-            except sqlite3.OperationalError:
-                pass  # 列已存在
+        with conn.cursor() as cur:
+            cur.execute(_SCHEMA_SQL)
         conn.commit()
     finally:
         conn.close()
 
 
 def _get_conn(db_path=None):
-    """获取数据库连接（Row 工厂模式）"""
-    if db_path is None:
-        db_path = DB_PATH
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """获取 MySQL 连接（DictCursor 工厂模式）
+
+    db_path 参数保留仅为兼容旧调用（SQLite 时代），实际已忽略。
+    """
+    from backend.data_access.data_source import _get_tushare_db
+    db = _get_tushare_db()
+    if not db:
+        raise RuntimeError('DB unavailable')
+    return db._get_conn()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -416,10 +422,17 @@ def judge_next_day(plan: dict, klines: list) -> dict:
 # 数据库 CRUD
 # ═══════════════════════════════════════════════════════════════
 
+def _current_user_id() -> int:
+    """当前用户 id（cron/脚本无上下文默认 admin=1）"""
+    from backend.core.auth import get_current_user_id
+    return get_current_user_id()
+
+
 def _plan_to_row(p: dict) -> dict:
-    """将 plan dict 转为数据库行"""
-    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    """将 plan dict 转为数据库行（含 user_id 用户维度）"""
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     return {
+        'user_id': _current_user_id(),
         'date': p.get('date', ''),
         'code': p.get('code', ''),
         'name': p.get('name', ''),
@@ -458,66 +471,79 @@ def _plan_to_row(p: dict) -> dict:
 
 
 def _save_plan_record(db_path: str, plan: dict):
-    """保存一条计划记录（INSERT OR REPLACE）"""
+    """保存一条计划记录（按用户 UPSERT：INSERT ... ON DUPLICATE KEY UPDATE）"""
     row = _plan_to_row(plan)
     conn = _get_conn(db_path)
     try:
         cols = ', '.join(row.keys())
-        placeholders = ', '.join(['?' for _ in row])
-        update_cols = ', '.join([f'{k}=excluded.{k}' for k in row.keys()
-                                 if k not in ('date', 'code', 'created_at')])
+        placeholders = ', '.join(['%s'] * len(row))
+        update_cols = ', '.join([f'{k}=VALUES({k})' for k in row.keys()
+                                 if k not in ('user_id', 'date', 'code', 'created_at')])
         sql = f"""INSERT INTO plan_records ({cols})
                   VALUES ({placeholders})
-                  ON CONFLICT(date, code) DO UPDATE SET {update_cols}"""
-        conn.execute(sql, list(row.values()))
+                  ON DUPLICATE KEY UPDATE {update_cols}"""
+        with conn.cursor() as cur:
+            cur.execute(sql, list(row.values()))
         conn.commit()
     finally:
         conn.close()
 
 
 def get_plans(db_path: str, start_date: str = None, end_date: str = None) -> list:
-    """获取计划列表，支持日期筛选"""
+    """获取当前用户的计划列表，支持日期筛选"""
     conn = _get_conn(db_path)
     try:
-        conditions = []
-        params = []
+        conditions = ["user_id = %s"]
+        params = [_current_user_id()]
         if start_date:
-            conditions.append("date >= ?")
+            conditions.append("date >= %s")
             params.append(start_date)
         if end_date:
-            conditions.append("date <= ?")
+            conditions.append("date <= %s")
             params.append(end_date)
 
-        where = "WHERE " + " AND ".join(conditions) if conditions else ""
-        rows = conn.execute(
-            f"SELECT * FROM plan_records {where} ORDER BY date DESC, code",
-            params
-        ).fetchall()
-        return [dict(r) for r in rows]
+        where = "WHERE " + " AND ".join(conditions)
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT * FROM plan_records {where} ORDER BY date DESC, code",
+                params
+            )
+            rows = cur.fetchall()
+        # MySQL 数值列返回 Decimal，统一转 float/int（SQLite 时代是原生数值）
+        result = []
+        for r in rows:
+            item = dict(r)
+            for k, v in item.items():
+                if isinstance(v, Decimal):
+                    item[k] = float(v)
+            result.append(item)
+        return result
     finally:
         conn.close()
 
 
 def annotate_plan(db_path: str, date_str: str, code: str,
                   executed: bool = None, user_note: str = '') -> dict:
-    """标记计划执行状态"""
+    """标记当前用户的计划执行状态"""
     conn = _get_conn(db_path)
     try:
-        now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-        updates = ['updated_at = ?']
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        updates = ['updated_at = %s']
         params = [now]
         if executed is not None:
-            updates.append('executed = ?')
+            updates.append('executed = %s')
             params.append(1 if executed else 0)
         if user_note:
-            updates.append('user_note = ?')
+            updates.append('user_note = %s')
             params.append(user_note)
-        params.extend([date_str, code])
-        conn.execute(
-            f"UPDATE plan_records SET {', '.join(updates)} WHERE date = ? AND code = ?",
-            params
-        )
-        affected = conn.total_changes
+        params.extend([_current_user_id(), date_str, code])
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE plan_records SET {', '.join(updates)} "
+                "WHERE user_id = %s AND date = %s AND code = %s",
+                params
+            )
+            affected = cur.rowcount
         conn.commit()
         if affected == 0:
             return {'success': False, 'error': '记录不存在'}
@@ -530,7 +556,9 @@ def _execute_query(db_path: str, sql: str, params: list = None) -> list:
     """执行SQL查询并返回dict列表"""
     conn = _get_conn(db_path)
     try:
-        rows = conn.execute(sql, params or []).fetchall()
+        with conn.cursor() as cur:
+            cur.execute(sql, params or [])
+            rows = cur.fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
@@ -632,8 +660,6 @@ def get_tracking(db_path: str = None, start_date: str = None, end_date: str = No
 
     Returns: {plans, summary, by_buy_point, by_structure, by_is_main, by_source, suggestions, last_updated}
     """
-    if db_path is None:
-        db_path = DB_PATH
     if force_db_init:
         _init_db(db_path)
 
@@ -797,18 +823,14 @@ def generate_suggestions_for_db(db_path: str = None) -> list:
     data = get_tracking(db_path)
     return data.get('suggestions', [])
 
-
 # ═══════════════════════════════════════════════════════════════
 # 完整计算流程
 # ═══════════════════════════════════════════════════════════════
 
 def _get_review_dates() -> list:
-    """获取有复盘的日期列表（从CACHE_RECORDS或review数据推断）
-
-    这里用 workbench 目录的存在日期作为候选，避免依赖 review_archive
-    """
-    from backend.core.config import PRIVATE_DIR
-    wb_dir = os.path.join(PRIVATE_DIR, 'workbench')
+    """获取有复盘的日期列表（从当前用户 workbench 目录推断）"""
+    from backend.core.config import get_user_config_path
+    wb_dir = os.path.dirname(get_user_config_path(os.path.join('workbench', '2000-01-01.json')))
     if os.path.isdir(wb_dir):
         return sorted(
             f.replace('.json', '') for f in os.listdir(wb_dir)
@@ -823,9 +845,6 @@ def compute_tracking(force=False, db_path=None) -> dict:
     force=True: 从头重新计算
     返回: get_tracking() 的完整结果
     """
-    if db_path is None:
-        db_path = DB_PATH
-
     _init_db(db_path)
 
     # 获取已有的记录作为缓存
