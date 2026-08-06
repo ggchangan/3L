@@ -50,6 +50,12 @@ echo "Data directory ready."
 # 持仓表迁移必须先于服务启动；失败时由 set -e 阻止带不兼容结构的代码上线。
 echo "Running database migrations..."
 python3 -m backend.migrations.holdings_entry_metadata
+# 多用户认证迁移：users 表加密码列 + 预置 admin/user2~5（幂等）
+python3 -m backend.migrations.users_auth
+# 用户数据目录迁移：config/ 全局文件 → config/users/<uid>/（幂等，不覆盖已有）
+python3 -m backend.migrations.migrate_user_data
+# plan_tracking 建表（MySQL；SQLite 存量在旧环境已迁移，新环境空表直接建）
+python3 -m backend.migrations.migrate_plan_tracking_mysql
 
 # 启动 cron（定时数据更新）
 echo "Starting cron daemon for scheduled data updates..."
