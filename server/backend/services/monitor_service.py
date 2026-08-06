@@ -620,7 +620,8 @@ def get_leader_dashboard():
         from backend.data_access.data_layer import get_stock_concept_map, get_concept_list
         from backend.data_access.data_layer import get_watchlist
         watchlist_data = get_watchlist()
-        watchlist_codes = set(s.get('code', '') for s in watchlist_data)
+        watchlist_stocks = watchlist_data.get('stocks', []) if isinstance(watchlist_data, dict) else watchlist_data
+        watchlist_codes = set(s.get('code', '') for s in watchlist_stocks)
         stock_concept = get_stock_concept_map()
         concept_list = get_concept_list()
         # 统计每个概念的自选股数量

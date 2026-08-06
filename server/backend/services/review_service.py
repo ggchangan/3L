@@ -98,6 +98,7 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
     from backend.services.direction_service import get_active as get_active_dirs
     active_dirs = get_active_dirs()
     wl = wl_func() if callable(wl_func) else []
+    wl = wl.get('stocks', []) if isinstance(wl, dict) else wl
     wl = [s for s in wl if s.get('direction', '其他') in active_dirs]
     wl_codes = set(s['code'] for s in wl)
     # 合并持仓股代码，确保持仓股也被扫描

@@ -190,7 +190,9 @@ def get_tracked_concept_universe(min_related_stocks=6, reference_date=None):
     """构建可参与概念主线的活跃集合，并保留排除原因供诊断。"""
     concept_list = get_concept_list()
     stock_concept_map = get_stock_concept_map()
-    watchlist_codes = {item.get('code', '') for item in get_watchlist()}
+    wl = get_watchlist()
+    wl_stocks = wl.get('stocks', []) if isinstance(wl, dict) else wl
+    watchlist_codes = {item.get('code', '') for item in wl_stocks}
     candidates = {}
     for concept_code, info in concept_list.items():
         name = info.get('name', '')

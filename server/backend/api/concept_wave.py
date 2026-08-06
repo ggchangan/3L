@@ -62,7 +62,8 @@ def _make_response(handler, path):
     concept_list = get_concept_list()
     stock_concept_map = get_stock_concept_map()
     watchlist = get_watchlist()
-    watchlist_codes = set(s.get('code', '') for s in watchlist)
+    watchlist_stocks = watchlist.get('stocks', []) if isinstance(watchlist, dict) else watchlist
+    watchlist_codes = set(s.get('code', '') for s in watchlist_stocks)
 
     # 筛选：只处理有K线且存在追踪列表中的概念（取自选股涉及的概念）
     results = []

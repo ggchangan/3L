@@ -279,6 +279,7 @@ def get_watchlist_analysis(stocks=None, wl=None):
         stocks = get_all_stocks()
     if wl is None:
         wl = get_watchlist()
+    wl = wl.get('stocks', []) if isinstance(wl, dict) else wl
     imap = _load_json(INDUSTRY_MAP_PATH, {})
     _mainlines = get_full_mainlines()
 
