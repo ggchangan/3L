@@ -106,18 +106,29 @@ def migrate():
                 col_info = conn.execute("PRAGMA table_info(plan_records)").fetchall()
                 cols = [c[1] for c in col_info]  # 第2列才是列名
                 imported = 0
-                for r in src:
-                    values = [_to_mysql_value(r[c]) for c in cols]
-                    # 排除 id（自增），date/code 必需
-                    insert_cols = [c for c in cols if c != 'id']
-                    insert_vals = [values[cols.index(c)] for c in insert_cols]
-                    placeholders = ', '.join(['%s'] * len(insert_cols))
-                    col_list = ', '.join(insert_cols)
-                    db.execute_raw(
-                        f"INSERT INTO plan_records ({col_list}) VALUES ({placeholders})",
-                        insert_vals,
-                    )
-                    imported += 1
+                # 单事务导入：中途失败整体回滚，避免残留部分数据导致下次跳过导入
+                mconn = db._get_conn()
+                try:
+                    mconn.autocommit(False)
+                    with mconn.cursor() as cur:
+                        for r in src:
+                            values = [_to_mysql_value(r[c]) for c in cols]
+                            # 排除 id（自增），date/code 必需
+                            insert_cols = [c for c in cols if c != 'id']
+                            insert_vals = [values[cols.index(c)] for c in insert_cols]
+                            placeholders = ', '.join(['%s'] * len(insert_cols))
+                            col_list = ', '.join(insert_cols)
+                            cur.execute(
+                                f"INSERT INTO plan_records ({col_list}) VALUES ({placeholders})",
+                                insert_vals,
+                            )
+                            imported += 1
+                    mconn.commit()
+                except Exception:
+                    mconn.rollback()
+                    raise
+                finally:
+                    mconn.close()
                 results.append(f'import: SQLite → MySQL {imported} 条（归 admin=1）')
             finally:
                 conn.close()

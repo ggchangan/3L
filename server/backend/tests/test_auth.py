@@ -20,6 +20,14 @@ from backend.data_access.tushare_db import is_db_available  # noqa: E402
 from backend.data_access import users_repo  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _cleanup_after():
+    """每个测试后清理内存 token 与 thread-local，防跨测试泄漏"""
+    yield
+    auth._tokens.clear()
+    auth.set_current_user(None)
+
+
 # ═══════════════════════════════════════════════════════════
 # 1. auth 核心纯函数（无需 DB）
 # ═══════════════════════════════════════════════════════════
@@ -87,13 +95,35 @@ class TestAuthCore:
         assert auth.get_token_user(t2) is None        # 其他会话被撤销
         assert auth.get_token_user(t_other) is not None  # 其他用户不受影响
 
+    def test_token_expiry_boundary(self, monkeypatch):
+        """边界：未到期仍有效，超过 expires_at 即失效"""
+        import time as _time
+        real_time = _time.time
+        user = {'id': 13, 'username': 'boundary'}
+        token = auth.create_token(user)
+        # 未到期（TTL-5s）：仍有效
+        monkeypatch.setattr(auth.time, 'time', lambda: real_time() + auth.TOKEN_TTL_SECONDS - 5)
+        assert auth.get_token_user(token) is not None
+        # 超过 1 秒：失效
+        monkeypatch.setattr(auth.time, 'time', lambda: real_time() + auth.TOKEN_TTL_SECONDS + 1)
+        assert auth.get_token_user(token) is None
+
+    def test_revoke_user_tokens_all_without_exception(self):
+        """except_token=None 时撤销该用户全部 token"""
+        t1 = auth.create_token({'id': 14, 'username': 'revall'})
+        t2 = auth.create_token({'id': 14, 'username': 'revall'})
+        auth.revoke_user_tokens(14)
+        assert auth.get_token_user(t1) is None
+        assert auth.get_token_user(t2) is None
+
     def test_sweep_expired_tokens(self, monkeypatch):
         token = auth.create_token({'id': 12, 'username': 'sweep'})
         import time as _time
         real_time = _time.time
         monkeypatch.setattr(auth.time, 'time', lambda: real_time() + auth.TOKEN_TTL_SECONDS + 10)
         auth.sweep_expired_tokens()
-        assert auth.get_token_user(token) is None
+        # 直接断言 token 从内存字典移除（而非依赖 get_token_user 的惰性清理）
+        assert token not in auth._tokens
 
 
 # ═══════════════════════════════════════════════════════════
@@ -266,6 +296,35 @@ class TestAuthAPI:
         assert data['token']
         # 清理
         TushareDB().execute_raw("DELETE FROM users WHERE username=%s", [username])
+
+    def test_register_with_display_name(self):
+        """注册时带昵称应保存并返回"""
+        from backend.api.auth import _handle_register
+        from backend.data_access.tushare_db import TushareDB
+        username = f'pytest_reg_{uuid4().hex[:8]}'
+        h = FakeHandler(body='{}')
+        _handle_register(h, '/api/auth/register',
+                         f'{{"username": "{username}", "password": "regpass123", "display_name": "测试昵称"}}')
+        status, data = h.responses[-1]
+        assert status == 200
+        assert data['user']['display_name'] == '测试昵称'
+        # DB 中也保存了昵称
+        got = users_repo.get_user_by_username(username)
+        assert got['display_name'] == '测试昵称'
+        TushareDB().execute_raw("DELETE FROM users WHERE username=%s", [username])
+
+    def test_login_deactivated_user(self, auth_user):
+        """停用用户（is_active=0）不能登录"""
+        from backend.api.auth import _handle_login
+        from backend.data_access.tushare_db import TushareDB
+        uid, username, password = auth_user
+        TushareDB().execute_raw("UPDATE users SET is_active=0 WHERE id=%s", [uid])
+        h = FakeHandler(body='{}')
+        _handle_login(h, '/api/auth/login',
+                      f'{{"username": "{username}", "password": "{password}"}}')
+        status, data = h.responses[-1]
+        assert status == 401
+        assert data['error'] == '用户名或密码错误'
 
     def test_register_duplicate_username(self, auth_user):
         from backend.api.auth import _handle_register
