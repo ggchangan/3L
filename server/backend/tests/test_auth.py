@@ -445,6 +445,14 @@ class TestAuthAPI:
         assert status == 401
 
 
+def _bind_handler_methods(h, Handler):
+    """把 server.Handler 的鉴权方法绑定到 FakeHandler 实例上。"""
+    h.AUTH_WHITELIST = Handler.AUTH_WHITELIST
+    h._resolve_user = Handler._resolve_user.__get__(h)
+    h._require_auth = Handler._require_auth.__get__(h)
+    return h
+
+
 class TestChartEndpointsAuthWhitelist:
     """图表端点必须免登录（前端 <img>/<object> 原生标签无法携带 Authorization header）。
 
@@ -468,3 +476,43 @@ class TestChartEndpointsAuthWhitelist:
         assert '/api/watchlist' not in Handler.AUTH_WHITELIST
         assert '/api/review' not in Handler.AUTH_WHITELIST
         assert '/api/holdings' not in Handler.AUTH_WHITELIST
+
+    def test_require_auth_whitelist_passes_without_token(self):
+        """白名单端点无 token 直接放行（模拟前端 <img> 加载图表）。"""
+        from server.server import Handler
+        h = _bind_handler_methods(FakeHandler(headers={}, body='{}'), Handler)
+        ok = h._require_auth('/api/index-chart')
+        assert ok is True
+        assert h.responses == []
+
+    def test_require_auth_private_api_rejects_without_token(self):
+        """私有 API 无 token 返回 401 且不放行。"""
+        from server.server import Handler
+        h = _bind_handler_methods(FakeHandler(headers={}, body='{}'), Handler)
+        ok = h._require_auth('/api/watchlist')
+        assert ok is False
+        status, data = h.responses[-1]
+        assert status == 401
+        assert data['success'] is False
+
+    def test_require_auth_private_api_passes_with_token(self):
+        """私有 API 带有效 token 放行。"""
+        from server.server import Handler
+        token = auth.create_token({'id': 5, 'username': 'wluser'})
+        h = _bind_handler_methods(
+            FakeHandler(headers={'Authorization': f'Bearer {token}'}, body='{}'),
+            Handler,
+        )
+        ok = h._require_auth('/api/watchlist')
+        assert ok is True
+        assert h.responses == []
+        assert auth.get_current_user_id() == 5
+        auth.set_current_user(None)
+
+    def test_require_auth_static_assets_no_auth(self):
+        """非 /api/ 静态资源不做鉴权（前端 JS/CSS/图片正常加载）。"""
+        from server.server import Handler
+        h = _bind_handler_methods(FakeHandler(headers={}, body='{}'), Handler)
+        assert h._require_auth('/react.html') is True
+        assert h._require_auth('/assets/sounds/market.wav') is True
+        assert h.responses == []
