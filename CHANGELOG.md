@@ -1,5 +1,55 @@
 # Changelog
 
+## [v3.11.0] — 2026-08-10
+
+### 新增：关注同花顺板块/概念 + 复盘页关注 Tab
+
+**背景：** 复盘页只有「行业/概念强度候选」（全量 20 日涨幅排序），用户无法聚焦自己重点关注的同花顺板块/概念。
+
+**功能：**
+- 新页面「⭐ 关注板块」(`/sector-focus`)：按 🏭行业(type=I, 1268个) / 💡概念(type=N, 418个) 双 Tab 浏览全部同花顺板块，支持中文/拼音搜索（pinyin-pro，首字母+全拼）、「只看已关注」开关、主线内/主线外标记，点击勾选/取消即时保存
+- 复盘页 STEP 2–3 `MainlineSection` 从 2 Tab 扩为 4 Tab：新增「⭐ 关注行业」「⭐ 关注概念」，展示与强度候选完全一致的信息（今日涨跌/20日涨幅/阶段/vl评分/持续天数/强度排名/领涨股）；关注了但主线暂无数据的显示「暂无数据」
+- 关注数据存 MySQL `watched_sectors` 表（按 user_id 隔离，`UNIQUE(user_id, ts_code)`，DDL 随 `CREATE_TABLES` 幂等建表），不再新增配置文件
+- 复盘 `/api/review/today` 响应新增 `watched_sectors` 字段：后端按当前用户从行业/概念 `all_ranked` 匹配（`matched` 标记），与强度候选同源同格式
+
+**API：**
+| 接口 | 说明 |
+|---|---|
+| `GET /api/sectors/list?type=industry\|concept` | 板块/概念全列表（名称、ts_code、成分股数、主线内标记、关注状态） |
+| `GET /api/watched-sectors` | 当前用户关注列表 `{industries: [名称], concepts: [名称]}` |
+| `POST /api/watched-sectors/toggle` | `{type, ts_code}` 关注/取消（服务端校验 ths_index 存在性 + type 匹配） |
+
+**测试：** `backend/tests/test_sector_focus.py` 15 项（repo CRUD/幂等/DB异常传播/用户隔离 + toggle 校验/原子切换/跨类型重名板块 + 独立强度计算/无K线/排序 + 列表结构 + 复盘匹配），全量后端测试 **800 passed 全绿**（顺带修复 test_auth 图表白名单 8 项预存失败：pytest 环境下 `server.server` 导入解析问题，`_load_server_handler()` 动态加载）。
+
+**关注 Tab 数据增强（2026-08-10 迭代）：**
+- 关注但不在主线 all_ranked 的板块/概念（新概念 K线<20条、数据源停更）从本地 ths_daily 独立计算强度——MLCC概念/玻璃基板（新概念）显示今日涨跌、华为盘古（Tushare 停更于 06-12）显示历史强度并标注 📅至06-12
+- 关注列表排序与强度候选一致（chg_20d 降序，无 20 日数据排最后）
+- 关注概念 Tab 图标改 🔖 与 ⭐关注行业 去重
+
+**关注板块每日增量更新保障 + Tushare 补齐（2026-08-10 二轮）：**
+- **根因**：`update_sectors()` 只更新「自选股关联≥6只」的追踪概念 + 全部行业，用户关注的板块/概念（新概念关联不足、数据停更概念）永远不在更新范围 → 停更死循环（华为盘古止于 06-12、玻璃基板仅 5 条、MLCC概念仅 3 条）
+- **修复 1（增量）**：`update_sectors()` 强制纳入 watched_sectors 全部用户关注（行业+概念），无论是否满足追踪门槛，每天增量更新（06:00 full / 20:00+22:00 evening cron 自动覆盖）
+- **修复 2（字段映射 bug）**：`_fetch_ths_daily_klines_tushare` 取 `pct_chg` 恒为 NULL（Tushare 返回 `pct_change`），已修正
+- **修复 3（历史补齐）**：新增 `scripts/backfill_watched_ths_daily.py` 按 ts_code 精确拉取 Tushare 全历史——华为盘古 419 条至 08-10（20日 +13.62% 阶段上涨）、玻璃基板 17 条、MLCC概念 7 条；跳过 close 为 NULL 的脏行（Tushare 新概念早期数据质量）
+- `_compute_sector_strength` 查询过滤 `close IS NOT NULL` 防除零崩溃
+- 测试：新增 `test_watched_sector_forced_update.py` 8 项（强制纳入/字段映射/脏行过滤/SQL 防御），全量后端测试 **808 passed 全绿**，CI 无 env 模拟通过
+
+**Code Review 修复（2026-08-10 三轮）：**
+- **C1 coverage 门禁误伤**：关注概念（可能停更/无数据）不再无条件计入 expected 分母——`get_ths_daily_update_coverage` 新增 `optional_concepts` 参数，缺失单独记录 `optional_missing` 只告警不拉低 ratio，防整个日更管线（06:00 full）被停更概念拖垮
+- **C2 改名快照过期**：强制纳入时以 ts_code JOIN ths_index 取 canonical name（ths_index 为权威，watched_sectors.name 是关注时刻快照），解析不到的跳过且不进 coverage 分母；新增 `get_ths_index_canonical_names()`
+- **W1 cron 复盘缺字段**：`generate_daily_review` 注入 `watched_sectors`（新增 `_build_watched_for_review` 延迟 import 复用，实时路径同步统一）——修缓存过期时关注 Tab"假空"
+- **W2 vl_score 失真**：`_compute_sector_strength` 补全 OHLCV 结构（judge_concept_wave 依赖 volume 量比/缩量），阶段判定不再系统性失真
+- **W3 backfill 健壮性**：校验响应行 ts_code（防代理忽略过滤全市场误写）、close<=0 脏行同拒、DB 判空顺序修正、空记录不调用 upsert
+- **W4 重关注保留过期 name**：新增 `refresh_watched_name` 在 toggle 取消前同步最新名
+- 前端：`chg_20d` null 灰色显示；关注 Tab 独立项不受 estimated 门控（数据为 ths_daily 确认值）；`_IN_MAINLINE_CACHE` 异常不写空缓存
+- 测试：新增 7 项（optional 门禁 3 / backfill 脏行 2 / canonical 解析 2），全量 **815 passed 全绿**，CI 无 env 模拟 30 passed
+
+**复盘页领涨股自选复选框（2026-08-10 四轮）：**
+- 板块领涨个股的 ➕ 加自选改为**复选框**：勾选状态实时反映是否已在自选中（accentColor 青色），点击 toggle 添加/移除，无需弹窗确认
+- 新增 `POST /api/watchlist/remove-stock`（与 add-stock 对称、幂等，返回"不在自选股中"不报错）
+- 前端 MainlineSection 加载 `/api/watchlist` 构建自选代码集合，两处领涨股渲染（候选榜+方向分组）统一
+- 测试：新增 `test_watchlist_toggle_endpoint.py` 4 项（remove 成功/幂等/缺 code/add 重复），全量 **819 passed 全绿**
+
 ## [v3.10.2] — 2026-08-04
 
 ### 新增：交易日 20:00 板块正式数据更新 + 22:00 条件补齐

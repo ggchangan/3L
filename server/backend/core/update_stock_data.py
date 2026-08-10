@@ -322,6 +322,44 @@ def update_sectors():
         log(f'⚠️  获取板块列表失败: {e}')
         names_to_update = []
 
+    # ── 强制纳入用户关注的行业/概念（无论是否满足追踪门槛）──
+    # 关注列表是用户明确指定的重点板块，必须每天增量更新；
+    # 否则新概念（关联自选股<6）或数据停更概念永远不会进入更新范围，形成死循环。
+    # ⚠️ 解析一律以 ts_code 为准（LEFT JOIN ths_index 取 canonical name）：
+    # watched_sectors.name 是关注时刻快照，Tushare 改名后（如 数据中心→数据中心(AIDC)）
+    # 快照过期，按名字匹配会静默跳过；ths_index 无匹配的跳过且不进门禁分母。
+    watched_concepts = set()  # 尽力而为集合：缺失不拉低 coverage 门禁（防停更概念误伤）
+    try:
+        from backend.data_access.watched_sectors_repo import get_all_watched
+        from backend.data_access.data_source import get_ths_index_canonical_names
+        watched_rows = get_all_watched()
+        existing = set(names_to_update)
+        if watched_rows:
+            ts_codes = [r.get('ts_code') for r in watched_rows if r.get('ts_code')]
+            canonical = get_ths_index_canonical_names(ts_codes)
+            type_map = {'I': 'industry', 'N': 'concept'}
+            for row in watched_rows:
+                info = canonical.get(row.get('ts_code', ''))
+                if not info:
+                    log(f'⚠️  关注板块跳过（ths_index 无匹配）: {row.get("ts_code")} '
+                        f'{row.get("name")}')
+                    continue
+                wtype = type_map.get(info.get('type', ''))
+                wname = info.get('name', '')
+                if not wtype or not wname:
+                    continue
+                if (wname, wtype) not in existing:
+                    names_to_update.append((wname, wtype))
+                    existing.add((wname, wtype))
+                # 仅「追踪集合之外」的关注概念才是尽力而为（optional）：
+                # 追踪概念（自选股关联≥6）必须严格门禁，缺失要暴露；
+                # 额外强加的关注概念（新概念/停更概念）缺失不拉低门禁。
+                if wtype == 'concept' and wname not in tracked_concepts:
+                    watched_concepts.add(wname)
+            log(f'⭐  关注板块强制纳入: {len(watched_rows)}个（含新概念/停更概念）')
+    except Exception as e:
+        log(f'⚠️  关注板块纳入失败(不阻断): {e}')
+
     ind_saved = len(ind_today) if 'ind_today' in dir() else 0
     con_saved = len(tracked_concepts)
 
@@ -335,7 +373,9 @@ def update_sectors():
         for line in traceback.format_exc().splitlines():
             log(f'  {line}')
 
-    coverage = get_ths_daily_update_coverage(names_to_update, today)
+    coverage = get_ths_daily_update_coverage(
+        names_to_update, today, optional_concepts=watched_concepts,
+    )
     missing_concepts = coverage.get('concept', {}).get('missing', [])
     if missing_concepts:
         try:
@@ -345,7 +385,9 @@ def update_sectors():
                 f'{retry.get("covered", 0)}/{retry.get("requested", 0)}'
             )
             if retry.get('covered', 0):
-                coverage = get_ths_daily_update_coverage(names_to_update, today)
+                coverage = get_ths_daily_update_coverage(
+                    names_to_update, today, optional_concepts=watched_concepts,
+                )
         except Exception as exc:
             log(f'⚠️  缺失概念同源重试失败，保留部分正式状态: {exc}')
     ind_cov = coverage.get('industry', {})
@@ -355,6 +397,8 @@ def update_sectors():
         f'行业{ind_cov.get("covered", 0)}/{ind_cov.get("expected", 0)}, '
         f'概念{con_cov.get("covered", 0)}/{con_cov.get("expected", 0)}'
     )
+    if coverage.get('optional_missing'):
+        log(f'💤  关注概念尽力而为未覆盖(不阻塞): {coverage["optional_missing"]}')
     if not coverage.get('ready'):
         missing = coverage.get('missing', [])[:10]
         raise RuntimeError(f'板块数据覆盖不足，缺失示例: {missing}')

@@ -23,6 +23,7 @@ const PlanTracking = lazy(() => import('./pages/PlanTracking'))
 const ConceptWaveTracking = lazy(() => import('./pages/ConceptWaveTracking'))
 const StrongTrendCandidates = lazy(() => import('./pages/StrongTrendCandidates'))
 const HotStocks = lazy(() => import('./pages/HotStocks'))
+const SectorFocus = lazy(() => import('./pages/SectorFocus'))
 
 export default function App() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/concept-wave" element={<RequireAuth><ConceptWaveTracking /></RequireAuth>} />
         <Route path="/strong-trend-candidates" element={<RequireAuth><StrongTrendCandidates /></RequireAuth>} />
         <Route path="/hot-stocks" element={<RequireAuth><HotStocks /></RequireAuth>} />
+        <Route path="/sector-focus" element={<RequireAuth><SectorFocus /></RequireAuth>} />
         <Route path="/" element={<RequireAuth><Monitor /></RequireAuth>} />
 
         {/* 旧 HTML 重定向到 React 路由 */}

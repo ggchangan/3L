@@ -453,6 +453,23 @@ def _bind_handler_methods(h, Handler):
     return h
 
 
+def _load_server_handler():
+    """动态加载 server/server.py 的 Handler 类。
+
+    ⚠️ 不能顶层 import：pytest 运行阶段会把 cwd（server/ 目录）放回 sys.path[0]，
+    顶层 sys.path.insert 会被 pytest 重置。此时 `import server` 解析为
+    server/server.py 模块（非包）→ "server is not a package"。
+    方法内重新把项目根插到最前 + 清掉被解析为模块的缓存，保证解析为
+    项目根下 server/ 包（regular package，有 __init__.py）。
+    """
+    _project_root = os.path.join(_test_dir, '..', '..', '..')  # 3l-server 项目根
+    if _project_root != sys.path[0]:
+        sys.path.insert(0, _project_root)
+    sys.modules.pop('server', None)  # 清除已被解析为 server.py 模块的缓存
+    from server.server import Handler
+    return Handler
+
+
 class TestChartEndpointsAuthWhitelist:
     """图表端点必须免登录（前端 <img>/<object> 原生标签无法携带 Authorization header）。
 
@@ -467,19 +484,19 @@ class TestChartEndpointsAuthWhitelist:
         '/api/sector-chart',
     ])
     def test_chart_endpoints_anonymous_ok(self, path):
-        from server.server import Handler
+        Handler = _load_server_handler()
         assert path in Handler.AUTH_WHITELIST
 
     def test_private_api_still_requires_auth(self):
         """非白名单 /api/* 仍必须登录（数据隔离不放松）。"""
-        from server.server import Handler
+        Handler = _load_server_handler()
         assert '/api/watchlist' not in Handler.AUTH_WHITELIST
         assert '/api/review' not in Handler.AUTH_WHITELIST
         assert '/api/holdings' not in Handler.AUTH_WHITELIST
 
     def test_require_auth_whitelist_passes_without_token(self):
         """白名单端点无 token 直接放行（模拟前端 <img> 加载图表）。"""
-        from server.server import Handler
+        Handler = _load_server_handler()
         h = _bind_handler_methods(FakeHandler(headers={}, body='{}'), Handler)
         ok = h._require_auth('/api/index-chart')
         assert ok is True
@@ -487,7 +504,7 @@ class TestChartEndpointsAuthWhitelist:
 
     def test_require_auth_private_api_rejects_without_token(self):
         """私有 API 无 token 返回 401 且不放行。"""
-        from server.server import Handler
+        Handler = _load_server_handler()
         h = _bind_handler_methods(FakeHandler(headers={}, body='{}'), Handler)
         ok = h._require_auth('/api/watchlist')
         assert ok is False
@@ -497,7 +514,7 @@ class TestChartEndpointsAuthWhitelist:
 
     def test_require_auth_private_api_passes_with_token(self):
         """私有 API 带有效 token 放行。"""
-        from server.server import Handler
+        Handler = _load_server_handler()
         token = auth.create_token({'id': 5, 'username': 'wluser'})
         h = _bind_handler_methods(
             FakeHandler(headers={'Authorization': f'Bearer {token}'}, body='{}'),
@@ -511,7 +528,7 @@ class TestChartEndpointsAuthWhitelist:
 
     def test_require_auth_static_assets_no_auth(self):
         """非 /api/ 静态资源不做鉴权（前端 JS/CSS/图片正常加载）。"""
-        from server.server import Handler
+        Handler = _load_server_handler()
         h = _bind_handler_methods(FakeHandler(headers={}, body='{}'), Handler)
         assert h._require_auth('/react.html') is True
         assert h._require_auth('/assets/sounds/market.wav') is True

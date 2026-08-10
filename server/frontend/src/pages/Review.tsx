@@ -139,7 +139,7 @@ export default function Review() {
                   <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 方向决定优先级，阶段只作加分和风险提示</span>
                 </div>
                 <div id="mainlineContainer">
-                  <MainlineSection data={data.mainline} dates={reviewDates} currentDate={reviewDate} previousTradingDate={data.previous_trading_date} />
+                  <MainlineSection data={data.mainline} dates={reviewDates} currentDate={reviewDate} previousTradingDate={data.previous_trading_date} watchedSectors={data.watched_sectors} />
                 </div>
               </div>
             )}
