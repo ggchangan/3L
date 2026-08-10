@@ -19,7 +19,12 @@
 | `GET /api/watched-sectors` | 当前用户关注列表 `{industries: [名称], concepts: [名称]}` |
 | `POST /api/watched-sectors/toggle` | `{type, ts_code}` 关注/取消（服务端校验 ths_index 存在性 + type 匹配） |
 
-**测试：** `backend/tests/test_sector_focus.py` 13 项（repo CRUD/幂等/DB异常传播/用户隔离 + toggle 校验/原子切换/跨类型重名板块 + 列表结构 + 复盘匹配），全量后端测试 **798 passed 全绿**（顺带修复 test_auth 图表白名单 8 项预存失败：pytest 环境下 `server.server` 导入解析问题，`_load_server_handler()` 动态加载）。
+**测试：** `backend/tests/test_sector_focus.py` 15 项（repo CRUD/幂等/DB异常传播/用户隔离 + toggle 校验/原子切换/跨类型重名板块 + 独立强度计算/无K线/排序 + 列表结构 + 复盘匹配），全量后端测试 **800 passed 全绿**（顺带修复 test_auth 图表白名单 8 项预存失败：pytest 环境下 `server.server` 导入解析问题，`_load_server_handler()` 动态加载）。
+
+**关注 Tab 数据增强（2026-08-10 迭代）：**
+- 关注但不在主线 all_ranked 的板块/概念（新概念 K线<20条、数据源停更）从本地 ths_daily 独立计算强度——MLCC概念/玻璃基板（新概念）显示今日涨跌、华为盘古（Tushare 停更于 06-12）显示历史强度并标注 📅至06-12
+- 关注列表排序与强度候选一致（chg_20d 降序，无 20 日数据排最后）
+- 关注概念 Tab 图标改 🔖 与 ⭐关注行业 去重
 
 ## [v3.10.2] — 2026-08-04
 
