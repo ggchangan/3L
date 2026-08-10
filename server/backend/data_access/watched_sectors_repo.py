@@ -41,6 +41,23 @@ def get_watched_by_user(user_id: int) -> list:
         conn.close()
 
 
+def get_all_watched() -> list:
+    """全部用户关注的板块/概念行（更新管线强制纳入每日更新用）。"""
+    db = _get_db()
+    conn = db._get_conn()
+    try:
+        with conn.cursor(DictCursor) as cur:
+            cur.execute(
+                f"SELECT {FIELDS} FROM watched_sectors ORDER BY sector_type, created_at"
+            )
+            return list(cur.fetchall() or [])
+    except Exception as e:
+        log.warning('get_all_watched failed: %s', e)
+        return []
+    finally:
+        conn.close()
+
+
 def add_watched(user_id: int, sector_type: str, ts_code: str, name: str) -> bool:
     """新增关注；已存在（唯一键冲突）返回 False 不报错。
 

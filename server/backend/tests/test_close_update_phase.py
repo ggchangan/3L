@@ -503,6 +503,7 @@ def test_sector_update_runs_on_saturday_to_confirm_friday_data():
     with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260724'), \
          patch('backend.data_access.data_source.sync_ths_index_from_tushare', return_value=0), \
          patch('backend.data_access.data_source.sync_ths_member_from_tushare', return_value=0), \
+         patch('backend.data_access.watched_sectors_repo.get_all_watched', return_value=[]), \
          patch.object(update_stock_data, 'get_tracked_concept_universe', return_value={
              'names': set(), 'excluded': {},
          }), \

@@ -322,6 +322,25 @@ def update_sectors():
         log(f'⚠️  获取板块列表失败: {e}')
         names_to_update = []
 
+    # ── 强制纳入用户关注的行业/概念（无论是否满足追踪门槛）──
+    # 关注列表是用户明确指定的重点板块，必须每天增量更新；
+    # 否则新概念（关联自选股<6）或数据停更概念永远不会进入更新范围，形成死循环。
+    try:
+        from backend.data_access.watched_sectors_repo import get_all_watched
+        watched_rows = get_all_watched()
+        watched_types = {'industry': 'industry', 'concept': 'concept'}
+        existing = set(names_to_update)
+        for row in watched_rows:
+            wtype = watched_types.get(row.get('sector_type', ''))
+            wname = row.get('name', '')
+            if wtype and wname and (wname, wtype) not in existing:
+                names_to_update.append((wname, wtype))
+                existing.add((wname, wtype))
+        if watched_rows:
+            log(f'⭐  关注板块强制纳入: {len(watched_rows)}个（含新概念/停更概念）')
+    except Exception as e:
+        log(f'⚠️  关注板块纳入失败(不阻断): {e}')
+
     ind_saved = len(ind_today) if 'ind_today' in dir() else 0
     con_saved = len(tracked_concepts)
 

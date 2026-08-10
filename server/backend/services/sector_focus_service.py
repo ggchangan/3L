@@ -182,7 +182,7 @@ def _compute_sector_strength(name: str, sector_type: str) -> dict:
                 return {'name': name, 'matched': False}
             cur.execute(
                 "SELECT trade_date, close FROM ths_daily WHERE ts_code=%s "
-                "ORDER BY trade_date ASC",
+                "AND close IS NOT NULL ORDER BY trade_date ASC",
                 [row['ts_code']],
             )
             klines = list(cur.fetchall() or [])

@@ -334,7 +334,7 @@ def _fetch_ths_daily_klines_tushare(db, names_to_update: list, today: str) -> tu
             'close': row.get('close'),
             'pre_close': row.get('pre_close'),
             'change': row.get('change'),
-            'pct_chg': row.get('pct_chg'),
+            'pct_chg': row.get('pct_change') if row.get('pct_change') is not None else row.get('pct_chg'),
             'vol': row.get('vol'),
             'amount': row.get('amount'),
         })
