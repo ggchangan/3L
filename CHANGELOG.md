@@ -1,5 +1,26 @@
 # Changelog
 
+## [v3.11.0] — 2026-08-10
+
+### 新增：关注同花顺板块/概念 + 复盘页关注 Tab
+
+**背景：** 复盘页只有「行业/概念强度候选」（全量 20 日涨幅排序），用户无法聚焦自己重点关注的同花顺板块/概念。
+
+**功能：**
+- 新页面「⭐ 关注板块」(`/sector-focus`)：按 🏭行业(type=I, 1268个) / 💡概念(type=N, 418个) 双 Tab 浏览全部同花顺板块，支持中文/拼音搜索（pinyin-pro，首字母+全拼）、「只看已关注」开关、主线内/主线外标记，点击勾选/取消即时保存
+- 复盘页 STEP 2–3 `MainlineSection` 从 2 Tab 扩为 4 Tab：新增「⭐ 关注行业」「⭐ 关注概念」，展示与强度候选完全一致的信息（今日涨跌/20日涨幅/阶段/vl评分/持续天数/强度排名/领涨股）；关注了但主线暂无数据的显示「暂无数据」
+- 关注数据存 MySQL `watched_sectors` 表（按 user_id 隔离，`UNIQUE(user_id, ts_code)`，DDL 随 `CREATE_TABLES` 幂等建表），不再新增配置文件
+- 复盘 `/api/review/today` 响应新增 `watched_sectors` 字段：后端按当前用户从行业/概念 `all_ranked` 匹配（`matched` 标记），与强度候选同源同格式
+
+**API：**
+| 接口 | 说明 |
+|---|---|
+| `GET /api/sectors/list?type=industry\|concept` | 板块/概念全列表（名称、ts_code、成分股数、主线内标记、关注状态） |
+| `GET /api/watched-sectors` | 当前用户关注列表 `{industries: [名称], concepts: [名称]}` |
+| `POST /api/watched-sectors/toggle` | `{type, ts_code}` 关注/取消（服务端校验 ths_index 存在性 + type 匹配） |
+
+**测试：** `backend/tests/test_sector_focus.py` 10 项（repo CRUD/幂等/用户隔离 + toggle 校验 + 列表结构 + 复盘匹配），全量后端测试 787 passed（8 个 test_auth 图表白名单失败为预存环境问题，git stash 验证与本次无关）。
+
 ## [v3.10.2] — 2026-08-04
 
 ### 新增：交易日 20:00 板块正式数据更新 + 22:00 条件补齐
