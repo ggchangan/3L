@@ -84,6 +84,41 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
   const [comparisonStatus, setComparisonStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable' | 'error'>('idle')
   const [tab, setTab] = useState<TabKey>('industry')
   const [expandedLeader, setExpandedLeader] = useState<string | null>(null)
+  // 自选股代码集合（领涨股复选框用）：加载一次，toggle 后本地同步
+  const [watchCodes, setWatchCodes] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    fetch('/api/watchlist')
+      .then(r => r.json())
+      .then(wl => {
+        const stocks = Array.isArray(wl) ? wl : (wl?.stocks || [])
+        setWatchCodes(new Set(stocks.filter((s: any) => s?.code).map((s: any) => s.code)))
+      })
+      .catch(() => { /* 加载失败保持空集合，不阻断页面 */ })
+  }, [])
+
+  const toggleWatch = (code: string, name: string) => {
+    const inWatch = watchCodes.has(code)
+    const url = inWatch ? '/api/watchlist/remove-stock' : '/api/watchlist/add-stock'
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, name }),
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          // 静默更新本地状态（不再 alert 弹窗确认）
+          setWatchCodes(prev => {
+            const next = new Set(prev)
+            if (inWatch) next.delete(code)
+            else next.add(code)
+            return next
+          })
+        }
+      })
+      .catch(() => { /* 失败静默，保持原状态 */ })
+  }
 
   const isWatchedTab = tab === 'watched-industry' || tab === 'watched-concept'
 
@@ -337,18 +372,18 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                               color: ld.chg_5d >= 5 ? '#ff6b6b' : ld.chg_5d > 0 ? '#44aa44' : '#888',
                             }}>
                               <span
-                                onClick={() => {
-                                  fetch('/api/watchlist/add-stock', {
-                                    method: 'POST',
-                                    headers: {'Content-Type': 'application/json'},
-                                    body: JSON.stringify({code: ld.code, name: ld.name}),
-                                  }).then(r => r.json()).then(res => {
-                                    if (res.success) alert(res.msg)
-                                  })
-                                }}
-                                style={{ cursor: 'pointer', marginRight: 2 }}
-                                title="加自选"
-                              >➕</span>
+                                onClick={(e) => { e.stopPropagation(); toggleWatch(ld.code, ld.name) }}
+                                style={{ cursor: 'pointer', marginRight: 2, display: 'inline-flex', alignItems: 'center' }}
+                                title={watchCodes.has(ld.code) ? '已在自选，点击取消' : '加自选'}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={watchCodes.has(ld.code)}
+                                  onChange={() => toggleWatch(ld.code, ld.name)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{ margin: 0, cursor: 'pointer', accentColor: '#4ecdc4' }}
+                                />
+                              </span>
                               {ld.name}
                               <span style={{ color: '#555', fontSize: 10 }}>
                                 {' '}{ld.chg_1d > 0 ? '+' : ''}{ld.chg_1d}% / 5d{ld.chg_5d > 0 ? '+' : ''}{ld.chg_5d}%
@@ -428,18 +463,18 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                           color: ld.chg_5d >= 5 ? '#ff6b6b' : ld.chg_5d > 0 ? '#44aa44' : '#888',
                         }}>
                           <span
-                            onClick={() => {
-                              fetch('/api/watchlist/add-stock', {
-                                method: 'POST',
-                                headers: {'Content-Type': 'application/json'},
-                                body: JSON.stringify({code: ld.code, name: ld.name}),
-                              }).then(r => r.json()).then(res => {
-                                if (res.success) alert(res.msg)
-                              })
-                            }}
-                            style={{ cursor: 'pointer', marginRight: 2 }}
-                            title="加自选"
-                          >➕</span>
+                            onClick={(e) => { e.stopPropagation(); toggleWatch(ld.code, ld.name) }}
+                            style={{ cursor: 'pointer', marginRight: 2, display: 'inline-flex', alignItems: 'center' }}
+                            title={watchCodes.has(ld.code) ? '已在自选，点击取消' : '加自选'}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={watchCodes.has(ld.code)}
+                              onChange={() => toggleWatch(ld.code, ld.name)}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ margin: 0, cursor: 'pointer', accentColor: '#4ecdc4' }}
+                            />
+                          </span>
                           {ld.name}
                           <span style={{ color: '#555', fontSize: 10 }}>
                             {' '}{ld.chg_1d > 0 ? '+' : ''}{ld.chg_1d}% / 5d{ld.chg_5d > 0 ? '+' : ''}{ld.chg_5d}%

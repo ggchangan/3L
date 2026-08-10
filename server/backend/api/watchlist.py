@@ -191,6 +191,28 @@ def _handle_watchlist_add_stock(h, path, body):
         raise APIError(f"自选股异常: {e}") from e
 
 
+def _handle_watchlist_remove_stock(h, path, body):
+    '''POST: 从自选股移除单只股票'''
+    try:
+        data = json.loads(body)
+        code = data.get('code', '').strip()
+        if not code:
+            h.send_json({'success': False, 'error': '缺少股票代码'})
+            return
+
+        wl = get_watchlist()
+        stocks = wl.get('stocks', []) if isinstance(wl, dict) else wl
+        remaining = [s for s in stocks if not (isinstance(s, dict) and s.get('code') == code)]
+        if len(remaining) == len(stocks):
+            h.send_json({'success': True, 'msg': '不在自选股中'})
+            return
+        wl_data = {'stocks': remaining, 'directions': wl.get('directions', [])} if isinstance(wl, dict) else {'stocks': remaining, 'directions': []}
+        save_watchlist(wl_data)
+        h.send_json({'success': True, 'msg': f'已从自选股移除 {code}'})
+    except Exception as e:
+        raise APIError(f"自选股异常: {e}") from e
+
+
 def register_routes(routes):
     routes.exact('/api/watchlist', func=_handle_watchlist)
     routes.exact('/api/watchlist/boards', func=_handle_watchlist_boards)

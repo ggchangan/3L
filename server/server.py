@@ -361,6 +361,7 @@ class Handler(SimpleHTTPRequestHandler):
                 '/api/review/save': ('backend.api.review', '_handle_review_save'),
                 '/api/watchlist/save': ('backend.api.watchlist', '_handle_watchlist_save'),
                 '/api/watchlist/add-stock': ('backend.api.watchlist', '_handle_watchlist_add_stock'),
+                '/api/watchlist/remove-stock': ('backend.api.watchlist', '_handle_watchlist_remove_stock'),
                 '/api/tips/save-journal': ('backend.api.tips', '_handle_save_journal'),
                 '/api/update': ('backend.api.system', '_handle_update'),
                 '/api/directions/add': ('backend.api.directions', '_handle_add'),
