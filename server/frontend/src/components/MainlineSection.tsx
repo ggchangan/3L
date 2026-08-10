@@ -366,20 +366,22 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                       )}
                       {showLeaders && leaders.length > 0 && (
                         <div style={{ width: '100%', padding: '6px 0 2px 0', fontSize: 11 }}>
-                          {leaders.map((ld: any) => (
-                            <span key={ld.code} style={{
+                          {leaders.map((ld: any) => {
+                            const code = String(ld.code).split('.')[0]  // 归一化纯6位，兼容带后缀旧缓存数据
+                            return (
+                            <span key={code} style={{
                               display: 'inline-block', marginRight: 10, marginBottom: 3,
                               color: ld.chg_5d >= 5 ? '#ff6b6b' : ld.chg_5d > 0 ? '#44aa44' : '#888',
                             }}>
                               <span
-                                onClick={(e) => { e.stopPropagation(); toggleWatch(ld.code, ld.name) }}
+                                onClick={(e) => { e.stopPropagation(); toggleWatch(code, ld.name) }}
                                 style={{ cursor: 'pointer', marginRight: 2, display: 'inline-flex', alignItems: 'center' }}
-                                title={watchCodes.has(ld.code) ? '已在自选，点击取消' : '加自选'}
+                                title={watchCodes.has(code) ? '已在自选，点击取消' : '加自选'}
                               >
                                 <input
                                   type="checkbox"
-                                  checked={watchCodes.has(ld.code)}
-                                  onChange={() => toggleWatch(ld.code, ld.name)}
+                                  checked={watchCodes.has(code)}
+                                  onChange={() => toggleWatch(code, ld.name)}
                                   onClick={(e) => e.stopPropagation()}
                                   style={{ margin: 0, cursor: 'pointer', accentColor: '#4ecdc4' }}
                                 />
@@ -390,7 +392,8 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                               </span>
                               {ld.tag && <span style={{ fontSize: 10, marginLeft: 2 }}>{ld.tag}</span>}
                             </span>
-                          ))}
+                            )
+                          })}
                         </div>
                       )}
                     </>
@@ -457,20 +460,22 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                   )}
                   {showLeaders && leaders.length > 0 && (
                     <div style={{ width: '100%', padding: '6px 0 2px 0', fontSize: 11 }}>
-                      {leaders.map((ld: any) => (
-                        <span key={ld.code} style={{
+                      {leaders.map((ld: any) => {
+                        const code = String(ld.code).split('.')[0]  // 归一化纯6位，兼容带后缀旧缓存数据
+                        return (
+                        <span key={code} style={{
                           display: 'inline-block', marginRight: 10, marginBottom: 3,
                           color: ld.chg_5d >= 5 ? '#ff6b6b' : ld.chg_5d > 0 ? '#44aa44' : '#888',
                         }}>
                           <span
-                            onClick={(e) => { e.stopPropagation(); toggleWatch(ld.code, ld.name) }}
+                            onClick={(e) => { e.stopPropagation(); toggleWatch(code, ld.name) }}
                             style={{ cursor: 'pointer', marginRight: 2, display: 'inline-flex', alignItems: 'center' }}
-                            title={watchCodes.has(ld.code) ? '已在自选，点击取消' : '加自选'}
+                            title={watchCodes.has(code) ? '已在自选，点击取消' : '加自选'}
                           >
                             <input
                               type="checkbox"
-                              checked={watchCodes.has(ld.code)}
-                              onChange={() => toggleWatch(ld.code, ld.name)}
+                              checked={watchCodes.has(code)}
+                              onChange={() => toggleWatch(code, ld.name)}
                               onClick={(e) => e.stopPropagation()}
                               style={{ margin: 0, cursor: 'pointer', accentColor: '#4ecdc4' }}
                             />
@@ -481,7 +486,8 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                           </span>
                           {ld.tag && <span style={{ fontSize: 10, marginLeft: 2 }}>{ld.tag}</span>}
                         </span>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>
