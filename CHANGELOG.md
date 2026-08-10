@@ -34,6 +34,16 @@
 - `_compute_sector_strength` 查询过滤 `close IS NOT NULL` 防除零崩溃
 - 测试：新增 `test_watched_sector_forced_update.py` 8 项（强制纳入/字段映射/脏行过滤/SQL 防御），全量后端测试 **808 passed 全绿**，CI 无 env 模拟通过
 
+**Code Review 修复（2026-08-10 三轮）：**
+- **C1 coverage 门禁误伤**：关注概念（可能停更/无数据）不再无条件计入 expected 分母——`get_ths_daily_update_coverage` 新增 `optional_concepts` 参数，缺失单独记录 `optional_missing` 只告警不拉低 ratio，防整个日更管线（06:00 full）被停更概念拖垮
+- **C2 改名快照过期**：强制纳入时以 ts_code JOIN ths_index 取 canonical name（ths_index 为权威，watched_sectors.name 是关注时刻快照），解析不到的跳过且不进 coverage 分母；新增 `get_ths_index_canonical_names()`
+- **W1 cron 复盘缺字段**：`generate_daily_review` 注入 `watched_sectors`（新增 `_build_watched_for_review` 延迟 import 复用，实时路径同步统一）——修缓存过期时关注 Tab"假空"
+- **W2 vl_score 失真**：`_compute_sector_strength` 补全 OHLCV 结构（judge_concept_wave 依赖 volume 量比/缩量），阶段判定不再系统性失真
+- **W3 backfill 健壮性**：校验响应行 ts_code（防代理忽略过滤全市场误写）、close<=0 脏行同拒、DB 判空顺序修正、空记录不调用 upsert
+- **W4 重关注保留过期 name**：新增 `refresh_watched_name` 在 toggle 取消前同步最新名
+- 前端：`chg_20d` null 灰色显示；关注 Tab 独立项不受 estimated 门控（数据为 ths_daily 确认值）；`_IN_MAINLINE_CACHE` 异常不写空缓存
+- 测试：新增 7 项（optional 门禁 3 / backfill 脏行 2 / canonical 解析 2），全量 **815 passed 全绿**，CI 无 env 模拟 30 passed
+
 ## [v3.10.2] — 2026-08-04
 
 ### 新增：交易日 20:00 板块正式数据更新 + 22:00 条件补齐
