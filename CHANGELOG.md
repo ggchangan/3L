@@ -44,6 +44,12 @@
 - 前端：`chg_20d` null 灰色显示；关注 Tab 独立项不受 estimated 门控（数据为 ths_daily 确认值）；`_IN_MAINLINE_CACHE` 异常不写空缓存
 - 测试：新增 7 项（optional 门禁 3 / backfill 脏行 2 / canonical 解析 2），全量 **815 passed 全绿**，CI 无 env 模拟 30 passed
 
+**复盘页领涨股自选复选框（2026-08-10 四轮）：**
+- 板块领涨个股的 ➕ 加自选改为**复选框**：勾选状态实时反映是否已在自选中（accentColor 青色），点击 toggle 添加/移除，无需弹窗确认
+- 新增 `POST /api/watchlist/remove-stock`（与 add-stock 对称、幂等，返回"不在自选股中"不报错）
+- 前端 MainlineSection 加载 `/api/watchlist` 构建自选代码集合，两处领涨股渲染（候选榜+方向分组）统一
+- 测试：新增 `test_watchlist_toggle_endpoint.py` 4 项（remove 成功/幂等/缺 code/add 重复），全量 **819 passed 全绿**
+
 ## [v3.10.2] — 2026-08-04
 
 ### 新增：交易日 20:00 板块正式数据更新 + 22:00 条件补齐
