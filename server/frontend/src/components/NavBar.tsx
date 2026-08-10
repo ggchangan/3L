@@ -28,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
 
   // ── 板块/概念 ──
   { label: '🔬 行业追踪', href: '/industry.html',       id: 'industry',        accent: '#22c55e', group: '板块 / 概念' },
+  { label: '⭐ 关注板块', href: '/sector-focus',        id: 'sector-focus',    accent: '#ffd700', group: '板块 / 概念' },
   { label: '🌊 概念波动', href: '/concept-wave',        id: 'concept-wave',    accent: '#00bcd4', group: '板块 / 概念' },
   { label: '💡 逻辑追踪', href: '/logic-tracking',      id: 'logic',           accent: '#a855f7', group: '板块 / 概念' },
 

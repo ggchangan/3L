@@ -395,6 +395,11 @@ export interface ReviewData {
       all_ranked?: LineItem[]
     }
   }
+  /** 关注行业/关注概念（按用户，从 all_ranked 匹配；matched=false 表示主线暂无数据） */
+  watched_sectors?: {
+    industries?: Array<Partial<LineItem> & { name: string; matched?: boolean }>
+    concepts?: Array<Partial<LineItem> & { name: string; matched?: boolean }>
+  }
   holdings_review?: BuySignalItem[]
   holdings_risk_exposure?: HoldingsRiskExposure
   holdings?: BuySignalItem[]

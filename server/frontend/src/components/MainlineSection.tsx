@@ -36,9 +36,22 @@ interface Props {
   dates: string[]
   currentDate: string
   previousTradingDate?: string
+  watchedSectors?: {
+    industries?: Array<Partial<LineItem> & { name: string; matched?: boolean }>
+    concepts?: Array<Partial<LineItem> & { name: string; matched?: boolean }>
+  }
 }
 
 const TAB_STYLE_BASE = { padding: '6px 16px', fontSize: 13, borderRadius: '6px 6px 0 0', cursor: 'pointer', border: 'none', fontWeight: 600 } as const
+
+type TabKey = 'industry' | 'concept' | 'watched-industry' | 'watched-concept'
+
+const TABS: { key: TabKey; label: string; color: string; activeColor: string }[] = [
+  { key: 'industry', label: '🏭 行业强度候选', color: '#e94560', activeColor: '#e94560' },
+  { key: 'concept', label: '💡 概念强度候选', color: '#4ecdc4', activeColor: '#4ecdc4' },
+  { key: 'watched-industry', label: '⭐ 关注行业', color: '#ffd700', activeColor: '#ffd700' },
+  { key: 'watched-concept', label: '⭐ 关注概念', color: '#ffb84d', activeColor: '#ffb84d' },
+]
 
 // 当前数据只是板块自身20日涨幅代理榜，不等同于 L1 动量主线。
 const DIRECTION_GROUPS = [
@@ -65,17 +78,26 @@ const chgSign = (v?: number) => {
   return '+'
 }
 
-export default function MainlineSection({ data, dates, currentDate, previousTradingDate }: Props) {
+export default function MainlineSection({ data, dates, currentDate, previousTradingDate, watchedSectors }: Props) {
   const [prevRanked, setPrevRanked] = useState<string[] | null>(null)
   const [comparisonDate, setComparisonDate] = useState('')
   const [comparisonStatus, setComparisonStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable' | 'error'>('idle')
-  const [tab, setTab] = useState<'industry' | 'concept'>('industry')
+  const [tab, setTab] = useState<TabKey>('industry')
   const [expandedLeader, setExpandedLeader] = useState<string | null>(null)
+
+  const isWatchedTab = tab === 'watched-industry' || tab === 'watched-concept'
 
   // 选择当前 tab 的数据来源
   const activeData: MainlineData | null | undefined = tab === 'concept'
     ? data?.concept_mainline
     : data
+
+  // 关注 tab：直接使用后端按用户匹配好的数据
+  const watchedItems: Array<Partial<LineItem> & { name: string; matched?: boolean }> = tab === 'watched-industry'
+    ? watchedSectors?.industries || []
+    : tab === 'watched-concept'
+      ? watchedSectors?.concepts || []
+      : []
 
   const allRanked = activeData?.all_ranked || []
   const persist = activeData?.persistence || []
@@ -160,40 +182,37 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
   return (
     <>
       {/* Tab 切换 */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 12 }}>
-        <button
-          onClick={() => setTab('industry')}
-          style={{
-            ...TAB_STYLE_BASE,
-            background: tab === 'industry' ? '#1a1a2e' : '#2a2a3e',
-            color: tab === 'industry' ? '#e94560' : '#888',
-          }}
-        >🏭 行业强度候选</button>
-        <button
-          onClick={() => setTab('concept')}
-          style={{
-            ...TAB_STYLE_BASE,
-            background: tab === 'concept' ? '#1a1a2e' : '#2a2a3e',
-            color: tab === 'concept' ? '#4ecdc4' : '#888',
-          }}
-        >💡 概念强度候选</button>
+      <div style={{ display: 'flex', gap: 0, marginBottom: 12, flexWrap: 'wrap' }}>
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              ...TAB_STYLE_BASE,
+              background: tab === t.key ? '#1a1a2e' : '#2a2a3e',
+              color: tab === t.key ? t.activeColor : '#888',
+            }}
+          >{t.label}</button>
+        ))}
       </div>
 
       <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#9ca3af', background: 'rgba(255,255,255,0.04)', lineHeight: 1.6 }}>
-        当前模型仅按板块自身20日涨幅排序；前5和第6–10名是强度候选，不是知识库定义的 L1 动量主线。
+        {isWatchedTab
+          ? '以下为你重点关注的同花顺板块/概念，强度数据与候选榜同源；主线暂无数据的显示「暂无数据」。'
+          : '当前模型仅按板块自身20日涨幅排序；前5和第6–10名是强度候选，不是知识库定义的 L1 动量主线。'}
       </div>
 
-      {activeData?.ranking_status === 'estimated' && (
+      {!isWatchedTab && activeData?.ranking_status === 'estimated' && (
         <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#ffd166', background: 'rgba(255,209,102,0.1)' }}>
           当日预估 · 收盘快照覆盖 {((activeData.estimate_coverage || 0) * 100).toFixed(1)}% · 次日 06:00 用正式板块日线校准
         </div>
       )}
-      {activeData?.ranking_status === 'stale' && (
+      {!isWatchedTab && activeData?.ranking_status === 'stale' && (
         <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#aaa', background: 'rgba(255,255,255,0.04)' }}>
           当日快照覆盖不足，暂沿用 {activeData.base_date || activeData.ranking_date || '上一交易日'} 已确认排名
         </div>
       )}
-      {activeData?.ranking_status === 'partial' && (
+      {!isWatchedTab && activeData?.ranking_status === 'partial' && (
         <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#ffd166', background: 'rgba(255,209,102,0.1)' }}>
           正式日线部分缺失 · 覆盖 {((activeData.coverage || 0) * 100).toFixed(1)}%
           {activeData.coverage_detail?.covered != null && activeData.coverage_detail?.expected != null
@@ -202,14 +221,14 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
           · 缺失概念不参与当日排名
         </div>
       )}
-      {activeData?.ranking_status === 'confirmed' && activeData.calibration?.status === 'completed' && (
+      {!isWatchedTab && activeData?.ranking_status === 'confirmed' && activeData.calibration?.status === 'completed' && (
         <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#4ecdc4', background: 'rgba(78,205,196,0.08)' }}>
           已完成次日校准 · Top5 重合 {activeData.calibration.top5_overlap ?? 0}/5 · Top10 重合 {activeData.calibration.top10_overlap ?? 0}/10
         </div>
       )}
 
       {/* 轮动提醒 */}
-      {rotationNote && (
+      {!isWatchedTab && rotationNote && (
         <div style={{
           marginBottom: 10, minHeight: 20, fontSize: 12,
           color: rotationNote.includes('🆕') || rotationNote.includes('⚠️') ? '#4ecdc4' : rotationNote.includes('📉') ? '#e94560' : '#888',
@@ -220,7 +239,7 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
       )}
 
       {/* 资金出逃 + 新方向 详细条 */}
-      {(escapeAlerts.length > 0 || newDirectionAlerts.length > 0) && (
+      {!isWatchedTab && (escapeAlerts.length > 0 || newDirectionAlerts.length > 0) && (
         <div style={{ marginBottom: 10, fontSize: 11, lineHeight: 1.8 }}>
           {escapeAlerts.length > 0 && (
             <div style={{ color: '#e94560' }}>
@@ -235,12 +254,106 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
         </div>
       )}
 
-      <div style={{ marginBottom: 12, color: '#888', fontSize: 11, lineHeight: 1.6 }}>
-        阅读顺序：先看20日板块强度候选，再看板块所处阶段。强度候选只提供方向线索；波谷是加分项，个股买点仍需独立判断。
-      </div>
+      {!isWatchedTab && (
+        <div style={{ marginBottom: 12, color: '#888', fontSize: 11, lineHeight: 1.6 }}>
+          阅读顺序：先看20日板块强度候选，再看板块所处阶段。强度候选只提供方向线索；波谷是加分项，个股买点仍需独立判断。
+        </div>
+      )}
 
-      {/* 按方向层级展示，避免用板块阶段替代机会判断 */}
-      {directionGroups.map(({ key, items, emoji, label, color, bg }) => {
+      {/* 关注 tab：渲染关注行业/概念列表 */}
+      {isWatchedTab ? (
+        watchedItems.length === 0 ? (
+          <div className="empty">
+            暂无关注{' '}
+            <a href="/sector-focus" style={{ color: '#ffd700' }}>→ 前往「⭐ 关注板块」勾选</a>
+          </div>
+        ) : (
+          <div style={{ background: 'rgba(255,215,0,0.05)', borderRadius: 8, padding: 6 }}>
+            {watchedItems.map(item => {
+              const c = item.chg_1d ?? 0
+              const stage = item.stage || '--'
+              const stageIcon = STAGE_ICONS[stage] || '•'
+              const stageColor = STAGE_COLORS[stage] || '#888'
+              const showLeaders = expandedLeader === item.name
+              const leaders = item.leaders || []
+              const rankLabel = item.strength_rank ? `强度#${item.strength_rank}` : ''
+              return (
+                <div key={item.name} style={{
+                  display: 'flex', alignItems: 'center',
+                  padding: '5px 10px', marginBottom: 3,
+                  background: 'rgba(255,255,255,0.02)',
+                  borderRadius: 6, fontSize: 12, flexWrap: 'wrap', gap: '2px 8px',
+                }}>
+                  <span style={{ fontWeight: 600, minWidth: 80 }}>{item.name}</span>
+                  {item.matched === false ? (
+                    <span style={{ color: '#555', fontSize: 11 }}>暂无数据</span>
+                  ) : (
+                    <>
+                      <span style={{ color: chgColor(c), fontSize: 11 }}>
+                        {activeData?.ranking_status === 'estimated' && !item.estimate_applied
+                          ? '今日--'
+                          : `今日${c > 0 ? '+' : ''}${c.toFixed(1)}%`}
+                      </span>
+                      <span style={{ color: item.chg_20d >= 0 ? '#ff4444' : '#44aa44', fontSize: 11 }}>
+                        20日+{item.chg_20d.toFixed(1)}%
+                      </span>
+                      <span style={{ color: stageColor, fontSize: 11 }}>
+                        {stageIcon} {stage}
+                      </span>
+                      {item.vl_score && item.vl_score > 0 ? (
+                        <span style={{ color: '#4ecdc4', fontSize: 10 }}>vl{item.vl_score}</span>
+                      ) : null}
+                      {persistDays[item.name] ? (
+                        <span style={{ color: '#888', fontSize: 10 }}>{persistDays[item.name]}天</span>
+                      ) : null}
+                      {rankLabel && (
+                        <span style={{ color: '#ffd700', fontSize: 10, fontWeight: 600 }}>{rankLabel}</span>
+                      )}
+                      {leaders.length > 0 && (
+                        <span
+                          onClick={() => setExpandedLeader(showLeaders ? null : item.name)}
+                          style={{ cursor: 'pointer', color: '#888', fontSize: 10, marginLeft: 'auto' }}
+                        >📈 {showLeaders ? '收起' : '领涨'}</span>
+                      )}
+                      {showLeaders && leaders.length > 0 && (
+                        <div style={{ width: '100%', padding: '6px 0 2px 0', fontSize: 11 }}>
+                          {leaders.map((ld: any) => (
+                            <span key={ld.code} style={{
+                              display: 'inline-block', marginRight: 10, marginBottom: 3,
+                              color: ld.chg_5d >= 5 ? '#ff6b6b' : ld.chg_5d > 0 ? '#44aa44' : '#888',
+                            }}>
+                              <span
+                                onClick={() => {
+                                  fetch('/api/watchlist/add-stock', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify({code: ld.code, name: ld.name}),
+                                  }).then(r => r.json()).then(res => {
+                                    if (res.success) alert(res.msg)
+                                  })
+                                }}
+                                style={{ cursor: 'pointer', marginRight: 2 }}
+                                title="加自选"
+                              >➕</span>
+                              {ld.name}
+                              <span style={{ color: '#555', fontSize: 10 }}>
+                                {' '}{ld.chg_1d > 0 ? '+' : ''}{ld.chg_1d}% / 5d{ld.chg_5d > 0 ? '+' : ''}{ld.chg_5d}%
+                              </span>
+                              {ld.tag && <span style={{ fontSize: 10, marginLeft: 2 }}>{ld.tag}</span>}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      ) : (
+      /* 按方向层级展示，避免用板块阶段替代机会判断 */
+      directionGroups.map(({ key, items, emoji, label, color, bg }) => {
         const isOther = key === 'other'
         return (
           <GroupSection
@@ -332,9 +445,12 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
             )}
           </GroupSection>
         )
-      })}
+      })
+      )
+      }
 
       {/* 完整排名表格 — 折叠 */}
+      {!isWatchedTab && (
       <details style={{ marginTop: 12 }}>
         <summary style={{ cursor: 'pointer', color: '#888', fontSize: 12 }}>
           📋 查看完整排名
@@ -403,6 +519,7 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
           板块自身20日涨幅排序 · 强度候选优先展示 · 板块阶段仅作环境提示
         </div>
       </details>
+      )}
     </>
   )
 }
