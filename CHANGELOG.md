@@ -19,7 +19,7 @@
 | `GET /api/watched-sectors` | 当前用户关注列表 `{industries: [名称], concepts: [名称]}` |
 | `POST /api/watched-sectors/toggle` | `{type, ts_code}` 关注/取消（服务端校验 ths_index 存在性 + type 匹配） |
 
-**测试：** `backend/tests/test_sector_focus.py` 10 项（repo CRUD/幂等/用户隔离 + toggle 校验 + 列表结构 + 复盘匹配），全量后端测试 787 passed（8 个 test_auth 图表白名单失败为预存环境问题，git stash 验证与本次无关）。
+**测试：** `backend/tests/test_sector_focus.py` 13 项（repo CRUD/幂等/DB异常传播/用户隔离 + toggle 校验/原子切换/跨类型重名板块 + 列表结构 + 复盘匹配），全量后端测试 790 passed（8 个 test_auth 图表白名单失败为预存环境问题，git stash 验证与本次无关）。
 
 ## [v3.10.2] — 2026-08-04
 
