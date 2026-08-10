@@ -13,6 +13,32 @@ log = get_logger(__name__)
 TYPE_MAP = {'industry': 'I', 'concept': 'N'}
 REVERSE_TYPE_MAP = {'I': 'industry', 'N': 'concept'}
 
+# 主线内标记缓存（10 分钟 TTL）：get_tracked_concept_names 是全量概念×个股映射循环，
+# 每次请求重算约 1s+，用户反复开关页面会重复计算。
+import time as _time
+_IN_MAINLINE_CACHE = {}  # {sector_type: (expire_ts, frozenset(names))}
+_IN_MAINLINE_TTL = 600
+
+
+def _get_in_mainline_names(sector_type: str) -> set:
+    """主线内板块名集合（行业=ths_daily 确认范围，概念=追踪概念门槛），带 TTL 缓存。"""
+    now = _time.time()
+    cached = _IN_MAINLINE_CACHE.get(sector_type)
+    if cached and cached[0] > now:
+        return cached[1]
+    try:
+        if sector_type == 'industry':
+            from backend.data_access.data_layer import get_ths_daily_update_confirmation
+            names = set(get_ths_daily_update_confirmation().get('industry_names', []))
+        else:
+            from backend.data_access.data_layer import get_tracked_concept_names
+            names = set(get_tracked_concept_names(min_related_stocks=6))
+    except Exception as e:
+        log.warning('_get_in_mainline_names failed: %s', e)
+        names = cached[1] if cached else set()
+    _IN_MAINLINE_CACHE[sector_type] = (now + _IN_MAINLINE_TTL, frozenset(names))
+    return names
+
 
 def _get_db():
     from backend.data_access.data_source import _get_tushare_db
@@ -47,6 +73,9 @@ def get_watched_ts_codes(user_id: int = None) -> set:
 def toggle_watched_sector(user_id: int, sector_type: str, ts_code: str) -> dict:
     """关注/取消关注（切换）。ts_code 需在 ths_index 中存在且 type 匹配。
 
+    原子切换（无读-判-写竞态）：先 INSERT IGNORE，rowcount>0=新增关注；
+    rowcount=0=已关注 → DELETE 取消。DB 异常上抛（防"假成功"）。
+
     返回: {'success': True, 'watched': bool, 'name': str, 'type': sector_type}
     """
     from backend.data_access.watched_sectors_repo import add_watched, remove_watched
@@ -69,12 +98,13 @@ def toggle_watched_sector(user_id: int, sector_type: str, ts_code: str) -> dict:
         return {'success': False, 'error': f'板块不存在或类型不匹配: {ts_code}'}
     name = row['name']
 
-    watched_codes = get_watched_ts_codes(user_id)
-    if ts_code in watched_codes:
-        removed = remove_watched(user_id, ts_code)
-        return {'success': True, 'watched': False, 'name': name, 'type': sector_type, 'removed': removed}
     added = add_watched(user_id, sector_type, ts_code, name)
-    return {'success': True, 'watched': True, 'name': name, 'type': sector_type, 'added': added}
+    if added:
+        return {'success': True, 'watched': True, 'name': name, 'type': sector_type}
+    removed = remove_watched(user_id, ts_code)
+    if not removed:
+        return {'success': False, 'error': f'关注状态切换失败: {ts_code}'}
+    return {'success': True, 'watched': False, 'name': name, 'type': sector_type}
 
 
 def get_all_sectors(sector_type: str, user_id: int = None) -> dict:
@@ -88,17 +118,8 @@ def get_all_sectors(sector_type: str, user_id: int = None) -> dict:
         return {'type': sector_type, 'count': 0, 'in_mainline': 0, 'sectors': []}
     ths_type = TYPE_MAP[sector_type]
 
-    # 主线内标记：行业=ths_daily 确认范围，概念=追踪概念门槛
-    in_mainline_names = set()
-    try:
-        if sector_type == 'industry':
-            from backend.data_access.data_layer import get_ths_daily_update_confirmation
-            in_mainline_names = set(get_ths_daily_update_confirmation().get('industry_names', []))
-        else:
-            from backend.data_access.data_layer import get_tracked_concept_names
-            in_mainline_names = set(get_tracked_concept_names(min_related_stocks=6))
-    except Exception as e:
-        log.warning('get_all_sectors in_mainline 标记失败: %s', e)
+    # 主线内标记：行业=ths_daily 确认范围，概念=追踪概念门槛（TTL 缓存）
+    in_mainline_names = _get_in_mainline_names(sector_type)
 
     watched_codes = get_watched_ts_codes(user_id)
 

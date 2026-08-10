@@ -42,7 +42,11 @@ def get_watched_by_user(user_id: int) -> list:
 
 
 def add_watched(user_id: int, sector_type: str, ts_code: str, name: str) -> bool:
-    """新增关注；已存在（唯一键冲突）返回 False 不报错。"""
+    """新增关注；已存在（唯一键冲突）返回 False 不报错。
+
+    ⚠️ DB 异常不上抛吞掉：写入失败必须让调用方感知（防止前端"假成功"），
+    由 finally 保证连接关闭。
+    """
     db = _get_db()
     conn = db._get_conn()
     try:
@@ -53,15 +57,12 @@ def add_watched(user_id: int, sector_type: str, ts_code: str, name: str) -> bool
                 [user_id, sector_type, ts_code, name],
             )
             return cur.rowcount > 0
-    except Exception as e:
-        log.warning('add_watched failed: %s', e)
-        return False
     finally:
         conn.close()
 
 
 def remove_watched(user_id: int, ts_code: str) -> bool:
-    """取消关注；不存在返回 False。"""
+    """取消关注；不存在返回 False。DB 异常同样上抛（防假成功）。"""
     db = _get_db()
     conn = db._get_conn()
     try:
@@ -71,8 +72,5 @@ def remove_watched(user_id: int, ts_code: str) -> bool:
                 [user_id, ts_code],
             )
             return cur.rowcount > 0
-    except Exception as e:
-        log.warning('remove_watched failed: %s', e)
-        return False
     finally:
         conn.close()

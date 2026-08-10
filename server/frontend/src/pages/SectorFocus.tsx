@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import NavBar, { BottomNav } from '../components/NavBar'
 import { pinyin } from 'pinyin-pro'
 import './SectorFocus.css'
@@ -28,17 +28,21 @@ export default function SectorFocus() {
   const [filter, setFilter] = useState('')
   const [onlyWatched, setOnlyWatched] = useState(false)
   const [pending, setPending] = useState<string | null>(null) // 正在切换的 ts_code
+  const reqSeqRef = useRef(0) // 请求序号：丢弃过期 Tab 的响应
 
   const load = useCallback((type: TabKey) => {
+    const seq = ++reqSeqRef.current
     setLoading(true)
     setError('')
     fetch(`/api/sectors/list?type=${type}`)
       .then(r => r.json())
       .then((data: SectorListResponse) => {
+        if (seq !== reqSeqRef.current) return // 已切换 Tab，丢弃过期响应
         setSectors(data.sectors || [])
         setLoading(false)
       })
       .catch(err => {
+        if (seq !== reqSeqRef.current) return
         setError(err.message || '加载板块列表失败')
         setLoading(false)
       })

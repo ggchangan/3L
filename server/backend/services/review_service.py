@@ -518,6 +518,7 @@ def compute_review_real_time(date_str=None):
     from backend.core.scan_buy_signals import get_main_lines
     from backend.data_access.data_layer import get_watchlist, get_all_stocks, get_index_klines
     from backend.services.sector_focus_service import build_watched_sector_items
+    from backend.core.auth import get_current_user_id
 
     print(f"[3L复盘实时] 计算 {date_str} 复盘数据...")
 

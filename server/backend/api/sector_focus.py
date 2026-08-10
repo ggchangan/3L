@@ -39,10 +39,14 @@ def _handle_watched_sectors_toggle(h, path, body):
     """POST /api/watched-sectors/toggle  body: {type, ts_code}"""
     try:
         data = json.loads(body)
+    except (ValueError, TypeError):
+        h.send_json({'success': False, 'error': '请求体必须是合法 JSON'}, 400)
+        return
+    try:
         sector_type = str(data.get('type', '')).strip().lower()
         ts_code = str(data.get('ts_code', '')).strip()
         if not sector_type or not ts_code:
-            h.send_json({'success': False, 'error': 'type 和 ts_code 不能为空'})
+            h.send_json({'success': False, 'error': 'type 和 ts_code 不能为空'}, 400)
             return
         h.send_json(toggle_watched_sector(get_current_user_id(), sector_type, ts_code))
     except Exception as e:

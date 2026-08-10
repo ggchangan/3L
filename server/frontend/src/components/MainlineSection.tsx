@@ -107,10 +107,14 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
   const persistDays: Record<string, number> = {}
   persist.forEach((p: any) => { persistDays[p.name] = p.days })
 
-  // 获取前一天的排名
+  // 获取前一天的排名（关注 Tab 不展示轮动比较，跳过请求）
   useEffect(() => {
     setPrevRanked(null)
     setComparisonDate('')
+    if (tab === 'watched-industry' || tab === 'watched-concept') {
+      setComparisonStatus('idle')
+      return
+    }
     if (!data || !currentDate) {
       setComparisonStatus('idle')
       return
@@ -292,10 +296,10 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                       <span style={{ color: chgColor(c), fontSize: 11 }}>
                         {activeData?.ranking_status === 'estimated' && !item.estimate_applied
                           ? '今日--'
-                          : `今日${c > 0 ? '+' : ''}${c.toFixed(1)}%`}
+                          : `今日${c > 0 ? '+' : ''}${c.toFixed(2)}%`}
                       </span>
                       <span style={{ color: item.chg_20d >= 0 ? '#ff4444' : '#44aa44', fontSize: 11 }}>
-                        20日+{item.chg_20d.toFixed(1)}%
+                        20日{item.chg_20d > 0 ? '+' : ''}{item.chg_20d.toFixed(2)}%
                       </span>
                       <span style={{ color: stageColor, fontSize: 11 }}>
                         {stageIcon} {stage}
@@ -383,10 +387,10 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                   <span style={{ color: chgColor(c), fontSize: 11 }}>
                     {activeData?.ranking_status === 'estimated' && !item.estimate_applied
                       ? '今日--'
-                      : `今日${c > 0 ? '+' : ''}${c.toFixed(1)}%`}
+                      : `今日${c > 0 ? '+' : ''}${c.toFixed(2)}%`}
                   </span>
                   <span style={{ color: item.chg_20d >= 0 ? '#ff4444' : '#44aa44', fontSize: 11 }}>
-                    20日+{item.chg_20d.toFixed(1)}%
+                    20日{item.chg_20d > 0 ? '+' : ''}{item.chg_20d.toFixed(2)}%
                   </span>
                   <span style={{ color: stageColor, fontSize: 11 }}>
                     {stageIcon} {stage}
@@ -495,12 +499,12 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                   <td>{i + 1}</td>
                   <td style={{ fontWeight: 600 }}>{l.name}</td>
                   <td style={{ color: l.chg_20d >= 0 ? '#ff4444' : '#44aa44' }}>
-                    {l.chg_20d >= 0 ? '+' : ''}{l.chg_20d.toFixed(1)}%
+                    {l.chg_20d >= 0 ? '+' : ''}{l.chg_20d.toFixed(2)}%
                   </td>
                   <td style={{ color: chgColor(l.chg_1d), fontSize: 12 }}>
                     {activeData?.ranking_status === 'estimated' && !l.estimate_applied
                       ? '--'
-                      : `${chgSign(l.chg_1d)}${(l.chg_1d ?? 0).toFixed(1)}%`}
+                      : `${chgSign(l.chg_1d)}${(l.chg_1d ?? 0).toFixed(2)}%`}
                   </td>
                   <td style={{ color: STAGE_COLORS[stage] || '#888', fontSize: 11 }}>
                     {stageIcon} {stage}
