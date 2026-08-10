@@ -26,6 +26,14 @@
 - 关注列表排序与强度候选一致（chg_20d 降序，无 20 日数据排最后）
 - 关注概念 Tab 图标改 🔖 与 ⭐关注行业 去重
 
+**关注板块每日增量更新保障 + Tushare 补齐（2026-08-10 二轮）：**
+- **根因**：`update_sectors()` 只更新「自选股关联≥6只」的追踪概念 + 全部行业，用户关注的板块/概念（新概念关联不足、数据停更概念）永远不在更新范围 → 停更死循环（华为盘古止于 06-12、玻璃基板仅 5 条、MLCC概念仅 3 条）
+- **修复 1（增量）**：`update_sectors()` 强制纳入 watched_sectors 全部用户关注（行业+概念），无论是否满足追踪门槛，每天增量更新（06:00 full / 20:00+22:00 evening cron 自动覆盖）
+- **修复 2（字段映射 bug）**：`_fetch_ths_daily_klines_tushare` 取 `pct_chg` 恒为 NULL（Tushare 返回 `pct_change`），已修正
+- **修复 3（历史补齐）**：新增 `scripts/backfill_watched_ths_daily.py` 按 ts_code 精确拉取 Tushare 全历史——华为盘古 419 条至 08-10（20日 +13.62% 阶段上涨）、玻璃基板 17 条、MLCC概念 7 条；跳过 close 为 NULL 的脏行（Tushare 新概念早期数据质量）
+- `_compute_sector_strength` 查询过滤 `close IS NOT NULL` 防除零崩溃
+- 测试：新增 `test_watched_sector_forced_update.py` 8 项（强制纳入/字段映射/脏行过滤/SQL 防御），全量后端测试 **808 passed 全绿**，CI 无 env 模拟通过
+
 ## [v3.10.2] — 2026-08-04
 
 ### 新增：交易日 20:00 板块正式数据更新 + 22:00 条件补齐
