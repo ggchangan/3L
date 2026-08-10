@@ -56,15 +56,19 @@ def backfill_one(db, ts_code: str, name: str, start: str, end: str) -> dict:
 
     records = []
     for row in rows:
+        # 防御：代理若忽略 ts_code 过滤会返回全市场，必须校验响应行归属，
+        # 否则会把所有板块全历史 REPLACE 进 ths_daily（覆盖既有数据+巨量写入）。
+        if str(row.get('ts_code', '')) != ts_code:
+            continue
         rec = {}
         for src_key, dst_key in FIELD_MAP.items():
             if src_key in row:
                 rec[dst_key] = row[src_key]
         trade_date = str(rec.get('trade_date', '')).replace('-', '')
         rec['trade_date'] = trade_date
-        # Tushare 新概念早期数据质量：close 缺失的行写入会污染 ths_daily
+        # Tushare 新概念早期数据质量：close 缺失或 <=0 的行写入会污染 ths_daily
         # （覆盖率误判正式数据 + 强度计算崩溃），整行跳过。
-        if rec.get('close') is None:
+        if rec.get('close') is None or rec.get('close') <= 0:
             continue
         records.append(rec)
 
@@ -79,6 +83,14 @@ def backfill_one(db, ts_code: str, name: str, start: str, end: str) -> dict:
         unique.append(rec)
     unique.sort(key=lambda r: r['trade_date'])
 
+    if not unique:
+        return {
+            'code': ts_code,
+            'name': name,
+            'fetched': len(rows),
+            'written': 0,
+            'range': '无有效数据（全部被脏行过滤）',
+        }
     written = db.upsert_many_from_dicts('ths_daily', unique)
     return {
         'code': ts_code,
@@ -99,8 +111,12 @@ def main():
     from backend.data_access.data_source import get_last_completed_trading_day
     end = args.end or get_last_completed_trading_day().replace('-', '')
 
+    db = _get_tushare_db()
+    if not db:
+        log.error('DB 不可用')
+        sys.exit(1)
+
     if args.codes:
-        db = _get_tushare_db()
         idx = db.execute_raw(
             "SELECT ts_code, name FROM ths_index WHERE ts_code IN (%s)"
             % ','.join(['%s'] * len(args.codes)),
@@ -110,11 +126,6 @@ def main():
         targets = [(c, name_map.get(c, c)) for c in args.codes]
     else:
         targets = DEFAULT_CODES
-
-    db = _get_tushare_db()
-    if not db:
-        log.error('DB 不可用')
-        sys.exit(1)
 
     log.info('补齐 %d 个板块: %s ~ %s', len(targets), args.start, end)
     for ts_code, name in targets:

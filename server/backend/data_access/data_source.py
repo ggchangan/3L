@@ -213,6 +213,33 @@ def get_ths_index_names(type_code='I'):
     return [(r['name'], type_code) for r in rows]
 
 
+def get_ths_index_canonical_names(ts_codes: list) -> dict:
+    """按 ts_code 解析 ths_index 权威名称（板块改名的唯一正确解析）。
+
+    场景：watched_sectors.name 是关注时刻的快照，Tushare 改名后（如
+    数据中心→数据中心(AIDC)）快照过期；任何按名字 join/匹配的环节
+    都是改名即碎的脆弱点。以 ts_code（稳定主键）为准，名字只做展示。
+
+    Args:
+        ts_codes: ts_code 列表（如 ['886094.TI', '881121.TI']）
+
+    Returns:
+        {ts_code: {'name': str, 'type': 'I'|'N'}} — 仅含 ths_index 中存在的板块
+    """
+    db = _get_tushare_db()
+    if not db or not ts_codes:
+        return {}
+    codes = [str(c) for c in ts_codes if c]
+    if not codes:
+        return {}
+    placeholders = ','.join(['%s'] * len(codes))
+    rows = db.execute_raw(
+        f"SELECT ts_code, name, type FROM ths_index WHERE ts_code IN ({placeholders})",
+        codes,
+    )
+    return {r['ts_code']: {'name': r['name'], 'type': r['type']} for r in rows}
+
+
 def _finite_number(value, default=None):
     """只接受有限数值；行情缺失值不得以 NaN/Inf 进入 MySQL。"""
     try:
@@ -587,24 +614,34 @@ def retry_missing_ths_concepts(target_date, concept_names) -> dict:
     return result
 
 
-def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> dict:
+def get_ths_daily_update_coverage(names_to_update: list, target_date: str,
+                                  optional_concepts: set = None) -> dict:
     """检查本次板块更新在目标日期的覆盖率。
 
     行业以上一次通过门禁的板块集合为基线，失败日的部分写入不会缩小
     下一日分母；概念统计本次明确追踪的名称。
+
+    Args:
+        names_to_update: [(name, kind), ...]
+        target_date: 目标交易日 YYYYMMDD
+        optional_concepts: 尽力而为的概念集合（如用户关注但可能停更/无数据的
+            概念）。它们仍参与写入与缺失统计，但**不计入门禁分母**——
+            否则停更概念缺失会拉低 ratio 导致整个日更管线失败。
     """
     db = _get_tushare_db()
     if not db:
         return {'ready': False, 'industry': {}, 'concept': {}, 'missing': []}
 
+    optional_concepts = set(optional_concepts or [])
     requested_industries = {name for name, kind in names_to_update if kind == 'industry'}
     requested_concepts = {name for name, kind in names_to_update if kind == 'concept'}
+    gate_concepts = requested_concepts - optional_concepts  # 门禁只统计必须的
     confirmation = get_ths_daily_update_confirmation()
     if not confirmation:
         confirmation = bootstrap_ths_daily_update_confirmation()
     active_industries = set(confirmation.get('industry_names', [])) & requested_industries
     bootstrap = not active_industries
-    expected = active_industries | requested_concepts
+    expected = active_industries | gate_concepts
     query_names = requested_industries | requested_concepts
 
     covered_industries = set()
@@ -640,13 +677,18 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str) -> di
     if bootstrap and industry['expected'] < 80:
         industry['ready'] = False
         industry['bootstrap_minimum'] = 80
-    concept = _stats(requested_concepts, covered_concepts, 0.90)
-    concepts_ready = concept['ready'] if requested_concepts else True
+    concept = _stats(gate_concepts, covered_concepts, 0.90)
+    concepts_ready = concept['ready'] if gate_concepts else True
+    # 尽力而为的关注概念：missing 单独记录，不拉低门禁
+    optional_missing = sorted(
+        (requested_concepts & optional_concepts) - covered_concepts
+    )
     return {
         'ready': industry['ready'] and concepts_ready,
         'industry': industry,
         'concept': concept,
         'missing': industry['missing'] + concept['missing'],
+        'optional_missing': optional_missing,
         'industry_names': sorted(active_industries | covered_industries),
         'concept_names': sorted(requested_concepts),
         'bootstrap': bootstrap,

@@ -34,8 +34,12 @@ def _get_in_mainline_names(sector_type: str) -> set:
             from backend.data_access.data_layer import get_tracked_concept_names
             names = set(get_tracked_concept_names(min_related_stocks=6))
     except Exception as e:
+        # DB 抖动时**不写空缓存**：否则「主线内」标记全灭 10 分钟，
+        # 且列表页无法自愈。保留旧缓存（若有），否则返回空但不缓存。
         log.warning('_get_in_mainline_names failed: %s', e)
-        names = cached[1] if cached else set()
+        if cached:
+            return cached[1]
+        return set()
     _IN_MAINLINE_CACHE[sector_type] = (now + _IN_MAINLINE_TTL, frozenset(names))
     return names
 
@@ -101,6 +105,10 @@ def toggle_watched_sector(user_id: int, sector_type: str, ts_code: str) -> dict:
     added = add_watched(user_id, sector_type, ts_code, name)
     if added:
         return {'success': True, 'watched': True, 'name': name, 'type': sector_type}
+    # 已关注 → 先刷新冗余 name（板块改名后快照过期，趁本次 ts_code 解析到
+    # 最新 name 时同步；不参与 toggle 判断，失败不影响取消），再取消关注
+    from backend.data_access.watched_sectors_repo import refresh_watched_name
+    refresh_watched_name(user_id, ts_code, name)
     removed = remove_watched(user_id, ts_code)
     if not removed:
         return {'success': False, 'error': f'关注状态切换失败: {ts_code}'}
@@ -181,15 +189,30 @@ def _compute_sector_strength(name: str, sector_type: str) -> dict:
             if not row:
                 return {'name': name, 'matched': False}
             cur.execute(
-                "SELECT trade_date, close FROM ths_daily WHERE ts_code=%s "
-                "AND close IS NOT NULL ORDER BY trade_date ASC",
+                "SELECT trade_date, open, high, low, close, vol FROM ths_daily "
+                "WHERE ts_code=%s AND close IS NOT NULL "
+                "ORDER BY trade_date ASC LIMIT 250",
                 [row['ts_code']],
             )
-            klines = list(cur.fetchall() or [])
+            raw_klines = list(cur.fetchall() or [])
     finally:
         conn.close()
-    if len(klines) < 2:
+    if len(raw_klines) < 2:
         return {'name': name, 'matched': False}
+
+    # 与主线同源口径：judge_concept_wave 依赖 volume 字段（量比/缩量/波谷+缩量
+    # 高胜率路径），补全 OHLCV 结构，避免 vl_score/阶段系统性失真。
+    klines = [
+        {
+            'date': k['trade_date'],
+            'open': k['open'],
+            'high': k['high'],
+            'low': k['low'],
+            'close': k['close'],
+            'volume': k['vol'] or 0,
+        }
+        for k in raw_klines
+    ]
 
     chg_1d = (klines[-1]['close'] / klines[-2]['close'] - 1) * 100
     chg_20d = None

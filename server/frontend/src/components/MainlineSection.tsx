@@ -294,13 +294,15 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                   ) : (
                     <>
                       <span style={{ color: chgColor(c), fontSize: 11 }}>
-                        {activeData?.ranking_status === 'estimated' && !item.estimate_applied
-                          ? '今日--'
-                          : item.chg_1d == null
+                        {item.matched !== true
+                          ? (item.chg_1d == null ? '今日--' : `今日${c > 0 ? '+' : ''}${c.toFixed(2)}%`)
+                          : (activeData?.ranking_status === 'estimated' && !item.estimate_applied
                             ? '今日--'
-                            : `今日${c > 0 ? '+' : ''}${c.toFixed(2)}%`}
+                            : item.chg_1d == null
+                              ? '今日--'
+                              : `今日${c > 0 ? '+' : ''}${c.toFixed(2)}%`)}
                       </span>
-                      <span style={{ color: item.chg_20d != null && item.chg_20d >= 0 ? '#ff4444' : '#44aa44', fontSize: 11 }}>
+                      <span style={{ color: item.chg_20d != null ? (item.chg_20d >= 0 ? '#ff4444' : '#44aa44') : '#555', fontSize: 11 }}>
                         20日{item.chg_20d != null ? `${item.chg_20d > 0 ? '+' : ''}${item.chg_20d.toFixed(2)}%` : '--'}
                       </span>
                       {item.data_date && (() => {

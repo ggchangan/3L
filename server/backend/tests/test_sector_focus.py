@@ -230,7 +230,7 @@ class TestSectorFocusService(unittest.TestCase):
     def test_watched_items_sorted_by_chg_20d(self):
         """关注列表排序与强度候选一致：chg_20d 降序，无20日数据排最后。"""
         from backend.services.sector_focus_service import (
-            toggle_watched_sector, build_watched_sector_items)
+            toggle_watched_sector, build_watched_sector_items, _compute_sector_strength)
         # 关注两个行业：A 在榜(chg_20d 高)，B 在榜(chg_20d 低)，C 不在榜(独立算)
         from backend.data_access.tushare_db import TushareDB
         db = TushareDB()
@@ -243,9 +243,16 @@ class TestSectorFocusService(unittest.TestCase):
             {'name': rows[0]['name'], 'chg_20d': 10.0, 'chg_1d': 1.0, 'stage': '上涨', 'vl_score': 1},
             {'name': rows[1]['name'], 'chg_20d': -2.0, 'chg_1d': 0.1, 'stage': '下跌', 'vl_score': 0},
         ]}
-        items = build_watched_sector_items(m, {'all_ranked': []}, self._uid)
+        # 第三个行业独立计算依赖真实 ths_daily 数据（chg_20d 随时序变化），
+        # mock 为无数据，保证「无20日数据排最后」断言稳定
+        with mock.patch.object(
+                sys.modules['backend.services.sector_focus_service'],
+                '_compute_sector_strength',
+                return_value={'name': rows[2]['name'], 'matched': False,
+                              'chg_1d': None, 'chg_20d': None}):
+            items = build_watched_sector_items(m, {'all_ranked': []}, self._uid)
         self.assertEqual(len(items['industries']), 3)
-        # 前两个有 chg_20d → 降序；第三个无榜数据 → 独立计算或暂无数据，排在最后
+        # 前两个有 chg_20d → 降序；第三个无榜数据 → 排在最后
         self.assertEqual(items['industries'][0]['name'], rows[0]['name'])
         self.assertEqual(items['industries'][1]['name'], rows[1]['name'])
         self.assertLessEqual(items['industries'][0]['chg_20d'], 10.0)

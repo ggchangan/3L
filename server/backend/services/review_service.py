@@ -32,6 +32,16 @@ from backend.services.review_cache_service import (
 
 log = get_logger(__name__)
 
+
+def _build_watched_for_review(mainline_data: dict, concept_mainline_data: dict,
+                              user_id: int = None) -> dict:
+    """组装复盘「关注行业/关注概念」数据（generate_daily_review + 实时路径共用）。
+
+    延迟 import 避免模块加载期循环依赖；无请求上下文时默认 admin（cron 场景）。
+    """
+    from backend.services.sector_focus_service import build_watched_sector_items
+    return build_watched_sector_items(mainline_data, concept_mainline_data, user_id)
+
 # ═══════════════════════════════════════════════════════════════
 # 文件辅助
 # ═══════════════════════════════════════════════════════════════
@@ -374,6 +384,9 @@ def generate_daily_review(date_str=None):
             'date': date_str,
         },
         'mainline': mainline_data,
+        'watched_sectors': _build_watched_for_review(
+            mainline_data, concept_mainline_data,
+        ),
         'timing_signals': timing_signals,
         'trading_plan': trading_plan,
         'holdings': holdings,
@@ -517,7 +530,6 @@ def compute_review_real_time(date_str=None):
     )
     from backend.core.scan_buy_signals import get_main_lines
     from backend.data_access.data_layer import get_watchlist, get_all_stocks, get_index_klines
-    from backend.services.sector_focus_service import build_watched_sector_items
     from backend.core.auth import get_current_user_id
 
     print(f"[3L复盘实时] 计算 {date_str} 复盘数据...")
@@ -768,7 +780,7 @@ def compute_review_real_time(date_str=None):
         'previous_trading_date': get_previous_review_date(date_str),
         'market': {**market_cycle, 'date': date_str},
         'mainline': mainline_data,
-        'watched_sectors': build_watched_sector_items(
+        'watched_sectors': _build_watched_for_review(
             mainline_data, concept_mainline_data, get_current_user_id(),
         ),
         'data_stale': _data_status.get('overall') != 'ready',

@@ -78,6 +78,28 @@ def add_watched(user_id: int, sector_type: str, ts_code: str, name: str) -> bool
         conn.close()
 
 
+def refresh_watched_name(user_id: int, ts_code: str, name: str) -> bool:
+    """刷新已关注板块的冗余 name（板块改名后快照过期）。
+
+    不影响 rowcount 语义（不参与 toggle 判断），失败返回 False 不报错。
+    """
+    db = _get_db()
+    conn = db._get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE watched_sectors SET name=%s "
+                "WHERE user_id=%s AND ts_code=%s AND name<>%s",
+                [name, user_id, ts_code, name],
+            )
+            return cur.rowcount > 0
+    except Exception as e:
+        log.warning('refresh_watched_name failed: %s', e)
+        return False
+    finally:
+        conn.close()
+
+
 def remove_watched(user_id: int, ts_code: str) -> bool:
     """取消关注；不存在返回 False。DB 异常同样上抛（防假成功）。"""
     db = _get_db()
