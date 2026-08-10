@@ -111,6 +111,18 @@ CREATE_TABLES = {
             PRIMARY KEY (ts_code, con_code)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """,
+    'watched_sectors': """
+        CREATE TABLE IF NOT EXISTS watched_sectors (
+            id          INT AUTO_INCREMENT PRIMARY KEY,
+            user_id     INT NOT NULL,
+            sector_type VARCHAR(10) NOT NULL COMMENT 'industry=同花顺行业(I), concept=同花顺概念(N)',
+            ts_code     VARCHAR(20) NOT NULL COMMENT 'ths_index.ts_code',
+            name        VARCHAR(100) NOT NULL COMMENT '板块名称(冗余,与ths_index.name对齐)',
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_user_tscode (user_id, ts_code),
+            KEY idx_user_type (user_id, sector_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户关注的同花顺板块/概念(按user_id隔离)'
+    """,
     'stock_basic': """
         CREATE TABLE IF NOT EXISTS stock_basic (
             ts_code     VARCHAR(20) PRIMARY KEY,

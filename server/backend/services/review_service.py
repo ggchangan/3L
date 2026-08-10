@@ -517,6 +517,7 @@ def compute_review_real_time(date_str=None):
     )
     from backend.core.scan_buy_signals import get_main_lines
     from backend.data_access.data_layer import get_watchlist, get_all_stocks, get_index_klines
+    from backend.services.sector_focus_service import build_watched_sector_items
 
     print(f"[3L复盘实时] 计算 {date_str} 复盘数据...")
 
@@ -766,6 +767,9 @@ def compute_review_real_time(date_str=None):
         'previous_trading_date': get_previous_review_date(date_str),
         'market': {**market_cycle, 'date': date_str},
         'mainline': mainline_data,
+        'watched_sectors': build_watched_sector_items(
+            mainline_data, concept_mainline_data, get_current_user_id(),
+        ),
         'data_stale': _data_status.get('overall') != 'ready',
         'data_status': _data_status,
         'data_dates': {

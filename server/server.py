@@ -107,6 +107,7 @@ def register_api_routes(routes):
         'backend.api.hot_stocks',
         'backend.api.data_source_health',
         'backend.api.auth',
+        'backend.api.sector_focus',
     ]
     for mod_name in api_modules:
         mod = importlib.import_module(mod_name)
@@ -273,6 +274,7 @@ class Handler(SimpleHTTPRequestHandler):
                 '/concept-wave',
                 '/strong-trend-candidates',
                 '/hot-stocks',
+                '/sector-focus',
                 '/login',
             }
             if path in spa_routes:
@@ -407,6 +409,7 @@ class Handler(SimpleHTTPRequestHandler):
                 '/api/auth/register': ('backend.api.auth', '_handle_register'),
                 '/api/auth/change-password': ('backend.api.auth', '_handle_change_password'),
                 '/api/auth/logout': ('backend.api.auth', '_handle_logout'),
+                '/api/watched-sectors/toggle': ('backend.api.sector_focus', '_handle_watched_sectors_toggle'),
             }
             if path in post_routes:
                 mod_name, func_name = post_routes[path]
