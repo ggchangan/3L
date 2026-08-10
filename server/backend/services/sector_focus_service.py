@@ -150,17 +150,85 @@ def get_all_sectors(sector_type: str, user_id: int = None) -> dict:
     }
 
 
+def _compute_sector_strength(name: str, sector_type: str) -> dict:
+    """关注但不在主线 all_ranked 的板块/概念：从本地 ths_daily 计算强度。
+
+    场景：新概念（K线<20条，如 MLCC概念/玻璃基板）不在主线排名，
+    或数据源停更被排除追踪（如 华为盘古）。只要有K线就展示强度，
+    避免关注 Tab 大量「暂无数据」。
+
+    ⚠️ 必须查本地 ths_daily（与主线 all_ranked 同源）：data_source 的
+    get_sector_klines 走外部在线 API 链路（Tushare/同花顺直连），离线/限流时
+    拿不到数据；且按名查不区分类型会串（家用电器 I/N 同名）。这里按
+    name + type 精确匹配 ths_index → ths_daily。
+
+    sector_type: 'industry' / 'concept'
+    """
+    from pymysql.cursors import DictCursor
+    ths_type = TYPE_MAP.get(sector_type)
+    if not ths_type:
+        return {'name': name, 'matched': False}
+
+    db = _get_db()
+    conn = db._get_conn()
+    try:
+        with conn.cursor(DictCursor) as cur:
+            cur.execute(
+                "SELECT ts_code FROM ths_index WHERE name=%s AND type=%s LIMIT 1",
+                [name, ths_type],
+            )
+            row = cur.fetchone()
+            if not row:
+                return {'name': name, 'matched': False}
+            cur.execute(
+                "SELECT trade_date, close FROM ths_daily WHERE ts_code=%s "
+                "ORDER BY trade_date ASC",
+                [row['ts_code']],
+            )
+            klines = list(cur.fetchall() or [])
+    finally:
+        conn.close()
+    if len(klines) < 2:
+        return {'name': name, 'matched': False}
+
+    chg_1d = (klines[-1]['close'] / klines[-2]['close'] - 1) * 100
+    chg_20d = None
+    if len(klines) >= 20:
+        chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
+
+    stage, vl_score = '--', 0
+    try:
+        if len(klines) >= 20:
+            from backend.services.concept_wave_service import judge_concept_wave
+            wave = judge_concept_wave(klines)
+            stage = wave.get('stage', '--')
+            vl_score = wave.get('vl_score', 0)
+    except Exception:
+        pass
+
+    return {
+        'name': name,
+        'matched': True,
+        'chg_1d': round(chg_1d, 2),
+        'chg_20d': round(chg_20d, 2) if chg_20d is not None else None,
+        'stage': stage,
+        'vl_score': vl_score,
+        'data_date': str(klines[-1].get('trade_date', '')),
+    }
+
+
 def build_watched_sector_items(mainline_data: dict, concept_mainline_data: dict,
                                user_id: int = None) -> dict:
     """组装复盘页「关注行业/关注概念」数据。
 
-    从行业/概念 all_ranked 中按关注名称匹配：
-    - 匹配到的条目带完整强度字段（与强度候选同格式）+ matched=True
-    - 关注了但主线无数据的条目 {name, matched=False}（前端显示"暂无数据"）
+    - 命中 all_ranked 的条目带完整强度字段（与强度候选同格式）+ matched=True
+    - 未命中的条目从 ths_daily 独立计算强度（见 _compute_sector_strength），
+      完全无K线才 matched=False（前端显示"暂无数据"）
+    - 排序与强度候选一致：按 chg_20d 降序；无20日数据（新概念/暂无数据）排最后
     """
     watched = get_watched_sectors(user_id)
 
-    def _match(names, ranked):
+    def _build(names, ranked, sector_type):
         by_name = {e['name']: e for e in ranked}
         items = []
         for n in names:
@@ -168,12 +236,16 @@ def build_watched_sector_items(mainline_data: dict, concept_mainline_data: dict,
             if entry is not None:
                 items.append({**entry, 'matched': True})
             else:
-                items.append({'name': n, 'matched': False})
+                items.append(_compute_sector_strength(n, sector_type))
+        # 排序：chg_20d 有值按降序（与强度候选相同）；无值(新概念/暂无数据)排最后
+        items.sort(key=lambda x: (x.get('chg_20d') is None, -(x.get('chg_20d') or 0)))
         return items
 
     return {
-        'industries': _match(watched.get('industries', []),
-                             (mainline_data or {}).get('all_ranked', [])),
-        'concepts': _match(watched.get('concepts', []),
-                           (concept_mainline_data or {}).get('all_ranked', [])),
+        'industries': _build(watched.get('industries', []),
+                             (mainline_data or {}).get('all_ranked', []),
+                             'industry'),
+        'concepts': _build(watched.get('concepts', []),
+                           (concept_mainline_data or {}).get('all_ranked', []),
+                           'concept'),
     }

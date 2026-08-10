@@ -50,7 +50,7 @@ const TABS: { key: TabKey; label: string; color: string; activeColor: string }[]
   { key: 'industry', label: '🏭 行业强度候选', color: '#e94560', activeColor: '#e94560' },
   { key: 'concept', label: '💡 概念强度候选', color: '#4ecdc4', activeColor: '#4ecdc4' },
   { key: 'watched-industry', label: '⭐ 关注行业', color: '#ffd700', activeColor: '#ffd700' },
-  { key: 'watched-concept', label: '⭐ 关注概念', color: '#ffb84d', activeColor: '#ffb84d' },
+  { key: 'watched-concept', label: '🔖 关注概念', color: '#ffb84d', activeColor: '#ffb84d' },
 ]
 
 // 当前数据只是板块自身20日涨幅代理榜，不等同于 L1 动量主线。
@@ -296,11 +296,19 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                       <span style={{ color: chgColor(c), fontSize: 11 }}>
                         {activeData?.ranking_status === 'estimated' && !item.estimate_applied
                           ? '今日--'
-                          : `今日${c > 0 ? '+' : ''}${c.toFixed(2)}%`}
+                          : item.chg_1d == null
+                            ? '今日--'
+                            : `今日${c > 0 ? '+' : ''}${c.toFixed(2)}%`}
                       </span>
-                      <span style={{ color: item.chg_20d >= 0 ? '#ff4444' : '#44aa44', fontSize: 11 }}>
-                        20日{item.chg_20d > 0 ? '+' : ''}{item.chg_20d.toFixed(2)}%
+                      <span style={{ color: item.chg_20d != null && item.chg_20d >= 0 ? '#ff4444' : '#44aa44', fontSize: 11 }}>
+                        20日{item.chg_20d != null ? `${item.chg_20d > 0 ? '+' : ''}${item.chg_20d.toFixed(2)}%` : '--'}
                       </span>
+                      {item.data_date && (() => {
+                        const d = String(item.data_date).replace(/(\d{4})(\d{2})(\d{2})/, '$2-$3')
+                        return (
+                          <span style={{ color: '#888', fontSize: 10 }} title={`数据至 ${d}`}>📅至{d}</span>
+                        )
+                      })()}
                       <span style={{ color: stageColor, fontSize: 11 }}>
                         {stageIcon} {stage}
                       </span>

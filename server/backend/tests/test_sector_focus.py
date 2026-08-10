@@ -174,14 +174,20 @@ class TestSectorFocusService(unittest.TestCase):
         watched = get_watched_sectors(self._uid)
         self.assertEqual(len(watched['industries']), 1)
         self.assertEqual(len(watched['concepts']), 1)
+        self.assertEqual(watched['industries'][0], watched['concepts'][0])  # 同名
 
-        # 行业榜含该名、概念榜不含 → 行业匹配成功、概念匹配失败（按类型隔离）
+        # 行业榜含该名 → 命中 all_ranked；概念榜不含 → 走独立强度计算（有K线则 matched=True）
         m = {'all_ranked': [{'name': watched['industries'][0], 'chg_20d': 1.0, 'chg_1d': 0.5, 'stage': '上涨', 'vl_score': 1}]}
         cm = {'all_ranked': []}
         items = build_watched_sector_items(m, cm, self._uid)
         self.assertTrue(items['industries'][0]['matched'])
-        self.assertFalse(items['concepts'][0]['matched'])
+        self.assertEqual(items['industries'][0]['chg_20d'], 1.0)
+        # 概念侧：条目存在且名字正确，不串到行业榜
+        self.assertEqual(len(items['concepts']), 1)
         self.assertEqual(items['concepts'][0]['name'], watched['concepts'][0])
+        # 若概念在 ths_daily 有K线，应有强度数据
+        if items['concepts'][0].get('matched'):
+            self.assertIn('data_date', items['concepts'][0])
 
     def test_get_all_sectors_structure(self):
         from backend.services.sector_focus_service import get_all_sectors
@@ -195,7 +201,7 @@ class TestSectorFocusService(unittest.TestCase):
 
     def test_build_watched_items_match_and_missing(self):
         from backend.services.sector_focus_service import (
-            toggle_watched_sector, build_watched_sector_items)
+            toggle_watched_sector, build_watched_sector_items, _compute_sector_strength)
         toggle_watched_sector(self._uid, 'industry', self._ind_code)
         toggle_watched_sector(self._uid, 'concept', self._con_code)
 
@@ -203,14 +209,47 @@ class TestSectorFocusService(unittest.TestCase):
             {'name': self._ind_name, 'chg_20d': 5.5, 'chg_1d': 1.2, 'stage': '上涨',
              'vl_score': 3, 'strength_rank': 1},
         ]}
-        cm = {'all_ranked': []}  # 概念不在榜 → matched=False
+        cm = {'all_ranked': []}  # 概念不在榜 → 走独立强度计算（AI应用在 ths_daily 有K线）
         items = build_watched_sector_items(m, cm, self._uid)
         self.assertEqual(len(items['industries']), 1)
         self.assertTrue(items['industries'][0]['matched'])
         self.assertEqual(items['industries'][0]['chg_20d'], 5.5)
         self.assertEqual(len(items['concepts']), 1)
-        self.assertFalse(items['concepts'][0]['matched'])
         self.assertEqual(items['concepts'][0]['name'], self._con_name)
+        self.assertTrue(items['concepts'][0]['matched'])  # 有K线 → 独立算强度
+        self.assertIsNotNone(items['concepts'][0]['chg_20d'])
+        self.assertIn('data_date', items['concepts'][0])
+
+    def test_compute_strength_no_kline_matched_false(self):
+        """ths_daily 完全无K线的关注项 → matched=False（前端显示暂无数据）。"""
+        from backend.services.sector_focus_service import _compute_sector_strength
+        item = _compute_sector_strength('不存在之板块XYZ', 'concept')
+        self.assertFalse(item['matched'])
+        self.assertEqual(item['name'], '不存在之板块XYZ')
+
+    def test_watched_items_sorted_by_chg_20d(self):
+        """关注列表排序与强度候选一致：chg_20d 降序，无20日数据排最后。"""
+        from backend.services.sector_focus_service import (
+            toggle_watched_sector, build_watched_sector_items)
+        # 关注两个行业：A 在榜(chg_20d 高)，B 在榜(chg_20d 低)，C 不在榜(独立算)
+        from backend.data_access.tushare_db import TushareDB
+        db = TushareDB()
+        rows = db.execute_raw(
+            "SELECT ts_code, name FROM ths_index WHERE type='I' LIMIT 3")
+        for tc, nm in [(r['ts_code'], r['name']) for r in rows[:3]]:
+            toggle_watched_sector(self._uid, 'industry', tc)
+
+        m = {'all_ranked': [
+            {'name': rows[0]['name'], 'chg_20d': 10.0, 'chg_1d': 1.0, 'stage': '上涨', 'vl_score': 1},
+            {'name': rows[1]['name'], 'chg_20d': -2.0, 'chg_1d': 0.1, 'stage': '下跌', 'vl_score': 0},
+        ]}
+        items = build_watched_sector_items(m, {'all_ranked': []}, self._uid)
+        self.assertEqual(len(items['industries']), 3)
+        # 前两个有 chg_20d → 降序；第三个无榜数据 → 独立计算或暂无数据，排在最后
+        self.assertEqual(items['industries'][0]['name'], rows[0]['name'])
+        self.assertEqual(items['industries'][1]['name'], rows[1]['name'])
+        self.assertLessEqual(items['industries'][0]['chg_20d'], 10.0)
+        self.assertGreaterEqual(items['industries'][0]['chg_20d'], items['industries'][1]['chg_20d'])
 
 
 if __name__ == '__main__':
