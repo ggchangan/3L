@@ -838,15 +838,9 @@ def generate_suggestions_for_db(db_path: str = None) -> list:
 # ═══════════════════════════════════════════════════════════════
 
 def _get_review_dates() -> list:
-    """获取有复盘的日期列表（从当前用户 workbench 目录推断）"""
-    from backend.core.config import get_user_config_path
-    wb_dir = os.path.dirname(get_user_config_path(os.path.join('workbench', '2000-01-01.json')))
-    if os.path.isdir(wb_dir):
-        return sorted(
-            f.replace('.json', '') for f in os.listdir(wb_dir)
-            if f.endswith('.json') and len(f.replace('.json', '')) == 10
-        )
-    return []
+    """获取有复盘的日期列表（从当前用户 review_archive 目录推断）"""
+    from backend.services.review_cache_service import get_archive_dates
+    return get_archive_dates()
 
 
 def compute_tracking(force=False, db_path=None) -> dict:
