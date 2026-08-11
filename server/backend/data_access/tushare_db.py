@@ -7,7 +7,7 @@ Tushare MySQL 数据库封装层
 """
 import os, json, time
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pymysql
 from pymysql.cursors import DictCursor
@@ -579,6 +579,83 @@ class TushareDB:
             result[code] = klines
 
         return result
+
+    def query_l1_market_features(self, as_of_date: str) -> dict:
+        """按目标日一次性计算全 A L1 所需特征，避免依赖用户方向池。"""
+        as_of = str(as_of_date or '').replace('-', '')
+        if len(as_of) != 8 or not as_of.isdigit():
+            raise ValueError('as_of_date must be YYYYMMDD')
+        history_start = (
+            datetime.strptime(as_of, '%Y%m%d') - timedelta(days=450)
+        ).strftime('%Y%m%d')
+        universe_rows = self.execute_raw(
+            """SELECT COUNT(*) AS expected_count
+                 FROM stock_basic
+                WHERE (list_date IS NULL OR list_date='' OR list_date<=%s)
+                  AND (delist_date IS NULL OR delist_date='' OR delist_date>%s)""",
+            [as_of, as_of],
+        )
+        expected_count = int(universe_rows[0]['expected_count'] or 0) if universe_rows else 0
+        rows = self.execute_raw(
+            """WITH ranked AS (
+                   SELECT sb.symbol AS code, sb.name, sb.list_date,
+                          sd.trade_date, sd.close, sd.high, af.adj_factor,
+                          ROW_NUMBER() OVER (
+                              PARTITION BY sd.ts_code ORDER BY sd.trade_date DESC
+                          ) AS rn
+                     FROM stock_daily sd
+                     JOIN stock_basic sb ON sb.ts_code=sd.ts_code
+                LEFT JOIN adj_factor af
+                       ON af.ts_code=sd.ts_code AND af.trade_date=sd.trade_date
+                    WHERE sd.trade_date BETWEEN %s AND %s
+                      AND (sb.list_date IS NULL OR sb.list_date='' OR sb.list_date<=%s)
+                      AND (sb.delist_date IS NULL OR sb.delist_date='' OR sb.delist_date>%s)
+               )
+               SELECT code, MAX(name) AS name, MAX(list_date) AS list_date,
+                      MAX(CASE WHEN rn=1 THEN trade_date END) AS latest_date,
+                      COUNT(*) AS bar_count,
+                      SUM(CASE WHEN adj_factor IS NOT NULL THEN 1 ELSE 0 END) AS factor_count,
+                      MAX(CASE WHEN rn=1 THEN close*adj_factor END) AS current_close,
+                      MAX(CASE WHEN rn=21 THEN close*adj_factor END) AS close_20d,
+                      MAX(CASE WHEN rn=1 THEN high*adj_factor END) AS current_high,
+                      MAX(CASE WHEN rn BETWEEN 2 AND 250 THEN high*adj_factor END) AS prior_52w_high
+                 FROM ranked
+                WHERE rn<=250
+             GROUP BY code""",
+            [history_start, as_of, as_of, as_of],
+        )
+        features = []
+        for row in rows:
+            bar_count = int(row.get('bar_count') or 0)
+            factor_count = int(row.get('factor_count') or 0)
+            current_close = float(row.get('current_close') or 0)
+            close_20d = float(row.get('close_20d') or 0)
+            current_high = float(row.get('current_high') or 0)
+            prior_52w_high = float(row.get('prior_52w_high') or 0)
+            features.append({
+                'code': str(row.get('code') or ''),
+                'name': row.get('name') or '',
+                'list_date': str(row.get('list_date') or ''),
+                'latest_date': str(row.get('latest_date') or ''),
+                'bar_count': bar_count,
+                'adjustment_complete': bar_count > 0 and factor_count == bar_count,
+                'return_20d': (
+                    (current_close / close_20d - 1) * 100
+                    if bar_count >= 21 and current_close > 0 and close_20d > 0 else None
+                ),
+                'high_52w': (
+                    current_high >= prior_52w_high
+                    if bar_count >= 250 and current_high > 0 and prior_52w_high > 0 else None
+                ),
+            })
+        return {
+            'as_of_date': as_of,
+            'source': 'tushare_mysql_full_market',
+            # 当前 ths_member 没有生效日期，历史成分回放暂不具备正式口径。
+            'constituent_as_of_supported': False,
+            'expected_stock_count': expected_count,
+            'stocks': features,
+        }
 
     # ════════════════════════════════════════════════════════════
     # 最新交易日查询

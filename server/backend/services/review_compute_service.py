@@ -555,6 +555,7 @@ def get_mainline_data(date_str):
                 and cached.get('model_type') == 'sector_return_20d_proxy'
                 and 'l1_shadow' in cached
             ):
+                cached['l1_shadow'] = _get_l1_shadow(date_str)
                 print(f"[3L复盘] 主线数据读缓存 {date_str}")
                 return cached
         except Exception:

@@ -89,6 +89,12 @@ def fetch_stock_klines_from_db(codes, limit=60):
     return db.query_stock_klines_batch(codes, limit=limit, adj='qfq')
 
 
+def get_l1_market_features(as_of_date):
+    """L1 专用全市场入口；返回目标日可回放的20日动量和52周新高特征。"""
+    from backend.data_access.tushare_db import TushareDB
+    return TushareDB().query_l1_market_features(as_of_date)
+
+
 def get_stock_names_from_db(codes):
     """从 stock_basic 批量查询股票名称，返回 {code: name}"""
     from backend.data_access.tushare_db import TushareDB
