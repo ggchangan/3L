@@ -192,7 +192,7 @@ def _run_fusion(klines: List[Dict], idx: int, structure: str,
     }
 
     # 规则1: 关键点看多 + 看多信号 + 买点已确认 → 🟢 买入
-    if buy_point_active and bullish_signals:
+    if kp_dir == 'bullish' and buy_point_active and bullish_signals:
         result['signal'] = 'buy'
         result['signal_text'] = f'{existing_buy_point}+{best_bullish["name"]}({best_bullish["confidence"]}分)'
         result['confidence'] = min(100, 70 + best_bullish['confidence'] // 5)
@@ -234,6 +234,16 @@ def _run_fusion(klines: List[Dict], idx: int, structure: str,
         result['confidence'] = min(50, 30 + best_bullish['confidence'] // 6)
         result['fusion_type'] = 'conflict_bullish'
         result['reason'] = f'关键点偏空({kp_dir})但出现看多信号{best_bullish["name"]}({best_bullish["confidence"]}分)，等确认再入场'
+        return result
+
+    # 规则3c: 已有买点事实但关键点偏空 → 保留技术事实，等待位置确认。
+    # 不能因为旧买点检测已触发，就跳过关键点方向门禁升级成强买。
+    if buy_point_active and kp_dir == 'bearish':
+        result['signal'] = 'hold'
+        result['signal_text'] = f'⏳ {existing_buy_point}待确认'
+        result['confidence'] = 40
+        result['fusion_type'] = 'conflict_bullish'
+        result['reason'] = f'关键点偏空({kp_dir})但出现{existing_buy_point}，等位置与需求确认后再入场'
         return result
 
     # 规则4: 已有盈利模式买点→维持买点（即使无信号确认）

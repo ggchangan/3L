@@ -9,6 +9,7 @@
         print(err)
 """
 
+import hashlib
 import json
 import math
 import os
@@ -29,6 +30,26 @@ INDEX_SYMBOLS = {
     '399006': 'sz399006',   # 创业板指
 }
 INDEX_CODE_CHART = '000985'  # 默认指数
+STOCK_CHART_CACHE_VERSION = 'v2'
+
+
+def _stock_chart_variant(stop_loss_price=None, triggered_signals=None):
+    """图表参数摘要；防止止损线和信号图例跨请求串用缓存。"""
+    payload = {
+        'version': STOCK_CHART_CACHE_VERSION,
+        'stop_loss': round(float(stop_loss_price), 4) if stop_loss_price else None,
+        'signals': [
+            {
+                'key': signal.get('key', ''),
+                'name': signal.get('name', ''),
+                'direction': signal.get('direction', ''),
+                'confidence': round(float(signal.get('confidence', 0) or 0), 2),
+            }
+            for signal in (triggered_signals or [])
+        ],
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode('utf-8')
+    return hashlib.sha1(encoded).hexdigest()[:12]
 
 
 def _fetch_realtime_quote(code):
@@ -277,9 +298,10 @@ def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_
     cache_file = None
     if mode != 'monitor':
         last_date = str(klines[-1].get('date', '')).replace('-', '')
+        variant = _stock_chart_variant(stop_loss_price, triggered_signals)
         cache_file = os.path.join(
             REVIEW_CHARTS_DIR,
-            f'zzqz_stock_chart_{raw_code}_{last_date}.svg'
+            f'zzqz_stock_chart_{raw_code}_{last_date}_{variant}.svg'
         )
         if os.path.isfile(cache_file):
             try:
@@ -398,7 +420,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_
     # ── 5. 当前买卖点 — 显示 get_stock_card() 的信号 ──
     try:
         from backend.services.stock_card_service import get_stock_card
-        card = get_stock_card(raw_code, last_date, klines=stocks) if last_date else None
+        card = get_stock_card(raw_code, last_date, klines=klines) if last_date else None
         if card:
             sig = card.get('signal', '')
             last_pos = n - 1
@@ -1286,30 +1308,10 @@ def generate_trend_stock_chart(code, mode='review', stop_loss_price=None):
             break
     raw_code = raw_code[-6:] if len(raw_code) >= 6 else raw_code
 
-    # ── 缓存检查（review 模式：按 18:00 规则判定缓存有效） ──
+    # 先读取实际K线日期再命中缓存，避免节假日和延迟更新时按系统日期
+    # 误读旧图；止损价也必须进入缓存变体。
     now = datetime.now()
     today_str = now.strftime('%Y%m%d')
-    is_weekday = now.weekday() < 5
-    if mode != 'monitor':
-        if now.hour >= 18 and is_weekday:
-            cache_date = today_str
-        else:
-            if now.weekday() == 0:
-                cache_date = (now - timedelta(days=3)).strftime('%Y%m%d')
-            elif now.weekday() == 6:
-                cache_date = (now - timedelta(days=2)).strftime('%Y%m%d')
-            else:
-                cache_date = (now - timedelta(days=1)).strftime('%Y%m%d')
-        cache_file = os.path.join(
-            REVIEW_CHARTS_DIR,
-            f'zzqz_trend_stock_chart_{raw_code}_{cache_date}.svg'
-        )
-        if os.path.isfile(cache_file):
-            try:
-                with open(cache_file, 'r') as f:
-                    return f.read(), None
-            except Exception:
-                pass
 
     stocks = get_all_stocks()
     klines = get_stock_klines(raw_code, stocks=stocks)
@@ -1320,9 +1322,10 @@ def generate_trend_stock_chart(code, mode='review', stop_loss_price=None):
     cache_file = None
     if mode != 'monitor':
         last_date = str(klines[-1].get('date', '')).replace('-', '')
+        variant = _stock_chart_variant(stop_loss_price)
         cache_file = os.path.join(
             REVIEW_CHARTS_DIR,
-            f'zzqz_trend_stock_chart_{raw_code}_{last_date}.svg'
+            f'zzqz_trend_stock_chart_{raw_code}_{last_date}_{variant}.svg'
         )
         if os.path.isfile(cache_file):
             try:
