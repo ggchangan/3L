@@ -8,6 +8,23 @@ from backend.services.review_compute_service import apply_trading_plan_actions, 
 from backend.services.review_service import normalize_review_response
 
 
+def test_l1_shadow_failure_is_explicit_and_does_not_break_review(monkeypatch):
+    from backend.services import l1_momentum_service
+    from backend.services.review_compute_service import _get_l1_shadow
+
+    monkeypatch.setattr(
+        l1_momentum_service, 'get_or_compute_l1_shadow',
+        lambda date: (_ for _ in ()).throw(RuntimeError('数据源不可用')),
+    )
+
+    result = _get_l1_shadow('2026-08-11')
+
+    assert result['data_status'] == 'error'
+    assert result['rankings'] == []
+    assert '已降级' in result['error']
+    assert result['error_type'] == 'RuntimeError'
+
+
 def test_buy_signal_review_preserves_authoritative_card_date():
     from backend.core.review_analysis import generate_buy_signals_review
 

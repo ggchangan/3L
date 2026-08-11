@@ -27,6 +27,9 @@ def test_l1_aggregates_top_stocks_by_count_times_coverage():
     )
 
     assert result['data_status'] == 'partial'
+    assert result['quality_gates']['formal_publish_ready'] is False
+    assert result['input_coverage']['kline_20d'] == 1
+    assert result['input_coverage']['industry_mapping'] == 1
     assert result['momentum_pool_size'] == 3
     assert result['rankings'][0]['name'] == '行业A'
     assert result['rankings'][0]['momentum_stock_count'] == 3
@@ -83,10 +86,10 @@ def test_shadow_snapshot_uses_data_layer_and_previous_snapshot(monkeypatch, tmp_
 
     monkeypatch.setattr(l1_momentum_service, 'L1_SHADOW_DIR', str(tmp_path))
     monkeypatch.setattr('backend.data_access.data_layer.get_all_stocks', lambda: {
-        'all': {'000001': _rows(10)},
+        'all': {'000001': _rows(10), '000002': _rows(9)},
     })
     monkeypatch.setattr('backend.data_access.data_layer.get_industry_map', lambda: {
-        '000001': {'ths_industry': '行业A'},
+        '000001': {'ths_industry': '行业A'}, '000002': {'ths_industry': '行业A'},
     })
 
     first = l1_momentum_service.compute_and_persist_l1_shadow('20260121')
@@ -95,3 +98,47 @@ def test_shadow_snapshot_uses_data_layer_and_previous_snapshot(monkeypatch, tmp_
     assert (tmp_path / '20260121.json').exists()
     assert second['rankings'][0]['consecutive_days'] == 2
     assert first['snapshot_version'] == 1
+
+
+def test_get_or_compute_reuses_same_day_snapshot(monkeypatch, tmp_path):
+    from backend.services import l1_momentum_service
+
+    monkeypatch.setattr(l1_momentum_service, 'L1_SHADOW_DIR', str(tmp_path))
+    calls = []
+
+    def fake_compute(as_of_date):
+        calls.append(as_of_date)
+        tmp_path.mkdir(exist_ok=True)
+        result = {'as_of_date': as_of_date, 'rankings': []}
+        l1_momentum_service.config.atomic_json_dump(
+            result, str(tmp_path / f'{as_of_date}.json'), indent=2,
+        )
+        return result
+
+    monkeypatch.setattr(l1_momentum_service, 'compute_and_persist_l1_shadow', fake_compute)
+
+    first = l1_momentum_service.get_or_compute_l1_shadow('2026-01-21')
+    second = l1_momentum_service.get_or_compute_l1_shadow('2026-01-21')
+
+    assert first == second
+    assert calls == ['20260121']
+
+
+def test_rotation_exits_when_score_loses_board_effect():
+    stocks = {'all': {'000001': _rows(10)}}
+    industry_map = {
+        '000001': {'ths_industry': '行业A'},
+        '000002': {'ths_industry': '行业A'},
+    }
+    previous = [{
+        'name': '行业A', 'status': 'confirmed',
+        'momentum_score': 2, 'consecutive_days': 3,
+    }]
+    result = compute_l1_industry_rankings(
+        stocks, industry_map, '20260121', previous=previous,
+        top_n_floor=1, dynamic_top_ratio=0,
+    )
+
+    assert result['rankings'][0]['status'] == 'not_confirmed'
+    assert result['rankings'][0]['rotation_state'] == 'exited'
+    assert result['rankings'][0]['consecutive_days'] == 0

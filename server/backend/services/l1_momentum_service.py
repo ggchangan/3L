@@ -73,6 +73,17 @@ def compute_l1_industry_rankings(stocks, industry_map, as_of_date,
         if industry:
             members[industry].add(str(code).split('.')[0])
 
+    mapped_candidate_count = sum(
+        1 for code, *_ in candidates
+        if code in (industry_map or {})
+        and isinstance((industry_map or {}).get(code), dict)
+        and (industry_map or {})[code].get('ths_industry')
+    )
+    kline_coverage = len(candidates) / len(stock_rows) if stock_rows else 0.0
+    industry_mapping_coverage = (
+        mapped_candidate_count / len(candidates) if candidates else 0.0
+    )
+
     hits = defaultdict(list)
     for code, return_20d, rows, high_52w in momentum_pool:
         info = (industry_map or {}).get(code, {})
@@ -98,14 +109,20 @@ def compute_l1_industry_rankings(stocks, industry_map, as_of_date,
         new_high_overlap = sum(item[3] is True for item in industry_hits)
         status = 'climax_warning' if score > 7 else 'confirmed' if score > 1 else 'not_confirmed'
         prior = previous_by_name.get(industry)
-        if not prior and status != 'not_confirmed':
+        prior_active = bool(prior and prior.get('status') in ('confirmed', 'climax_warning'))
+        if status == 'not_confirmed':
+            rotation_state = 'exited' if prior_active else 'none'
+            consecutive_days = 0
+        elif not prior_active:
             rotation_state = 'new'
         elif prior and score > float(prior.get('momentum_score', 0)):
             rotation_state = 'strengthening'
         elif prior and score < float(prior.get('momentum_score', 0)):
             rotation_state = 'declining'
         else:
-            rotation_state = 'persistent' if prior else 'none'
+            rotation_state = 'persistent'
+        if status != 'not_confirmed':
+            consecutive_days = int(prior.get('consecutive_days', 0)) + 1 if prior_active else 1
         rankings.append({
             'name': industry,
             'momentum_stock_count': count,
@@ -114,25 +131,44 @@ def compute_l1_industry_rankings(stocks, industry_map, as_of_date,
             'momentum_score': round(score, 4),
             'status': status,
             'rotation_state': rotation_state,
-            'consecutive_days': int(prior.get('consecutive_days', 0)) + 1 if prior else 1,
+            'consecutive_days': consecutive_days,
             'new_high_count': new_high_count if high_52w_coverage > 0 else None,
             'new_high_overlap': new_high_overlap if high_52w_coverage > 0 else None,
             'top_stocks': [item[0] for item in industry_hits[:10]],
         })
     rankings.sort(key=lambda item: item['momentum_score'], reverse=True)
 
+    input_ready = (
+        kline_coverage >= 0.95
+        and industry_mapping_coverage >= 0.95
+        and institution_filter_ready
+        and high_52w_coverage >= 0.95
+    )
     return {
         'model_type': 'l1_momentum_mainline',
         'is_l1_model': True,
         'experimental': True,
         'as_of_date': str(as_of_date),
-        'data_status': 'experimental' if institution_filter_ready else 'partial',
+        'data_status': 'experimental' if input_ready else 'partial',
+        'calibration_status': 'pending',
         'institution_filter_applied': institution_filter_ready,
         'input_coverage': {
+            'total_stock_count': len(stock_rows),
             'eligible_stock_count': len(candidates),
             'missing_kline_count': incomplete_kline,
+            'kline_20d': round(kline_coverage, 4),
+            'industry_mapping': round(industry_mapping_coverage, 4),
             'institution_holdings': round(holdings_coverage, 4),
             'new_high_52w': round(high_52w_coverage, 4),
+        },
+        'quality_gates': {
+            'kline_ready': kline_coverage >= 0.95,
+            'industry_mapping_ready': industry_mapping_coverage >= 0.95,
+            'institution_holdings_ready': institution_filter_ready,
+            'new_high_validation_ready': high_52w_coverage >= 0.95,
+            'input_ready': input_ready,
+            # THS 阈值仍待历史标注集校准；输入齐全也只能运行影子模型。
+            'formal_publish_ready': False,
         },
         'momentum_pool_size': len(momentum_pool),
         'rankings': rankings,
@@ -165,3 +201,16 @@ def compute_and_persist_l1_shadow(as_of_date):
         result, os.path.join(L1_SHADOW_DIR, f'{normalized_date}.json'), indent=2,
     )
     return result
+
+
+def get_or_compute_l1_shadow(as_of_date, force=False):
+    """读取目标日影子快照；缺失时计算。实验结果不得阻塞正式复盘。"""
+    normalized_date = str(as_of_date).replace('-', '')
+    snapshot_path = os.path.join(L1_SHADOW_DIR, f'{normalized_date}.json')
+    if not force and os.path.isfile(snapshot_path):
+        try:
+            with open(snapshot_path, encoding='utf-8') as stream:
+                return json.load(stream)
+        except (OSError, ValueError):
+            pass
+    return compute_and_persist_l1_shadow(normalized_date)
