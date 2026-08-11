@@ -105,6 +105,7 @@ def _detect_chart_signals(code):
             detect_upward_breakout, detect_upward_continuation, detect_upward_reversal,
             detect_supply_exhaustion, detect_downward_breakout, detect_downward_reversal,
             detect_demand_exhaustion, detect_downward_continuation, detect_range_continuation,
+            detect_panic_stagnation,
         )
         from backend.services.stock_chart_service import get_all_stocks, get_stock_klines
         raw_code = str(code).strip()
@@ -122,7 +123,9 @@ def _detect_chart_signals(code):
             ('向上突破', detect_upward_breakout, 'bullish'),
             ('上涨中继', detect_upward_continuation, 'bullish'),
             ('向上反转', detect_upward_reversal, 'bullish'),
-            ('供应衰竭', detect_supply_exhaustion, 'bullish'),
+            ('天量滞跌', detect_panic_stagnation, 'bullish'),
+            # 供应衰竭只说明卖压减弱，尚未证明需求进入。
+            ('供应衰竭', detect_supply_exhaustion, 'neutral'),
             ('向下突破', detect_downward_breakout, 'bearish'),
             ('向下反转', detect_downward_reversal, 'bearish'),
             ('需求衰竭', detect_demand_exhaustion, 'bearish'),

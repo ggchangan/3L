@@ -587,6 +587,11 @@ def get_stock_card(code, date_str, market_position='波中',
             signal = 'sell'
             signal_text = f_result.get('signal_text', '')
             score = f_result['confidence']
+        elif fusion_type == 'conflict_bullish' and signal == 'buy':
+            # 买点是已经发生的量价事实，但关键点方向偏空时不能继续保留
+            # “可执行买入”语义；复盘层仍可展示 technical_signal=buy。
+            signal = 'hold'
+            signal_text = f_result.get('signal_text', '') or f'{buy_point}待确认'
     except Exception:
         triggered_signals = []
         fusion_type = ''

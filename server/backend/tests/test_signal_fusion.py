@@ -245,6 +245,41 @@ class TestFusionEngine(unittest.TestCase):
         self.assertEqual(result['fusion_type'], 'strong_buy')
         self.assertGreaterEqual(result['confidence'], 70)
 
+    def test_existing_buy_point_never_becomes_strong_buy_at_bearish_keypoint(self):
+        """已有买点和看多信号不能绕过关键点偏空门禁。"""
+        self.mock_get_signals.return_value = [
+            self._make_signal('upward_breakout', '向上突破', 'bullish', 80)
+        ]
+        from backend.core.signal_detector.fusion import _run_fusion
+        result = _run_fusion(
+            self.klines, self.idx,
+            structure='区间震荡', stage='区间顶部',
+            ema_arrangement='交叉', bias5=3,
+            main_line_names=self.main_line_names,
+            sector=self.sector,
+            existing_signal='buy', existing_buy_point='突破买点',
+        )
+        self.assertEqual(result['signal'], 'hold')
+        self.assertEqual(result['fusion_type'], 'conflict_bullish')
+        self.assertEqual(result['technical_signal'], 'buy')
+        self.assertNotIn('关键点看多(bearish)', result['reason'])
+
+    def test_existing_buy_point_without_confirmation_waits_at_bearish_keypoint(self):
+        """即使没有额外看多信号，偏空关键点也只能保留买点事实。"""
+        self.mock_get_signals.return_value = []
+        from backend.core.signal_detector.fusion import _run_fusion
+        result = _run_fusion(
+            self.klines, self.idx,
+            structure='下降趋势', stage='下行',
+            ema_arrangement='空头排列', bias5=-2,
+            main_line_names=self.main_line_names,
+            sector=self.sector,
+            existing_signal='buy', existing_buy_point='反转买点',
+        )
+        self.assertEqual(result['signal'], 'hold')
+        self.assertEqual(result['fusion_type'], 'conflict_bullish')
+        self.assertEqual(result['technical_signal'], 'buy')
+
     def test_rule2_signal_buy(self):
         """规则2: 关键点看多 + 看多信号（无买点）→ 潜在买点"""
         self.mock_get_signals.return_value = [
