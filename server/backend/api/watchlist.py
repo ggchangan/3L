@@ -171,18 +171,19 @@ def _handle_watchlist_add_stock(h, path, body):
                     with open(INDUSTRY_MAP_PATH) as _f:
                         _im = json.load(_f)
                     info = _im.get(code, {})
-                    suggested = info.get('direction', info.get('ths_industry', ''))
+                    # direction 字段可能为 None（key存在值为None），用 or 链回退到 ths_industry
+                    suggested = info.get('direction') or info.get('ths_industry') or ''
                     if suggested and suggested not in ('未知', '获取失败'):
                         direction = suggested
                 # 如果推断出的方向是裸大类（不含'.'），统一归入"未分类.XXX"
                 if direction and '.' not in direction and direction != '其他':
                     direction = f'未分类.{direction}'
                 if not direction:
-                    direction = '其他'
+                    direction = '未分类.其它'
             except:
-                direction = '其他'
+                direction = '未分类.其它'
 
-        new_stock = {'code': code, 'name': name or code, 'direction': direction or '其他'}
+        new_stock = {'code': code, 'name': name or code, 'direction': direction or '未分类.其它'}
         stocks.append(new_stock)
         wl_data = {'stocks': stocks, 'directions': wl.get('directions', [])} if isinstance(wl, dict) else {'stocks': stocks, 'directions': []}
         save_watchlist(wl_data)

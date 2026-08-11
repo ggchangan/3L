@@ -734,7 +734,8 @@ def compute_review_real_time(date_str=None):
                 _name = stock_names.get(_c, _c)
                 _tag = '🏆领涨' if _chg_5d >= 5 else ('💪中军' if _chg_1d > 0 else '')
                 _candidates.append({
-                    'code': _c, 'name': _name or _c,
+                    # code 归一化为纯6位（与 watchlist/全站一致），ths_member.con_code 带交易所后缀
+                    'code': _c.split('.')[0], 'name': _name or _c,
                     'chg_1d': _chg_1d, 'chg_5d': _chg_5d, 'tag': _tag,
                 })
             _candidates.sort(key=lambda x: -x['chg_5d'])
