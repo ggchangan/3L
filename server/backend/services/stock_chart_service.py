@@ -15,9 +15,8 @@ import math
 import os
 from datetime import datetime, timedelta
 
-import akshare as ak
-
 from backend.data_access.data_layer import get_all_stocks, get_stock_klines
+from backend.core.keypoint_contract import enrich_keypoints, keypoint_svg_title
 
 # 中证全指K线图输出目录
 REVIEW_CHARTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'public', 'charts')
@@ -30,7 +29,8 @@ INDEX_SYMBOLS = {
     '399006': 'sz399006',   # 创业板指
 }
 INDEX_CODE_CHART = '000985'  # 默认指数
-STOCK_CHART_CACHE_VERSION = 'v3'
+STOCK_CHART_CACHE_VERSION = 'v4'
+KEYPOINT_CHART_CONTRACT_VERSION = 'v2'
 STOCK_CHART_CACHE_LIMIT_PER_CODE = 12
 
 
@@ -171,9 +171,11 @@ def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stag
 
     关键点类型一览（静态层，基于量价数据实时计算）：
 
-    【供需格局转换点】—— 代表供应/需求主导权切换：
-      - 前高：局部波峰，比前后各5根K线的最高都高 → 需求衰竭，供应开始主导
-      - 前低：局部波谷，比前后各5根K线的最低都低 → 供应衰竭，需求开始主导
+    【第一类参考点】—— 是潜在支撑/压力锚点，不直接证明供需已转换：
+      - 前高：局部波峰，比前后各5根K线的最高都高 → 潜在压力参考位
+      - 前低：局部波谷，比前后各5根K线的最低都低 → 潜在支撑参考位
+
+    【第二类供需格局转换点】：
       - 突：区间震荡突破（结构=区间震荡+突破前12日最高+收盘偏高+EMA20以上）→ 需求突破供应区
       - 反：阴转阳反转形态 → 短期供需逆转（仅大盘/板块）
 
@@ -277,7 +279,7 @@ def _find_breakthrough_points(closes, highs, lows, volumes, structure=None, stag
                     kps.append({'idx': i, 'label': '反', 'y': lows[i]})
                     _last['反'] = i
 
-    return kps
+    return enrich_keypoints(kps)
 
 
 def _format_volume(v):
@@ -668,6 +670,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_
         yp = py_price(kp['y'])
         clr_map = {'突': '#2196f3', '前高': '#ff9800', '前低': '#4caf50', '放↑': '#ff5722', '放↓': '#9c27b0', '缩': '#607d8b', '↯': '#ff9800', '买': '#00e676', '卖': '#e94560', '技买': '#4ecdc4', '技卖': '#ff9800'}
         clr = clr_map.get(kp['label'], '#ff9800')
+        sv.append(f'<g><title>{keypoint_svg_title(kp)}</title>')
         sv.append(
             f'<rect x="{xp - sz}" y="{yp - sz}" width="{sz * 2}" '
             f'height="{sz * 2}" fill="{clr}" opacity="0.85" rx="1"/>'
@@ -676,6 +679,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_
             f'<text x="{xp}" y="{yp - sz - 2}" text-anchor="middle" '
             f'font-family="sans-serif" font-size="8" fill="{clr}">{kp["label"]}</text>'
         )
+        sv.append('</g>')
 
     # 5i. 支撑线
     if bk_pts:
@@ -865,7 +869,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_
     ly2 = bv + 28
     legend_items = [
         ('#ffd700', 'EMA5'), ('#ff6b6b', 'EMA10'), ('#4ecdc4', 'EMA20'),
-        ('#2196f3', '突破'), ('#ff9800', '前高/量'), ('#4caf50', '前低'),
+        ('#2196f3', '第2类·突破'), ('#ff9800', '第1类·前高/量'), ('#4caf50', '第1类·前低'),
         ('#00e676', '买点'), ('#e94560', '卖点'),
     ]
     if has_today:
@@ -941,7 +945,7 @@ def _find_index_keypoints(data):
                                     opens=opens, detect_reversal=True)
     # 兼容旧字段格式（type字段用于SVG渲染）
     for kp in kps:
-        kp['type'] = 1 if kp['label'] in ('前高', '前低', '量', '放↑', '放↓', '缩', '↯') else 2
+        kp['type'] = 1 if kp.get('kind') in ('reference', 'volume_evidence') else 2
     return kps
 
 
@@ -959,7 +963,7 @@ def generate_index_chart(mode='review', code=None):
         return None, f'unknown index code: {code}'
     qt_symbol = symbol  # sh000985 → 腾讯接口 q=sh000985
 
-    cache_prefix = f'index_chart_{code}'
+    cache_prefix = f'index_chart_{code}_{KEYPOINT_CHART_CONTRACT_VERSION}'
     now = datetime.now()
     today_str = now.strftime('%Y%m%d')
     is_weekday = now.weekday() < 5
@@ -989,26 +993,39 @@ def generate_index_chart(mode='review', code=None):
 
     # ── Fetch 60-day kline data ──────────────────────────
     try:
-        ak_data = ak.stock_zh_index_daily_tx(symbol=symbol)
-        ak_data = ak_data.tail(60).reset_index(drop=True)
+        from backend.data_access.data_layer import get_index_klines
+        source_rows = get_index_klines(code) or []
     except Exception as e:
         # fallback: check any cached file
         for fname in sorted(os.listdir(REVIEW_CHARTS_DIR), reverse=True):
-            if fname.startswith(f'index_chart_{code}_') and fname.endswith('.svg'):
+            if fname.startswith(f'{cache_prefix}_') and fname.endswith('.svg'):
                 fp = os.path.join(REVIEW_CHARTS_DIR, fname)
                 if os.path.isfile(fp):
                     return fp, None
         return None, f'failed to fetch index data: {e}'
 
+    if len(source_rows) < 10:
+        for fname in sorted(os.listdir(REVIEW_CHARTS_DIR), reverse=True):
+            if fname.startswith(f'{cache_prefix}_') and fname.endswith('.svg'):
+                fp = os.path.join(REVIEW_CHARTS_DIR, fname)
+                if os.path.isfile(fp):
+                    return fp, None
+        return None, 'insufficient confirmed index data'
+
     data = []
-    for _, row in ak_data.iterrows():
+    for row in reversed(source_rows[:60]):
+        raw_date = str(row.get('date', '')).replace('-', '')
+        day = (
+            f'{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}'
+            if len(raw_date) == 8 else str(row.get('date', ''))
+        )
         data.append({
-            'day': str(row['date']),
+            'day': day,
             'open': float(row['open']),
             'high': float(row['high']),
             'low': float(row['low']),
             'close': float(row['close']),
-            'volume': float(row['amount']) / 1e4,
+            'volume': float(row.get('volume', 0)),
         })
 
     # ── 确定缓存日期 ──
@@ -1016,11 +1033,7 @@ def generate_index_chart(mode='review', code=None):
         # 过滤掉今天的K线（如有）
         data = [d for d in data if d['day'] != now.date().isoformat()]
         if not data:
-            # 全被过滤了（数据只有今天），回退到全量
-            data = [{'day': str(row['date']), 'open': float(row['open']),
-                     'high': float(row['high']), 'low': float(row['low']),
-                     'close': float(row['close']), 'volume': float(row['amount']) / 1e4}
-                    for _, row in ak_data.iterrows()]
+            return None, 'no confirmed index data before review cutoff'
 
     last_date = str(data[-1]['day']).replace('-', '')
 
@@ -1192,6 +1205,7 @@ def generate_index_chart(mode='review', code=None):
         xp = px(i)
         yp = py(kp['y'])
         clr = '#ff9800' if kp['type'] == 1 else '#2196f3'
+        sv.append(f'<g><title>{keypoint_svg_title(kp)}</title>')
         sv.append(
             f'<rect x="{xp - sz}" y="{yp - sz}" width="{sz * 2}" '
             f'height="{sz * 2}" fill="{clr}" opacity="0.85"/>'
@@ -1200,6 +1214,7 @@ def generate_index_chart(mode='review', code=None):
             f'<text x="{xp}" y="{yp - sz - 3}" text-anchor="middle" '
             f'font-family="sans-serif" font-size="9" fill="{clr}">{kp["label"]}</text>'
         )
+        sv.append('</g>')
 
     # Support line
     if bk_pts_chart:

@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from backend.core.logger import get_logger
 log = get_logger(__name__)
@@ -14,9 +14,11 @@ log = get_logger(__name__)
 from backend.core.config import WWW_DIR, DATA_DIR, CACHE_DIR, INDUSTRY_MAP_PATH, REVIEW_CHARTS_DIR
 from backend.core import config  # for config.atomic_json_dump
 from backend.core.exceptions import DataError
+from backend.core.keypoint_contract import keypoint_svg_title
 
 # 板块缓存目录（位于 WWW_DIR/data/cache，区别于 config.CACHE_DIR）
 _BOARD_CACHE_DIR = os.path.join(WWW_DIR, 'data', 'cache')
+KEYPOINT_CHART_CONTRACT_VERSION = 'v2'
 
 
 # =====================================================
@@ -178,7 +180,10 @@ def get_sector_chart(name, board_type='industry'):
         return None, 'missing name param'
 
     prefix = 'concept_' if board_type == 'concept' else ''
-    svg_file = os.path.join(REVIEW_CHARTS_DIR, f'{prefix}sector_{name}.svg')
+    svg_file = os.path.join(
+        REVIEW_CHARTS_DIR,
+        f'{prefix}sector_{name}_{KEYPOINT_CHART_CONTRACT_VERSION}.svg',
+    )
 
     # 检查缓存（交易时间10分钟，非交易时间1小时）
     now = datetime.now()
@@ -194,43 +199,19 @@ def get_sector_chart(name, board_type='industry'):
 
     # 生成板块关键点图
     try:
-        if board_type == 'concept':
-            # 通过 data_layer 获取概念板块K线
-            from backend.data_access.data_layer import get_sector_klines
-            klines = get_sector_klines(name, 'concept')
-            if not klines or len(klines) < 10:
-                return None, 'insufficient data'
-            data = []
-            for k in klines:
-                data.append({
-                    'day': str(k['date']),
-                    'open': float(k['open']),
-                    'high': float(k['high']),
-                    'low': float(k['low']),
-                    'close': float(k['close']),
-                    'volume': float(k['volume']),
-                })
-        else:
-            import akshare as ak
-            now = datetime.now()
-            start_d = now - timedelta(days=90)
-            start_date = start_d.strftime('%Y%m%d')
-            end_date = now.strftime('%Y%m%d')
-            df = ak.stock_board_industry_index_ths(
-                symbol=name, start_date=start_date, end_date=end_date
-            )
-            if df is None or len(df) < 10:
-                return None, 'insufficient data'
-            data = []
-            for _, row in df.iterrows():
-                data.append({
-                    'day': str(row['日期']),
-                    'open': float(row['开盘价']),
-                    'high': float(row['最高价']),
-                    'low': float(row['最低价']),
-                    'close': float(row['收盘价']),
-                    'volume': float(row['成交量']),
-                })
+        # 行业和概念统一经 data_layer 获取，图表层不再直连第三方接口。
+        from backend.data_access.data_layer import get_sector_klines
+        klines = get_sector_klines(name, board_type)
+        if not klines or len(klines) < 10:
+            return None, 'insufficient data'
+        data = [{
+            'day': str(k['date']),
+            'open': float(k['open']),
+            'high': float(k['high']),
+            'low': float(k['low']),
+            'close': float(k['close']),
+            'volume': float(k['volume']),
+        } for k in klines]
 
         # -------- 关键点识别 --------
         closes = [k['close'] for k in data]
@@ -257,10 +238,8 @@ def get_sector_chart(name, board_type='industry'):
         kps = []
         for kp in kps_raw:
             kps.append({
-                'idx': kp['idx'],
-                'label': kp['label'],
-                'y': kp['y'],
-                'type': 1 if kp['label'] in ('前高', '前低', '量', '放↑', '放↓', '缩', '↯') else 2,
+                **kp,
+                'type': 1 if kp.get('kind') in ('reference', 'volume_evidence') else 2,
             })
 
         # -------- SVG 生成 --------
@@ -397,6 +376,7 @@ def get_sector_chart(name, board_type='industry'):
                 '量': '#ff9800',
             }
             clr = clr_map_m.get(kp['label'], '#ff9800')
+            sv.append(f'<g><title>{keypoint_svg_title(kp)}</title>')
             sv.append(
                 f'<rect x="{xp - sz}" y="{yp - sz}" width="{sz * 2}" '
                 f'height="{sz * 2}" fill="{clr}" opacity="0.85"/>'
@@ -405,6 +385,7 @@ def get_sector_chart(name, board_type='industry'):
                 f'<text x="{xp}" y="{yp - sz - 2}" text-anchor="middle" '
                 f'font-family="sans-serif" font-size="8" fill="{clr}">{kp["label"]}</text>'
             )
+            sv.append('</g>')
 
         # 支撑线
         if bk_pts_chart:
@@ -451,7 +432,7 @@ def get_sector_chart(name, board_type='industry'):
         # 图例
         ly2 = bv + 8
         for idx2, (clr2, lbl) in enumerate([
-            ('#ff9800', '第1类'), ('#2196f3', '第2类'),
+            ('#ff9800', '第1类·参考位'), ('#2196f3', '第2类·供需变化'),
             ('#ffd700', 'EMA5'), ('#ff6b6b', 'EMA10'), ('#4ecdc4', 'EMA20')
         ]):
             lx = 50 + idx2 * 130
