@@ -95,6 +95,23 @@ def _find_idx(klines, date_str):
     return len(klines) - 1
 
 
+def _select_bullish_volume_signal(triggered_signals, detected_buy_point=''):
+    """选择与当前买点一致的多头量价信号，避免中性供应衰竭冒充买点证据。"""
+    buy_point_keys = {
+        '突破买点': 'upward_breakout',
+        '中继买点': 'upward_continuation',
+        '反转买点': 'upward_reversal',
+        '恐慌买点': 'panic_stagnation',
+    }
+    bullish = [signal for signal in (triggered_signals or []) if signal.get('direction') == 'bullish']
+    expected_key = buy_point_keys.get(detected_buy_point)
+    if expected_key:
+        matched = next((signal for signal in bullish if signal.get('key') == expected_key), None)
+        if matched:
+            return matched
+    return max(bullish, key=lambda signal: float(signal.get('confidence', 0) or 0), default=None)
+
+
 def _analyze_structure(klines, idx):
     """分析结构和阶段"""
     if idx < 0 or idx >= len(klines):
@@ -640,10 +657,7 @@ def get_stock_card(code, date_str, market_position='波中',
 
     # 技术信号的量比统一使用“不含当日”的基准，并直接说明比较窗口。
     if technical_signal == 'buy':
-        bullish = next((s for s in triggered_signals
-                        if s.get('key') in ('upward_reversal', 'supply_exhaustion',
-                                            'panic_stagnation', 'upward_breakout',
-                                            'upward_continuation')), None)
+        bullish = _select_bullish_volume_signal(triggered_signals, detected_buy_point)
         if bullish:
             scores_detail = bullish.get('scores', {})
             vr20 = scores_detail.get('volume_ratio_20')

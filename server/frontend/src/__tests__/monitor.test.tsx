@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import StockCard from '../components/StockCard'
 import RuleLayer from '../components/RuleLayer'
 import type { BuySignalItem } from '../lib/types'
@@ -223,6 +223,34 @@ describe('StockCard', () => {
     expect(screen.getByText('🎯 买点')).toBeTruthy()
     expect(screen.getByText(/可执行买入计划/)).toBeTruthy()
     expect(screen.queryByText('⏳ 待确认')).toBeNull()
+  })
+
+  it('最终可执行买入覆盖 execution_signal=hold 并传入图表日期', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      date: '20260808',
+      decision_status: 'executable',
+      execution_signal: 'hold',
+      technical_signal: 'buy',
+      action_type: '技术信号',
+    }} idx={1} mode="review" decisionContext="buy-signal" />)
+
+    fireEvent.click(screen.getByText('📊'))
+    const chart = document.querySelector('object')
+    expect(chart?.getAttribute('data')).toContain('signal_marker=buy')
+    expect(chart?.getAttribute('data')).toContain('signal_date=20260808')
+  })
+
+  it('候选买点只向图表传技术买点标记', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      date: '20260808',
+      decision_status: 'candidate',
+      technical_signal: 'buy',
+    }} idx={1} mode="review" decisionContext="buy-signal" />)
+
+    fireEvent.click(screen.getByText('📊'))
+    expect(document.querySelector('object')?.getAttribute('data')).toContain('signal_marker=technical_buy')
   })
 
   it('复盘旧缓存缺少决策字段时保守降级为技术信号', () => {

@@ -58,7 +58,18 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
   const chartId = `${chartPrefix}chart_${idx}`
   const modeParam = mode ? `&mode=${mode}` : ''
   const slParam = (s.stop_loss !== undefined && s.stop_loss !== null) ? `&stop_loss=${s.stop_loss}` : ''
-  const chartUrl = `/api/stock-chart?code=${s.code}${modeParam}${slParam}`
+  const chartMarker = (() => {
+    if (decisionContext !== 'analysis' && ['买入', '加仓'].includes(decisionAction)) return 'buy'
+    if (decisionContext !== 'analysis' && ['卖出', '减仓', '换股'].includes(decisionAction)) return 'sell'
+    if (decisionContext !== 'analysis' && !isNonExecutable && executionSignal === 'buy') return 'buy'
+    if (decisionContext !== 'analysis' && !isNonExecutable && executionSignal === 'sell') return 'sell'
+    if (s.technical_signal === 'buy' || s.signal === 'buy') return 'technical_buy'
+    if (s.technical_signal === 'sell' || s.signal === 'sell') return 'technical_sell'
+    return ''
+  })()
+  const markerParam = chartMarker ? `&signal_marker=${chartMarker}` : ''
+  const signalDateParam = s.date ? `&signal_date=${encodeURIComponent(s.date)}` : ''
+  const chartUrl = `/api/stock-chart?code=${s.code}${modeParam}${slParam}${markerParam}${signalDateParam}`
   const [chartEverShown, setChartEverShown] = useState(false)
 
   // 止损
