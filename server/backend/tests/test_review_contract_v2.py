@@ -8,6 +8,52 @@ from backend.services.review_compute_service import apply_trading_plan_actions, 
 from backend.services.review_service import normalize_review_response
 
 
+def test_buy_signal_review_preserves_authoritative_card_date():
+    from backend.core.review_analysis import generate_buy_signals_review
+
+    card = {
+        'code': '000001', 'name': '测试股票', 'industry': '银行', 'sector': '银行',
+        'direction': '金融', 'buy_point': '反转买点', 'date': '20260808',
+        'price': 10.0, 'change': 1.0, 'score': 80, 'profit_model1': False,
+        'trend_stock': False, 'trading_system': '3l', 'stop_loss': 9.2,
+        'stop_loss_pct': 8.0, 'structure': '区间震荡', 'stage': '区间底部',
+        'signal': 'hold', 'technical_signal': 'buy', 'ema': '多头',
+        'vol_analysis': '量能正常',
+    }
+
+    result = generate_buy_signals_review(
+        [card], stocks={}, stock_cache={}, date_str='2026-08-11',
+        mainlines={'lines': [], 'secondary': []},
+    )
+
+    assert result[0]['date'] == '20260808'
+
+
+def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path):
+    monkeypatch.setattr('backend.services.direction_service.get_active', lambda: ['金融'])
+    card = {
+        'code': '000001', 'name': '测试股票', 'industry': '银行', 'sector': '银行',
+        'date': '20260808', 'price': 10.0, 'change': 1.0, 'score': 80,
+        'buy_point': '反转买点', 'stop_loss': 9.2, 'stop_loss_pct': 8.0,
+        'structure': '区间震荡', 'stage': '区间底部', 'signal': 'hold',
+        'technical_signal': 'buy', 'profit_model1': False, 'trend_stock': False,
+        'trading_system': '3l',
+    }
+    monkeypatch.setattr('backend.services.stock_card_service.get_stock_card', lambda **kwargs: card)
+    rows = [
+        {'date': f'202607{idx + 1:02d}', 'open': 10, 'high': 11, 'low': 9, 'close': 10, 'volume': 100}
+        for idx in range(30)
+    ]
+
+    signals, _ = review_service.scan_buy_signals_if_needed(
+        [], {'银行': {'000001': rows}}, '2026-08-11',
+        str(tmp_path), str(tmp_path / 'stocks.json'), {'lines': []}, {},
+        lambda: [{'code': '000001', 'direction': '金融'}],
+    )
+
+    assert signals[0]['date'] == '20260808'
+
+
 def test_cached_review_contract_is_completed_without_losing_legacy_sector():
     review = normalize_review_response({
         'date': '2026-07-15',

@@ -185,6 +185,7 @@ export interface BuySignalItem {
   change?: number
   score?: number
   price?: number
+  date?: string
   vol_analysis?: string
   industry?: string
   sector?: string

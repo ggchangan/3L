@@ -30,14 +30,32 @@ INDEX_SYMBOLS = {
     '399006': 'sz399006',   # 创业板指
 }
 INDEX_CODE_CHART = '000985'  # 默认指数
-STOCK_CHART_CACHE_VERSION = 'v2'
+STOCK_CHART_CACHE_VERSION = 'v3'
+STOCK_CHART_CACHE_LIMIT_PER_CODE = 12
 
 
-def _stock_chart_variant(stop_loss_price=None, triggered_signals=None):
+def _kline_snapshot_digest(klines):
+    """摘要最近K线内容；同一交易日数据订正后不能继续返回旧图。"""
+    snapshot = [
+        {
+            key: row.get(key)
+            for key in ('date', 'open', 'high', 'low', 'close', 'volume')
+        }
+        for row in (klines or [])[-60:]
+    ]
+    encoded = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, default=str).encode('utf-8')
+    return hashlib.sha1(encoded).hexdigest()[:12]
+
+
+def _stock_chart_variant(stop_loss_price=None, triggered_signals=None,
+                         signal_marker=None, signal_date=None, klines=None):
     """图表参数摘要；防止止损线和信号图例跨请求串用缓存。"""
     payload = {
         'version': STOCK_CHART_CACHE_VERSION,
         'stop_loss': round(float(stop_loss_price), 4) if stop_loss_price else None,
+        'signal_marker': signal_marker or None,
+        'signal_date': str(signal_date or '').replace('-', '') or None,
+        'kline_snapshot': _kline_snapshot_digest(klines),
         'signals': [
             {
                 'key': signal.get('key', ''),
@@ -50,6 +68,73 @@ def _stock_chart_variant(stop_loss_price=None, triggered_signals=None):
     }
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode('utf-8')
     return hashlib.sha1(encoded).hexdigest()[:12]
+
+
+def _cleanup_stock_chart_cache(raw_code, prefix='zzqz_stock_chart_', limit=STOCK_CHART_CACHE_LIMIT_PER_CODE):
+    """限制单只股票缓存变体数量，避免参数化缓存无限增长。"""
+    try:
+        files = sorted(
+            (
+                os.path.join(REVIEW_CHARTS_DIR, filename)
+                for filename in os.listdir(REVIEW_CHARTS_DIR)
+                if filename.startswith(f'{prefix}{raw_code}_') and filename.endswith('.svg')
+            ),
+            key=os.path.getmtime,
+            reverse=True,
+        )
+        for old_file in files[max(int(limit), 0):]:
+            try:
+                os.remove(old_file)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+def _resolve_signal_marker_index(klines, signal_date=None):
+    """定位决策快照日期；明确日期不存在时宁可不画，也不能错标到最新K线。"""
+    if not klines:
+        return None
+    normalized_date = str(signal_date or '').replace('-', '')
+    if not normalized_date:
+        return len(klines) - 1
+    matched = [
+        idx for idx, row in enumerate(klines)
+        if str(row.get('date', '')).replace('-', '') == normalized_date
+    ]
+    return matched[-1] if matched else None
+
+
+def _inject_trend_decision_marker(svg_str, klines, signal_marker=None, signal_date=None):
+    """在趋势技术图上叠加复盘最终决策；历史BIAS标记仍作为独立参考保留。"""
+    marker_labels = {
+        'buy': ('买', '#00e676', 'low'),
+        'sell': ('卖', '#e94560', 'high'),
+        'technical_buy': ('技买', '#4ecdc4', 'low'),
+        'technical_sell': ('技卖', '#ff9800', 'high'),
+    }
+    marker = marker_labels.get(signal_marker)
+    marker_idx = _resolve_signal_marker_index(klines, signal_date)
+    if not marker or marker_idx is None:
+        return svg_str
+
+    highs = [float(row['high']) for row in klines]
+    lows = [float(row['low']) for row in klines]
+    max_price, min_price = max(highs), min(lows)
+    price_range = max_price - min_price or 1
+    width, left, right, top, kline_bottom = 750, 60, 25, 32, 415
+    candle_width = (width - left - right) / len(klines)
+    x_pos = left + marker_idx * candle_width + candle_width / 2
+    label, color, price_side = marker
+    price = lows[marker_idx] if price_side == 'low' else highs[marker_idx]
+    y_pos = top + (max_price - price) / price_range * (kline_bottom - top)
+    text_y = max(top + 12, y_pos - 10) if price_side == 'low' else min(kline_bottom - 4, y_pos + 18)
+    overlay = (
+        f'<circle cx="{x_pos:.2f}" cy="{y_pos:.2f}" r="5" fill="{color}" opacity="0.9"/>'
+        f'<text x="{x_pos:.2f}" y="{text_y:.2f}" text-anchor="middle" '
+        f'font-family="sans-serif" font-size="10" fill="{color}" font-weight="bold">{label}</text>'
+    )
+    return svg_str.replace('</svg>', overlay + '</svg>')
 
 
 def _fetch_realtime_quote(code):
@@ -261,7 +346,8 @@ def _resolve_today_candle_state(now_hour, now_min, quote, last_date_str, today_s
         }
 
 
-def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_price=None):
+def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_price=None,
+                         signal_marker=None, signal_date=None):
     """
     生成个股 K 线 SVG（60 日 K 线）
     mode=monitor: 含今日实时虚线蜡烛，不缓存；
@@ -298,7 +384,10 @@ def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_
     cache_file = None
     if mode != 'monitor':
         last_date = str(klines[-1].get('date', '')).replace('-', '')
-        variant = _stock_chart_variant(stop_loss_price, triggered_signals)
+        variant = _stock_chart_variant(
+            stop_loss_price, triggered_signals,
+            signal_marker=signal_marker, signal_date=signal_date, klines=klines,
+        )
         cache_file = os.path.join(
             REVIEW_CHARTS_DIR,
             f'zzqz_stock_chart_{raw_code}_{last_date}_{variant}.svg'
@@ -417,19 +506,22 @@ def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_
     kps = _find_breakthrough_points(closes, highs, lows, volumes,
                                     structure=stock_structure, stage=stock_stage)
 
-    # ── 5. 当前买卖点 — 显示 get_stock_card() 的信号 ──
-    try:
-        from backend.services.stock_card_service import get_stock_card
-        card = get_stock_card(raw_code, last_date, klines=klines) if last_date else None
-        if card:
-            sig = card.get('signal', '')
-            last_pos = n - 1
-            if sig == 'buy':
-                kps.append({'idx': last_pos, 'label': '买', 'y': lows[last_pos], 'type': 1})
-            elif sig == 'sell':
-                kps.append({'idx': last_pos, 'label': '卖', 'y': highs[last_pos], 'type': 1})
-    except Exception:
-        pass
+    # ── 5. 当前买卖点 ──
+    # 图表不再脱离复盘上下文重新计算卡片，避免市场/主线门禁不同导致结论分叉。
+    # marker 由调用页面按最终决策快照传入；技术信号明确标为“技买/技卖”。
+    marker_labels = {
+        'buy': ('买', 'low'),
+        'sell': ('卖', 'high'),
+        'technical_buy': ('技买', 'low'),
+        'technical_sell': ('技卖', 'high'),
+    }
+    marker = marker_labels.get(signal_marker)
+    if marker:
+        marker_idx = _resolve_signal_marker_index(data_60, signal_date)
+        if marker_idx is not None:
+            label, price_side = marker
+            marker_y = lows[marker_idx] if price_side == 'low' else highs[marker_idx]
+            kps.append({'idx': marker_idx, 'label': label, 'y': marker_y, 'type': 1})
 
     # 支撑/压力线 — 综合支撑候选，取最近的一档
     # 2026-06-02 v3: 支撑=前低+前高(角色互换)+突(突破)，均低于现价取最高
@@ -574,7 +666,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_
             continue
         xp = px(ai)
         yp = py_price(kp['y'])
-        clr_map = {'突': '#2196f3', '前高': '#ff9800', '前低': '#4caf50', '放↑': '#ff5722', '放↓': '#9c27b0', '缩': '#607d8b', '↯': '#ff9800', '买': '#00e676', '卖': '#e94560'}
+        clr_map = {'突': '#2196f3', '前高': '#ff9800', '前低': '#4caf50', '放↑': '#ff5722', '放↓': '#9c27b0', '缩': '#607d8b', '↯': '#ff9800', '买': '#00e676', '卖': '#e94560', '技买': '#4ecdc4', '技卖': '#ff9800'}
         clr = clr_map.get(kp['label'], '#ff9800')
         sv.append(
             f'<rect x="{xp - sz}" y="{yp - sz}" width="{sz * 2}" '
@@ -812,6 +904,7 @@ def generate_stock_chart(code, mode='review', triggered_signals=None, stop_loss_
             os.makedirs(REVIEW_CHARTS_DIR, exist_ok=True)
             with open(cache_file, 'w') as f:
                 f.write(svg_content)
+            _cleanup_stock_chart_cache(raw_code)
         except Exception:
             pass  # 缓存写失败不影响返回
 
@@ -1296,7 +1389,8 @@ def generate_index_chart(mode='review', code=None):
     return cache_file, None
 
 
-def generate_trend_stock_chart(code, mode='review', stop_loss_price=None):
+def generate_trend_stock_chart(code, mode='review', stop_loss_price=None,
+                               signal_marker=None, signal_date=None):
     """生成趋势交易 K 线 SVG（使用 gen_trend_chart 的绘制逻辑）
     mode=monitor: 含今日实时数据叠加到K线，不缓存；
     其他mode: 仅日K线，按18:00规则缓存。
@@ -1322,7 +1416,10 @@ def generate_trend_stock_chart(code, mode='review', stop_loss_price=None):
     cache_file = None
     if mode != 'monitor':
         last_date = str(klines[-1].get('date', '')).replace('-', '')
-        variant = _stock_chart_variant(stop_loss_price)
+        variant = _stock_chart_variant(
+            stop_loss_price, signal_marker=signal_marker,
+            signal_date=signal_date, klines=klines,
+        )
         cache_file = os.path.join(
             REVIEW_CHARTS_DIR,
             f'zzqz_trend_stock_chart_{raw_code}_{last_date}_{variant}.svg'
@@ -1363,14 +1460,9 @@ def generate_trend_stock_chart(code, mode='review', stop_loss_price=None):
         svg_str = f.read()
     os.unlink(out_path)
 
-    # ── 写入缓存（review 模式） ──
-    if mode != 'monitor':
-        try:
-            os.makedirs(REVIEW_CHARTS_DIR, exist_ok=True)
-            with open(cache_file, 'w') as f:
-                f.write(svg_str)
-        except Exception:
-            pass
+    svg_str = _inject_trend_decision_marker(
+        svg_str, klines, signal_marker=signal_marker, signal_date=signal_date,
+    )
 
     # monitor 模式：注入实时标注（今日虚线+实时量文字）
     if mode == 'monitor':
@@ -1392,5 +1484,16 @@ def generate_trend_stock_chart(code, mode='review', stop_loss_price=None):
         )
         # The y=160 is approximate; inject near </svg>
         svg_str = svg_str.replace('</svg>', sl_line + '</svg>')
+
+    # ── 写入最终SVG缓存（review 模式） ──
+    # 必须在止损线等请求变体注入之后缓存，否则第二次请求会丢失标注。
+    if mode != 'monitor':
+        try:
+            os.makedirs(REVIEW_CHARTS_DIR, exist_ok=True)
+            with open(cache_file, 'w') as f:
+                f.write(svg_str)
+            _cleanup_stock_chart_cache(raw_code, prefix='zzqz_trend_stock_chart_')
+        except Exception:
+            pass
 
     return svg_str, None

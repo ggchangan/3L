@@ -76,17 +76,31 @@ def _handle_stock_chart(h, path):
             stop_loss = float(stop_loss)
         except (ValueError, TypeError):
             stop_loss = None
+    # 最终决策标记由卡片上下文传入；只接受展示层白名单，禁止图表自行重算交易结论。
+    signal_marker = params.get('signal_marker', [None])[0]
+    if signal_marker not in {'buy', 'sell', 'technical_buy', 'technical_sell'}:
+        signal_marker = None
+    signal_date = params.get('signal_date', [None])[0]
+    if signal_date:
+        normalized_date = str(signal_date).replace('-', '')
+        signal_date = normalized_date if len(normalized_date) == 8 and normalized_date.isdigit() else None
     # 后端自决交易系统类型，不依赖前端传 sys 参数
     trading_system = _get_stock_trading_system(code)
     if trading_system == 'trend':
-        svg_str, err = generate_trend_stock_chart(code, mode=mode, stop_loss_price=stop_loss)
+        svg_str, err = generate_trend_stock_chart(
+            code, mode=mode, stop_loss_price=stop_loss,
+            signal_marker=signal_marker, signal_date=signal_date,
+        )
         if err:
             h.send_json({'error': err})
             return
     else:
         # 检测信号（用于SVG图上标注）
         triggered = _detect_chart_signals(code)
-        svg_str, err = generate_stock_chart(code, mode=mode, triggered_signals=triggered, stop_loss_price=stop_loss)
+        svg_str, err = generate_stock_chart(
+            code, mode=mode, triggered_signals=triggered, stop_loss_price=stop_loss,
+            signal_marker=signal_marker, signal_date=signal_date,
+        )
         if err:
             h.send_json({'error': err})
             return
