@@ -47,6 +47,7 @@ from backend.core.trend_trading import (
 from backend.core.signal_detector.fusion import fusion_judge
 from backend.core.signal_detector.sell_point_detection import detect_sell_point
 from backend.core.structure_wave import judge_structure_wave
+from backend.core.trade_signal_contract import is_buy_point_allowed_by_structure
 from backend.models.data_models import TradeDecision
 from threel_core.parameters import PARAMETER_VERSION
 
@@ -536,22 +537,31 @@ def get_stock_card(code, date_str, market_position='波中',
                               market_position=market_position,
                               main_lines=main_line_names)
         if bt:
-            signal = 'buy'
-            buy_point = bt.get('buy_type', '')
-            signal_text = bt.get('detail', {}).get('reason', '')
-            score = bt.get('score', 0)
-            vol_analysis_text = ''
-            vr = bt.get('vol_ratio', 0)
-            if vr < 0.7:
-                vol_analysis_text = f'缩量{vr:.0%}'
-            elif vr > 1.5:
-                vol_analysis_text = f'放量{vr:.0%}'
+            detected_buy_type = bt.get('buy_type', '')
+            allowed, gate_reason, _ = is_buy_point_allowed_by_structure(
+                detected_buy_type,
+                struct_info.get('structure', ''),
+                struct_info.get('stage', ''),
+            )
+            if allowed:
+                signal = 'buy'
+                buy_point = detected_buy_type
+                signal_text = bt.get('detail', {}).get('reason', '')
+                score = bt.get('score', 0)
+                vol_analysis_text = ''
+                vr = bt.get('vol_ratio', 0)
+                if vr < 0.7:
+                    vol_analysis_text = f'缩量{vr:.0%}'
+                elif vr > 1.5:
+                    vol_analysis_text = f'放量{vr:.0%}'
+                else:
+                    vol_analysis_text = f'量能正常{vr:.0%}'
+                vol_analysis = vol_analysis_text
+                profit_model1 = bt.get('profit_model1', False) or bt.get('detail', {}).get('profit_model1', False)
+                flags = bt.get('flags', '')
+                _3l_detail = bt.get('detail', {})
             else:
-                vol_analysis_text = f'量能正常{vr:.0%}'
-            vol_analysis = vol_analysis_text
-            profit_model1 = bt.get('profit_model1', False) or bt.get('detail', {}).get('profit_model1', False)
-            flags = bt.get('flags', '')
-            _3l_detail = bt.get('detail', {})
+                signal_text = f'{detected_buy_type}与{struct_info.get("stage", "")}位置冲突：{gate_reason}，按回避模板处理'
 
     # 5b. 卖出判定（当无买点信号时，基于结构+阶段判定）
     if signal == 'hold':
@@ -595,7 +605,7 @@ def get_stock_card(code, date_str, market_position='波中',
         if fusion_type in ('strong_buy', 'signal_buy'):
             if signal == 'hold':
                 signal = 'buy'
-                buy_point = '信号确认'
+                buy_point = detected_buy_point or '信号确认'
                 signal_text = f_result.get('signal_text', '')
                 score = min(100, f_result['confidence'])
             elif signal == 'buy':

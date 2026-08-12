@@ -280,6 +280,27 @@ class TestFusionEngine(unittest.TestCase):
         self.assertEqual(result['fusion_type'], 'conflict_bullish')
         self.assertEqual(result['technical_signal'], 'buy')
 
+    def test_rejected_bullish_signal_is_preserved_as_technical_fact(self):
+        """区间顶部的中继信号应保留为技术事实，但不能升级成买入。"""
+        self.mock_get_signals.return_value = [
+            self._make_signal('upward_continuation', '上涨中继', 'bullish', 75)
+        ]
+        from backend.core.signal_detector.fusion import _run_fusion
+        result = _run_fusion(
+            self.klines, self.idx,
+            structure='区间震荡', stage='区间顶部',
+            ema_arrangement='交叉', bias5=3,
+            main_line_names=self.main_line_names,
+            sector=self.sector,
+            existing_signal='hold', existing_buy_point='',
+        )
+
+        self.assertEqual(result['signal'], 'hold')
+        self.assertEqual(result['technical_signal'], 'buy')
+        self.assertEqual(result['detected_buy_point'], '中继买点')
+        self.assertEqual(result['fusion_type'], 'keypoint_rejected_bullish')
+        self.assertFalse(result['triggered_signals'][0]['keypoint_allowed'])
+
     def test_rule2_signal_buy(self):
         """规则2: 关键点看多 + 看多信号（无买点）→ 潜在买点"""
         self.mock_get_signals.return_value = [

@@ -34,6 +34,10 @@ from backend.core.signal_detector import (
     detect_panic_stagnation,
     SIGNAL_NAMES,
 )
+from backend.core.trade_signal_contract import (
+    BUY_POINT_BY_SIGNAL,
+    annotate_keypoint_permission,
+)
 
 # ── 信号方向映射 ──
 SIGNAL_DIRECTION = {
@@ -49,14 +53,6 @@ SIGNAL_DIRECTION = {
     'downward_continuation': 'bearish', # 下跌中继 → 看空
     'range_continuation': 'neutral',    # 区间震荡中继 → 中性
 }
-
-BUY_POINT_BY_SIGNAL = {
-    'upward_breakout': '突破买点',
-    'upward_continuation': '中继买点',
-    'upward_reversal': '反转买点',
-    'panic_stagnation': '恐慌买点',
-}
-
 
 def _detected_buy_point(signal):
     if not signal:
@@ -155,6 +151,7 @@ def _run_fusion(klines: List[Dict], idx: int, structure: str,
 
     # 过滤低置信度
     triggered = [t for t in triggered if t['confidence'] >= confidence_threshold]
+    triggered = [annotate_keypoint_permission(t, structure, stage) for t in triggered]
 
     # 2. 关键点方向
     kp_dir = _keypoint_direction(structure, stage, ema_arrangement,
@@ -164,12 +161,38 @@ def _run_fusion(klines: List[Dict], idx: int, structure: str,
     buy_point_active = bool(existing_buy_point) and existing_signal == 'buy'
 
     # 4. 融合判定
-    bullish_signals = [t for t in triggered if t['direction'] == 'bullish']
+    bullish_signals = [
+        t for t in triggered
+        if t['direction'] == 'bullish' and t.get('keypoint_allowed', True)
+    ]
+    rejected_bullish_signals = [
+        t for t in triggered
+        if t['direction'] == 'bullish' and not t.get('keypoint_allowed', True)
+    ]
     bearish_signals = [t for t in triggered if t['direction'] == 'bearish']
     neutral_signals = [t for t in triggered if t['direction'] == 'neutral']
 
     best_bullish = max(bullish_signals, key=lambda x: x['confidence']) if bullish_signals else None
+    best_rejected_bullish = (
+        max(rejected_bullish_signals, key=lambda x: x['confidence'])
+        if rejected_bullish_signals else None
+    )
     best_bearish = max(bearish_signals, key=lambda x: x['confidence']) if bearish_signals else None
+    if best_bullish:
+        technical_confidence = best_bullish['confidence']
+        technical_reason = best_bullish.get('detail', '')
+    elif best_rejected_bullish:
+        technical_confidence = best_rejected_bullish['confidence']
+        technical_reason = (
+            best_rejected_bullish.get('detail', '')
+            or best_rejected_bullish.get('keypoint_reject_reason', '')
+        )
+    elif buy_point_active:
+        technical_confidence = 60
+        technical_reason = f'{existing_buy_point}已由原3L/趋势检测确认'
+    else:
+        technical_confidence = 0
+        technical_reason = ''
 
     result = {
         'triggered_signals': triggered,
@@ -180,15 +203,15 @@ def _run_fusion(klines: List[Dict], idx: int, structure: str,
         'fusion_type': '',
         'reason': '',
         # 技术信号是量价事实；signal 是结合位置后的执行倾向。两者不可互相覆盖。
-        'technical_signal': ('buy' if (best_bullish or buy_point_active)
+        'technical_signal': ('buy' if (bullish_signals or rejected_bullish_signals or buy_point_active)
                              else ('sell' if best_bearish else 'hold')),
         'detected_buy_point': _detected_buy_point(best_bullish) or (
-            existing_buy_point if buy_point_active else ''
+            _detected_buy_point(best_rejected_bullish) or (
+                existing_buy_point if buy_point_active else ''
+            )
         ),
-        'technical_confidence': (best_bullish['confidence'] if best_bullish
-                                 else (60 if buy_point_active else 0)),
-        'technical_reason': (best_bullish['detail'] if best_bullish
-                             else (f'{existing_buy_point}已由原3L/趋势检测确认' if buy_point_active else '')),
+        'technical_confidence': technical_confidence,
+        'technical_reason': technical_reason,
     }
 
     # 规则1: 关键点看多 + 看多信号 + 买点已确认 → 🟢 买入
@@ -233,7 +256,21 @@ def _run_fusion(klines: List[Dict], idx: int, structure: str,
         result['signal_text'] = f'⏳ {best_bullish["name"]}待确认'
         result['confidence'] = min(50, 30 + best_bullish['confidence'] // 6)
         result['fusion_type'] = 'conflict_bullish'
-        result['reason'] = f'关键点偏空({kp_dir})但出现看多信号{best_bullish["name"]}({best_bullish["confidence"]}分)，等确认再入场'
+        return result
+
+    # 规则3d: 出现看多技术信号，但买点类型与当前位置冲突 → 保留技术事实，禁止升级执行。
+    if kp_dir == 'bearish' and best_rejected_bullish:
+        rejected = best_rejected_bullish
+        result['signal'] = 'hold'
+        result['signal_text'] = f'⏳ {rejected["name"]}位置不成立'
+        result['confidence'] = min(50, 30 + rejected['confidence'] // 6)
+        result['fusion_type'] = 'keypoint_rejected_bullish'
+        result['reason'] = rejected.get('keypoint_reject_reason') or (
+            f'关键点偏空({kp_dir})但出现看多信号{rejected["name"]}，等位置确认'
+        )
+        result['detected_buy_point'] = _detected_buy_point(rejected)
+        result['technical_confidence'] = rejected['confidence']
+        result['technical_reason'] = rejected.get('detail') or result['reason']
         return result
 
     # 规则3c: 已有买点事实但关键点偏空 → 保留技术事实，等待位置确认。
