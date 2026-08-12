@@ -105,3 +105,57 @@ def test_retry_missing_concepts_uses_ths_target_rows_and_writes_db(monkeypatch):
         'vol': 1200,
         'pct_chg': 2,
     }]
+
+
+def test_retry_missing_industries_uses_ths_target_rows_and_writes_db(monkeypatch):
+    from backend.data_access import data_source
+
+    written = []
+    calls = []
+
+    class FakeDb:
+        def upsert_many_from_dicts(self, table, records):
+            assert table == 'ths_daily'
+            written.extend(records)
+            return len(records)
+
+    def fake_snapshots(target_date, names, ths_type):
+        calls.append((target_date, set(names), ths_type))
+        return {
+            '中药': {
+                'ts_code': '881141.TI',
+                'open': 100,
+                'high': 103,
+                'low': 99,
+                'close': 102,
+                'volume': 1200,
+                'change_pct': 2,
+            },
+        }
+
+    monkeypatch.setattr(data_source, '_get_tushare_db', lambda: FakeDb())
+    monkeypatch.setattr(data_source, '_fetch_ths_kline_close_snapshots', fake_snapshots)
+
+    result = data_source.retry_missing_ths_industries(
+        '20260811',
+        ['中药', '保险'],
+    )
+
+    assert calls == [('20260811', {'中药', '保险'}, 'I')]
+    assert result == {
+        'requested': 2,
+        'covered': 1,
+        'written': 1,
+        'covered_names': ['中药'],
+        'missing': ['保险'],
+    }
+    assert written == [{
+        'ts_code': '881141.TI',
+        'trade_date': '20260811',
+        'open': 100,
+        'high': 103,
+        'low': 99,
+        'close': 102,
+        'vol': 1200,
+        'pct_chg': 2,
+    }]

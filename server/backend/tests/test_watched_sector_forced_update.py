@@ -306,12 +306,20 @@ class TestCoverageOptionalConcepts(unittest.TestCase):
         from backend.data_access import data_source as ds
 
         fake_db = mock.Mock()
-        fake_db.execute_raw.return_value = covered_rows
+
+        def fake_execute_raw(sql, params=None):
+            if 'SELECT name, ts_code' in sql and 'FROM ths_index' in sql:
+                return [{'name': '半导体', 'ts_code': '881121.TI'}]
+            return covered_rows
+
+        fake_db.execute_raw.side_effect = fake_execute_raw
         # 非 bootstrap：行业有确认基线（避免 industry['ready']=False 干扰）
-        ds.get_ths_daily_update_confirmation = mock.Mock(return_value=confirmation or {
+        confirmation = confirmation or {
             'industry_names': ['半导体'], 'concept_names': [],
-        })
-        with mock.patch.object(ds, '_get_tushare_db', return_value=fake_db):
+        }
+        with mock.patch.object(ds, '_get_tushare_db', return_value=fake_db), \
+             mock.patch.object(ds, 'get_ths_daily_update_confirmation',
+                               return_value=confirmation):
             return ds.get_ths_daily_update_coverage(
                 names_to_update, '20260810',
                 optional_concepts=optional or set(),

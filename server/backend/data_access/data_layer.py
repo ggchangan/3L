@@ -1023,6 +1023,12 @@ def retry_missing_ths_concepts(target_date, concept_names):
     return _fn(target_date, concept_names)
 
 
+def retry_missing_ths_industries(target_date, industry_names):
+    """通过同花顺原始 K 线通道定向补齐批量更新遗漏的有效行业。"""
+    from backend.data_access.data_source import retry_missing_ths_industries as _fn
+    return _fn(target_date, industry_names)
+
+
 def get_ths_daily_update_confirmation():
     """读取上次通过门禁的权威板块状态。"""
     from backend.data_access.data_source import get_ths_daily_update_confirmation as _fn

@@ -237,7 +237,9 @@ def test_sector_update_coverage_rejects_partial_target_date():
     requested = [('A', 'industry'), ('B', 'industry')]
     confirmation = {'confirmed_date': '20260720', 'industry_names': ['A', 'B']}
     with patch.object(data_source, '_get_tushare_db', return_value=db), \
-         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value=confirmation):
+         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value=confirmation), \
+         patch.object(data_source, '_filter_ths_kline_industry_names',
+                      side_effect=lambda _db, names: (set(names), set())):
         result = data_source.get_ths_daily_update_coverage(requested, '20260721')
 
     assert result['ready'] is False
@@ -260,7 +262,9 @@ def test_partial_sector_rows_never_become_next_day_baseline():
         'industry_names': ['A', 'B', 'C'],
     }
     with patch.object(data_source, '_get_tushare_db', return_value=db), \
-         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value=confirmation):
+         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value=confirmation), \
+         patch.object(data_source, '_filter_ths_kline_industry_names',
+                      side_effect=lambda _db, names: (set(names), set())):
         first = data_source.get_ths_daily_update_coverage(requested, '20260721')
         second = data_source.get_ths_daily_update_coverage(requested, '20260722')
 
@@ -268,6 +272,36 @@ def test_partial_sector_rows_never_become_next_day_baseline():
     assert second['ready'] is False
     assert first['industry']['expected'] == second['industry']['expected'] == 3
     assert first['industry_names'] == second['industry_names'] == ['A', 'B', 'C']
+
+
+def test_sector_coverage_ignores_non_ths_kline_industry_baseline():
+    from backend.data_access import data_source
+
+    class FakeDb:
+        def execute_raw(self, sql, params=None):
+            if 'SELECT name, ts_code' in sql and 'FROM ths_index' in sql:
+                return [
+                    {'name': '中药', 'ts_code': '881141.TI'},
+                    {'name': '旧分类', 'ts_code': '700001.TI'},
+                ]
+            if 'FROM ths_daily' in sql:
+                return [{'name': '中药', 'type': 'I'}]
+            return []
+
+    with patch.object(data_source, '_get_tushare_db', return_value=FakeDb()), \
+         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value={
+             'industry_names': ['中药', '旧分类'],
+         }):
+        coverage = data_source.get_ths_daily_update_coverage(
+            [('中药', 'industry'), ('旧分类', 'industry')],
+            '20260811',
+        )
+
+    assert coverage['ready'] is True
+    assert coverage['industry']['expected'] == 1
+    assert coverage['industry']['covered'] == 1
+    assert coverage['industry_names'] == ['中药']
+    assert coverage['excluded_industries'] == ['旧分类']
 
 
 def test_same_count_sector_member_replacement_is_not_complete():
@@ -286,7 +320,9 @@ def test_same_count_sector_member_replacement_is_not_complete():
     requested = [(name, 'industry') for name in ('A', 'B', 'C', 'X')]
     confirmation = {'confirmed_date': '20260720', 'industry_names': ['A', 'B', 'C']}
     with patch.object(data_source, '_get_tushare_db', return_value=FakeDB()), \
-         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value=confirmation):
+         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value=confirmation), \
+         patch.object(data_source, '_filter_ths_kline_industry_names',
+                      side_effect=lambda _db, names: (set(names), set())):
         result = data_source.get_ths_daily_update_coverage(requested, '20260721')
 
     assert result['ready'] is False
@@ -309,7 +345,9 @@ def test_sector_coverage_uses_shared_safe_legacy_bootstrap():
     requested = [(name, 'industry') for name in names]
     with patch.object(data_source, '_get_tushare_db', return_value=db), \
          patch.object(data_source, 'get_ths_daily_update_confirmation', return_value={}), \
-         patch.object(data_source, 'bootstrap_ths_daily_update_confirmation', return_value=confirmation) as bootstrap:
+         patch.object(data_source, 'bootstrap_ths_daily_update_confirmation', return_value=confirmation) as bootstrap, \
+         patch.object(data_source, '_filter_ths_kline_industry_names',
+                      side_effect=lambda _db, names: (set(names), set())):
         result = data_source.get_ths_daily_update_coverage(requested, '20260721')
 
     assert result['ready'] is True
@@ -649,6 +687,67 @@ def test_sector_update_rechecks_coverage_after_targeted_concept_retry():
     retry.assert_called_once_with('20260721', ['工业互联网'])
     assert get_coverage.call_count == 2
     save.assert_called_once_with('20260721', completed)
+
+
+def test_sector_update_rechecks_coverage_after_targeted_industry_retry():
+    from backend.core import update_stock_data
+
+    initial = {
+        'ready': False,
+        'industry': {
+            'expected': 2, 'covered': 1, 'ready': False,
+            'missing': ['中药'],
+        },
+        'concept': {
+            'expected': 1, 'covered': 1, 'ready': True,
+            'missing': [],
+        },
+        'missing': ['中药'],
+        'industry_names': ['A', '中药'],
+        'concept_names': ['大飞机'],
+    }
+    completed = {
+        'ready': True,
+        'industry': {
+            'expected': 2, 'covered': 2, 'ready': True,
+            'missing': [],
+        },
+        'concept': {
+            'expected': 1, 'covered': 1, 'ready': True,
+            'complete': True, 'missing': [],
+        },
+        'missing': [],
+        'industry_names': ['A', '中药'],
+        'concept_names': ['大飞机'],
+    }
+    with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260811'), \
+         patch('backend.data_access.data_source.sync_ths_index_from_tushare', return_value=0), \
+         patch('backend.data_access.data_source.sync_ths_member_from_tushare', return_value=0), \
+         patch.object(update_stock_data, 'datetime') as current_time, \
+         patch.object(update_stock_data, 'get_tracked_concept_universe', return_value={
+             'names': {'大飞机'}, 'excluded': {},
+         }), \
+         patch.object(update_stock_data, 'get_ths_index_names', return_value=[
+             ('A', '881001.TI'), ('中药', '881141.TI'),
+         ]), \
+         patch.object(update_stock_data, 'fetch_ths_daily_klines_akshare', return_value=(2, 3)), \
+         patch.object(
+             update_stock_data,
+             'get_ths_daily_update_coverage',
+             side_effect=[initial, completed],
+         ) as get_coverage, \
+         patch.object(update_stock_data, 'retry_missing_ths_industries', return_value={
+             'requested': 1, 'covered': 1, 'written': 1,
+         }) as retry_industry, \
+         patch.object(update_stock_data, 'retry_missing_ths_concepts') as retry_concept, \
+         patch.object(update_stock_data, 'save_ths_daily_update_confirmation') as save:
+        current_time.now.return_value.weekday.return_value = 0
+        assert update_stock_data.update_sectors() == (2, 1)
+
+    retry_industry.assert_called_once_with('20260811', ['中药'])
+    retry_concept.assert_not_called()
+    assert get_coverage.call_count == 2
+    save.assert_called_once_with('20260811', completed)
 
 
 def test_isolated_stage_retries_after_signal_then_succeeds():
