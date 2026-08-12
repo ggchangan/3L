@@ -3,7 +3,7 @@ review_compute_service.py — 复盘计算层
 大盘周期判定、动量主线计算、量价择时分析、交易计划生成
 所有函数接收数据为参数，不直接依赖文件 I/O（可测试）
 """
-import json, os, sys, math, threading
+import json, os, sys, math, threading, logging
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -16,6 +16,7 @@ MAINLINE_FULL_CACHE = os.path.join(DATA_DIR, '.cache', 'mainline_full.json')
 MAINLINE_HISTORY_PATH = os.path.join(DATA_DIR, 'mainline_history.json')
 MAINLINE_CALIBRATION_PATH = os.path.join(DATA_DIR, 'computed', 'mainline_calibration.json')
 _MAINLINE_STATE_LOCK = threading.RLock()
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -467,6 +468,24 @@ def describe_sector_context(opportunity, mainline_level=''):
 # ② 动量主线
 # ═══════════════════════════════════════════════════════════════
 
+def _get_l1_shadow(date_str):
+    """L1 影子模型失败时显式降级，但不得阻塞正式复盘。"""
+    try:
+        from backend.services.l1_momentum_service import get_or_compute_l1_shadow
+        return get_or_compute_l1_shadow(date_str)
+    except Exception as exc:
+        logger.exception('L1 影子模型计算失败: date=%s', date_str)
+        return {
+            'model_type': 'l1_momentum_mainline',
+            'is_l1_model': True,
+            'experimental': True,
+            'as_of_date': date_str,
+            'data_status': 'error',
+            'error': 'L1 影子模型计算失败，已降级为现有板块强度代理榜',
+            'error_type': type(exc).__name__,
+            'rankings': [],
+        }
+
 def _record_mainline_calibration(date_str, ranked, is_estimated, coverage=0.0):
     """保存收盘预估 Top10，正式板块日线到齐后记录排名差异。"""
     try:
@@ -534,7 +553,9 @@ def get_mainline_data(date_str):
             if (
                 cached.get('date') == date_str
                 and cached.get('model_type') == 'sector_return_20d_proxy'
+                and 'l1_shadow' in cached
             ):
+                cached['l1_shadow'] = _get_l1_shadow(date_str)
                 print(f"[3L复盘] 主线数据读缓存 {date_str}")
                 return cached
         except Exception:
@@ -576,7 +597,10 @@ def get_mainline_data(date_str):
     from backend.data_access.data_layer import get_ths_industry_klines
     industries_data = get_ths_industry_klines(ths_type='I')
     if not industries_data:
-        return {'lines': [], 'secondary': [], 'industries': get_industry_rankings(), 'all_ranked': []}
+        return {
+            'lines': [], 'secondary': [], 'industries': get_industry_rankings(),
+            'all_ranked': [], 'l1_shadow': _get_l1_shadow(date_str),
+        }
 
     # 导入概念波谷判定（复用至行业板块）
     from backend.services.concept_wave_service import judge_concept_wave as _judge_wave
@@ -686,6 +710,8 @@ def get_mainline_data(date_str):
         'all_ranked': scores,
         'persistence': track_mainline_persistence(date_str, main_lines, prefix=''),
     }
+    # L1 先以影子字段并行运行，不替换代理榜，也不参与当前交易计划门禁。
+    result['l1_shadow'] = _get_l1_shadow(date_str)
     result['calibration'] = (
         _record_mainline_calibration(
             date_str, scores, estimate_active, industry_coverage.get('ratio', 0)

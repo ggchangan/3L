@@ -82,6 +82,7 @@ def test_index_chart_uses_confirmed_data_layer_instead_of_direct_provider(monkey
 
     monkeypatch.setattr('backend.data_access.data_layer.get_index_klines', fake_index_klines)
     monkeypatch.setattr(stock_chart_service, 'REVIEW_CHARTS_DIR', str(tmp_path))
+    monkeypatch.setattr(stock_chart_service, '_fetch_realtime_quote', lambda _code: None)
 
     chart_path, error = stock_chart_service.generate_index_chart(mode='review', code='000985')
 

@@ -112,6 +112,27 @@ def test_mainline_uses_close_snapshot_for_estimated_20d_ranking(monkeypatch, tmp
     assert not (tmp_path / 'history.json').exists()
 
 
+def test_cached_mainline_refreshes_l1_shadow_independently(monkeypatch, tmp_path):
+    from backend.services import review_compute_service
+
+    cache_path = tmp_path / 'mainline.json'
+    cache_path.write_text(json.dumps({
+        'date': '2026-07-21',
+        'model_type': 'sector_return_20d_proxy',
+        'l1_shadow': {'data_status': 'partial', 'rankings': ['old']},
+    }))
+    monkeypatch.setattr(review_compute_service, 'MAINLINE_FULL_CACHE', str(cache_path))
+    monkeypatch.setattr(
+        review_compute_service,
+        '_get_l1_shadow',
+        lambda _date: {'data_status': 'partial', 'rankings': ['fresh']},
+    )
+
+    result = review_compute_service.get_mainline_data('2026-07-21')
+
+    assert result['l1_shadow']['rankings'] == ['fresh']
+
+
 def test_official_mainline_completes_estimate_calibration(monkeypatch, tmp_path):
     from backend.data_access import data_layer
     from backend.services import concept_wave_service, review_compute_service
