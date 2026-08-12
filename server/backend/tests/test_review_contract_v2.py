@@ -441,7 +441,8 @@ def test_trading_plan_peak_risk_blocks_breakout_but_not_every_valid_buy():
             {
                 'code': '000001', 'name': '突破标的', 'industry': '主线方向',
                 'mainline_level': '主线', 'score': 4, 'action_type': '买入',
-                'buy_point': '突破买点',
+                'buy_point': '突破买点', 'structure': '区间震荡', 'stage': '区间顶部',
+                'stop_loss': 9.5,
             },
             {
                 'code': '000002', 'name': '回踩标的', 'industry': '主线方向',
@@ -604,7 +605,8 @@ def test_unknown_market_never_marks_focus_buy_as_executable():
         buy_signals_review=[{
             'code': '000001', 'name': '主线买点', 'industry': '主线方向',
             'mainline_level': '主线', 'score': 4, 'action_type': '买入',
-            'buy_point': '明确反转买点',
+            'buy_point': '明确反转买点', 'structure': '下降趋势', 'stage': '下行',
+            'stop_loss': 9.5,
         }],
         opportunity_map={'主线方向': '趋势延续'},
     )
@@ -634,7 +636,7 @@ def test_weak_market_does_not_treat_bearish_reversal_or_demand_exhaustion_as_buy
     item = plan['buy_priority'][0]
     assert item['decision_status'] == 'candidate'
     assert item['market_compatible'] is False
-    assert '无法将当前信号确认为3L四类买点' in item['attention_reason']
+    assert '无法将当前信号确认为3L买点' in item['attention_reason']
 
 
 def test_strong_market_executes_breakout_but_not_reversal_buy_point():
@@ -712,7 +714,7 @@ def test_neutral_market_only_executes_buy_points_at_range_edges():
             {
                 'code': '000001', 'name': '区底标的', 'industry': '主线方向',
                 'mainline_level': '主线', 'score': 4, 'action_type': '买入',
-                'buy_point': '中继买点', 'structure': '区间震荡', 'stage': '区间底部',
+                'buy_point': '区间底部获得支撑', 'structure': '区间震荡', 'stage': '区间底部',
                 'stop_loss': 9.5,
             },
             {
@@ -727,8 +729,28 @@ def test_neutral_market_only_executes_buy_points_at_range_edges():
 
     items = {item['code']: item for item in plan['buy_priority']}
     assert items['000001']['decision_status'] == 'executable'
+    assert items['000001']['buy_point_category'] == 'range_support'
     assert items['000002']['decision_status'] == 'candidate'
-    assert '只在区间底部成立' in items['000002']['attention_reason']
+    assert '只能位于上涨趋势' in items['000002']['attention_reason']
+
+
+def test_structural_rejection_is_recorded_for_ordinary_signal_too():
+    plan = generate_trading_plan(
+        market_cycle={'position': '波中', 'market_regime': 'neutral'},
+        mainline_data={'lines': []}, signals_data={}, existing_holdings=[],
+        buy_signals_review=[{
+            'code': '000003', 'name': '普通冲突股', 'industry': '非强方向',
+            'mainline_level': '非主线', 'score': 2, 'action_type': '买入',
+            'buy_point': '中继买点', 'structure': '区间震荡', 'stage': '区间顶部',
+            'stop_loss': 9.5,
+        }],
+        opportunity_map={'非强方向': '--'},
+    )
+
+    item = plan['buy_priority'][0]
+    assert item['decision_status'] == 'signal_only'
+    assert item['structural_compatible'] is False
+    assert '只能位于上涨趋势' in item['attention_reason']
 
 
 def test_neutral_market_accepts_display_stage_for_confirmed_range_breakout():
