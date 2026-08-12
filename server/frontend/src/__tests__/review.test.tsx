@@ -116,7 +116,7 @@ describe('MainlineSection', () => {
     expect(screen.getByText(/当前只展示分值线索/)).toBeTruthy()
     expect(screen.getByText(/机构持仓/)).toBeTruthy()
     expect(screen.getByText('半导体')).toBeTruthy()
-    expect(screen.getByText('主线线索')).toBeTruthy()
+    expect(screen.getByText('板块效应线索')).toBeTruthy()
   })
 
   it('严格使用交易日历给出的上一交易日归档运行轮动比较', async () => {

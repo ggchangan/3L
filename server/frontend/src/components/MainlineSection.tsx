@@ -115,7 +115,7 @@ const pct = (v?: number | string | null) => {
 }
 
 const L1_STATUS_LABEL: Record<string, string> = {
-  confirmed: '主线线索',
+  confirmed: '板块效应线索',
   climax_warning: '高潮预警',
   not_confirmed: '未确认',
   insufficient_data: '数据不足',
