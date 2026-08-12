@@ -1011,10 +1011,10 @@ def tushare_fetch_daily_incremental():
     return _fn()
 
 
-def get_ths_daily_update_coverage(names_to_update, target_date):
+def get_ths_daily_update_coverage(names_to_update, target_date, optional_concepts=None):
     """检查目标日期的行业/追踪概念覆盖率。"""
     from backend.data_access.data_source import get_ths_daily_update_coverage as _fn
-    return _fn(names_to_update, target_date)
+    return _fn(names_to_update, target_date, optional_concepts=optional_concepts)
 
 
 def retry_missing_ths_concepts(target_date, concept_names):
