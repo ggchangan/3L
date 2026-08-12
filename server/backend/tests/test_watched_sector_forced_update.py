@@ -280,6 +280,28 @@ class TestBackfillSkipsNullClose(unittest.TestCase):
 class TestCoverageOptionalConcepts(unittest.TestCase):
     """C1: coverage 门禁必须支持 optional_concepts——尽力而为的概念缺失不拉低门禁。"""
 
+    def test_data_layer_forwards_optional_concepts(self):
+        """data_layer 转发层也必须保留 optional_concepts 参数。"""
+        from backend.data_access import data_layer
+
+        captured = {}
+
+        def fake_coverage(names, target_date, optional_concepts=None):
+            captured['optional_concepts'] = set(optional_concepts or [])
+            return {'ready': True}
+
+        with mock.patch(
+            'backend.data_access.data_source.get_ths_daily_update_coverage',
+            side_effect=fake_coverage,
+        ):
+            result = data_layer.get_ths_daily_update_coverage(
+                [('半导体', 'industry')], '20260810',
+                optional_concepts={'华为盘古'},
+            )
+
+        self.assertTrue(result['ready'])
+        self.assertEqual(captured['optional_concepts'], {'华为盘古'})
+
     def _call(self, names_to_update, covered_rows, optional=None, confirmation=None):
         from backend.data_access import data_source as ds
 

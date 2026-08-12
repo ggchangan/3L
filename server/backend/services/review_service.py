@@ -376,6 +376,19 @@ def generate_daily_review(date_str=None):
                                          opportunity_map=opp_map)
     apply_trading_plan_actions(buy_signals_review, trading_plan)
 
+    try:
+        from backend.data_access.data_layer import get_sector_daily
+        _sd = get_sector_daily()
+        _sector_date = _sd.get('last_updated', '') if isinstance(_sd, dict) else ''
+    except Exception:
+        _sector_date = ''
+    _stock_date = all_stocks.get('last_updated', '') if isinstance(all_stocks, dict) else ''
+    _index_date = market_cycle.get('data_date', '')
+    _requested_date = date_str.replace('-', '')
+    _data_status = build_review_data_status(
+        _requested_date, _index_date, _stock_date, _sector_date, mainline_data,
+    )
+
     # 组装
     review = {
         'date': date_str,
@@ -388,6 +401,19 @@ def generate_daily_review(date_str=None):
         'watched_sectors': _build_watched_for_review(
             mainline_data, concept_mainline_data,
         ),
+        'data_stale': _data_status.get('overall') != 'ready',
+        'data_status': _data_status,
+        'data_dates': {
+            'requested': date_str,
+            'index': _index_date,
+            'stocks': _stock_date,
+            'sectors': _sector_date,
+        },
+        'data_freshness': {
+            'index': 'current' if _data_status['index']['status'] == 'confirmed' else _data_status['index']['status'],
+            'stocks': 'current' if _data_status['stocks']['status'] == 'confirmed' else _data_status['stocks']['status'],
+            'sectors': 'current' if _data_status['industry']['status'] == 'confirmed' else 'stale',
+        },
         'timing_signals': timing_signals,
         'trading_plan': trading_plan,
         'holdings': holdings,
