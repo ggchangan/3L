@@ -27,8 +27,38 @@ interface MainlineData {
   secondary?: LineItem[]
   persistence?: { name: string; days: number; status: string }[]
   all_ranked?: LineItem[]
+  l1_shadow?: L1ShadowData
   type?: string
   concept_mainline?: MainlineData
+}
+
+interface L1ShadowData {
+  model_type?: string
+  experimental?: boolean
+  as_of_date?: string
+  data_status?: 'experimental' | 'partial' | 'error'
+  calibration_status?: string
+  source?: string
+  input_coverage?: Record<string, number | string | null | undefined>
+  quality_gates?: Record<string, boolean | null | undefined>
+  rankings?: L1Ranking[]
+  error?: string
+  error_type?: string
+}
+
+interface L1Ranking {
+  name: string
+  momentum_stock_count?: number
+  constituent_count?: number
+  coverage?: number
+  momentum_score?: number
+  status?: string
+  score_status?: string
+  rotation_state?: string
+  consecutive_days?: number
+  new_high_count?: number | null
+  new_high_overlap?: number | null
+  top_stocks?: string[]
 }
 
 interface Props {
@@ -76,6 +106,122 @@ const chgColor = (v?: number) => {
 const chgSign = (v?: number) => {
   if (!v || v <= 0) return ''
   return '+'
+}
+
+const pct = (v?: number | string | null) => {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '--'
+  return `${(n * 100).toFixed(1)}%`
+}
+
+const L1_STATUS_LABEL: Record<string, string> = {
+  confirmed: '主线线索',
+  climax_warning: '高潮预警',
+  not_confirmed: '未确认',
+  insufficient_data: '数据不足',
+}
+
+const L1_GATE_LABELS: Record<string, string> = {
+  market_universe_ready: '全市场',
+  kline_ready: '20日行情',
+  listing_date_ready: '上市日期',
+  target_date_ready: '目标日',
+  industry_mapping_ready: '行业映射',
+  constituent_as_of_ready: '历史成分',
+  institution_holdings_ready: '机构持仓',
+  institution_as_of_ready: '机构日期',
+  new_high_validation_ready: '52周新高',
+}
+
+function L1ShadowPanel({ shadow }: { shadow?: L1ShadowData }) {
+  if (!shadow) return null
+  const rankings = (shadow.rankings || []).slice(0, 5)
+  const gates = shadow.quality_gates || {}
+  const gateEntries = Object.entries(L1_GATE_LABELS).filter(([key]) => key in gates)
+  const blocked = gateEntries.filter(([key]) => gates[key] === false).map(([, label]) => label)
+  const isPartial = shadow.data_status === 'partial'
+  const isError = shadow.data_status === 'error'
+
+  return (
+    <div style={{
+      marginBottom: 12,
+      border: '1px solid rgba(78,205,196,0.22)',
+      background: 'rgba(78,205,196,0.06)',
+      borderRadius: 8,
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '8px 10px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 10,
+        flexWrap: 'wrap',
+        borderBottom: '1px solid rgba(78,205,196,0.14)',
+      }}>
+        <div>
+          <span style={{ color: '#4ecdc4', fontWeight: 700, fontSize: 13 }}>L1 动量主线影子模型</span>
+          <span style={{ color: '#888', fontSize: 11, marginLeft: 8 }}>
+            全市场20日强势个股 → THS行业聚合
+          </span>
+        </div>
+        <span style={{
+          color: isError ? '#e94560' : isPartial ? '#ffd166' : '#4ecdc4',
+          fontSize: 11,
+          fontWeight: 700,
+        }}>
+          {isError ? '计算失败' : isPartial ? '数据门禁未过' : '实验运行'}
+        </span>
+      </div>
+
+      <div style={{ padding: '8px 10px' }}>
+        {isError ? (
+          <div style={{ color: '#e94560', fontSize: 12 }}>{shadow.error || 'L1影子模型暂不可用'}</div>
+        ) : (
+          <>
+            <div style={{ color: '#9ca3af', fontSize: 11, lineHeight: 1.6, marginBottom: 8 }}>
+              {isPartial
+                ? `当前只展示分值线索，不作为正式主线结论；未过门禁：${blocked.length ? blocked.join('、') : '待校准'}。`
+                : '输入门禁已过，但THS口径阈值仍待历史校准，暂不替换20日强度候选。'}
+              <span style={{ marginLeft: 8 }}>
+                全市场覆盖 {pct(shadow.input_coverage?.market_universe)} · 20日行情 {pct(shadow.input_coverage?.kline_20d)} · 52周新高 {pct(shadow.input_coverage?.new_high_52w)}
+              </span>
+            </div>
+
+            {rankings.length ? (
+              <div style={{ display: 'grid', gap: 6, overflowX: 'auto' }}>
+                {rankings.map((item, idx) => {
+                  const rawStatus = item.score_status || item.status || ''
+                  const statusLabel = L1_STATUS_LABEL[rawStatus] || rawStatus || '--'
+                  const statusColor = rawStatus === 'climax_warning' ? '#e94560' : rawStatus === 'confirmed' ? '#4ecdc4' : '#888'
+                  return (
+                    <div key={item.name} style={{
+                      display: 'grid',
+                      gridTemplateColumns: '32px minmax(90px, 1fr) repeat(4, minmax(62px, auto))',
+                      gap: 8,
+                      alignItems: 'center',
+                      padding: '6px 8px',
+                      borderRadius: 6,
+                      background: 'rgba(255,255,255,0.035)',
+                      fontSize: 11,
+                    }}>
+                      <span style={{ color: '#888' }}>#{idx + 1}</span>
+                      <span style={{ color: '#ddd', fontWeight: 700 }}>{item.name}</span>
+                      <span style={{ color: '#9ca3af' }}>动量股 {item.momentum_stock_count ?? 0}/{item.constituent_count ?? '--'}</span>
+                      <span style={{ color: '#9ca3af' }}>覆盖 {pct(item.coverage)}</span>
+                      <span style={{ color: '#ffd166' }}>分值 {item.momentum_score?.toFixed?.(2) ?? '--'}</span>
+                      <span style={{ color: statusColor, fontWeight: 700 }}>{statusLabel}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div style={{ color: '#666', fontSize: 12 }}>暂无可展示的L1影子线索</div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export default function MainlineSection({ data, dates, currentDate, previousTradingDate, watchedSectors }: Props) {
@@ -279,6 +425,8 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
           已完成次日校准 · Top5 重合 {activeData.calibration.top5_overlap ?? 0}/5 · Top10 重合 {activeData.calibration.top10_overlap ?? 0}/10
         </div>
       )}
+
+      {tab === 'industry' && <L1ShadowPanel shadow={data?.l1_shadow} />}
 
       {/* 轮动提醒 */}
       {!isWatchedTab && rotationNote && (

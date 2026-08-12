@@ -382,6 +382,32 @@ export interface ReviewData {
     secondary?: LineItem[]
     persistence?: { name: string; days: number; status: string }[]
     all_ranked?: LineItem[]
+    l1_shadow?: {
+      model_type?: string
+      experimental?: boolean
+      as_of_date?: string
+      data_status?: 'experimental' | 'partial' | 'error'
+      calibration_status?: string
+      source?: string
+      input_coverage?: Record<string, number | string | null | undefined>
+      quality_gates?: Record<string, boolean | null | undefined>
+      rankings?: Array<{
+        name: string
+        momentum_stock_count?: number
+        constituent_count?: number
+        coverage?: number
+        momentum_score?: number
+        status?: string
+        score_status?: string
+        rotation_state?: string
+        consecutive_days?: number
+        new_high_count?: number | null
+        new_high_overlap?: number | null
+        top_stocks?: string[]
+      }>
+      error?: string
+      error_type?: string
+    }
     concept_mainline?: {
       ranking_status?: 'confirmed' | 'estimated' | 'partial' | 'stale'
       ranking_date?: string
