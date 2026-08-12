@@ -44,6 +44,7 @@ from backend.data_access.data_layer import (
     tushare_fetch_daily_incremental,
     get_ths_daily_update_coverage,
     retry_missing_ths_concepts,
+    retry_missing_ths_industries,
     save_ths_daily_update_confirmation,
     refresh_sector_close_snapshot,
 )
@@ -376,6 +377,20 @@ def update_sectors():
     coverage = get_ths_daily_update_coverage(
         names_to_update, today, optional_concepts=watched_concepts,
     )
+    missing_industries = coverage.get('industry', {}).get('missing', [])
+    if missing_industries:
+        try:
+            retry = retry_missing_ths_industries(today, missing_industries)
+            log(
+                '🔁  缺失行业同源重试: '
+                f'{retry.get("covered", 0)}/{retry.get("requested", 0)}'
+            )
+            if retry.get('covered', 0):
+                coverage = get_ths_daily_update_coverage(
+                    names_to_update, today, optional_concepts=watched_concepts,
+                )
+        except Exception as exc:
+            log(f'⚠️  缺失行业同源重试失败，保留部分正式状态: {exc}')
     missing_concepts = coverage.get('concept', {}).get('missing', [])
     if missing_concepts:
         try:

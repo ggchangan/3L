@@ -570,7 +570,17 @@ def get_ths_concept_latest_dates(names, reference_date=None) -> dict:
 
 def retry_missing_ths_concepts(target_date, concept_names) -> dict:
     """仅对缺失的有效概念使用同花顺原始 K 线通道重试并写入 DB。"""
-    requested = sorted({str(name) for name in concept_names if name})
+    return _retry_missing_ths_boards(target_date, concept_names, 'N')
+
+
+def retry_missing_ths_industries(target_date, industry_names) -> dict:
+    """对批量接口遗漏的行业使用同花顺原始 K 线通道定向补齐。"""
+    return _retry_missing_ths_boards(target_date, industry_names, 'I')
+
+
+def _retry_missing_ths_boards(target_date, board_names, ths_type) -> dict:
+    """通过同花顺原始 K 线通道补齐目标日期缺失的行业/概念。"""
+    requested = sorted({str(name) for name in board_names if name})
     result = {
         'requested': len(requested),
         'covered': 0,
@@ -581,7 +591,7 @@ def retry_missing_ths_concepts(target_date, concept_names) -> dict:
     if not requested:
         return result
 
-    snapshots = _fetch_ths_kline_close_snapshots(target_date, requested, 'N')
+    snapshots = _fetch_ths_kline_close_snapshots(target_date, requested, ths_type)
     db = _get_tushare_db()
     if not db or not snapshots:
         return result
@@ -640,6 +650,9 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str,
     if not confirmation:
         confirmation = bootstrap_ths_daily_update_confirmation()
     active_industries = set(confirmation.get('industry_names', [])) & requested_industries
+    active_industries, excluded_industries = _filter_ths_kline_industry_names(
+        db, active_industries,
+    )
     bootstrap = not active_industries
     expected = active_industries | gate_concepts
     query_names = requested_industries | requested_concepts
@@ -673,6 +686,9 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str,
             'missing': sorted(names - covered),
         }
 
+    covered_industries, covered_excluded_industries = _filter_ths_kline_industry_names(
+        db, covered_industries,
+    )
     industry = _stats(active_industries, covered_industries, 0.95)
     if bootstrap and industry['expected'] < 80:
         industry['ready'] = False
@@ -689,10 +705,41 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str,
         'concept': concept,
         'missing': industry['missing'] + concept['missing'],
         'optional_missing': optional_missing,
-        'industry_names': sorted(active_industries | covered_industries),
         'concept_names': sorted(requested_concepts),
         'bootstrap': bootstrap,
+        'industry_names': sorted(active_industries | covered_industries),
+        'excluded_industries': sorted(excluded_industries | covered_excluded_industries),
     }
+
+
+def _filter_ths_kline_industry_names(db, industry_names: set) -> tuple:
+    """仅保留有同花顺 88 系 K 线代码、可连续更新的行业名。
+
+    ths_index 中会混入 700/861/871 等外部或旧分类代码，它们可能有历史
+    ths_daily 记录，但不能通过同花顺原始 K 线稳定补齐，不适合作为 3L
+    板块量价阶段的正式门禁分母。
+    """
+    requested = sorted({str(name) for name in industry_names if name})
+    if not requested:
+        return set(), set()
+    placeholders = ','.join(['%s'] * len(requested))
+    rows = db.execute_raw(
+        f"""SELECT name, ts_code
+            FROM ths_index
+            WHERE type='I' AND name IN ({placeholders})""",
+        requested,
+    )
+    reachable = set()
+    seen = set()
+    for row in rows:
+        name = row.get('name')
+        ts_code = str(row.get('ts_code') or '')
+        if not name:
+            continue
+        seen.add(name)
+        if ts_code.startswith('88'):
+            reachable.add(name)
+    return reachable, set(requested) - reachable
 
 
 def get_ths_daily_update_confirmation() -> dict:
