@@ -82,6 +82,43 @@ describe('MainlineSection', () => {
     expect(screen.queryByText('主线回调机会')).toBeNull()
   })
 
+  it('展示L1动量主线影子模型，但partial时只作为线索', () => {
+    render(<MainlineSection
+      data={{
+        lines: [],
+        all_ranked: [],
+        l1_shadow: {
+          data_status: 'partial',
+          input_coverage: { market_universe: 1, kline_20d: 0.98, new_high_52w: 0.97 },
+          quality_gates: {
+            market_universe_ready: true,
+            kline_ready: true,
+            institution_holdings_ready: false,
+            constituent_as_of_ready: false,
+          },
+          rankings: [{
+            name: '半导体',
+            momentum_stock_count: 12,
+            constituent_count: 80,
+            coverage: 0.15,
+            momentum_score: 1.8,
+            status: 'insufficient_data',
+            score_status: 'confirmed',
+          }],
+        },
+      }}
+      dates={[]}
+      currentDate="2026-07-23"
+    />)
+
+    expect(screen.getByText('L1 动量主线影子模型')).toBeTruthy()
+    expect(screen.getByText('数据门禁未过')).toBeTruthy()
+    expect(screen.getByText(/当前只展示分值线索/)).toBeTruthy()
+    expect(screen.getByText(/机构持仓/)).toBeTruthy()
+    expect(screen.getByText('半导体')).toBeTruthy()
+    expect(screen.getByText('板块效应线索')).toBeTruthy()
+  })
+
   it('严格使用交易日历给出的上一交易日归档运行轮动比较', async () => {
     vi.mocked(fetchReviewByDate).mockResolvedValue({
       mainline: { all_ranked: [{ name: '旧方向', chg_20d: 10 }] },
