@@ -8,13 +8,15 @@ STAGE=sectors-backfill
 LOG=/home/ubuntu/3l-server/logs/sector-evening.log
 MARK=/tmp/3l-sector-confirmed-$(date +%Y%m%d)
 PHASE=${1:-main}   # main=20:00 主跑(成功打标记)  catchup=22:00 补齐(已确认则跳过)
+BACKFILL_DAYS=${SECTOR_BACKFILL_DAYS:-5}
 
 cd /home/ubuntu/3l-server/server
 
 run_sectors() {
     TQDM_DISABLE=1 /usr/bin/flock -n /tmp/3l-sector-evening.lock \
         /home/ubuntu/3l-server/.venv/bin/python3 -m backend.core.update_stock_data \
-        --isolated-stage "$STAGE" >> "$LOG" 2>&1
+        --isolated-stage "$STAGE" \
+        --sector-backfill-days "$BACKFILL_DAYS" >> "$LOG" 2>&1
 }
 
 if [ "$PHASE" = "catchup" ] && [ -f "$MARK" ]; then

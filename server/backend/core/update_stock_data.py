@@ -848,6 +848,12 @@ def main(argv=None):
     parser.add_argument('--retry-interval', type=int, default=900, help='重试间隔秒数')
     parser.add_argument('--isolated-stage', choices=('index', 'sectors', 'sectors-backfill'), help=argparse.SUPPRESS)
     parser.add_argument('--target-date', help=argparse.SUPPRESS)
+    parser.add_argument(
+        '--sector-backfill-days',
+        type=int,
+        default=int(os.environ.get('SECTOR_BACKFILL_DAYS', '5')),
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args(argv)
 
     os.environ['TQDM_DISABLE'] = '1'
@@ -859,7 +865,7 @@ def main(argv=None):
         elif args.isolated_stage == 'sectors':
             result = update_sectors(args.target_date)
         else:
-            result = (1 if run_sector_backfill() else 0,)
+            result = (1 if run_sector_backfill(max_days=args.sector_backfill_days) else 0,)
         print(f'{ISOLATED_STAGE_MARKER}{json.dumps(result, ensure_ascii=False)}', flush=True)
         return 0 if args.isolated_stage != 'sectors-backfill' or result[0] else 2
 
