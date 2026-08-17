@@ -600,6 +600,18 @@ def test_sector_backfill_succeeds_when_latest_date_confirmed():
         assert update_stock_data.run_sector_backfill() is True
 
 
+def test_isolated_sector_backfill_honors_configurable_day_window():
+    from backend.core import update_stock_data
+
+    with patch.object(update_stock_data, 'run_sector_backfill', return_value=True) as backfill:
+        assert update_stock_data.main([
+            '--isolated-stage', 'sectors-backfill',
+            '--sector-backfill-days', '10',
+        ]) == 0
+
+    backfill.assert_called_once_with(max_days=10)
+
+
 def test_full_sector_cron_runs_tuesday_through_saturday():
     crontab = (Path(__file__).resolve().parents[3] / 'deploy' / 'crontab').read_text()
     full_lines = [line for line in crontab.splitlines() if '--phase full' in line]
