@@ -30,7 +30,7 @@ def test_l1_aggregates_top_stocks_by_count_times_coverage():
 
     assert result['data_status'] == 'partial'
     assert result['quality_gates']['formal_publish_ready'] is False
-    assert result['input_coverage']['kline_20d'] == 1
+    assert result['input_coverage']['kline_10d'] == 1
     assert result['input_coverage']['industry_mapping'] == 1
     assert result['momentum_pool_size'] == 3
     assert result['rankings'][0]['name'] == '行业A'
@@ -94,9 +94,9 @@ def test_shadow_snapshot_uses_data_layer_and_previous_snapshot(monkeypatch, tmp_
         'source': 'test_full_market', 'expected_stock_count': 2,
         'constituent_as_of_supported': False,
         'stocks': [
-            {'code': '000001', 'return_20d': 10, 'high_52w': True,
+            {'code': '000001', 'return_10d': 10, 'high_52w': True,
              'adjustment_complete': True, 'list_date': '20200101', 'latest_date': date_str},
-            {'code': '000002', 'return_20d': 9, 'high_52w': False,
+            {'code': '000002', 'return_10d': 9, 'high_52w': False,
              'adjustment_complete': True, 'list_date': '20200101', 'latest_date': date_str},
         ],
         }
@@ -112,7 +112,7 @@ def test_shadow_snapshot_uses_data_layer_and_previous_snapshot(monkeypatch, tmp_
     assert (tmp_path / '20260121.json').exists()
     assert second['rankings'][0]['score_status'] == 'confirmed'
     assert second['rankings'][0]['rotation_state'] == 'unavailable'
-    assert first['snapshot_version'] == 2
+    assert first['snapshot_version'] == 3
 
 
 def test_get_or_compute_reuses_same_day_snapshot(monkeypatch, tmp_path):
@@ -124,7 +124,11 @@ def test_get_or_compute_reuses_same_day_snapshot(monkeypatch, tmp_path):
     def fake_compute(as_of_date):
         calls.append(as_of_date)
         tmp_path.mkdir(exist_ok=True)
-        result = {'as_of_date': as_of_date, 'rankings': []}
+        result = {
+            'as_of_date': as_of_date,
+            'snapshot_version': l1_momentum_service.L1_SNAPSHOT_VERSION,
+            'rankings': [],
+        }
         l1_momentum_service.config.atomic_json_dump(
             result, str(tmp_path / f'{as_of_date}.json'), indent=2,
         )
@@ -188,9 +192,9 @@ def test_rotation_exits_when_score_loses_board_effect():
 
 def test_full_input_ready_keeps_formal_publish_gate_closed_until_calibrated():
     features = [
-        {'code': '000001', 'return_20d': 10, 'high_52w': True,
+        {'code': '000001', 'return_10d': 10, 'high_52w': True,
          'adjustment_complete': True, 'list_date': '20200101', 'latest_date': '20260121'},
-        {'code': '000002', 'return_20d': 9, 'high_52w': False,
+        {'code': '000002', 'return_10d': 9, 'high_52w': False,
          'adjustment_complete': True, 'list_date': '20200101', 'latest_date': '20260121'},
     ]
     industry_map = {
@@ -215,7 +219,7 @@ def test_full_input_ready_keeps_formal_publish_gate_closed_until_calibrated():
 
 def test_institution_filter_tolerates_missing_rows_at_coverage_boundary():
     features = [
-        {'code': f'{idx:06d}', 'return_20d': 100 - idx, 'high_52w': True,
+        {'code': f'{idx:06d}', 'return_10d': 100 - idx, 'high_52w': True,
          'adjustment_complete': True, 'list_date': '20200101', 'latest_date': '20260121'}
         for idx in range(20)
     ]

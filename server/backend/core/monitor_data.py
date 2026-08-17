@@ -23,6 +23,7 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 INDEX_CODE = '000985'
 # 有效指数价格范围（用于校验实时供应商数据是否合理）
 INDEX_PRICE_MIN = 1000  # 中证全指正常应在5000-8000
+SECTOR_MOMENTUM_DAYS = 10
 
 def _is_trading_time():
     """判断当前是否为A股交易时间（周一至五 9:30-15:00）"""
@@ -500,7 +501,7 @@ def get_top_sectors_with_5d():
         return num/den if den else 0
     
     def _compute_one(name, chg_today):
-        """计算单个板块的结构、阶段、5日涨幅"""
+        """计算单个板块的结构、阶段、动量涨幅"""
         kd = s60d.get(name)
         if not kd:
             return {'name': name, 'chg': chg_today, 'structure': '-', 'phase': '-'}
@@ -511,10 +512,10 @@ def get_top_sectors_with_5d():
         kps = kd.get('key_points', [])
         cur = c60[-1]
         
-        # 20日涨幅
-        chg20d = 0
-        if len(c60) >= 21:
-            chg20d = round((cur / c60[-21] - 1) * 100, 2)
+        # 动量涨幅（字段名保持 chg20d 兼容旧前端；实际窗口由 SECTOR_MOMENTUM_DAYS 控制）
+        momentum_chg = 0
+        if len(c60) >= SECTOR_MOMENTUM_DAYS + 1:
+            momentum_chg = round((cur / c60[-SECTOR_MOMENTUM_DAYS - 1] - 1) * 100, 2)
         
         # 结构（看EMA10极值位置，取最近15日）
         c15 = c60[-15:] if len(c60) >= 15 else c60
@@ -567,14 +568,15 @@ def get_top_sectors_with_5d():
         
         return {
             'name': name, 'chg': chg_today,
-            'chg20d': chg20d,
+            'chg10d': momentum_chg,
+            'chg20d': momentum_chg,
             'structure': structure, 'phase': phase,
         }
     
     # === 计算TOP15所有结果（用于今日涨幅/结构/阶段） ===
     all_results = [_compute_one(name, today_chg_map.get(name, 0)) for name in top15_names]
     
-    # === 20日涨幅：全量板块参与排序 ===
+    # === 动量涨幅：全量板块参与排序 ===
     # 所有在s60d中有数据的板块（含TOP15已计算的 + 其他有缓存的）
     all_with_20d = []
     seen_in_results = {r['name'] for r in all_results if r.get('chg20d') is not None}
@@ -587,7 +589,7 @@ def get_top_sectors_with_5d():
         if name in seen_in_results:
             continue
         kd = s60d.get(name)
-        if not kd or 'closes' not in kd or len(kd['closes']) < 21:
+        if not kd or 'closes' not in kd or len(kd['closes']) < SECTOR_MOMENTUM_DAYS + 1:
             continue
         # 用缓存数据计算完整结构/阶段
         all_with_20d.append(_compute_one(name, today_chg_map.get(name, 0)))
@@ -595,7 +597,7 @@ def get_top_sectors_with_5d():
     # 今日涨幅TOP10
     today_top10 = sorted(all_results, key=lambda x: x['chg'], reverse=True)[:10]
     
-    # 20日涨幅TOP10（从全量有数据的板块中排）
+    # 动量涨幅TOP10（从全量有数据的板块中排）
     chg20d_top10 = sorted(all_with_20d, key=lambda x: x['chg20d'], reverse=True)[:10]
     
     # 昨日涨幅TOP10

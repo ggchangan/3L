@@ -83,11 +83,11 @@ const TABS: { key: TabKey; label: string; color: string; activeColor: string }[]
   { key: 'watched-concept', label: '🔖 关注概念', color: '#ffb84d', activeColor: '#ffb84d' },
 ]
 
-// 当前数据只是板块自身20日涨幅代理榜，不等同于 L1 动量主线。
+// 当前数据只是板块自身10日涨幅代理榜，不等同于 L1 动量主线。
 const DIRECTION_GROUPS = [
-  { key: 'mainline', label: '20日强度前5候选', emoji: '🔥', color: '#e94560', bg: 'rgba(233,69,96,0.10)' },
-  { key: 'secondary', label: '20日强度6–10候选', emoji: '⚡', color: '#ffd700', bg: 'rgba(255,215,0,0.08)' },
-  { key: 'other', label: '20日强度榜外', emoji: '📊', color: '#888', bg: 'rgba(136,136,136,0.05)' },
+  { key: 'mainline', label: '10日强度前5候选', emoji: '🔥', color: '#e94560', bg: 'rgba(233,69,96,0.10)' },
+  { key: 'secondary', label: '10日强度6–10候选', emoji: '⚡', color: '#ffd700', bg: 'rgba(255,215,0,0.08)' },
+  { key: 'other', label: '10日强度榜外', emoji: '📊', color: '#888', bg: 'rgba(136,136,136,0.05)' },
 ] as const
 
 const STAGE_ICONS: Record<string, string> = {
@@ -108,6 +108,8 @@ const chgSign = (v?: number) => {
   return '+'
 }
 
+const momentumChg = (item: Partial<LineItem>) => item.chg_10d ?? item.chg_20d
+
 const pct = (v?: number | string | null) => {
   const n = Number(v)
   if (!Number.isFinite(n)) return '--'
@@ -123,7 +125,7 @@ const L1_STATUS_LABEL: Record<string, string> = {
 
 const L1_GATE_LABELS: Record<string, string> = {
   market_universe_ready: '全市场',
-  kline_ready: '20日行情',
+  kline_ready: '10日行情',
   listing_date_ready: '上市日期',
   target_date_ready: '目标日',
   industry_mapping_ready: '行业映射',
@@ -161,7 +163,7 @@ function L1ShadowPanel({ shadow }: { shadow?: L1ShadowData }) {
         <div>
           <span style={{ color: '#4ecdc4', fontWeight: 700, fontSize: 13 }}>L1 动量主线影子模型</span>
           <span style={{ color: '#888', fontSize: 11, marginLeft: 8 }}>
-            全市场20日强势个股 → THS行业聚合
+            全市场10日强势个股 → THS行业聚合
           </span>
         </div>
         <span style={{
@@ -181,9 +183,9 @@ function L1ShadowPanel({ shadow }: { shadow?: L1ShadowData }) {
             <div style={{ color: '#9ca3af', fontSize: 11, lineHeight: 1.6, marginBottom: 8 }}>
               {isPartial
                 ? `当前只展示分值线索，不作为正式主线结论；未过门禁：${blocked.length ? blocked.join('、') : '待校准'}。`
-                : '输入门禁已过，但THS口径阈值仍待历史校准，暂不替换20日强度候选。'}
+                : '输入门禁已过，但THS口径阈值仍待历史校准，暂不替换10日强度候选。'}
               <span style={{ marginLeft: 8 }}>
-                全市场覆盖 {pct(shadow.input_coverage?.market_universe)} · 20日行情 {pct(shadow.input_coverage?.kline_20d)} · 52周新高 {pct(shadow.input_coverage?.new_high_52w)}
+                全市场覆盖 {pct(shadow.input_coverage?.market_universe)} · 10日行情 {pct(shadow.input_coverage?.kline_10d ?? shadow.input_coverage?.kline_20d)} · 52周新高 {pct(shadow.input_coverage?.new_high_52w)}
               </span>
             </div>
 
@@ -398,7 +400,7 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
       <div style={{ marginBottom: 10, padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#9ca3af', background: 'rgba(255,255,255,0.04)', lineHeight: 1.6 }}>
         {isWatchedTab
           ? '以下为你重点关注的同花顺板块/概念，强度数据与候选榜同源；主线暂无数据的显示「暂无数据」。'
-          : '当前模型仅按板块自身20日涨幅排序；前5和第6–10名是强度候选，不是知识库定义的 L1 动量主线。'}
+          : '当前模型仅按板块自身10日涨幅排序；前5和第6–10名是强度候选，不是知识库定义的 L1 动量主线。'}
       </div>
 
       {!isWatchedTab && activeData?.ranking_status === 'estimated' && (
@@ -457,7 +459,7 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
 
       {!isWatchedTab && (
         <div style={{ marginBottom: 12, color: '#888', fontSize: 11, lineHeight: 1.6 }}>
-          阅读顺序：先看20日板块强度候选，再看板块所处阶段。强度候选只提供方向线索；波谷是加分项，个股买点仍需独立判断。
+          阅读顺序：先看10日板块强度候选，再看板块所处阶段。强度候选只提供方向线索；波谷是加分项，个股买点仍需独立判断。
         </div>
       )}
 
@@ -499,8 +501,8 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                               ? '今日--'
                               : `今日${c > 0 ? '+' : ''}${c.toFixed(2)}%`)}
                       </span>
-                      <span style={{ color: item.chg_20d != null ? (item.chg_20d >= 0 ? '#ff4444' : '#44aa44') : '#555', fontSize: 11 }}>
-                        20日{item.chg_20d != null ? `${item.chg_20d > 0 ? '+' : ''}${item.chg_20d.toFixed(2)}%` : '--'}
+                      <span style={{ color: momentumChg(item) != null ? (Number(momentumChg(item)) >= 0 ? '#ff4444' : '#44aa44') : '#555', fontSize: 11 }}>
+                        10日{momentumChg(item) != null ? `${Number(momentumChg(item)) > 0 ? '+' : ''}${Number(momentumChg(item)).toFixed(2)}%` : '--'}
                       </span>
                       {item.data_date && (() => {
                         const d = String(item.data_date).replace(/(\d{4})(\d{2})(\d{2})/, '$2-$3')
@@ -599,8 +601,8 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                       ? '今日--'
                       : `今日${c > 0 ? '+' : ''}${c.toFixed(2)}%`}
                   </span>
-                  <span style={{ color: item.chg_20d >= 0 ? '#ff4444' : '#44aa44', fontSize: 11 }}>
-                    20日{item.chg_20d > 0 ? '+' : ''}{item.chg_20d.toFixed(2)}%
+                  <span style={{ color: Number(momentumChg(item) ?? 0) >= 0 ? '#ff4444' : '#44aa44', fontSize: 11 }}>
+                    10日{Number(momentumChg(item) ?? 0) > 0 ? '+' : ''}{Number(momentumChg(item) ?? 0).toFixed(2)}%
                   </span>
                   <span style={{ color: stageColor, fontSize: 11 }}>
                     {stageIcon} {stage}
@@ -677,7 +679,7 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
             <tr>
               <th>#</th>
               <th>{tab === 'concept' ? '概念' : '行业'}</th>
-              <th>20日涨幅</th>
+              <th>10日涨幅</th>
               <th>今日涨跌</th>
               <th>阶段</th>
               <th>方向层级</th>
@@ -711,8 +713,8 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
                 <tr key={i}>
                   <td>{i + 1}</td>
                   <td style={{ fontWeight: 600 }}>{l.name}</td>
-                  <td style={{ color: l.chg_20d >= 0 ? '#ff4444' : '#44aa44' }}>
-                    {l.chg_20d >= 0 ? '+' : ''}{l.chg_20d.toFixed(2)}%
+                  <td style={{ color: Number(momentumChg(l) ?? 0) >= 0 ? '#ff4444' : '#44aa44' }}>
+                    {Number(momentumChg(l) ?? 0) >= 0 ? '+' : ''}{Number(momentumChg(l) ?? 0).toFixed(2)}%
                   </td>
                   <td style={{ color: chgColor(l.chg_1d), fontSize: 12 }}>
                     {activeData?.ranking_status === 'estimated' && !l.estimate_applied
@@ -733,7 +735,7 @@ export default function MainlineSection({ data, dates, currentDate, previousTrad
           </tbody>
         </table>
         <div style={{ marginTop: 4, color: '#555', fontSize: 10, textAlign: 'right' }}>
-          板块自身20日涨幅排序 · 强度候选优先展示 · 板块阶段仅作环境提示
+          板块自身10日涨幅排序 · 强度候选优先展示 · 板块阶段仅作环境提示
         </div>
       </details>
       )}

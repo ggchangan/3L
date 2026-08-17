@@ -124,6 +124,8 @@ class SectorRankingItem:
     stage: str
     vl_score: float
     volume_ratio: float
+    # 兼容新增字段；当前主线/动量候选真实窗口为10日。
+    chg_10d: float = 0.0
     is_mainline: bool = False
     is_secondary: bool = False
     opportunity: str = ''

@@ -4,6 +4,8 @@ from typing import List, Tuple, Optional
 
 from backend.core.config import DATA_DIR, INDUSTRY_MAP_PATH
 
+SECTOR_MOMENTUM_DAYS = 10
+
 # ── 数据加载（DB / JSON 统一入口）──
 
 def load_sector_daily() -> dict:
@@ -102,7 +104,7 @@ def _load_concept_map() -> dict:
 
 # ── 板块强度排名 ──
 
-def get_top_sectors(sectors: dict, window_days: int = 20, top_n: int = 8) -> List[Tuple[str, float]]:
+def get_top_sectors(sectors: dict, window_days: int = SECTOR_MOMENTUM_DAYS, top_n: int = 8) -> List[Tuple[str, float]]:
     """返回涨幅TOP N的板块列表 (name, chg_pct)
 
     sectors: {name: [升序K线]} 预期 K 线升序排列（旧→新）
@@ -243,30 +245,30 @@ def get_strong_trend_candidates(
 
     # 1. 双窗口筛选强势板块
     strong_industries = set()
-    for name, _ in get_top_sectors(industries, 20, top_industries):
+    for name, _ in get_top_sectors(industries, SECTOR_MOMENTUM_DAYS, top_industries):
         strong_industries.add(name)
     for name, _ in get_top_sectors(industries, 5, hot_industries):
         strong_industries.add(name)
 
     strong_concepts = set()
-    for name, _ in get_top_sectors(concepts, 20, top_concepts):
+    for name, _ in get_top_sectors(concepts, SECTOR_MOMENTUM_DAYS, top_concepts):
         strong_concepts.add(name)
     for name, _ in get_top_sectors(concepts, 5, hot_concepts):
         strong_concepts.add(name)
 
     # 2. 构建板块TOP列表
-    all_ind_pairs = get_top_sectors(industries, 20, top_industries + hot_industries)
-    all_con_pairs = get_top_sectors(concepts, 20, top_concepts + hot_concepts)
+    all_ind_pairs = get_top_sectors(industries, SECTOR_MOMENTUM_DAYS, top_industries + hot_industries)
+    all_con_pairs = get_top_sectors(concepts, SECTOR_MOMENTUM_DAYS, top_concepts + hot_concepts)
 
-    top_industries_list = [{'name': n, 'chg_20d': c} for n, c in all_ind_pairs[:top_industries]]
+    top_industries_list = [{'name': n, 'chg_10d': c, 'chg_20d': c} for n, c in all_ind_pairs[:top_industries]]
     hot_industries_list = [{'name': n, 'chg_5d': c} for n, c in get_top_sectors(industries, 5, hot_industries)]
-    top_concepts_list = [{'name': n, 'chg_20d': c} for n, c in all_con_pairs[:top_concepts]]
+    top_concepts_list = [{'name': n, 'chg_10d': c, 'chg_20d': c} for n, c in all_con_pairs[:top_concepts]]
     hot_concepts_list = [{'name': n, 'chg_5d': c} for n, c in get_top_sectors(concepts, 5, hot_concepts)]
 
     # 预加载行业/概念涨幅查找表
-    ind_chg20_map = dict(get_top_sectors(industries, 20, 100))
+    ind_chg10_map = dict(get_top_sectors(industries, SECTOR_MOMENTUM_DAYS, 100))
     ind_chg5_map = dict(get_top_sectors(industries, 5, 100))
-    con_chg20_map = dict(get_top_sectors(concepts, 20, 100))
+    con_chg10_map = dict(get_top_sectors(concepts, SECTOR_MOMENTUM_DAYS, 100))
     con_chg5_map = dict(get_top_sectors(concepts, 5, 100))
 
     # 3. 从行业映射中查找候选股代码（不拉K线，纯JSON）
@@ -281,7 +283,8 @@ def get_strong_trend_candidates(
         if ind and ind in strong_industries:
             code_to_sectors.setdefault(code, []).append({
                 'type': 'industry', 'name': ind,
-                'chg_20d': ind_chg20_map.get(ind, 0),
+                'chg_10d': ind_chg10_map.get(ind, 0),
+                'chg_20d': ind_chg10_map.get(ind, 0),
                 'chg_5d': ind_chg5_map.get(ind, 0),
             })
             matched = True
@@ -290,7 +293,8 @@ def get_strong_trend_candidates(
             if con in strong_concepts:
                 code_to_sectors.setdefault(code, []).append({
                     'type': 'concept', 'name': con,
-                    'chg_20d': con_chg20_map.get(con, 0),
+                    'chg_10d': con_chg10_map.get(con, 0),
+                    'chg_20d': con_chg10_map.get(con, 0),
                     'chg_5d': con_chg5_map.get(con, 0),
                 })
                 matched = True
@@ -340,8 +344,8 @@ def get_strong_trend_candidates(
         if st['score'] < min_score:
             continue
 
-        best_sector = max(code_to_sectors[code], key=lambda s: max(abs(s['chg_20d']), abs(s['chg_5d'])))
-        max_sector_chg = max(abs(s['chg_20d']) for s in code_to_sectors[code])
+        best_sector = max(code_to_sectors[code], key=lambda s: max(abs(s.get('chg_10d', s['chg_20d'])), abs(s['chg_5d'])))
+        max_sector_chg = max(abs(s.get('chg_10d', s['chg_20d'])) for s in code_to_sectors[code])
         sector_bonus = min(2.0, max_sector_chg / 10.0)
         total_score = round(min(10.0, st['score'] + sector_bonus), 1)
 

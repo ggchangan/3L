@@ -11,8 +11,8 @@ interface Props {
 const PRI_COLORS: Record<string, string> = { '高': '#e94560', '中': '#ffd700', '低': '#888' }
 
 const DIRECTION_CFG: Record<string, { emoji: string; color: string; order: number; label: string }> = {
-  '主线': { emoji: '🔥', color: '#e94560', order: 0, label: '20日强度前5候选' },
-  '次级主线': { emoji: '⚡', color: '#ffd700', order: 1, label: '20日强度6–10候选' },
+  '主线': { emoji: '🔥', color: '#e94560', order: 0, label: '10日强度前5候选' },
+  '次级主线': { emoji: '⚡', color: '#ffd700', order: 1, label: '10日强度6–10候选' },
   '其他方向': { emoji: '📊', color: '#888', order: 2, label: '其他方向' },
 }
 const DIRECTION_ORDER: Record<string, number> = {}
@@ -42,7 +42,7 @@ export default function TradingPlan({ plan }: Props) {
     ordinary: ordinaryItems.length,
     market_regime: undefined,
     conclusion: focusItems.length ? `优先跟踪 ${focusItems.length} 个重点买点。` : '当前暂无一级重点买点。',
-    ranking_rule: '市场过滤 → 20日板块强度候选/强动量 → 个股买点质量 → 板块环境 → 止损风险',
+    ranking_rule: '市场过滤 → 10日板块强度候选/强动量 → 个股买点质量 → 板块环境 → 止损风险',
   }
   const marketStrategy = plan.market_strategy
 
@@ -52,7 +52,7 @@ export default function TradingPlan({ plan }: Props) {
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
         <span style={{ fontSize: 13 }}><span style={{ color: '#888' }}>仓位:</span> {plan.position_level || '--'}</span>
         <span style={{ fontSize: 13 }}><span style={{ color: '#888' }}>建仓:</span> {plan.build_per_stock_pct || '--'}</span>
-        {plan.main_lines?.length ? <span style={{ fontSize: 13 }}><span style={{ color: '#888' }}>20日强度候选:</span> {plan.main_lines.join(' · ')}</span> : null}
+        {plan.main_lines?.length ? <span style={{ fontSize: 13 }}><span style={{ color: '#888' }}>10日强度候选:</span> {plan.main_lines.join(' · ')}</span> : null}
       </div>
       {plan.position_detail && (
         <div style={{ marginBottom: 12, padding: '6px 10px', background: 'rgba(78,205,196,0.08)', borderRadius: 6, fontSize: 12, color: '#4ecdc4' }}>
@@ -160,7 +160,7 @@ export default function TradingPlan({ plan }: Props) {
 
       {focusItems.length > 0
         ? <BuyActionTable title={`🔥 重点关注 (${focusItems.length})`} items={focusItems} />
-        : buyItems.length > 0 && <div className="empty" style={{ marginTop: 10 }}>🔥 今日暂无20日板块强度候选/强动量重点买点</div>}
+        : buyItems.length > 0 && <div className="empty" style={{ marginTop: 10 }}>🔥 今日暂无10日板块强度候选/强动量重点买点</div>}
       {watchItems.length > 0 && <BuyActionTable title={`👀 次级观察 (${watchItems.length})`} items={watchItems} />}
       {ordinaryItems.length > 0 && (
         <div style={{ marginTop: 10 }}>

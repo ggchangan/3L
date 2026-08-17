@@ -90,7 +90,7 @@ def fetch_stock_klines_from_db(codes, limit=60):
 
 
 def get_l1_market_features(as_of_date):
-    """L1 专用全市场入口；返回目标日可回放的20日动量和52周新高特征。"""
+    """L1 专用全市场入口；返回目标日可回放的10日动量和52周新高特征。"""
     from backend.data_access.tushare_db import TushareDB
     return TushareDB().query_l1_market_features(as_of_date)
 

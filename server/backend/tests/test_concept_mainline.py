@@ -215,8 +215,8 @@ def test_concept_mainline_only_ranks_tracked_concepts_on_authoritative_date(monk
 
     result = review_compute_service.get_concept_mainline_data('2026-07-21')
 
-    assert result['model_type'] == 'sector_return_20d_proxy'
-    assert result['model_label'] == '20日概念板块强度候选'
+    assert result['model_type'] == 'sector_return_10d_proxy'
+    assert result['model_label'] == '10日概念板块强度候选'
     assert result['is_l1_model'] is False
     assert [item['name'] for item in result['all_ranked']] == ['追踪且已到齐']
     assert result['all_ranked'][0]['strength_rank'] == 1

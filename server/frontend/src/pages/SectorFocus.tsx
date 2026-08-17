@@ -127,7 +127,7 @@ export default function SectorFocus() {
             <span className="step">关注管理</span>
             选择 / 取消关注
             <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>
-              → 勾选即保存 · 复盘页同数据源展示强度（今日/20日涨幅、阶段、领涨）
+              → 勾选即保存 · 复盘页同数据源展示强度（今日/10日涨幅、阶段、领涨）
             </span>
           </div>
 

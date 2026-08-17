@@ -6,6 +6,7 @@ import './StrongTrendCandidates.css'
 interface SectorInfo {
   type: string
   name: string
+  chg_10d?: number
   chg_20d: number
   chg_5d: number
 }
@@ -50,9 +51,9 @@ interface Candidate {
 
 interface TrendData {
   date: string
-  top_industries: { name: string; chg_20d: number }[]
+  top_industries: { name: string; chg_10d?: number; chg_20d: number }[]
   hot_industries: { name: string; chg_5d: number }[]
-  top_concepts: { name: string; chg_20d: number }[]
+  top_concepts: { name: string; chg_10d?: number; chg_20d: number }[]
   hot_concepts: { name: string; chg_5d: number }[]
   candidates: Candidate[]
 }
@@ -68,6 +69,8 @@ const ALIGNMENT_LABELS: Record<string, string> = {
   'partial': '偏多',
   'bearish': '空头排列',
 }
+
+const momentumChg = (s: { chg_10d?: number; chg_20d: number }) => s.chg_10d ?? s.chg_20d
 
 export default function StrongTrendCandidates() {
   const navigate = useNavigate()
@@ -145,11 +148,11 @@ export default function StrongTrendCandidates() {
           <>
           {/* 板块信息 */}
           <div className="section">
-            <h2 className="section-title">🏭 强势行业</h2>
+            <h2 className="section-title">🏭 强势行业（10日）</h2>
             <div className="sector-tags">
               {data.top_industries.map(s => (
                 <span key={s.name} className="sector-tag">
-                  {s.name} <span className="chg-up">+{s.chg_20d.toFixed(1)}%</span>
+                  {s.name} <span className="chg-up">+{momentumChg(s).toFixed(1)}%</span>
                 </span>
               ))}
             </div>
@@ -167,11 +170,11 @@ export default function StrongTrendCandidates() {
           </div>
 
           <div className="section">
-            <h2 className="section-title">💡 强势概念</h2>
+            <h2 className="section-title">💡 强势概念（10日）</h2>
             <div className="sector-tags">
               {data.top_concepts.map(s => (
                 <span key={s.name} className="sector-tag concept-tag">
-                  {s.name} <span className="chg-up">+{s.chg_20d.toFixed(1)}%</span>
+                  {s.name} <span className="chg-up">+{momentumChg(s).toFixed(1)}%</span>
                 </span>
               ))}
             </div>
@@ -209,7 +212,7 @@ export default function StrongTrendCandidates() {
                   <div className="card-sectors">
                     {c.sectors.slice(0, 4).map(s => (
                       <span key={s.name} className={`sector-badge ${s.type === 'industry' ? 'industry-badge' : 'concept-badge'}`}>
-                        {s.type === 'industry' ? '🏭' : '💡'} {s.name} {s.chg_20d > 0 ? `+${s.chg_20d.toFixed(1)}%` : ''}
+                        {s.type === 'industry' ? '🏭' : '💡'} {s.name} {momentumChg(s) > 0 ? `+${momentumChg(s).toFixed(1)}%` : ''}
                       </span>
                     ))}
                   </div>
@@ -256,8 +259,8 @@ export default function StrongTrendCandidates() {
                     ) : (
                       <span className="sig-badge sig-3l">3L</span>
                     )}
-                    {c.mainline_level === '主线' && <span className="sig-badge sig-mainline">20日强度前5候选</span>}
-                    {c.mainline_level === '次级主线' && <span className="sig-badge sig-submain">20日强度6–10候选</span>}
+                    {c.mainline_level === '主线' && <span className="sig-badge sig-mainline">10日强度前5候选</span>}
+                    {c.mainline_level === '次级主线' && <span className="sig-badge sig-submain">10日强度6–10候选</span>}
                     {c.stop_loss_pct != null && (
                       <span className="sig-badge sig-sl">止损{c.stop_loss_pct.toFixed(1)}%</span>
                     )}
