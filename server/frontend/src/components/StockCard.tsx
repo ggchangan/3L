@@ -21,6 +21,7 @@ const strengthLevelLabel = (level?: string) => {
 
 import type { BuySignalItem } from '../lib/types'
 import { buyDecisionAction } from '../lib/buyDecision'
+import { fusionDisplayLabel, isRejectedTechnicalBuy, signalRejectReason, triggeredSignalStyle } from '../lib/signalDisplay'
 
 interface StockCardProps {
   s: BuySignalItem
@@ -55,6 +56,8 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
   const structIcon = STRUCT_ICONS[s.structure] || ''
 
   const isBuy = s.technical_signal === 'buy' || s.signal === 'buy'
+  const rejectedTechnicalBuy = isRejectedTechnicalBuy(s)
+  const rejectReason = signalRejectReason(s)
   const chartId = `${chartPrefix}chart_${idx}`
   const modeParam = mode ? `&mode=${mode}` : ''
   const slParam = (s.stop_loss !== undefined && s.stop_loss !== null) ? `&stop_loss=${s.stop_loss}` : ''
@@ -126,16 +129,16 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
   let conclusion = `阶段${s.stage}，${s.structure}`
   let conclusionColor = '#aaa'
   if (isBlocked) {
-    conclusion = `${s.buy_point || '买点信号'}已触发，但${s.action_reason || '板块数据待补齐'}，操作暂待确认`
+    conclusion = `${s.buy_point || '买点信号'}已触发，但${rejectReason || s.action_reason || '板块数据待补齐'}，操作暂待确认`
     conclusionColor = '#ffd700'
   } else if (isCandidate) {
-    conclusion = `${s.buy_point || '买点'}技术信号已触发；${s.action_reason || '尚未满足当前市场执行条件'}，列入观察，尚非可执行买入`
+    conclusion = `${s.buy_point || '买点'}技术信号已触发；${rejectReason || s.action_reason || '尚未满足当前市场执行条件'}，列入观察，尚非可执行买入`
     conclusionColor = '#ffd700'
   } else if (isSignalOnly) {
     conclusion = decisionContext === 'analysis'
-      ? `${s.buy_point || '买点'}技术信号已触发；本页尚未叠加复盘市场环境和方向优先级，最终操作以复盘页为准`
-      : `${s.buy_point || '买点'}技术信号已触发；${s.action_reason || '当前方向优先级不足'}，不进入当前核心交易计划`
-    conclusionColor = '#888'
+      ? `${s.buy_point || '买点'}技术信号已触发；${rejectReason || '本页尚未叠加复盘市场环境和方向优先级'}，最终操作以复盘页为准`
+      : `${s.buy_point || '买点'}技术信号已触发；${rejectReason || s.action_reason || '当前方向优先级不足'}，仅作为技术事实，不进入当前核心交易计划`
+    conclusionColor = rejectedTechnicalBuy ? '#ff9800' : '#888'
   } else if (isBuy) {
     const slText = (s.stop_loss && s.stop_loss_pct)
       ? `，建议止损${Number(s.stop_loss).toFixed(2)}（约${Number(s.stop_loss_pct).toFixed(1)}%）`
@@ -179,8 +182,8 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
           <span className="code">{s.code}</span>
           {s.profit_model1 && <span className="tag" style={{ background: '#e94560', fontSize: 10, padding: '1px 6px', borderRadius: 4, marginLeft: 4 }}>🏆 盈利1</span>}
           {s.trend_stock && <span className="tag" style={{ background: '#2196f3', fontSize: 10, padding: '1px 6px', borderRadius: 4, marginLeft: 4 }}>📈 趋势股</span>}
-          {isBuy && <span style={{ background: isNonExecutable ? '#4b5563' : '#e94560', color: '#fff', fontSize: 11, fontWeight: 'bold', padding: '2px 8px', borderRadius: 4, marginLeft: 6 }}>
-            {isBlocked ? '⏳ 待确认' : isCandidate ? '👀 观察' : isSignalOnly ? '📡 技术信号' : '🎯 买点'}
+          {isBuy && <span style={{ background: rejectedTechnicalBuy ? '#7c4a03' : isNonExecutable ? '#4b5563' : '#e94560', color: '#fff', fontSize: 11, fontWeight: 'bold', padding: '2px 8px', borderRadius: 4, marginLeft: 6 }}>
+            {rejectedTechnicalBuy ? '📡 技术信号·位置不成立' : isBlocked ? '⏳ 待确认' : isCandidate ? '👀 观察' : isSignalOnly ? '📡 技术信号' : '🎯 买点'}
           </span>}
         </div>
         <span style={{ fontSize: 13, color: changeColor }}>
@@ -193,6 +196,12 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
         <div className="field"><span className="l">结构:</span> <span className="v">{structIcon} {s.structure || '--'}</span></div>
         <div className="field"><span className="l">阶段:</span> <span className="v" style={{ color: stageColor, fontWeight: 'bold' }}>{icon} {s.stage || '--'}</span></div>
         {bpContent}
+        {rejectedTechnicalBuy && (
+          <div className="field">
+            <span className="l">位置门禁:</span>
+            <span className="v" style={{ color: '#ff9800', fontSize: 11 }} title={rejectReason}>⛔ 不成立</span>
+          </div>
+        )}
         {slContent}
         {sectorLine}
         {/* 板块层只提供环境提示，不替代个股买点 */}
@@ -230,24 +239,18 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
         <div style={{ marginTop: 4, padding: '4px 6px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, border: '1px solid #2a2a3a' }}>
           <div style={{ fontSize: 10, color: '#888', marginBottom: 3 }}>📡 关键信号</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {(s.triggered_signals as Array<{name:string;confidence:number;direction:string}>).slice(0,4).map((sig, i) => {
-              const dirColor = sig.direction === 'bullish' ? '#4ecdc4' : sig.direction === 'bearish' ? '#e94560' : '#ffd700'
-              const dirIcon = sig.direction === 'bullish' ? '🟢' : sig.direction === 'bearish' ? '🔴' : '🟡'
+            {s.triggered_signals.slice(0,4).map((sig, i) => {
+              const display = triggeredSignalStyle(sig)
               return (
-                <span key={i} style={{ fontSize: 10, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4, color: dirColor }}>
-                  {dirIcon} {sig.name} {sig.confidence.toFixed(0)}分
+                <span key={i} title={display.title} style={{ fontSize: 10, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4, color: display.color }}>
+                  {display.icon} {sig.name}{display.suffix} {sig.confidence.toFixed(0)}分
                 </span>
               )
             })}
             {s.fusion_type && (
               <span style={{ fontSize: 10, background: 'rgba(88,166,255,0.1)', padding: '2px 6px', borderRadius: 4, color: '#58a6ff' }}>
                 {(() => {
-                  const fusionLabels: Record<string,string> = {
-                    'strong_buy': '🟢强买', 'signal_buy': '🟢买入', 'conflict_bearish': '⚠️警惕',
-                    'signal_sell': '🔴卖出', 'conflict_bullish': '⚠️等确认', 'buy_point_only': '⏳买点',
-                    'bearish_watch': '👀偏空', 'bullish_wait': '⏳等待', 'balance': '⚖️平衡',
-                  }
-                  return fusionLabels[s.fusion_type!] || s.fusion_type
+                  return fusionDisplayLabel(s.fusion_type)
                 })()}
               </span>
             )}

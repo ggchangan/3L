@@ -181,6 +181,40 @@ describe('StockCard', () => {
     expect(screen.queryByText(/可执行买入计划/)).toBeNull()
   })
 
+  it('位置不成立的 bullish 技术信号明确标为仅技术事实', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      name: '美年健康',
+      code: '002044',
+      stage: '区间顶部',
+      structure: '区间震荡',
+      buy_point: '中继买点',
+      signal: 'buy',
+      technical_signal: 'buy',
+      execution_signal: 'hold',
+      decision_status: 'signal_only',
+      structural_compatible: false,
+      structural_compatibility_reason: '中继/回踩买点只能位于上涨趋势，区间顶部或下降趋势不成立',
+      fusion_type: 'keypoint_rejected_bullish',
+      triggered_signals: [{
+        key: 'continuation_pullback',
+        name: '中继买点',
+        direction: 'bullish',
+        confidence: 72,
+        keypoint_allowed: false,
+        keypoint_reject_reason: '中继/回踩买点只能位于上涨趋势，区间顶部或下降趋势不成立',
+      }],
+    }} idx={1} mode="review" decisionContext="buy-signal" />)
+
+    expect(screen.getByText('📡 技术信号·位置不成立')).toBeTruthy()
+    expect(screen.getByText('⛔ 不成立')).toBeTruthy()
+    expect(screen.getByText(/仅作为技术事实/)).toBeTruthy()
+    expect(screen.getByText(/中继\/回踩买点只能位于上涨趋势/)).toBeTruthy()
+    expect(screen.getByText(/中继买点 · 位置不成立/)).toBeTruthy()
+    expect(screen.getByText('⛔位置不成立')).toBeTruthy()
+    expect(screen.queryByText(/可执行买入计划/)).toBeNull()
+  })
+
   it('个股分析页的技术信号不冒充已完成复盘门禁', () => {
     render(<StockCard s={{
       ...buySignal,

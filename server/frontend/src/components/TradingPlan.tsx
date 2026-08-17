@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ReviewData } from '../lib/types'
 import { formatSectorEnvironment } from '../lib/review'
 import { buyDecisionAction } from '../lib/buyDecision'
+import { fusionDisplayLabel, isRejectedTechnicalBuy, prioritizedTriggeredSignals, signalRejectReason, triggeredSignalStyle } from '../lib/signalDisplay'
 
 interface Props {
   plan: ReviewData['trading_plan']
@@ -86,18 +87,23 @@ export default function TradingPlan({ plan }: Props) {
           const sig = item.signal || ''
           const sigs = item.triggered_signals || []
           const ft = item.fusion_type || ''
+          const rejected = isRejectedTechnicalBuy(item)
+          const rejectReason = signalRejectReason(item)
           return (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-              {sig ? <span style={{ color: '#aaa', fontSize: 10 }}>{sig}</span> : null}
-              {(sigs.length > 0) && sigs.slice(0,2).map((s: any, i: number) => {
-                const c = s.direction === 'bullish' ? '#4ecdc4' : s.direction === 'bearish' ? '#e94560' : '#ffd700'
-                return <span key={i} style={{fontSize:9,color:c,background:'rgba(255,255,255,0.05)',padding:'1px 4px',borderRadius:3}}>{s.name}</span>
-              })}
-              {ft && (
-                <span style={{fontSize:9,color:'#58a6ff',background:'rgba(88,166,255,0.1)',padding:'1px 4px',borderRadius:3}}>
-                  {({strong_buy:'强买',signal_buy:'买入',conflict_bearish:'⚠️',signal_sell:'卖出',conflict_bullish:'等确认',buy_point_only:'买点',bearish_watch:'偏空',bullish_wait:'等待',balance:'平衡'})[ft] || ft}
-                </span>
-              )}
+            <div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+                {sig ? <span style={{ color: '#aaa', fontSize: 10 }}>{sig}</span> : null}
+                {prioritizedTriggeredSignals(sigs, 2).map((s: any, i: number) => {
+                  const display = triggeredSignalStyle(s)
+                  return <span key={i} title={display.title} style={{fontSize:9,color:display.color,background:'rgba(255,255,255,0.05)',padding:'1px 4px',borderRadius:3}}>{display.icon} {s.name}{display.suffix}</span>
+                })}
+                {ft && (
+                  <span style={{fontSize:9,color:'#58a6ff',background:'rgba(88,166,255,0.1)',padding:'1px 4px',borderRadius:3}}>
+                    {fusionDisplayLabel(ft)}
+                  </span>
+                )}
+              </div>
+              {rejected && <div title={rejectReason} style={{ color: '#ff9800', fontSize: 9, marginTop: 2 }}>位置不成立</div>}
             </div>
           )
         }}
@@ -192,17 +198,34 @@ function BuyActionTable({ title, items }: { title: string; items: any[] }) {
       groupKey={directionGroup}
       renderAction={item => {
         const action = buyDecisionAction(item, 'signal')
-        const color = action === '待确认' ? '#ffd700' : PRI_COLORS[item.priority] || '#22c55e'
+        const color = action === '买入'
+          ? '#22c55e'
+          : action === '观察' || action === '待确认'
+            ? '#ffd700'
+            : action === '技术信号'
+              ? '#888'
+              : PRI_COLORS[item.priority] || '#aaa'
         return <span style={{ color, fontWeight: 600 }}>{action}</span>
       }}
       renderSignal={item => {
         const sigs = item.triggered_signals || []
+        const rejected = isRejectedTechnicalBuy(item)
+        const rejectReason = signalRejectReason(item)
+        const signalName = item.buy_point || item.technical_signal || item.signal || ''
         return (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-            <span style={{ color: '#aaa', fontSize: 10 }}>{item.signal || item.buy_point || ''}</span>
-            {sigs.slice(0, 2).map((s: any, i: number) => (
-              <span key={i} style={{fontSize:9,color:s.direction === 'bullish' ? '#4ecdc4' : s.direction === 'bearish' ? '#e94560' : '#ffd700',background:'rgba(255,255,255,0.05)',padding:'1px 4px',borderRadius:3}}>{s.name}</span>
-            ))}
+          <div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+              <span style={{ color: '#aaa', fontSize: 10 }}>{signalName}</span>
+              {prioritizedTriggeredSignals(sigs, 2).map((s: any, i: number) => {
+                const display = triggeredSignalStyle(s)
+                return (
+                  <span key={i} title={display.title} style={{fontSize:9,color:display.color,background:'rgba(255,255,255,0.05)',padding:'1px 4px',borderRadius:3}}>
+                    {display.icon} {s.name}{display.suffix}
+                  </span>
+                )
+              })}
+            </div>
+            {rejected && <div title={rejectReason} style={{ color: '#ff9800', fontSize: 9, marginTop: 2 }}>位置不成立：仅技术事实</div>}
           </div>
         )
       }}
@@ -331,6 +354,7 @@ function UnifiedTable({ title, items, groupKey, renderAction, renderSignal, rend
                         </div>
                       )}
                       {item.attention_reason && <div style={{ color: '#bbb' }}>{item.attention_reason}</div>}
+                      {signalRejectReason(item) && <div style={{ color: '#ff9800' }}>位置门禁：{signalRejectReason(item)}</div>}
                       {item.reason && <div>{item.reason}</div>}
                     </td>
                     <td style={{ padding: '3px 4px', whiteSpace: 'nowrap', textAlign: 'right' }}>

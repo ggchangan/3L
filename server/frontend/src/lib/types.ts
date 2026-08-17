@@ -201,6 +201,9 @@ export interface BuySignalItem {
     confidence: number
     detail?: string
     scores?: Record<string, unknown>
+    keypoint_allowed?: boolean
+    keypoint_reject_reason?: string
+    buy_point_category?: string
   }>
   fusion_type?: string
   fusion_reason?: string
