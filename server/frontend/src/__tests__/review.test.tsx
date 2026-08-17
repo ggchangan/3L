@@ -303,6 +303,44 @@ describe('TradingPlan action semantics', () => {
     expect(screen.queryByText('🔥 重点关注 (1)')).toBeNull()
     expect(screen.queryByText('旧缓存股票')).toBeNull()
   })
+
+  it('交易计划表展示技术信号的位置门禁失败原因', () => {
+    render(<TradingPlan plan={{
+      buy_priority: [{
+        code: '002044',
+        name: '美年健康',
+        attention_tier: 'ordinary',
+        decision_status: 'signal_only',
+        action_type: '买入',
+        signal: 'buy',
+        technical_signal: 'buy',
+        execution_signal: 'hold',
+        buy_point: '中继买点',
+        structure: '区间震荡',
+        stage: '区间顶部',
+        structural_compatible: false,
+        structural_compatibility_reason: '中继/回踩买点只能位于上涨趋势，区间顶部或下降趋势不成立',
+        fusion_type: 'keypoint_rejected_bullish',
+        triggered_signals: [{
+          key: 'continuation_pullback',
+          name: '中继买点',
+          direction: 'bullish',
+          confidence: 72,
+          keypoint_allowed: false,
+          keypoint_reject_reason: '中继/回踩买点只能位于上涨趋势，区间顶部或下降趋势不成立',
+        }],
+      }],
+      buy_summary: { total: 1, focus: 0, watch: 0, ordinary: 1 },
+    }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '展开普通技术信号 (1)' }))
+    expect(screen.getByText('美年健康')).toBeTruthy()
+    expect(screen.getByText('技术信号')).toBeTruthy()
+    expect(screen.getByText('中继买点')).toBeTruthy()
+    expect(screen.getByText(/位置不成立：仅技术事实/)).toBeTruthy()
+    expect(screen.getByText(/位置门禁：中继\/回踩买点只能位于上涨趋势/)).toBeTruthy()
+    expect(screen.queryByText(/可执行买入计划/)).toBeNull()
+  })
 })
 
 describe('持仓真实风险暴露', () => {
