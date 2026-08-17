@@ -267,10 +267,10 @@ export default function TopGainers() {
                       {s.mainline_level && (
                         <span className={`mainline-badge ${s.mainline_level === '主线' ? 'main' : s.mainline_level === '次级主线' ? 'sub' : 'non'}`}>
                           {s.mainline_level === '主线'
-                            ? '20日强度前5候选'
+                            ? '10日强度前5候选'
                             : s.mainline_level === '次级主线'
-                              ? '20日强度6–10候选'
-                              : '20日强度榜外'}
+                              ? '10日强度6–10候选'
+                              : '10日强度榜外'}
                         </span>
                       )}
                       {s.buy_point && (

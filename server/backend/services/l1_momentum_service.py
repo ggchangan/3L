@@ -9,17 +9,19 @@ from datetime import datetime, timezone
 from backend.core import config
 
 L1_SHADOW_DIR = os.path.join(config.COMPUTED_DIR, 'l1_momentum_shadow')
+L1_MOMENTUM_LOOKBACK_DAYS = 10
+L1_SNAPSHOT_VERSION = 3
 
 
-def _return_20d(rows, as_of_date):
+def _return_momentum(rows, as_of_date, window=L1_MOMENTUM_LOOKBACK_DAYS):
     cutoff = str(as_of_date or '').replace('-', '')
     eligible = sorted(
         (row for row in (rows or []) if not cutoff or str(row.get('date', '')).replace('-', '') <= cutoff),
         key=lambda row: str(row.get('date', '')),
     )
-    if len(eligible) < 21:
+    if len(eligible) < window + 1:
         return None, eligible
-    base = float(eligible[-21].get('close', 0) or 0)
+    base = float(eligible[-window - 1].get('close', 0) or 0)
     current = float(eligible[-1].get('close', 0) or 0)
     if base <= 0 or current <= 0:
         return None, eligible
@@ -43,15 +45,15 @@ def compute_l1_industry_rankings(stocks, industry_map, as_of_date,
     if feature_rows:
         for feature in feature_rows:
             code = str(feature.get('code') or '').split('.')[0]
-            value = feature.get('return_20d')
+            value = feature.get('return_10d', feature.get('return_20d'))
             if not code or value is None or not feature.get('adjustment_complete', False):
                 incomplete_kline += 1
                 continue
             candidates.append((code, float(value), None, feature.get('high_52w')))
     else:
         for code, rows in stock_rows.items():
-            return_20d, eligible_rows = _return_20d(rows, as_of_date)
-            if return_20d is None:
+            momentum_return, eligible_rows = _return_momentum(rows, as_of_date)
+            if momentum_return is None:
                 incomplete_kline += 1
                 continue
             high_52w = None
@@ -62,7 +64,7 @@ def compute_l1_industry_rankings(stocks, industry_map, as_of_date,
                     for row in eligible_rows[-250:-1]
                 )
                 high_52w = current_high >= prior_high
-            candidates.append((code, return_20d, eligible_rows, high_52w))
+            candidates.append((code, momentum_return, eligible_rows, high_52w))
 
     candidates.sort(key=lambda item: item[1], reverse=True)
     top_n = min(len(candidates), max(int(top_n_floor), round(len(candidates) * dynamic_top_ratio)))
@@ -110,11 +112,11 @@ def compute_l1_industry_rankings(stocks, industry_map, as_of_date,
     )
 
     hits = defaultdict(list)
-    for code, return_20d, rows, high_52w in momentum_pool:
+    for code, momentum_return, rows, high_52w in momentum_pool:
         info = (industry_map or {}).get(code, {})
         industry = info.get('ths_industry', '') if isinstance(info, dict) else str(info or '')
         if industry:
-            hits[industry].append((code, return_20d, rows, high_52w))
+            hits[industry].append((code, momentum_return, rows, high_52w))
 
     high_52w_by_code = {code: high_52w for code, _, _, high_52w in candidates}
     high_52w_coverage = (
@@ -210,6 +212,8 @@ def compute_l1_industry_rankings(stocks, industry_map, as_of_date,
             'eligible_stock_count': len(candidates),
             'missing_kline_count': incomplete_kline,
             'market_universe': round(universe_coverage, 4),
+            'kline_10d': round(kline_coverage, 4),
+            # 兼容旧前端字段；真实含义已切换为 L1_MOMENTUM_LOOKBACK_DAYS。
             'kline_20d': round(kline_coverage, 4),
             'listing_date': round(listing_date_coverage, 4),
             'target_date': round(target_date_coverage, 4),
@@ -237,7 +241,7 @@ def compute_l1_industry_rankings(stocks, industry_map, as_of_date,
 
 
 def compute_and_persist_l1_shadow(as_of_date):
-    """从统一数据层计算每日影子快照；不替换现有20日板块强度代理榜。"""
+    """从统一数据层计算每日影子快照；不替换现有10日板块强度代理榜。"""
     from backend.data_access.data_layer import get_industry_map, get_l1_market_features
 
     os.makedirs(L1_SHADOW_DIR, exist_ok=True)
@@ -265,7 +269,7 @@ def compute_and_persist_l1_shadow(as_of_date):
     )
     result['source'] = market_data.get('source', '')
     result['generated_at'] = datetime.now(timezone.utc).isoformat()
-    result['snapshot_version'] = 2
+    result['snapshot_version'] = L1_SNAPSHOT_VERSION
     config.atomic_json_dump(
         result, os.path.join(L1_SHADOW_DIR, f'{normalized_date}.json'), indent=2,
     )
@@ -280,10 +284,10 @@ def get_or_compute_l1_shadow(as_of_date, force=False):
         try:
             with open(snapshot_path, encoding='utf-8') as stream:
                 cached = json.load(stream)
-            if cached.get('data_status') != 'partial':
+            if cached.get('snapshot_version') == L1_SNAPSHOT_VERSION and cached.get('data_status') != 'partial':
                 return cached
             # 部分数据可能在盘后继续补齐，避免同日首个残缺快照永久固化。
-            if (datetime.now().timestamp() - os.path.getmtime(snapshot_path)) < 900:
+            if cached.get('snapshot_version') == L1_SNAPSHOT_VERSION and (datetime.now().timestamp() - os.path.getmtime(snapshot_path)) < 900:
                 return cached
         except (OSError, ValueError):
             pass

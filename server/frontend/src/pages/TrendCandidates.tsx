@@ -121,7 +121,7 @@ export default function TrendCandidates() {
       <NavBar />
       <div className="header">
         <h1>🎯 趋势交易候选</h1>
-        <div className="subtitle">自动候选（20日板块强度前10候选）· 从自选股搜索加入 · 打勾即加入趋势交易</div>
+        <div className="subtitle">自动候选（10日板块强度前10候选）· 从自选股搜索加入 · 打勾即加入趋势交易</div>
         <div className="stats">自动候选 <b>{autoCount}</b> 只 · 已跟踪 <b>{trackedCount}</b> 只</div>
       </div>
 

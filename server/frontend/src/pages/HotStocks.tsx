@@ -223,7 +223,7 @@ export default function HotStocks() {
 
             <label className="checkbox-label">
               <input type="checkbox" checked={mainlineOnly} onChange={e => setMainlineOnly(e.target.checked)} />
-              仅20日强度前10候选
+              仅10日强度前10候选
             </label>
           </div>
 
@@ -289,7 +289,7 @@ export default function HotStocks() {
             {signalFilter !== '全部' && ` · 信号=${signalFilter}`}
             {structFilter !== '全部' && ` · 结构=${structFilter}`}
             {buyOnly && ' · 仅买点'}
-            {mainlineOnly && ' · 仅20日强度前10候选'}
+            {mainlineOnly && ' · 仅10日强度前10候选'}
           </div>
         )}
 

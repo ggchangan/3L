@@ -138,7 +138,7 @@ def _last_trading_day():
 
 ### L3 — 业务逻辑验证
 
-**职责：** 验证业务计算逻辑正确——主线判定、行业排行、chg_1d/chg_20d 计算。
+**职责：** 验证业务计算逻辑正确——主线判定、行业排行、chg_1d/chg_10d（并保留 chg_20d 兼容字段） 计算。
 
 **不需要知道：** 数据从哪个源来、前端怎么展示。
 
@@ -146,8 +146,8 @@ def _last_trading_day():
 |:------|:----|:-----|
 | `get_mainline_data()` 结构 | 调用 | 含 lines/secondary/all_ranked |
 | chg_1d 值 | 对比已知行业的预期值 | 与 `_push2test` 或实时源一致 |
-| chg_20d 值 | 对比K线计算 | (klines[-1]/klines[-20]-1)*100 |
-| 主线排序 | 按 chg_20d 降序 | 前5 = 主线 |
+| chg_10d 值 | 对比K线计算 | 按10个交易日前基准计算 |
+| 主线排序 | 按 chg_10d 降序 | 前5 = 主线 |
 | 概念主线同理 | `get_concept_mainline_data()` | 结构与行业主线一致 |
 
 ### L4 — API 验证
@@ -192,7 +192,7 @@ lines = data.get('lines', [])       # ← 永远返回 []
 |:------|:----|:-----|
 | `GET /api/review` | HTTP 调用 | 200 + JSON |
 | 返回结构 | 含 lines/secondary/industries | schema 完整 |
-| 行业排行 | `GET /api/review` 中 industries | 含 chg_1d/chg_20d |
+| 行业排行 | `GET /api/review` 中 industries | 含 chg_1d/chg_10d（并保留 chg_20d 兼容字段） |
 | 关键行业值 | 电子化学品/半导体/银行 | change_pct 非零（交易日） |
 
 ### L5 — 前端展示验证（可选）

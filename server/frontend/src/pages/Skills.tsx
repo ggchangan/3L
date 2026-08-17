@@ -23,7 +23,7 @@ const SKILLS: SkillItem[] = [
   { name: 'a-stock-data-sources', desc: '5个稳定A股数据源分层使用方案（mootdx/腾讯/akshare/同花顺）', tag: '更新', tagCls: 'updated' },
   { name: 'a-stock-3l-analysis', desc: '个股3L体系分析（动量主线/最强逻辑/量价择时）' },
   { name: 'a-stock-3l-simulation-v2', desc: '3L模拟交易引擎（中继+突破双选，板块动量加权分配）' },
-  { name: 'main-line-judgment', desc: '20日动量+个股活跃度动态主线板块判定' },
+  { name: 'main-line-judgment', desc: '10日动量+个股活跃度动态主线板块判定' },
   { name: 'market-scan-workflow', desc: '系统化扫描8大方向自选股，30日K线缓存买点分析' },
   { name: 'market-leaders-scan', desc: '市场龙头动态扫描 — 5日涨幅行业第一+成交额第一+MA10向上+换手率>3%', tag: '创建', tagCls: 'created' },
   { name: 'market-peak-trough', desc: '综合评分法判断大盘波峰/波谷/波中，决定总仓位策略' },

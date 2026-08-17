@@ -49,7 +49,7 @@ export default function SectorMonitor() {
           color: tab === 'industry_chg20d' ? '#ffd700' : '#888',
           borderBottom: tab === 'industry_chg20d' ? '2px solid #ffd700' : '2px solid transparent',
           fontWeight: tab === 'industry_chg20d' ? 'bold' : 'normal',
-        }}>🏭 行业·20日</button>
+        }}>🏭 行业·10日</button>
         <button type="button" role="tab" aria-selected={tab === 'concept_today'} onClick={() => setTab('concept_today')} className="monitor-tab" style={{
           padding: '6px 14px', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap',
           color: tab === 'concept_today' ? '#ffd700' : '#888',
@@ -66,7 +66,7 @@ export default function SectorMonitor() {
           </thead>
           <tbody>
             {activeItems.map((b, i) => {
-              const c = isChg20d ? (b.chg20d ?? b.chg ?? 0) : (b.chg ?? b.chg20d ?? 0)
+              const c = isChg20d ? (b.chg10d ?? b.chg20d ?? b.chg ?? 0) : (b.chg ?? b.chg10d ?? b.chg20d ?? 0)
               const chartId = `chart_${i}`
               return (
                 <React.Fragment key={i}>

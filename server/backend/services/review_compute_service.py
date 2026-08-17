@@ -23,6 +23,25 @@ MAINLINE_CALIBRATION_PATH = os.path.join(DATA_DIR, 'computed', 'mainline_calibra
 _MAINLINE_STATE_LOCK = threading.RLock()
 logger = logging.getLogger(__name__)
 
+MOMENTUM_LOOKBACK_DAYS = 10
+MOMENTUM_MODEL_TYPE = f'sector_return_{MOMENTUM_LOOKBACK_DAYS}d_proxy'
+MOMENTUM_MODEL_LABEL_INDUSTRY = f'{MOMENTUM_LOOKBACK_DAYS}日行业板块强度候选'
+MOMENTUM_MODEL_LABEL_CONCEPT = f'{MOMENTUM_LOOKBACK_DAYS}日概念板块强度候选'
+MOMENTUM_LABEL_TOP5 = f'{MOMENTUM_LOOKBACK_DAYS}日强度前5候选'
+MOMENTUM_LABEL_TOP10 = f'{MOMENTUM_LOOKBACK_DAYS}日强度6–10候选'
+MOMENTUM_LABEL_OTHER = f'{MOMENTUM_LOOKBACK_DAYS}日强度榜外'
+
+
+def _momentum_return(klines, window=MOMENTUM_LOOKBACK_DAYS):
+    """按板块强度窗口计算涨幅；需要当前 K 线 + window 个交易日前基准。"""
+    if not klines or len(klines) < window + 1:
+        return None
+    current = float(klines[-1]['close'])
+    base = float(klines[-window - 1]['close'])
+    if current <= 0 or base <= 0:
+        return None
+    return (current / base - 1) * 100
+
 
 @contextmanager
 def _mainline_state_lock():
@@ -452,19 +471,19 @@ def classify_opportunity(is_mainline, is_secondary, stage, vl_score):
 def describe_sector_context(opportunity, mainline_level=''):
     """把兼容字段 opportunity 转成不越权的板块环境描述。"""
     level_label = {
-        '主线': '20日强度前5候选',
-        '次级主线': '20日强度6–10候选',
-        '非主线': '20日强度榜外',
+        '主线': MOMENTUM_LABEL_TOP5,
+        '次级主线': MOMENTUM_LABEL_TOP10,
+        '非主线': MOMENTUM_LABEL_OTHER,
     }.get(mainline_level, mainline_level or '板块')
     labels = {
-        '主线回调': '20日强度前5候选·波谷',
-        '次线机会': '20日强度6–10候选·波谷',
-        '波谷观察': '20日强度榜外·波谷',
+        '主线回调': f'{MOMENTUM_LABEL_TOP5}·波谷',
+        '次线机会': f'{MOMENTUM_LABEL_TOP10}·波谷',
+        '波谷观察': f'{MOMENTUM_LABEL_OTHER}·波谷',
         '趋势延续': f'{level_label}·上升/波中',
         '见顶风险': f'{level_label}·波峰风险',
         '回调中': f'{level_label}·下跌/回调',
-        '主线观察': '20日强度前5候选·阶段待确认',
-        '次级观察': '20日强度6–10候选·阶段待确认',
+        '主线观察': f'{MOMENTUM_LABEL_TOP5}·阶段待确认',
+        '次级观察': f'{MOMENTUM_LABEL_TOP10}·阶段待确认',
     }
     return labels.get(opportunity, opportunity or '--')
 
@@ -549,7 +568,7 @@ def _record_mainline_calibration(date_str, ranked, is_estimated, coverage=0.0):
 
 
 def get_mainline_data(date_str):
-    """板块自身20日涨幅代理榜；不是知识库定义的 L1 动量主线模型。"""
+    """板块自身10日涨幅代理榜；不是知识库定义的 L1 动量主线模型。"""
     # 检查当天缓存（数据源已经是 DB，不再检查文件 mtime）
     if os.path.isfile(MAINLINE_FULL_CACHE):
         try:
@@ -557,7 +576,7 @@ def get_mainline_data(date_str):
                 cached = json.load(_f)
             if (
                 cached.get('date') == date_str
-                and cached.get('model_type') == 'sector_return_20d_proxy'
+                and cached.get('model_type') == MOMENTUM_MODEL_TYPE
                 and 'l1_shadow' in cached
             ):
                 cached['l1_shadow'] = _get_l1_shadow(date_str)
@@ -640,21 +659,19 @@ def get_mainline_data(date_str):
                     chg_1d = 0
             else:
                 chg_1d = float(chg_1d)
-            estimate_applied = estimate_snap is not None and len(klines) >= 19
+            estimate_applied = estimate_snap is not None and len(klines) >= MOMENTUM_LOOKBACK_DAYS
             if estimate_applied:
                 analysis_klines = _append_estimated_sector_kline(
                     klines, estimate_snap, target_date, chg_1d,
                 )
-                chg_20d = (
-                    float(analysis_klines[-1]['close'])
-                    / float(analysis_klines[-20]['close']) - 1
-                ) * 100
-            elif len(klines) >= 20:
+                momentum_chg = _momentum_return(analysis_klines)
+            elif len(klines) >= MOMENTUM_LOOKBACK_DAYS + 1:
                 analysis_klines = klines
-                chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
+                momentum_chg = _momentum_return(klines)
             else:
                 analysis_klines = klines
-                chg_20d = 0  # 历史不足，不参与20日排名
+                momentum_chg = 0  # 历史不足，不参与动量排名
+            momentum_chg = momentum_chg or 0
             # 预估榜也必须使用目标日临时 K 线判断阶段，不能沿用上一日结论。
             wave = _judge_wave(analysis_klines)
             stage = wave.get('stage', '--')
@@ -662,7 +679,9 @@ def get_mainline_data(date_str):
             volume_ratio = wave.get('volume_ratio', 0)
             scores.append({
                 'name': name,
-                'chg_20d': round(chg_20d, 2),
+                'chg_10d': round(momentum_chg, 2),
+                # 兼容旧前端/测试字段；真实含义已切换为 MOMENTUM_LOOKBACK_DAYS。
+                'chg_20d': round(momentum_chg, 2),
                 'chg_1d': round(chg_1d, 2),
                 'stage': stage,
                 'vl_score': vl_score,
@@ -672,10 +691,10 @@ def get_mainline_data(date_str):
         except Exception:
             continue
 
-    scores.sort(key=lambda x: x['chg_20d'], reverse=True)
+    scores.sort(key=lambda x: x.get('chg_10d', x.get('chg_20d', 0)), reverse=True)
     daily_rankings = get_industry_rankings()
 
-    # 兼容字段 is_mainline/is_secondary 暂保留；其含义只是20日板块涨幅分层，
+    # 兼容字段 is_mainline/is_secondary 暂保留；其含义只是10日板块涨幅分层，
     # 不能解释为知识库中的 L1 动量主线。
     for i, item in enumerate(scores):
         item['is_mainline'] = i < 5
@@ -697,8 +716,8 @@ def get_mainline_data(date_str):
 
     result = {
         'date': date_str,
-        'model_type': 'sector_return_20d_proxy',
-        'model_label': '20日行业板块强度候选',
+        'model_type': MOMENTUM_MODEL_TYPE,
+        'model_label': MOMENTUM_MODEL_LABEL_INDUSTRY,
         'is_l1_model': False,
         'ranking_status': ranking_status,
         'ranking_date': target_date if estimate_active else effective_sector_date,
@@ -750,7 +769,7 @@ def get_mainline_data(date_str):
 
 
 def get_concept_mainline_data(date_str):
-    """概念板块自身20日涨幅代理榜；不是知识库定义的 L1 动量主线。"""
+    """概念板块自身10日涨幅代理榜；不是知识库定义的 L1 动量主线。"""
     from backend.data_access.data_layer import (
         get_sector_close_snapshot, get_sector_daily, get_ths_industry_klines,
         get_tracked_concept_names,
@@ -802,7 +821,7 @@ def get_concept_mainline_data(date_str):
             ]
             if not klines or str(klines[-1].get('date', '')).replace('-', '') != sector_date:
                 continue
-            if len(klines) < 20:
+            if len(klines) < MOMENTUM_LOOKBACK_DAYS + 1:
                 continue
             # chg_1d：优先 THS 日快照，次选K线计算
             estimate_snap = estimate_snapshots.get(name)
@@ -820,18 +839,16 @@ def get_concept_mainline_data(date_str):
                 chg_1d = (klines[-1]['close'] / klines[-2]['close'] - 1) * 100
             else:
                 chg_1d = 0
-            estimate_applied = estimate_snap is not None and len(klines) >= 19
+            estimate_applied = estimate_snap is not None and len(klines) >= MOMENTUM_LOOKBACK_DAYS
             if estimate_applied:
                 analysis_klines = _append_estimated_sector_kline(
                     klines, estimate_snap, target_date, chg_1d,
                 )
-                chg_20d = (
-                    float(analysis_klines[-1]['close'])
-                    / float(analysis_klines[-20]['close']) - 1
-                ) * 100
+                momentum_chg = _momentum_return(analysis_klines)
             else:
                 analysis_klines = klines
-                chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
+                momentum_chg = _momentum_return(klines)
+            momentum_chg = momentum_chg or 0
             # 概念榜与行业榜使用相同的目标日临时 K 线口径。
             wave = _judge_wave(analysis_klines)
             stage = wave.get('stage', '--')
@@ -839,7 +856,9 @@ def get_concept_mainline_data(date_str):
             volume_ratio = wave.get('volume_ratio', 0)
             scores.append({
                 'name': name,
-                'chg_20d': round(chg_20d, 2),
+                'chg_10d': round(momentum_chg, 2),
+                # 兼容旧前端/测试字段；真实含义已切换为 MOMENTUM_LOOKBACK_DAYS。
+                'chg_20d': round(momentum_chg, 2),
                 'chg_1d': round(chg_1d, 2),
                 'stage': stage,
                 'vl_score': vl_score,
@@ -849,9 +868,9 @@ def get_concept_mainline_data(date_str):
         except Exception:
             continue
 
-    scores.sort(key=lambda x: x['chg_20d'], reverse=True)
+    scores.sort(key=lambda x: x.get('chg_10d', x.get('chg_20d', 0)), reverse=True)
 
-    # 兼容字段含义同 get_mainline_data，仅表示20日涨幅分层。
+    # 兼容字段含义同 get_mainline_data，仅表示10日涨幅分层。
     for i, item in enumerate(scores):
         item['is_mainline'] = i < 5
         item['is_secondary'] = 5 <= i < 10
@@ -900,8 +919,8 @@ def get_concept_mainline_data(date_str):
 
     return {
         'date': date_str,
-        'model_type': 'sector_return_20d_proxy',
-        'model_label': '20日概念板块强度候选',
+        'model_type': MOMENTUM_MODEL_TYPE,
+        'model_label': MOMENTUM_MODEL_LABEL_CONCEPT,
         'is_l1_model': False,
         'ranking_status': ranking_status,
         'ranking_date': target_date if estimate_active else sector_date,
@@ -1202,7 +1221,7 @@ def build_market_strategy(market_cycle, existing_holdings, holdings_action, buy_
         position_mode, position_action = 'reduce', '不追高，随卖点降低风险暴露'
     elif risk_phase == 'valley_recovery':
         position_mode = 'increase_on_signal'
-        position_action = '只随20日板块强度候选/强动量中的有效买点逐步增加仓位'
+        position_action = '只随10日板块强度候选/强动量中的有效买点逐步增加仓位'
     else:
         position_mode, position_action = 'follow_signals', '按有效买卖点动态调整，不预设目标仓位'
 
@@ -1340,13 +1359,13 @@ def _build_buy_condition_plan(item):
     }
     trigger, invalidation = category_conditions.get(category, category_conditions['unknown'])
     trigger_prefix = {
-        'executable': '市场门禁仍成立、方向仍处于20日板块强度候选/强动量，且',
+        'executable': '市场门禁仍成立、方向仍处于10日板块强度候选/强动量，且',
         'candidate': '市场与方向门禁重新满足，且',
-        'signal_only': '方向进入20日板块强度候选/强动量，且',
+        'signal_only': '方向进入10日板块强度候选/强动量，且',
         'blocked': '板块数据闭环后，且',
     }.get(item.get('decision_status'), '市场与方向门禁确认后，且')
     trigger = f'{trigger_prefix}{trigger}'
-    invalidation += '；方向退出20日板块强度候选/强动量，或市场进入主跌风险时，计划同时失效'
+    invalidation += '；方向退出10日板块强度候选/强动量，或市场进入主跌风险时，计划同时失效'
     status = item.get('decision_status')
     action_when_triggered = {
         'executable': '按计划买入',
@@ -1417,7 +1436,8 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     }
 
     for line in (mainline_data.get('lines', [])[:3]):
-        plan['main_lines'].append(f"{line['name']}({line['chg_20d']}%)")
+        chg = line.get('chg_10d', line.get('chg_20d'))
+        plan['main_lines'].append(f"{line['name']}({chg}%)")
 
     pos = market_cycle.get('position', '波中')
     plan['position_detail'] = '仓位由持仓卖出和有效买入逐笔形成，不预设静态目标仓位'
@@ -1586,7 +1606,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     PRIORITY_ORDER = {'高': 0, '中': 1, '低': 2}
     plan['holdings_action'].sort(key=lambda x: PRIORITY_ORDER.get(x.get('priority', '中'), 2))
 
-    # 买点分层：个股技术信号只是入口，当前代理规则用20日板块强度候选/强动量决定重点。
+    # 买点分层：个股技术信号只是入口，当前代理规则用10日板块强度候选/强动量决定重点。
     # 波谷仅作为板块环境加分，不能替代方向优先级或个股买点质量。
     OPP_ORDER = {
         '主线回调': 0, '次线机会': 1, '潜在主线': 2,
@@ -1655,7 +1675,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             tier_reason = '板块数据未闭环，仅保留技术信号'
         elif score_ready and (is_mainline or momentum <= 20):
             tier = 'focus'
-            tier_reason = '20日板块强度前10候选出现买点' if is_mainline else f'强动量第{momentum}名出现买点'
+            tier_reason = '10日板块强度前10候选出现买点' if is_mainline else f'强动量第{momentum}名出现买点'
         elif score_ready and momentum <= 50:
             tier = 'watch'
             tier_reason = f'动量第{momentum}名，进入次级观察'
@@ -1664,7 +1684,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
             tier_reason = f'买点质量{quality_score:g}，暂不进入交易重点'
         else:
             tier = 'ordinary'
-            tier_reason = '未进入20日板块强度前10或动量前50，仅保留技术信号'
+            tier_reason = '未进入10日板块强度前10或动量前50，仅保留技术信号'
 
         item['attention_tier'] = tier
         item['attention_reason'] = tier_reason
@@ -1744,7 +1764,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
     ):
         conclusion = '当前为弱势市场，重点信号需符合天量滞跌的恐慌买点或明确反转买点后才可执行。'
     elif tier_counts['focus']:
-        conclusion = f'优先跟踪 {tier_counts["focus"]} 个20日板块强度候选/强动量买点。'
+        conclusion = f'优先跟踪 {tier_counts["focus"]} 个10日板块强度候选/强动量买点。'
     elif tier_counts['watch']:
         conclusion = '暂无一级重点，先观察动量前排能否进一步确认。'
     else:
@@ -1756,7 +1776,7 @@ def generate_trading_plan(market_cycle, mainline_data, signals_data, existing_ho
         'ordinary': tier_counts['ordinary'],
         'market_regime': market_regime,
         'conclusion': conclusion,
-        'ranking_rule': '市场过滤 → 20日板块强度候选/强动量 → 个股买点质量 → 板块环境 → 止损风险',
+        'ranking_rule': '市场过滤 → 10日板块强度候选/强动量 → 个股买点质量 → 板块环境 → 止损风险',
     }
 
     pk_score = market_cycle.get('pk_score', 0)

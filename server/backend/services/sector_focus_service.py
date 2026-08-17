@@ -12,6 +12,7 @@ log = get_logger(__name__)
 # 与 ths_index.type 对齐：industry=I / concept=N
 TYPE_MAP = {'industry': 'I', 'concept': 'N'}
 REVERSE_TYPE_MAP = {'I': 'industry', 'N': 'concept'}
+SECTOR_MOMENTUM_DAYS = 10
 
 # 主线内标记缓存（10 分钟 TTL）：get_tracked_concept_names 是全量概念×个股映射循环，
 # 每次请求重算约 1s+，用户反复开关页面会重复计算。
@@ -215,9 +216,11 @@ def _compute_sector_strength(name: str, sector_type: str) -> dict:
     ]
 
     chg_1d = (klines[-1]['close'] / klines[-2]['close'] - 1) * 100
-    chg_20d = None
-    if len(klines) >= 20:
-        chg_20d = (klines[-1]['close'] / klines[-20]['close'] - 1) * 100
+    momentum_chg = None
+    if len(klines) >= SECTOR_MOMENTUM_DAYS + 1:
+        momentum_chg = (
+            klines[-1]['close'] / klines[-SECTOR_MOMENTUM_DAYS - 1]['close'] - 1
+        ) * 100
 
     stage, vl_score = '--', 0
     try:
@@ -233,7 +236,9 @@ def _compute_sector_strength(name: str, sector_type: str) -> dict:
         'name': name,
         'matched': True,
         'chg_1d': round(chg_1d, 2),
-        'chg_20d': round(chg_20d, 2) if chg_20d is not None else None,
+        'chg_10d': round(momentum_chg, 2) if momentum_chg is not None else None,
+        # 兼容旧字段；真实含义已切换为10日动量。
+        'chg_20d': round(momentum_chg, 2) if momentum_chg is not None else None,
         'stage': stage,
         'vl_score': vl_score,
         'data_date': str(klines[-1].get('trade_date', '')),
@@ -247,7 +252,7 @@ def build_watched_sector_items(mainline_data: dict, concept_mainline_data: dict,
     - 命中 all_ranked 的条目带完整强度字段（与强度候选同格式）+ matched=True
     - 未命中的条目从 ths_daily 独立计算强度（见 _compute_sector_strength），
       完全无K线才 matched=False（前端显示"暂无数据"）
-    - 排序与强度候选一致：按 chg_20d 降序；无20日数据（新概念/暂无数据）排最后
+    - 排序与强度候选一致：按 chg_10d 降序；无10日数据（新概念/暂无数据）排最后
     """
     watched = get_watched_sectors(user_id)
 
@@ -260,8 +265,11 @@ def build_watched_sector_items(mainline_data: dict, concept_mainline_data: dict,
                 items.append({**entry, 'matched': True})
             else:
                 items.append(_compute_sector_strength(n, sector_type))
-        # 排序：chg_20d 有值按降序（与强度候选相同）；无值(新概念/暂无数据)排最后
-        items.sort(key=lambda x: (x.get('chg_20d') is None, -(x.get('chg_20d') or 0)))
+        # 排序：chg_10d 有值按降序（与强度候选相同）；无值(新概念/暂无数据)排最后
+        items.sort(key=lambda x: (
+            x.get('chg_10d', x.get('chg_20d')) is None,
+            -(x.get('chg_10d', x.get('chg_20d')) or 0),
+        ))
         return items
 
     return {

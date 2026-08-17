@@ -116,14 +116,14 @@ def _make_all_stocks():
 class TestStrongTrendService:
     """强势趋势追踪 — 服务层测试"""
 
-    def test_get_top_sectors_20d(self):
-        """20日涨幅TOP N包含涨幅较高的板块"""
+    def test_get_top_sectors_10d(self):
+        """10日涨幅TOP N包含涨幅较高的板块"""
         from backend.services.strong_trend_service import get_top_sectors
         sd = _make_sector_daily()
         industries = sd['industries']
 
-        result = get_top_sectors(industries, window_days=20, top_n=3)
-        # 自动化设备和光学光电子在最后20日涨幅最高（之前平的，后5天暴涨8%）
+        result = get_top_sectors(industries, window_days=10, top_n=3)
+        # 自动化设备和光学光电子在最后10日涨幅最高（之前平的，后5天暴涨8%）
         assert len(result) <= 3
         assert len(result) > 0
         assert result[0][1] >= 5.0  # 第一名至少5%以上

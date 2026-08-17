@@ -616,7 +616,7 @@ class TushareDB:
                       COUNT(*) AS bar_count,
                       SUM(CASE WHEN adj_factor IS NOT NULL THEN 1 ELSE 0 END) AS factor_count,
                       MAX(CASE WHEN rn=1 THEN close*adj_factor END) AS current_close,
-                      MAX(CASE WHEN rn=21 THEN close*adj_factor END) AS close_20d,
+                      MAX(CASE WHEN rn=11 THEN close*adj_factor END) AS close_10d,
                       MAX(CASE WHEN rn=1 THEN high*adj_factor END) AS current_high,
                       MAX(CASE WHEN rn BETWEEN 2 AND 250 THEN high*adj_factor END) AS prior_52w_high
                  FROM ranked
@@ -629,7 +629,7 @@ class TushareDB:
             bar_count = int(row.get('bar_count') or 0)
             factor_count = int(row.get('factor_count') or 0)
             current_close = float(row.get('current_close') or 0)
-            close_20d = float(row.get('close_20d') or 0)
+            close_10d = float(row.get('close_10d') or 0)
             current_high = float(row.get('current_high') or 0)
             prior_52w_high = float(row.get('prior_52w_high') or 0)
             features.append({
@@ -639,9 +639,14 @@ class TushareDB:
                 'latest_date': str(row.get('latest_date') or ''),
                 'bar_count': bar_count,
                 'adjustment_complete': bar_count > 0 and factor_count == bar_count,
+                'return_10d': (
+                    (current_close / close_10d - 1) * 100
+                    if bar_count >= 11 and current_close > 0 and close_10d > 0 else None
+                ),
+                # 兼容旧 L1 服务/测试字段；真实含义已切换为10日动量。
                 'return_20d': (
-                    (current_close / close_20d - 1) * 100
-                    if bar_count >= 21 and current_close > 0 and close_20d > 0 else None
+                    (current_close / close_10d - 1) * 100
+                    if bar_count >= 11 and current_close > 0 and close_10d > 0 else None
                 ),
                 'high_52w': (
                     current_high >= prior_52w_high

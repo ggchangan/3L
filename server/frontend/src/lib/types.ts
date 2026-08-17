@@ -43,6 +43,7 @@ export interface MonitorMeta {
 export interface SectorItem {
   name: string
   chg?: number
+  chg10d?: number
   chg20d?: number
   structure?: string
   phase?: string
@@ -539,6 +540,7 @@ export interface ReviewDataStatus {
 /** 主线/板块行项目 */
 export interface LineItem {
   name: string
+  chg_10d?: number
   chg_20d: number
   chg_1d?: number
   stage?: string

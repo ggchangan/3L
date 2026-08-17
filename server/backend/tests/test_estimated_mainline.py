@@ -43,7 +43,7 @@ def _klines(start_close=100.0, end_close=100.0, include_target=False):
     return rows
 
 
-def test_mainline_uses_close_snapshot_for_estimated_20d_ranking(monkeypatch, tmp_path):
+def test_mainline_uses_close_snapshot_for_estimated_10d_ranking(monkeypatch, tmp_path):
     from backend.data_access import data_layer
     from backend.services import concept_wave_service, review_compute_service
 
@@ -87,8 +87,8 @@ def test_mainline_uses_close_snapshot_for_estimated_20d_ranking(monkeypatch, tmp
     result = review_compute_service.get_mainline_data('2026-07-21')
 
     assert result['ranking_status'] == 'estimated'
-    assert result['model_type'] == 'sector_return_20d_proxy'
-    assert result['model_label'] == '20日行业板块强度候选'
+    assert result['model_type'] == 'sector_return_10d_proxy'
+    assert result['model_label'] == '10日行业板块强度候选'
     assert result['is_l1_model'] is False
     assert result['ranking_date'] == '20260721'
     assert result['base_date'] == '20260720'
@@ -118,7 +118,7 @@ def test_cached_mainline_refreshes_l1_shadow_independently(monkeypatch, tmp_path
     cache_path = tmp_path / 'mainline.json'
     cache_path.write_text(json.dumps({
         'date': '2026-07-21',
-        'model_type': 'sector_return_20d_proxy',
+        'model_type': 'sector_return_10d_proxy',
         'l1_shadow': {'data_status': 'partial', 'rankings': ['old']},
     }))
     monkeypatch.setattr(review_compute_service, 'MAINLINE_FULL_CACHE', str(cache_path))

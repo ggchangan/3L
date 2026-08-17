@@ -13,9 +13,9 @@ const STAGE_COLORS: Record<string, string> = {
 }
 const STRUCT_ICONS: Record<string, string> = { '上涨趋势': '📈', '区间震荡': '➡️', '下降趋势': '📉' }
 const strengthLevelLabel = (level?: string) => {
-  if (level === '主线') return '20日强度前5候选'
-  if (level === '次级主线') return '20日强度6–10候选'
-  if (level === '非主线') return '20日强度榜外'
+  if (level === '主线') return '10日强度前5候选'
+  if (level === '次级主线') return '10日强度6–10候选'
+  if (level === '非主线') return '10日强度榜外'
   return level || ''
 }
 
