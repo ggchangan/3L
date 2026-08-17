@@ -46,6 +46,7 @@ from backend.data_access.data_layer import (
     retry_missing_ths_concepts,
     retry_missing_ths_industries,
     save_ths_daily_update_confirmation,
+    get_ths_daily_update_confirmation,
     refresh_sector_close_snapshot,
 )
 
@@ -258,7 +259,7 @@ def update_index():
 # ════════════════════════════════════════════════════════════════
 
 
-def update_sectors():
+def update_sectors(target_date=None):
     """更新行业+概念板块日K线
 
     数据源：
@@ -273,7 +274,7 @@ def update_sectors():
     # 按“目标交易日”而非“当前是否周末”决定更新。
     # 同花顺的周五正式板块日线在周六才齐，因此周六是必需的回填时窗。
     from backend.data_access.data_source import get_last_completed_trading_day
-    today = get_last_completed_trading_day()
+    today = (target_date or get_last_completed_trading_day()).replace('-', '')
     log(f'📋  目标日期: {today}')
 
     # 板块清单同步（Tushare 15000分）：新板块自动进表；失败不阻断主流程
@@ -421,6 +422,68 @@ def update_sectors():
 
     log(f'📈  板块: 行业{ind_saved}个, 概念{con_saved}个 (K线已写入DB)')
     return (ind_saved, con_saved)
+
+
+def _sector_backfill_target_dates(max_days=5):
+    """返回最近需要补齐的板块交易日。"""
+    from backend.data_access.data_source import (
+        get_last_completed_trading_day,
+        get_previous_trading_day,
+    )
+
+    last = get_last_completed_trading_day().replace('-', '')
+    confirmed = str(
+        get_ths_daily_update_confirmation().get('confirmed_date')
+        or ''
+    ).replace('-', '')
+
+    dates = []
+    current = last
+    for _ in range(max(1, max_days)):
+        if confirmed and current <= confirmed:
+            break
+        dates.append(current)
+        previous = get_previous_trading_day(
+            datetime.strptime(current, '%Y%m%d').date()
+        )
+        if not previous or previous == current:
+            break
+        current = previous.replace('-', '')
+
+    return list(reversed(dates))
+
+
+def run_sector_backfill(max_days=5):
+    """回补最近未确认板块交易日；最后交易日未齐时返回 False。"""
+    target_dates = _sector_backfill_target_dates(max_days=max_days)
+    if not target_dates:
+        log('📋  板块数据已是最新确认状态，无需补齐')
+        return True
+
+    log(f'📋  板块补齐队列: {", ".join(target_dates)}')
+    successes = []
+    failures = []
+    for target in target_dates:
+        try:
+            update_sectors(target)
+            successes.append(target)
+        except Exception as exc:
+            failures.append((target, exc))
+            log(f'⚠️  板块补齐未完成 {target}: {type(exc).__name__}: {exc}')
+
+    if successes:
+        _clear_mainline_cache()
+        from backend.data_access.data_source import get_last_completed_trading_day
+        _refresh_review_cache(get_last_completed_trading_day())
+        log(f'✅  已确认板块日期: {", ".join(successes)}；复盘缓存已刷新')
+
+    latest = target_dates[-1]
+    if latest in successes:
+        return True
+
+    if failures:
+        log(f'🚨 最新板块日期 {latest} 尚未确认，等待下一轮补齐')
+    return False
 
 
 # ════════════════════════════════════════════════════════════════
@@ -783,16 +846,22 @@ def main(argv=None):
     )
     parser.add_argument('--max-attempts', type=int, default=1, help='close 阶段最大尝试次数')
     parser.add_argument('--retry-interval', type=int, default=900, help='重试间隔秒数')
-    parser.add_argument('--isolated-stage', choices=('index', 'sectors'), help=argparse.SUPPRESS)
+    parser.add_argument('--isolated-stage', choices=('index', 'sectors', 'sectors-backfill'), help=argparse.SUPPRESS)
+    parser.add_argument('--target-date', help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
     os.environ['TQDM_DISABLE'] = '1'
     os.environ['AKSHARE_PROXY_PROGRESS'] = 'False'
 
     if args.isolated_stage:
-        result = update_index() if args.isolated_stage == 'index' else update_sectors()
+        if args.isolated_stage == 'index':
+            result = update_index()
+        elif args.isolated_stage == 'sectors':
+            result = update_sectors(args.target_date)
+        else:
+            result = (1 if run_sector_backfill() else 0,)
         print(f'{ISOLATED_STAGE_MARKER}{json.dumps(result, ensure_ascii=False)}', flush=True)
-        return 0
+        return 0 if args.isolated_stage != 'sectors-backfill' or result[0] else 2
 
     if args.phase == 'full':
         run_full_phase()
