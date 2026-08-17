@@ -555,6 +555,51 @@ def test_sector_update_runs_on_saturday_to_confirm_friday_data():
     save.assert_called_once_with('20260724', coverage)
 
 
+def test_sector_backfill_targets_dates_after_last_confirmed():
+    from backend.core import update_stock_data
+
+    with patch('backend.data_access.data_source.get_last_completed_trading_day', return_value='20260817'), \
+         patch('backend.data_access.data_source.get_previous_trading_day',
+               side_effect=['20260814', '20260813']), \
+         patch.object(update_stock_data, 'get_ths_daily_update_confirmation',
+                      return_value={'confirmed_date': '20260813'}):
+        assert update_stock_data._sector_backfill_target_dates(max_days=5) == [
+            '20260814', '20260817',
+        ]
+
+
+def test_sector_backfill_refreshes_review_after_partial_catchup():
+    from backend.core import update_stock_data
+
+    with patch.object(update_stock_data, '_sector_backfill_target_dates',
+                      return_value=['20260814', '20260817']), \
+         patch.object(update_stock_data, 'update_sectors',
+                      side_effect=[(1268, 178), RuntimeError('ths_daily 返回空')]) as update, \
+         patch.object(update_stock_data, '_clear_mainline_cache') as clear, \
+         patch('backend.data_access.data_source.get_last_completed_trading_day',
+               return_value='20260817'), \
+         patch.object(update_stock_data, '_refresh_review_cache') as refresh:
+        assert update_stock_data.run_sector_backfill() is False
+
+    assert [call.args[0] for call in update.call_args_list] == ['20260814', '20260817']
+    clear.assert_called_once()
+    refresh.assert_called_once_with('20260817')
+
+
+def test_sector_backfill_succeeds_when_latest_date_confirmed():
+    from backend.core import update_stock_data
+
+    with patch.object(update_stock_data, '_sector_backfill_target_dates',
+                      return_value=['20260817']), \
+         patch.object(update_stock_data, 'update_sectors',
+                      return_value=(1268, 178)), \
+         patch.object(update_stock_data, '_clear_mainline_cache'), \
+         patch('backend.data_access.data_source.get_last_completed_trading_day',
+               return_value='20260817'), \
+         patch.object(update_stock_data, '_refresh_review_cache'):
+        assert update_stock_data.run_sector_backfill() is True
+
+
 def test_full_sector_cron_runs_tuesday_through_saturday():
     crontab = (Path(__file__).resolve().parents[3] / 'deploy' / 'crontab').read_text()
     full_lines = [line for line in crontab.splitlines() if '--phase full' in line]
