@@ -993,6 +993,19 @@ def fetch_ths_daily_klines_akshare(names_to_update, today):
     return _fn(names_to_update, today)
 
 
+def filter_inactive_ths_boards(names_to_update, target_date, inactive_days=None):
+    """过滤连续多个交易日无日 K 更新的行业/概念。"""
+    from backend.data_access.data_source import (
+        THS_BOARD_INACTIVE_AFTER_TRADING_DAYS,
+        filter_inactive_ths_boards as _fn,
+    )
+    return _fn(
+        names_to_update,
+        target_date,
+        THS_BOARD_INACTIVE_AFTER_TRADING_DAYS if inactive_days is None else inactive_days,
+    )
+
+
 def build_industry_map_from_db():
     """从 ths_member + ths_index 构建行业映射"""
     from backend.data_access.data_source import build_industry_map_from_db as _fn
