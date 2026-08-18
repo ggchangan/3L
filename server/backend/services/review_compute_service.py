@@ -619,7 +619,7 @@ def get_mainline_data(date_str):
 
     # 从 DB（ths_daily）获取行业K线数据
     from backend.data_access.data_layer import get_ths_industry_klines
-    industries_data = get_ths_industry_klines(ths_type='I')
+    industries_data = get_ths_industry_klines(ths_type='I', industry_pool='mainline')
     if not industries_data:
         return {
             'lines': [], 'secondary': [], 'industries': get_industry_rankings(),

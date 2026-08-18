@@ -44,6 +44,16 @@ SECTOR_CLOSE_SNAPSHOT_PATH = os.path.join(DATA_DIR, 'computed', 'sector_close_sn
 THS_BOARD_INACTIVE_AFTER_TRADING_DAYS = int(os.environ.get('THS_BOARD_INACTIVE_AFTER_TRADING_DAYS', '5'))
 THS_BOARD_PUBLISH_LAG_TRADING_DAYS = int(os.environ.get('THS_BOARD_PUBLISH_LAG_TRADING_DAYS', '1'))
 THS_BOARD_DELAYED_GATE_MAX_RATIO = float(os.environ.get('THS_BOARD_DELAYED_GATE_MAX_RATIO', '0.15'))
+THS_MAINLINE_INDUSTRY_PREFIXES = tuple(
+    prefix.strip()
+    for prefix in os.environ.get('THS_MAINLINE_INDUSTRY_PREFIXES', '881').split(',')
+    if prefix.strip()
+)
+THS_SUB_INDUSTRY_PREFIXES = tuple(
+    prefix.strip()
+    for prefix in os.environ.get('THS_SUB_INDUSTRY_PREFIXES', '884').split(',')
+    if prefix.strip()
+)
 
 # TushareDB 全局实例（懒加载）
 _TUSHARE_DB = None
@@ -58,6 +68,33 @@ def _get_tushare_db():
             log.warning('TushareDB 初始化失败: %s', e)
             _TUSHARE_DB = None
     return _TUSHARE_DB
+
+
+def classify_ths_industry_role(ts_code: str, name: str = '') -> dict:
+    """把 THS 行业代码归一到 3L 使用角色。
+
+    - mainline_industry：稳定中间层行业，用于行业主线候选、门禁分母、10日强度排名。
+    - sub_industry：更细分行业，保留给个股解释/细分机会，不直接参与主线排名。
+    - excluded：旧口径、宽口径、外盘或测试分类，不进入正式行业池。
+
+    概念 type='N' 不走这里；概念不是同一套层级体系。
+    """
+    code = str(ts_code or '').upper()
+    display_name = str(name or '')
+    if not code:
+        return {'role': 'excluded', 'reason': 'missing_ts_code'}
+    if code.endswith('.TEST') or display_name.startswith('测试'):
+        return {'role': 'excluded', 'reason': 'test_board'}
+    if code.startswith(THS_MAINLINE_INDUSTRY_PREFIXES):
+        return {'role': 'mainline_industry', 'reason': 'ths_881_middle_layer'}
+    if code.startswith(THS_SUB_INDUSTRY_PREFIXES):
+        return {'role': 'sub_industry', 'reason': 'ths_884_sub_industry'}
+    return {'role': 'excluded', 'reason': 'non_mainline_industry_code'}
+
+
+def is_ths_mainline_industry(ts_code: str, name: str = '') -> bool:
+    """是否属于 3L 行业主线候选使用的 THS 中间层行业池。"""
+    return classify_ths_industry_role(ts_code, name).get('role') == 'mainline_industry'
 
 
 # ═══════════════════════════════════════════════════════
@@ -925,11 +962,12 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str,
 
 
 def _filter_ths_kline_industry_names(db, industry_names: set) -> tuple:
-    """仅保留有同花顺 88 系 K 线代码、可连续更新的行业名。
+    """仅保留 3L 行业主线候选使用的 THS 中间层行业名。
 
-    ths_index 中会混入 700/861/871 等外部或旧分类代码，它们可能有历史
-    ths_daily 记录，但不能通过同花顺原始 K 线稳定补齐，不适合作为 3L
-    板块量价阶段的正式门禁分母。
+    ths_index.type='I' 里同时存在：
+    - 881xxx：稳定中间层行业，适合作为 3L 行业主线候选/门禁分母；
+    - 884xxx：更细分行业，保留给个股解释，不直接参与主线排名；
+    - 700/861/871/877 等：旧口径、宽口径或外盘分类，排除。
     """
     requested = sorted({str(name) for name in industry_names if name})
     if not requested:
@@ -949,7 +987,7 @@ def _filter_ths_kline_industry_names(db, industry_names: set) -> tuple:
         if not name:
             continue
         seen.add(name)
-        if ts_code.startswith('88'):
+        if is_ths_mainline_industry(ts_code, name):
             reachable.add(name)
     return reachable, set(requested) - reachable
 
@@ -974,10 +1012,11 @@ def bootstrap_ths_daily_update_confirmation() -> dict:
         """SELECT td.trade_date, COUNT(DISTINCT td.ts_code) AS board_count
            FROM ths_daily td
            JOIN ths_index ti ON td.ts_code=ti.ts_code
-           WHERE ti.type='I'
+           WHERE ti.type='I' AND ti.ts_code LIKE %s
            GROUP BY td.trade_date
            ORDER BY td.trade_date DESC
-           LIMIT 20"""
+           LIMIT 20""",
+        ['881%'],
     )
     if len(count_rows or []) < 2:
         return {}
@@ -995,8 +1034,8 @@ def bootstrap_ths_daily_update_confirmation() -> dict:
         """SELECT DISTINCT ti.name
            FROM ths_daily td
            JOIN ths_index ti ON td.ts_code=ti.ts_code
-           WHERE ti.type='I' AND td.trade_date=%s""",
-        [confirmed_date],
+           WHERE ti.type='I' AND ti.ts_code LIKE %s AND td.trade_date=%s""",
+        ['881%', confirmed_date],
     )
     industry_names = sorted({row['name'] for row in rows if row.get('name')})
     if len(industry_names) < 80:
