@@ -39,6 +39,7 @@ from backend.data_access.data_layer import (
 from backend.data_access.data_layer import (
     get_ths_index_names,
     fetch_ths_daily_klines_akshare,
+    filter_inactive_ths_boards,
     build_industry_map_from_db,
     build_concept_maps_from_db,
     tushare_fetch_daily_incremental,
@@ -361,6 +362,32 @@ def update_sectors(target_date=None):
             log(f'⭐  关注板块强制纳入: {len(watched_rows)}个（含新概念/停更概念）')
     except Exception as e:
         log(f'⚠️  关注板块纳入失败(不阻断): {e}')
+
+    try:
+        before_count = len(names_to_update)
+        names_to_update, inactive_boards = filter_inactive_ths_boards(
+            names_to_update, today,
+        )
+        if inactive_boards:
+            inactive_industries = [
+                item for item in inactive_boards
+                if item.get('kind') == 'industry'
+            ]
+            inactive_concepts = [
+                item for item in inactive_boards
+                if item.get('kind') == 'concept'
+            ]
+            examples = ', '.join(
+                f"{item.get('name')}({item.get('latest_date') or '无历史'})"
+                for item in inactive_boards[:10]
+            )
+            log(
+                '🧊  停更板块跳过: '
+                f'行业{len(inactive_industries)}个, 概念{len(inactive_concepts)}个, '
+                f'更新列表 {before_count}->{len(names_to_update)}；示例: {examples}'
+            )
+    except Exception as e:
+        log(f'⚠️  停更板块过滤失败(不阻断): {e}')
 
     ind_saved = len(ind_today) if 'ind_today' in dir() else 0
     con_saved = len(tracked_concepts)

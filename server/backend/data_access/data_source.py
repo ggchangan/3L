@@ -41,6 +41,7 @@ SOURCES_EM_CONCEPT_MAP = os.path.join(DATA_DIR, 'sources', 'em', 'concept_map.js
 CONCEPT_NAME_MAPPING_PATH = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.json')
 SECTOR_UPDATE_STATE_PATH = os.path.join(DATA_DIR, 'computed', 'sector_update_state.json')
 SECTOR_CLOSE_SNAPSHOT_PATH = os.path.join(DATA_DIR, 'computed', 'sector_close_snapshot.json')
+THS_BOARD_INACTIVE_AFTER_TRADING_DAYS = int(os.environ.get('THS_BOARD_INACTIVE_AFTER_TRADING_DAYS', '5'))
 
 # TushareDB 全局实例（懒加载）
 _TUSHARE_DB = None
@@ -211,6 +212,105 @@ def get_ths_index_names(type_code='I'):
         [type_code]
     )
     return [(r['name'], type_code) for r in rows]
+
+
+def _trading_day_cutoff(reference_date: str, days: int) -> str:
+    """返回 reference_date 往前数 days 个交易日的 cutoff（含目标日前推）。"""
+    normalized = str(reference_date or '').replace('-', '')
+    if not normalized or days <= 0:
+        return normalized
+    try:
+        current = datetime.strptime(normalized, '%Y%m%d').date()
+    except ValueError:
+        return normalized
+    cutoff = normalized
+    for _ in range(days):
+        previous = get_previous_trading_day(current)
+        if not previous or previous == cutoff:
+            break
+        cutoff = str(previous).replace('-', '')
+        current = datetime.strptime(cutoff, '%Y%m%d').date()
+    return cutoff
+
+
+def filter_inactive_ths_boards(names_to_update: list, target_date: str,
+                               inactive_days: int = THS_BOARD_INACTIVE_AFTER_TRADING_DAYS) -> tuple:
+    """过滤连续多个交易日无日 K 更新的行业/概念。
+
+    规则：
+    - 有 ths_daily 历史：latest_date 早于 target_date 前推 inactive_days 个交易日，
+      认为该板块已经连续多日不可更新，不再拉取/不进门禁。
+    - 无 ths_daily 历史：若 ths_index.list_date 也早于 cutoff，认为不是新板块，
+      同样跳过；若 list_date 较新或缺失，则保留一次尝试机会。
+
+    Returns:
+        (active_names_to_update, inactive_details)
+    """
+    db = _get_tushare_db()
+    if not db or not names_to_update:
+        return names_to_update, []
+    cutoff = _trading_day_cutoff(target_date, inactive_days)
+    requested = {
+        (str(name), 'I' if kind == 'industry' else 'N')
+        for name, kind in names_to_update
+        if name and kind in ('industry', 'concept')
+    }
+    if not requested:
+        return names_to_update, []
+    names = sorted({name for name, _ in requested})
+    types = sorted({type_code for _, type_code in requested})
+    name_placeholders = ','.join(['%s'] * len(names))
+    type_placeholders = ','.join(['%s'] * len(types))
+    rows = db.execute_raw(
+        f"""SELECT ti.name, ti.type, ti.ts_code, ti.list_date,
+                   MAX(td.trade_date) AS latest_date
+              FROM ths_index ti
+         LEFT JOIN ths_daily td ON td.ts_code=ti.ts_code
+             WHERE ti.name IN ({name_placeholders})
+               AND ti.type IN ({type_placeholders})
+          GROUP BY ti.name, ti.type, ti.ts_code, ti.list_date""",
+        [*names, *types],
+    )
+
+    latest_by_key = {}
+    stale_codes_by_key = {}
+    for row in rows:
+        key = (row.get('name'), row.get('type'))
+        if key not in requested:
+            continue
+        latest = str(row.get('latest_date') or '').replace('-', '')
+        list_date = str(row.get('list_date') or '').replace('-', '')
+        effective_latest = latest or list_date
+        if not effective_latest:
+            continue
+        previous = latest_by_key.get(key)
+        if not previous or effective_latest > previous:
+            latest_by_key[key] = effective_latest
+        if effective_latest <= cutoff:
+            stale_codes_by_key.setdefault(key, []).append(str(row.get('ts_code') or ''))
+
+    inactive_keys = {
+        key for key, effective_latest in latest_by_key.items()
+        if effective_latest <= cutoff
+    }
+    inactive_details = [
+        {
+            'name': name,
+            'kind': 'industry' if type_code == 'I' else 'concept',
+            'type': type_code,
+            'latest_date': latest_by_key.get((name, type_code), ''),
+            'cutoff_date': cutoff,
+            'ts_codes': sorted(stale_codes_by_key.get((name, type_code), [])),
+        }
+        for name, type_code in sorted(inactive_keys)
+    ]
+
+    active = []
+    for name, kind in names_to_update:
+        type_code = 'I' if kind == 'industry' else 'N'
+        if (str(name), type_code) not in inactive_keys:
+            active.append((name, kind))
+    return active, inactive_details
 
 
 def get_ths_index_canonical_names(ts_codes: list) -> dict:
@@ -643,6 +743,13 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str,
         return {'ready': False, 'industry': {}, 'concept': {}, 'missing': []}
 
     optional_concepts = set(optional_concepts or [])
+    try:
+        names_to_update, inactive_boards = filter_inactive_ths_boards(
+            names_to_update, target_date,
+        )
+    except Exception as exc:
+        log.warning('停更板块过滤失败，继续使用原始覆盖分母: %s', exc)
+        inactive_boards = []
     requested_industries = {name for name, kind in names_to_update if kind == 'industry'}
     requested_concepts = {name for name, kind in names_to_update if kind == 'concept'}
     gate_concepts = requested_concepts - optional_concepts  # 门禁只统计必须的
@@ -709,6 +816,7 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str,
         'bootstrap': bootstrap,
         'industry_names': sorted(active_industries | covered_industries),
         'excluded_industries': sorted(excluded_industries | covered_excluded_industries),
+        'inactive_boards': inactive_boards,
     }
 
 
@@ -824,6 +932,7 @@ def save_ths_daily_update_confirmation(target_date: str, coverage: dict) -> None
     industry = coverage.get('industry', {})
     concept = coverage.get('concept', {})
     state = dict(previous)
+    state['inactive_boards'] = coverage.get('inactive_boards', [])
     state['concept_coverage'] = concept.get(
         'ratio',
         state.get('concept_coverage', 0),

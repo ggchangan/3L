@@ -248,6 +248,74 @@ def test_sector_update_coverage_rejects_partial_target_date():
     assert result['missing'] == ['B']
 
 
+def test_sector_coverage_skips_boards_inactive_for_five_trading_days():
+    from backend.data_access import data_source
+
+    class FakeDB:
+        def execute_raw(self, sql, params=None):
+            if 'MAX(td.trade_date) AS latest_date' in sql:
+                return [
+                    {'name': 'A', 'type': 'I', 'ts_code': '881001.TI',
+                     'list_date': '20200101', 'latest_date': '20260720'},
+                    {'name': 'B', 'type': 'I', 'ts_code': '884001.TI',
+                     'list_date': '20200101', 'latest_date': '20260720'},
+                    {'name': 'C停更', 'type': 'I', 'ts_code': '884999.TI',
+                     'list_date': '20200101', 'latest_date': '20260714'},
+                ]
+            if 'SELECT DISTINCT ti.name, ti.type' in sql:
+                return [{'name': 'A', 'type': 'I'}]
+            if 'SELECT name, ts_code' in sql and 'FROM ths_index' in sql:
+                rows = [
+                    {'name': 'A', 'ts_code': '881001.TI'},
+                    {'name': 'B', 'ts_code': '884001.TI'},
+                ]
+                requested_names = set(params or [])
+                return [row for row in rows if row['name'] in requested_names]
+            return []
+
+    requested = [('A', 'industry'), ('B', 'industry'), ('C停更', 'industry')]
+    confirmation = {'confirmed_date': '20260720', 'industry_names': ['A', 'B', 'C停更']}
+    with patch.object(data_source, '_get_tushare_db', return_value=FakeDB()), \
+         patch.object(data_source, 'get_ths_daily_update_confirmation', return_value=confirmation), \
+         patch.object(data_source, '_trading_day_cutoff', return_value='20260714'):
+        result = data_source.get_ths_daily_update_coverage(requested, '20260721')
+
+    assert result['ready'] is False
+    assert result['industry']['expected'] == 2
+    assert result['industry']['missing'] == ['B']
+    assert result['inactive_boards'][0]['name'] == 'C停更'
+    assert result['inactive_boards'][0]['latest_date'] == '20260714'
+
+
+def test_filter_inactive_keeps_recently_missing_board_for_retry():
+    from backend.data_access import data_source
+
+    class FakeDB:
+        def execute_raw(self, sql, params=None):
+            return [
+                {'name': '三级慢行业', 'type': 'I', 'ts_code': '884001.TI',
+                 'list_date': '20200101', 'latest_date': '20260718'},
+                {'name': '老分类', 'type': 'I', 'ts_code': '861001.TI',
+                 'list_date': '20200101', 'latest_date': '20260710'},
+                {'name': '新概念', 'type': 'N', 'ts_code': '886001.TI',
+                 'list_date': '20260720', 'latest_date': None},
+            ]
+
+    requested = [
+        ('三级慢行业', 'industry'),
+        ('老分类', 'industry'),
+        ('新概念', 'concept'),
+    ]
+    with patch.object(data_source, '_get_tushare_db', return_value=FakeDB()), \
+         patch.object(data_source, '_trading_day_cutoff', return_value='20260714'):
+        active, inactive = data_source.filter_inactive_ths_boards(
+            requested, '20260721',
+        )
+
+    assert active == [('三级慢行业', 'industry'), ('新概念', 'concept')]
+    assert [item['name'] for item in inactive] == ['老分类']
+
+
 def test_partial_sector_rows_never_become_next_day_baseline():
     from backend.data_access import data_source
 
