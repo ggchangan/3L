@@ -248,6 +248,73 @@ def test_sector_update_coverage_rejects_partial_target_date():
     assert result['missing'] == ['B']
 
 
+def test_sector_update_coverage_excludes_one_day_delayed_board_from_gate():
+    from backend.data_access import data_source
+
+    class FakeDB:
+        def execute_raw(self, sql, params=None):
+            if 'SELECT DISTINCT ti.name, ti.type' in sql:
+                return [{'name': 'A', 'type': 'I'}]
+            if '/* delayed_publication */' in sql:
+                return [{'name': 'B慢发布', 'type': 'I', 'latest_date': '20260720'}]
+            return []
+
+    requested = [('A', 'industry'), ('B慢发布', 'industry')]
+    confirmation = {'confirmed_date': '20260720', 'industry_names': ['A', 'B慢发布']}
+    with patch.object(data_source, '_get_tushare_db', return_value=FakeDB()), \
+         patch.object(data_source, 'filter_inactive_ths_boards',
+                      return_value=(requested, [])), \
+         patch.object(data_source, 'get_ths_daily_update_confirmation',
+                      return_value=confirmation), \
+         patch.object(data_source, '_trading_day_cutoff', return_value='20260720'), \
+         patch.object(data_source, '_filter_ths_kline_industry_names',
+                      side_effect=lambda _db, names: (set(names), set())):
+        result = data_source.get_ths_daily_update_coverage(requested, '20260721')
+
+    assert result['ready'] is True
+    assert result['industry']['expected'] == 1
+    assert result['industry']['covered'] == 1
+    assert result['industry']['missing'] == []
+    assert result['delayed_boards'][0]['name'] == 'B慢发布'
+    assert result['delayed_boards'][0]['reason'] == 'publish_lag'
+
+
+def test_sector_update_coverage_does_not_exclude_delayed_boards_when_over_cap():
+    from backend.data_access import data_source
+
+    names = [f'I{i}' for i in range(10)]
+
+    class FakeDB:
+        def execute_raw(self, sql, params=None):
+            if 'SELECT DISTINCT ti.name, ti.type' in sql:
+                return [{'name': name, 'type': 'I'} for name in names[:7]]
+            if '/* delayed_publication */' in sql:
+                return [
+                    {'name': name, 'type': 'I', 'latest_date': '20260720'}
+                    for name in names[7:]
+                ]
+            return []
+
+    requested = [(name, 'industry') for name in names]
+    confirmation = {'confirmed_date': '20260720', 'industry_names': names}
+    with patch.object(data_source, '_get_tushare_db', return_value=FakeDB()), \
+         patch.object(data_source, 'filter_inactive_ths_boards',
+                      return_value=(requested, [])), \
+         patch.object(data_source, 'get_ths_daily_update_confirmation',
+                      return_value=confirmation), \
+         patch.object(data_source, '_trading_day_cutoff', return_value='20260720'), \
+         patch.object(data_source, '_filter_ths_kline_industry_names',
+                      side_effect=lambda _db, names: (set(names), set())):
+        result = data_source.get_ths_daily_update_coverage(requested, '20260721')
+
+    assert result['ready'] is False
+    assert result['industry']['expected'] == 10
+    assert result['industry']['covered'] == 7
+    assert result['industry']['missing'] == ['I7', 'I8', 'I9']
+    assert result['delayed_boards'] == []
+    assert {item['name'] for item in result['delayed_over_cap']} == {'I7', 'I8', 'I9'}
+
+
 def test_sector_coverage_skips_boards_inactive_for_five_trading_days():
     from backend.data_access import data_source
 

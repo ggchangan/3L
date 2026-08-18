@@ -42,6 +42,8 @@ CONCEPT_NAME_MAPPING_PATH = os.path.join(DATA_DIR, 'map', 'concept_name_mapping.
 SECTOR_UPDATE_STATE_PATH = os.path.join(DATA_DIR, 'computed', 'sector_update_state.json')
 SECTOR_CLOSE_SNAPSHOT_PATH = os.path.join(DATA_DIR, 'computed', 'sector_close_snapshot.json')
 THS_BOARD_INACTIVE_AFTER_TRADING_DAYS = int(os.environ.get('THS_BOARD_INACTIVE_AFTER_TRADING_DAYS', '5'))
+THS_BOARD_PUBLISH_LAG_TRADING_DAYS = int(os.environ.get('THS_BOARD_PUBLISH_LAG_TRADING_DAYS', '1'))
+THS_BOARD_DELAYED_GATE_MAX_RATIO = float(os.environ.get('THS_BOARD_DELAYED_GATE_MAX_RATIO', '0.15'))
 
 # TushareDB 全局实例（懒加载）
 _TUSHARE_DB = None
@@ -311,6 +313,75 @@ def filter_inactive_ths_boards(names_to_update: list, target_date: str,
         if (str(name), type_code) not in inactive_keys:
             active.append((name, kind))
     return active, inactive_details
+
+
+def _find_delayed_ths_boards(db, names_by_type: dict, target_date: str,
+                             lag_days: int = THS_BOARD_PUBLISH_LAG_TRADING_DAYS) -> list:
+    """识别天然慢一拍发布、但仍在更新的 THS 板块。
+
+    有些行业/概念的日 K 经常在 T+1 才补上。它们不是停更，也不是需要
+    人工补历史；在 T 日晚间复盘门禁里，如果最新记录正好落后 1 个交易日，
+    应作为「延迟发布」从当日门禁分母中扣除，避免拖住整页复盘。
+    """
+    if not db or not names_by_type:
+        return []
+    lag_cutoff = _trading_day_cutoff(target_date, lag_days)
+    delayed = []
+    for type_code, names in names_by_type.items():
+        names = sorted({name for name in names if name})
+        if not names:
+            continue
+        placeholders = ','.join(['%s'] * len(names))
+        rows = db.execute_raw(
+            f"""/* delayed_publication */
+                SELECT ti.name, ti.type, MAX(td.trade_date) AS latest_date
+                  FROM ths_index ti
+             LEFT JOIN ths_daily td ON td.ts_code=ti.ts_code
+                 WHERE ti.name IN ({placeholders})
+                   AND ti.type=%s
+              GROUP BY ti.name, ti.type""",
+            [*names, type_code],
+        )
+        for row in rows:
+            latest = str(row.get('latest_date') or '').replace('-', '')
+            if latest == lag_cutoff:
+                delayed.append({
+                    'name': row.get('name'),
+                    'kind': 'industry' if type_code == 'I' else 'concept',
+                    'type': type_code,
+                    'latest_date': latest,
+                    'target_date': target_date,
+                    'allowed_lag_trading_days': lag_days,
+                    'reason': 'publish_lag',
+                })
+    return delayed
+
+
+def _cap_delayed_gate_exclusions(delayed_boards: list, expected_by_type: dict,
+                                 max_ratio: float = THS_BOARD_DELAYED_GATE_MAX_RATIO) -> tuple:
+    """限制延迟发布豁免比例，避免把整体数据源故障误判为天然延迟。"""
+    if not delayed_boards:
+        return [], []
+    allowed = []
+    capped = []
+    for type_code in ('I', 'N'):
+        items = [item for item in delayed_boards if item.get('type') == type_code]
+        expected = max(0, int(expected_by_type.get(type_code) or 0))
+        limit = int(math.floor(expected * max_ratio)) if expected else 0
+        if expected and items and limit <= 0:
+            limit = 1
+        if len(items) <= limit:
+            allowed.extend(items)
+        else:
+            for item in items:
+                capped.append({
+                    **item,
+                    'reason': 'publish_lag_over_cap',
+                    'max_exclusion_ratio': max_ratio,
+                    'expected_count': expected,
+                    'delayed_count': len(items),
+                })
+    return allowed, capped
 
 
 def get_ths_index_canonical_names(ts_codes: list) -> dict:
@@ -796,7 +867,38 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str,
     covered_industries, covered_excluded_industries = _filter_ths_kline_industry_names(
         db, covered_industries,
     )
-    industry = _stats(active_industries, covered_industries, 0.95)
+    raw_missing_industries = active_industries - covered_industries
+    raw_missing_concepts = gate_concepts - covered_concepts
+    try:
+        delayed_boards = _find_delayed_ths_boards(
+            db,
+            {
+                'I': raw_missing_industries,
+                'N': raw_missing_concepts,
+            },
+            target_date,
+        )
+        delayed_boards, delayed_over_cap = _cap_delayed_gate_exclusions(
+            delayed_boards,
+            {
+                'I': len(active_industries),
+                'N': len(gate_concepts),
+            },
+        )
+    except Exception as exc:
+        log.warning('延迟发布板块识别失败，继续使用原始覆盖分母: %s', exc)
+        delayed_boards = []
+        delayed_over_cap = []
+    delayed_industries = {
+        item.get('name') for item in delayed_boards if item.get('type') == 'I'
+    }
+    delayed_concepts = {
+        item.get('name') for item in delayed_boards if item.get('type') == 'N'
+    }
+    gate_industries = active_industries - delayed_industries
+    gate_concepts = gate_concepts - delayed_concepts
+
+    industry = _stats(gate_industries, covered_industries, 0.95)
     if bootstrap and industry['expected'] < 80:
         industry['ready'] = False
         industry['bootstrap_minimum'] = 80
@@ -817,6 +919,8 @@ def get_ths_daily_update_coverage(names_to_update: list, target_date: str,
         'industry_names': sorted(active_industries | covered_industries),
         'excluded_industries': sorted(excluded_industries | covered_excluded_industries),
         'inactive_boards': inactive_boards,
+        'delayed_boards': delayed_boards,
+        'delayed_over_cap': delayed_over_cap,
     }
 
 
@@ -933,6 +1037,8 @@ def save_ths_daily_update_confirmation(target_date: str, coverage: dict) -> None
     concept = coverage.get('concept', {})
     state = dict(previous)
     state['inactive_boards'] = coverage.get('inactive_boards', [])
+    state['delayed_boards'] = coverage.get('delayed_boards', [])
+    state['delayed_over_cap'] = coverage.get('delayed_over_cap', [])
     state['concept_coverage'] = concept.get(
         'ratio',
         state.get('concept_coverage', 0),
@@ -951,6 +1057,12 @@ def save_ths_daily_update_confirmation(target_date: str, coverage: dict) -> None
                 'missing': industry.get('missing', []),
             },
         })
+        delayed_industries = [
+            item for item in coverage.get('delayed_boards', [])
+            if item.get('type') == 'I'
+        ]
+        if delayed_industries:
+            state['industry_coverage_detail']['delayed'] = delayed_industries
 
     concept_expected = int(concept.get('expected') or 0)
     if concept_expected:
@@ -966,6 +1078,12 @@ def save_ths_daily_update_confirmation(target_date: str, coverage: dict) -> None
                 'missing': concept.get('missing', []),
             },
         })
+        delayed_concepts = [
+            item for item in coverage.get('delayed_boards', [])
+            if item.get('type') == 'N'
+        ]
+        if delayed_concepts:
+            state['concept_coverage_detail']['delayed'] = delayed_concepts
         if concept_complete:
             state['concept_confirmed_date'] = target_date
 
