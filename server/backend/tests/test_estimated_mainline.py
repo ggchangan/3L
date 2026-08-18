@@ -77,7 +77,7 @@ def test_mainline_uses_close_snapshot_for_estimated_10d_ranking(monkeypatch, tmp
         data_layer, 'get_sector_daily_snapshot',
         lambda: type('Snapshot', (), {'industries': {}})(),
     )
-    monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='I': {
+    monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='I', **_kwargs: {
         'A': _klines(100, 100),
         'B': _klines(95, 100),
         'C': _klines(1, 1000),
@@ -159,7 +159,7 @@ def test_official_mainline_completes_estimate_calibration(monkeypatch, tmp_path)
         data_layer, 'get_sector_daily_snapshot',
         lambda: type('Snapshot', (), {'industries': {}})(),
     )
-    monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='I': {
+    monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='I', **_kwargs: {
         'A': _klines(100, 100, state['official']),
         'B': _klines(95, 100, state['official']),
     })
@@ -232,7 +232,7 @@ def test_stale_snapshot_never_marks_mainline_as_estimated(monkeypatch, tmp_path)
         data_layer, 'get_sector_daily_snapshot',
         lambda: type('Snapshot', (), {'industries': {}})(),
     )
-    monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='I': {'A': _klines()})
+    monkeypatch.setattr(data_layer, 'get_ths_industry_klines', lambda ths_type='I', **_kwargs: {'A': _klines()})
 
     result = review_compute_service.get_mainline_data('2026-07-21')
 

@@ -591,19 +591,24 @@ def get_concept_klines(name_list: list) -> dict:
         return {}
 
 
-def get_ths_industry_klines(ths_type='I', limit=120):
+def get_ths_industry_klines(ths_type='I', limit=120, industry_pool='all'):
     """从 ths_daily 读取行业/概念K线数据
 
     Args:
         ths_type: 'I'=行业, 'N'=概念, 'BB'=板块
         limit: 每行业最多K线条数
+        industry_pool: ths_type='I' 时生效：
+            'all'=保留所有行业代码；'mainline'=仅 3L 行业主线候选池
 
     Returns:
         {name: [{date, open, close, high, low, volume}, ...], ...}
         名称与 sector_daily.json 的 industries/concepts 格式兼容
     """
     try:
-        from backend.data_access.data_source import _get_tushare_db
+        from backend.data_access.data_source import (
+            _get_tushare_db,
+            is_ths_mainline_industry,
+        )
         db = _get_tushare_db()
         if not db:
             return {}
@@ -615,6 +620,17 @@ def get_ths_industry_klines(ths_type='I', limit=120):
         )
         if not idx_rows:
             return {}
+
+        if ths_type == 'I' and industry_pool == 'mainline':
+            before = len(idx_rows)
+            idx_rows = [
+                r for r in idx_rows
+                if is_ths_mainline_industry(r.get('ts_code'), r.get('name'))
+            ]
+            if before != len(idx_rows):
+                log.info('行业主线候选池过滤: %d -> %d', before, len(idx_rows))
+            if not idx_rows:
+                return {}
 
         ts_codes = [r['ts_code'] for r in idx_rows]
         name_map = {r['ts_code']: r['name'] for r in idx_rows}

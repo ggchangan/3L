@@ -324,9 +324,9 @@ def test_sector_coverage_skips_boards_inactive_for_five_trading_days():
                 return [
                     {'name': 'A', 'type': 'I', 'ts_code': '881001.TI',
                      'list_date': '20200101', 'latest_date': '20260720'},
-                    {'name': 'B', 'type': 'I', 'ts_code': '884001.TI',
+                    {'name': 'B', 'type': 'I', 'ts_code': '881002.TI',
                      'list_date': '20200101', 'latest_date': '20260720'},
-                    {'name': 'C停更', 'type': 'I', 'ts_code': '884999.TI',
+                    {'name': 'C停更', 'type': 'I', 'ts_code': '881999.TI',
                      'list_date': '20200101', 'latest_date': '20260714'},
                 ]
             if 'SELECT DISTINCT ti.name, ti.type' in sql:
@@ -334,7 +334,7 @@ def test_sector_coverage_skips_boards_inactive_for_five_trading_days():
             if 'SELECT name, ts_code' in sql and 'FROM ths_index' in sql:
                 rows = [
                     {'name': 'A', 'ts_code': '881001.TI'},
-                    {'name': 'B', 'ts_code': '884001.TI'},
+                    {'name': 'B', 'ts_code': '881002.TI'},
                 ]
                 requested_names = set(params or [])
                 return [row for row in rows if row['name'] in requested_names]
@@ -416,27 +416,78 @@ def test_sector_coverage_ignores_non_ths_kline_industry_baseline():
         def execute_raw(self, sql, params=None):
             if 'SELECT name, ts_code' in sql and 'FROM ths_index' in sql:
                 return [
-                    {'name': '中药', 'ts_code': '881141.TI'},
+                    {'name': '元件', 'ts_code': '881270.TI'},
+                    {'name': '被动元件', 'ts_code': '884093.TI'},
                     {'name': '旧分类', 'ts_code': '700001.TI'},
                 ]
             if 'FROM ths_daily' in sql:
-                return [{'name': '中药', 'type': 'I'}]
+                return [
+                    {'name': '元件', 'type': 'I'},
+                    {'name': '被动元件', 'type': 'I'},
+                ]
             return []
 
     with patch.object(data_source, '_get_tushare_db', return_value=FakeDb()), \
          patch.object(data_source, 'get_ths_daily_update_confirmation', return_value={
-             'industry_names': ['中药', '旧分类'],
+             'industry_names': ['元件', '被动元件', '旧分类'],
          }):
         coverage = data_source.get_ths_daily_update_coverage(
-            [('中药', 'industry'), ('旧分类', 'industry')],
+            [('元件', 'industry'), ('被动元件', 'industry'), ('旧分类', 'industry')],
             '20260811',
         )
 
     assert coverage['ready'] is True
     assert coverage['industry']['expected'] == 1
     assert coverage['industry']['covered'] == 1
-    assert coverage['industry_names'] == ['中药']
-    assert coverage['excluded_industries'] == ['旧分类']
+    assert coverage['industry_names'] == ['元件']
+    assert coverage['excluded_industries'] == ['旧分类', '被动元件']
+
+
+def test_ths_industry_role_classifies_mainline_and_sub_industries():
+    from backend.data_access import data_source
+
+    assert data_source.classify_ths_industry_role('881270.TI', '元件')['role'] == 'mainline_industry'
+    assert data_source.classify_ths_industry_role('884093.TI', '被动元件')['role'] == 'sub_industry'
+    assert data_source.classify_ths_industry_role('700566.TI', '电子元件(A股)')['role'] == 'excluded'
+    assert data_source.classify_ths_industry_role('884112.TEST', '测试人工智能')['role'] == 'excluded'
+
+
+def test_ths_industry_klines_can_read_mainline_pool_without_dropping_sub_industry():
+    from backend.data_access import data_layer, data_source
+
+    class FakeDb:
+        def execute_raw(self, sql, params=None):
+            if 'FROM ths_index WHERE type=%s' in sql:
+                assert params == ['I']
+                return [
+                    {'ts_code': '881270.TI', 'name': '元件'},
+                    {'ts_code': '884093.TI', 'name': '被动元件'},
+                ]
+            if 'FROM ths_member' in sql:
+                return [
+                    {'ts_code': '881270.TI', 'con_code': '000636.SZ'},
+                    {'ts_code': '884093.TI', 'con_code': '000636.SZ'},
+                ]
+            if 'FROM ths_daily' in sql:
+                return [
+                    {
+                        'ts_code': code, 'trade_date': '20260818',
+                        'open': 1, 'high': 1, 'low': 1, 'close': 1, 'vol': 1,
+                    }
+                    for code in params
+                ]
+            return []
+
+    with patch.object(data_source, '_get_tushare_db', return_value=FakeDb()):
+        mainline = data_layer.get_ths_industry_klines(
+            ths_type='I', industry_pool='mainline',
+        )
+        all_industries = data_layer.get_ths_industry_klines(
+            ths_type='I', industry_pool='all',
+        )
+
+    assert set(mainline) == {'元件'}
+    assert set(all_industries) == {'元件', '被动元件'}
 
 
 def test_same_count_sector_member_replacement_is_not_complete():
@@ -524,7 +575,7 @@ def test_legacy_sector_state_bootstraps_only_from_repeated_stable_history(tmp_pa
                     {'trade_date': '20260720', 'board_count': 79},
                     {'trade_date': '20260719', 'board_count': 80},
                 ]
-            assert params == ['20260719']
+            assert params == ['881%', '20260719']
             return [{'name': name} for name in names]
 
     state_path = tmp_path / 'computed' / 'sector_update_state.json'
