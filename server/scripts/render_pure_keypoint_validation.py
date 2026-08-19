@@ -154,10 +154,19 @@ def render(samples: List[Dict], output: Path) -> None:
     from matplotlib.font_manager import FontProperties
     from matplotlib.patches import Rectangle
 
-    font_path = '/System/Library/Fonts/PingFang.ttc'
-    if not os.path.exists(font_path):
-        font_path = '/System/Library/Fonts/STHeiti Medium.ttc'
-    font = FontProperties(fname=font_path) if os.path.exists(font_path) else None
+    font_path = next((
+        path for path in (
+            '/System/Library/Fonts/PingFang.ttc',
+            '/System/Library/Fonts/STHeiti Medium.ttc',
+            '/System/Library/Fonts/Hiragino Sans GB.ttc',
+            '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+            '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+            '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+            '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
+        )
+        if os.path.exists(path)
+    ), None)
+    font = FontProperties(fname=font_path) if font_path else None
     plt.rcParams['axes.unicode_minus'] = False
 
     rows_count = max(1, (len(samples) + 1) // 2)
