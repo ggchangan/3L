@@ -48,6 +48,7 @@ from backend.core.signal_detector.fusion import fusion_judge
 from backend.core.signal_detector.sell_point_detection import detect_sell_point
 from backend.core.structure_wave import judge_structure_wave
 from backend.core.trade_signal_contract import is_buy_point_allowed_by_structure
+from backend.core.keypoint_context import build_keypoint_context
 from backend.models.data_models import TradeDecision
 from threel_core.parameters import PARAMETER_VERSION
 
@@ -362,6 +363,19 @@ def _calc_action_reason(signal, structure, stage, fusion_reason,
     return _stage_reason.get(stage, f'{structure}·{stage}')
 
 
+def _can_promote_detected_buy_point(fusion_type, triggered_signals):
+    """被关键点拒绝的看多技术信号不能写入正式 buy_point 字段。"""
+    if fusion_type == 'keypoint_rejected_bullish':
+        return False
+    for signal in triggered_signals or []:
+        if (
+            signal.get('direction') == 'bullish'
+            and signal.get('keypoint_allowed') is False
+        ):
+            return False
+    return True
+
+
 def build_trade_decision(*, signal, structure, stage, fusion_type='',
                          fusion_reason='', triggered_signals=None, buy_point='',
                          stop_loss=None, stop_loss_pct=None):
@@ -461,6 +475,12 @@ def get_stock_card(code, date_str, market_position='波中',
 
     # 3. 结构分析
     struct_info = _analyze_structure(klines, idx)
+    keypoint_context = build_keypoint_context(
+        klines,
+        idx,
+        structure=struct_info.get('structure', ''),
+        stage=struct_info.get('stage', ''),
+    )
 
     # 通用 EMA 数值、偏离率、量比
     closes_all = [k['close'] for k in klines[:idx + 1]]
@@ -591,7 +611,12 @@ def get_stock_card(code, date_str, market_position='波中',
         technical_reason = f_result.get('technical_reason', '')
 
         # 下降结构可以降低执行优先级，但不能抹掉已经发生的反转/恐慌量价事实。
-        if technical_signal == 'buy' and detected_buy_point and not buy_point:
+        if (
+            technical_signal == 'buy'
+            and detected_buy_point
+            and not buy_point
+            and _can_promote_detected_buy_point(fusion_type, triggered_signals)
+        ):
             buy_point = detected_buy_point
             score = max(score, technical_confidence)
             if structure_sell_only:
@@ -773,6 +798,7 @@ def get_stock_card(code, date_str, market_position='波中',
         'technical_signal': technical_signal,
         'technical_confidence': technical_confidence,
         'technical_reason': technical_reason,
+        'keypoint_context': keypoint_context,
         'wave_position': wave_position,
         # 操作建议（卡片统一推导）
         'decision': decision.to_dict(),
@@ -835,6 +861,11 @@ def _empty_card(code, name, sector, direction, reason):
         'triggered_signals': [],
         'fusion_type': '',
         'fusion_reason': '',
+        'keypoint_context': {
+            'version': 'keypoint-context-p0',
+            'status': 'unavailable',
+            'reason': reason,
+        },
         'wave_position': '',
         'decision': decision.to_dict(),
         'action_type': decision.action,
