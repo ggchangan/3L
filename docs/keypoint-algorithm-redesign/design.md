@@ -424,6 +424,224 @@ P0 的回归验收样本：
   - 今日相对昨日和 5 日均量同步缩量；
   - 可识别为 `continuation`。
 
+### P0.1：纯关键点识别器
+
+这一阶段只做“图上哪些点本身值得标记”，不做买点、不做卖点、不解释位置含义。
+
+#### 原文依据
+
+3L 原文里，前高、前低、天量 K 线高低点、地量 K 线高低点属于容易被参与者
+观察和锚定的明显参考点。它们提供支撑/压力/成本聚集参考，但不直接等于
+突破、反转、中继或恐慌。
+
+因此 P0.1 的输出只包含：
+
+```text
+price_high       局部前高
+price_low        局部前低
+volume_peak      局部量峰
+volume_trough    局部量谷
+```
+
+每个点都必须带确认状态：
+
+```text
+confirmed  右侧 K 线数量足够，已经确认
+candidate  最新右侧 K 线不足，只能称为候选点
+```
+
+#### 旧实现审计与取舍
+
+现有代码里有可借鉴部分，也有必须拆分的部分。
+
+可借鉴：
+
+- `stock_chart_service._find_breakthrough_points()` 中前高/前低使用“左右各 5 根”
+  的局部波峰/波谷思想，符合明显参考点的基本定义；
+- `buy_point_detection._find_resistance_levels()` 使用局部波峰找阻力，方向正确；
+- `buy_point_detection._is_extreme_shrink()` 使用分位数识别地量，比简单均量倍数
+  更接近“相对异常量”；
+- `range-oscillation-support-resistance/design.md` 中对区间支撑/压力做过回测，
+  可作为后续“关键点到位置含义”的验证参考。
+
+需要重写或拆分：
+
+- `_find_breakthrough_points()` 在末尾 5 根 K 线缺少右侧确认时，仍会退化成
+  后向窗口并标为“前高/前低”，这会把最新高点误当成确认关键点；
+- 旧图表函数同时输出前高/前低、放量/缩量、突破/反转，静态锚点和供需转换点
+  混在一起，不利于回归；
+- 旧量能标注是“放↑/放↓/缩”的行为标签，不是“局部量峰/局部量谷”；
+- 买点检测器内部各自计算支撑、压力、缩量和突破，导致图表、卡片和复盘可能
+  使用不同关键点来源；
+- 中继/突破买点中存在技术评分逻辑，不能直接当作 3L 关键点识别器。
+
+结论：
+
+```text
+局部极值思想保留；
+分位数思想保留；
+末端确认逻辑、量峰量谷识别、输出契约需要重写；
+供需转换点必须从纯关键点识别器之上另起一层，不能混在 P0.1。
+```
+
+#### 三类对象参数
+
+定义保持一致，参数按对象类型微调：
+
+| 对象 | 示例 | 价格窗口 | 量能窗口 | 量峰强度 | 量谷强度 |
+|---|---|---:|---:|---|---|
+| 大盘 market | 科创50、中证全指 | 左右 5 根 | 左右 5 根 | MA20×1.25 或 60日分位≥85% | MA20×0.75 或 60日分位≤20% |
+| 板块 sector | CPO、元件、存储 | 左右 4 根 | 左右 4 根 | MA20×1.35 或 60日分位≥85% | MA20×0.70 或 60日分位≤18% |
+| 个股 stock | 中国巨石、太辰光、普冉股份 | 左右 3 根 | 左右 3 根 | MA20×1.50 或 60日分位≥90% | MA20×0.65 或 60日分位≤15% |
+
+这里的差异来自工程经验假设：
+
+- 大盘噪音相对少，关键点应该更稳、更少；
+- 板块轮动更快，需要略敏感；
+- 个股噪音最大，价格窗口可以更短，但量能异常强度必须更高。
+
+这些参数必须通过样本图和回归样本继续校准，不能视为最终值。
+
+#### P0.1 输出契约
+
+```json
+{
+  "version": "pure-keypoint-v1",
+  "asset_type": "market",
+  "date": "20260818",
+  "profile": {
+    "price_left": 5,
+    "price_right": 5,
+    "volume_left": 5,
+    "volume_right": 5
+  },
+  "points": [
+    {
+      "idx": 30,
+      "date": "20260701",
+      "type": "price_high",
+      "label": "局部前高",
+      "status": "confirmed",
+      "role": "resistance",
+      "price": 2255.25
+    },
+    {
+      "idx": 64,
+      "date": "20260818",
+      "type": "price_high",
+      "label": "候选前高",
+      "status": "candidate",
+      "role": "resistance",
+      "price": 1798.78
+    },
+    {
+      "idx": 21,
+      "date": "20260618",
+      "type": "volume_peak",
+      "label": "局部量峰",
+      "status": "confirmed",
+      "volume": 21000000,
+      "metrics": {
+        "volume_ma_ratio": 1.42,
+        "volume_percentile": 88.0
+      }
+    }
+  ]
+}
+```
+
+#### 回归策略
+
+三类对象都要有回归样本：
+
+```text
+market_keypoint_cases.json   科创50、中证全指
+sector_keypoint_cases.json   CPO、元件、存储
+stock_keypoint_cases.json    中国巨石、太辰光、普冉股份
+```
+
+第一批不追求完整标注全市场，只固化人眼讨论后确认的 `must_include` 和
+`must_exclude`：
+
+```json
+{
+  "target": "科创50",
+  "asset_type": "market",
+  "date_range": ["20260519", "20260818"],
+  "must_include": [
+    {"date": "20260701", "type": "price_high"},
+    {"date": "20260803", "type": "price_low"}
+  ],
+  "must_exclude": [
+    {"date": "20260818", "type": "price_high", "status": "confirmed"}
+  ]
+}
+```
+
+验收指标：
+
+```text
+召回：人眼确认的重要点是否被识别；
+误报：算法标出来但明显没有意义的点是否过多；
+状态：confirmed / candidate 是否区分正确；
+稳定性：大盘、板块、个股是否需要不同参数。
+```
+
+#### 形成中关键点状态机
+
+当天复盘最重要的是“正在形成的关键点”。这类点不能因为右侧确认不足而被
+忽略，也不能被当成已确认历史锚点。
+
+状态定义：
+
+```text
+candidate    形成中，右侧 K 线不足；
+confirmed    右侧窗口完整，仍保持局部极值；
+superseded   后续出现更极端高点/低点/量峰/量谷，候选点自然顺延；
+invalidated  后续走势使该候选点失去关键点意义。
+```
+
+P0.1 只落地 `candidate / confirmed` 两种状态：
+
+```text
+右侧窗口完整 → confirmed
+右侧窗口不足 → candidate
+```
+
+`superseded / invalidated` 需要跨日状态追踪，不在纯函数里持久化。但纯函数
+必须天然支持“顺延”：
+
+```text
+T 日出现候选量峰；
+T+1 继续更大成交量；
+再次滚动计算时，T 日不能升级为 confirmed，T+1 成为新的 candidate。
+```
+
+这保证当天复盘可以看到关键变化，同时避免把形成中的点误当成历史确认点。
+
+#### 人工验证图
+
+新增脚本：
+
+```bash
+PYTHONPATH=server:core python server/scripts/render_pure_keypoint_validation.py
+```
+
+默认生成 8 个标的的总览图：
+
+```text
+大盘：科创50、中证全指
+板块：CPO、元件、存储
+个股：中国巨石、太辰光、普冉股份
+```
+
+图上只展示：
+
+```text
+前高、前低、局部量峰、局部量谷；
+半透明标记表示 candidate，实心/高亮标记表示 confirmed。
+```
+
 ### P1：重写上涨中继算法
 
 1. 上涨中继只消费 `keypoint_context`；
