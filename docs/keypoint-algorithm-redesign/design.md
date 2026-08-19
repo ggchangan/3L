@@ -378,6 +378,52 @@ def detect_bullish_continuation_keypoint(klines, idx, context):
 3. 修复 `buy_point` 字段污染：
    - `keypoint_rejected_bullish` 不能写入 `buy_point`。
 
+#### P0 实现决策
+
+P0 不直接重写全部买卖点检测器，原因是当前系统里结构、阶段、技术信号、
+复盘缓存和前端展示已经有较多调用链。如果一次性重写，容易把“定义问题”
+和“工程迁移问题”混在一起，回归时难以定位。
+
+本阶段采用如下策略：
+
+```text
+保留现有结构/阶段判断
+  ↓
+新增统一 keypoint_context
+  ↓
+股票卡片先输出统一上下文
+  ↓
+禁止被关键点拒绝的看多技术信号污染正式 buy_point
+  ↓
+后续上涨中继、突破、反转、恐慌买点逐个迁移到 keypoint_context
+```
+
+具体复用与重写边界：
+
+- 复用 `get_structure()` / `get_stage()`：P0 先沿用现有结构、阶段口径；
+- 新增 `backend/core/keypoint_context.py`：统一输出明显参考点、当前关键区域、
+  当日量价行为、供需格局点；
+- 不复用各检测器内部私有的支撑/压力口径作为统一来源；
+- 不在 P0 重写 `upward_continuation.py`，但先阻止它在被融合层拒绝后继续写入
+  正式 `buy_point`；
+- `buy_point` 字段只表达“通过关键点语义后的有效买点”，疑似或被拒绝信号
+  只能留在 `technical_signal` / `triggered_signals` / `fusion_reason`。
+
+P0 的回归验收样本：
+
+- 圣邦股份 `300661` / `2026-08-18`：
+  - 区间震荡；
+  - 区间顶部；
+  - 今日/昨日成交量约 `1.53`；
+  - 放量下跌；
+  - 供需格局点应为 `failed_breakout`；
+  - 不允许输出正式 `中继买点`。
+- 人工上涨趋势缩量回踩样本：
+  - 上涨趋势；
+  - 回踩 EMA/支撑附近；
+  - 今日相对昨日和 5 日均量同步缩量；
+  - 可识别为 `continuation`。
+
 ### P1：重写上涨中继算法
 
 1. 上涨中继只消费 `keypoint_context`；
