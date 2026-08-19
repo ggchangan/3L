@@ -18,6 +18,12 @@ def _row(date, high, low, volume, close=None):
     }
 
 
+def _row_with_vol(date, high, low, vol, close=None):
+    row = _row(date, high, low, vol, close)
+    row['vol'] = row.pop('volume')
+    return row
+
+
 def _date(offset):
     return (date(2026, 7, 1) + timedelta(days=offset)).strftime('%Y%m%d')
 
@@ -95,6 +101,40 @@ def test_volume_trough_uses_local_trough_and_percentile():
     troughs = [p for p in result['points'] if p['type'] == 'volume_trough']
 
     assert any(p['date'] == '20260722' for p in troughs)
+
+
+def test_volume_field_accepts_tushare_vol_alias():
+    klines = []
+    volumes = [
+        100, 105, 108, 110, 112, 115, 118, 120, 122, 125,
+        128, 130, 132, 135, 138, 140, 142, 145, 148, 150,
+        160, 230, 155, 150, 148, 146, 144, 142, 140, 138,
+    ]
+    for i, vol in enumerate(volumes):
+        klines.append(_row_with_vol(f'202607{i + 1:02d}', 10 + i * 0.1, 9 + i * 0.1, vol))
+
+    result = detect_pure_keypoints(klines, asset_type='sector')
+
+    assert ('20260722', 'volume_peak', 'confirmed') in _types(result, 'volume_peak')
+
+
+def test_nearby_price_lows_keep_lower_low():
+    klines = [
+        _row(_date(0), 15, 10, 100),
+        _row(_date(1), 14, 9, 100),
+        _row(_date(2), 13, 7, 100),
+        _row(_date(3), 14, 9, 100),
+        _row(_date(4), 13, 6, 100),
+        _row(_date(5), 14, 9, 100),
+        _row(_date(6), 15, 10, 100),
+        _row(_date(7), 16, 11, 100),
+    ]
+
+    result = detect_pure_keypoints(klines, asset_type='stock')
+    lows = [p for p in result['points'] if p['type'] == 'price_low']
+
+    assert any(p['date'] == _date(4) and p['price'] == 6 for p in lows)
+    assert all(p['date'] != _date(2) for p in lows)
 
 
 def test_latest_volume_peak_is_candidate_and_rolls_forward_when_volume_expands():

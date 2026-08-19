@@ -44,6 +44,72 @@ DEFAULT_SAMPLES = [
 ]
 
 
+def _fixture_date(offset: int) -> str:
+    from datetime import date, timedelta
+
+    return (date(2026, 7, 1) + timedelta(days=offset)).strftime('%Y%m%d')
+
+
+def _fixture_rows(volume_tail: float = 240, price_tail_high: bool = True) -> List[Dict]:
+    highs = [
+        100, 102, 104, 106, 108, 110, 112, 114, 113, 112,
+        111, 109, 107, 105, 103, 101, 99, 98, 100, 102,
+        104, 108, 112, 116, 120, 118, 116, 114, 112, 110,
+        108, 106, 104, 102, 100, 98, 96, 95, 97, 99,
+        101, 103, 105, 107, 109, 111, 113, 115, 117, 119,
+        121, 123, 125, 127, 129, 131, 133, 134, 135, 136,
+    ]
+    if not price_tail_high:
+        highs[-1] = highs[-2] - 1
+    lows = [h - 5 for h in highs]
+    lows[17] = 90
+    lows[37] = 88
+    volumes = [
+        100, 102, 104, 106, 108, 110, 112, 114, 116, 118,
+        120, 122, 124, 126, 128, 130, 132, 134, 136, 138,
+        140, 230, 150, 145, 142, 140, 138, 136, 134, 132,
+        130, 128, 126, 124, 122, 120, 118, 70, 115, 116,
+        118, 120, 122, 124, 126, 128, 130, 132, 134, 136,
+        138, 140, 142, 144, 146, 148, 150, 152, 154, volume_tail,
+    ]
+    rows = []
+    for i, (high, low, volume) in enumerate(zip(highs, lows, volumes)):
+        close = (high + low) / 2
+        rows.append({
+            'date': _fixture_date(i),
+            'open': close,
+            'high': float(high),
+            'low': float(low),
+            'close': close,
+            'volume': float(volume),
+        })
+    return rows
+
+
+def collect_fixture_samples() -> List[Dict]:
+    specs = [
+        ('fixture-科创50', 'market', 180, True),
+        ('fixture-中证全指', 'market', 170, False),
+        ('fixture-CPO', 'sector', 245, False),
+        ('fixture-元件', 'sector', 235, True),
+        ('fixture-存储', 'sector', 225, False),
+        ('fixture-中国巨石', 'stock', 255, False),
+        ('fixture-太辰光', 'stock', 265, True),
+        ('fixture-普冉股份', 'stock', 275, False),
+    ]
+    return [
+        {
+            'name': name,
+            'asset_type': asset_type,
+            'table': 'fixture',
+            'code': name,
+            'source': 'offline-fixture',
+            'rows': _fixture_rows(volume_tail=volume_tail, price_tail_high=price_tail_high),
+        }
+        for name, asset_type, volume_tail, price_tail_high in specs
+    ]
+
+
 def _query_rows(db: TushareDB, table: str, code: str, limit: int) -> List[Dict]:
     rows = db.execute_raw(
         f'SELECT trade_date, open, high, low, close, vol FROM {table} '
@@ -193,9 +259,14 @@ def main() -> None:
     parser.add_argument('--limit', type=int, default=65)
     parser.add_argument('--output', default='/tmp/pure_keypoint_validation_overview.png')
     parser.add_argument('--summary', default='/tmp/pure_keypoint_validation_summary.json')
+    parser.add_argument(
+        '--fixture',
+        action='store_true',
+        help='使用内置离线 fixture 生成验证图，适合本地没有 MySQL 时跑 P0.1 回归。',
+    )
     args = parser.parse_args()
 
-    samples = collect_samples(args.limit)
+    samples = collect_fixture_samples() if args.fixture else collect_samples(args.limit)
     output = Path(args.output)
     render(samples, output)
 

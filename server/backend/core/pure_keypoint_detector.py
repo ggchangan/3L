@@ -338,6 +338,8 @@ def _dedupe_points(points: List[Dict], profile: KeypointProfile) -> List[Dict]:
             return float(percentile)
         if point['type'] == 'volume_trough' and percentile is not None:
             return 100 - float(percentile)
+        if point['type'] == 'price_low':
+            return -float(point.get('price') or 0)
         return float(point.get('price') or point.get('volume') or 0)
 
     kept: List[Dict] = []

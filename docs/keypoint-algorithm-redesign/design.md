@@ -627,6 +627,12 @@ T+1 继续更大成交量；
 PYTHONPATH=server:core python server/scripts/render_pure_keypoint_validation.py
 ```
 
+本地没有 MySQL 或真实行情库不可达时，使用离线 fixture 回归模式：
+
+```bash
+PYTHONPATH=server:core python server/scripts/render_pure_keypoint_validation.py --fixture
+```
+
 默认生成 8 个标的的总览图：
 
 ```text
