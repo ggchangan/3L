@@ -60,3 +60,23 @@ def test_normalize_qfq_rows_keeps_adjustment_status_and_sorts():
 
     assert [row['date'] for row in rows] == ['20260801', '20260802']
     assert all(row['adjustment_status'] == 'qfq' for row in rows)
+
+
+def _load_supply_demand_script():
+    script = Path(__file__).resolve().parents[2] / 'scripts' / 'render_supply_demand_keypoint_validation.py'
+    spec = importlib.util.spec_from_file_location('render_supply_demand_keypoint_validation', script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_supply_demand_validation_fixture_builds_summary():
+    module = _load_supply_demand_script()
+
+    samples = module.collect_fixture_samples()
+    summary = module.build_summary(samples)
+
+    assert summary[0]['name'] == 'fixture-P0.2'
+    assert summary[0]['asset_type'] == 'stock'
+    assert summary[0]['transition_points']
+    assert all(point['is_trade_decision'] is False for point in summary[0]['transition_points'])
