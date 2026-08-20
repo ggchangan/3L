@@ -18,7 +18,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Tuple
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -133,15 +133,71 @@ def _normalize(rows: Iterable[Dict]) -> List[Dict]:
     return result
 
 
+def _normalize_qfq_rows(rows: Iterable[Dict]) -> List[Dict]:
+    """规范化 TushareDB.query_stock_daily(adj='qfq') 的输出。"""
+    result = []
+    for row in rows:
+        result.append({
+            'date': str(row['date']),
+            'open': float(row['open']),
+            'high': float(row['high']),
+            'low': float(row['low']),
+            'close': float(row['close']),
+            'volume': float(row.get('volume') or row.get('vol') or 0),
+            'adjustment_status': row.get('adjustment_status', ''),
+        })
+    result.sort(key=lambda r: r['date'])
+    return result
+
+
+def validate_price_continuity(rows: List[Dict], *, max_close_gap_pct: float = 35.0,
+                              max_open_gap_pct: float = 30.0) -> Tuple[str, List[Dict]]:
+    """校验价格序列是否适合作为人工关键点校准样本。
+
+    P0.1 关键点校准图需要连续可比价格。个股即使走了前复权，也可能因为
+    原始行情或复权因子异常出现断层；这类样本必须醒目标记，避免被固化
+    为 benchmark。
+    """
+    issues: List[Dict] = []
+    for index in range(1, len(rows)):
+        previous = rows[index - 1]
+        current = rows[index]
+        prev_close = float(previous.get('close') or 0)
+        if prev_close <= 0:
+            continue
+        open_gap = (float(current.get('open') or 0) / prev_close - 1) * 100
+        close_gap = (float(current.get('close') or 0) / prev_close - 1) * 100
+        if abs(open_gap) > max_open_gap_pct or abs(close_gap) > max_close_gap_pct:
+            issues.append({
+                'date': current.get('date'),
+                'prev_date': previous.get('date'),
+                'prev_close': round(prev_close, 4),
+                'open': current.get('open'),
+                'close': current.get('close'),
+                'open_gap_pct': round(open_gap, 2),
+                'close_gap_pct': round(close_gap, 2),
+            })
+    return ('ok' if not issues else 'suspicious_price_gap'), issues
+
+
 def collect_samples(limit: int) -> List[Dict]:
     db = TushareDB()
     samples = []
     for spec in DEFAULT_SAMPLES:
-        rows = _query_rows(db, spec['table'], spec['code'], limit)
+        if spec['table'] == 'stock_daily':
+            rows = _normalize_qfq_rows(db.query_stock_daily(spec['code'], limit=limit, adj='qfq'))
+            source = f"{spec['table']}:{spec['code']}:qfq"
+            data_quality, quality_issues = validate_price_continuity(rows)
+        else:
+            rows = _normalize(_query_rows(db, spec['table'], spec['code'], limit))
+            source = f"{spec['table']}:{spec['code']}"
+            data_quality, quality_issues = 'ok', []
         samples.append({
             **spec,
-            'source': f"{spec['table']}:{spec['code']}",
-            'rows': _normalize(rows),
+            'source': source,
+            'rows': rows,
+            'data_quality': data_quality,
+            'quality_issues': quality_issues,
         })
     return samples
 
@@ -217,12 +273,15 @@ def render(samples: List[Dict], output: Path) -> None:
             for kind in ('price_high', 'price_low', 'volume_peak', 'volume_trough')
         }
         candidates = sum(1 for p in points if p['status'] == 'candidate')
+        quality_label = ''
+        if sample.get('data_quality') and sample.get('data_quality') != 'ok':
+            quality_label = f" | ⚠ {sample['data_quality']}({len(sample.get('quality_issues') or [])})"
         title = (
             f"{sample['name']} · {sample['asset_type']}\n"
             f"{rows[0]['date']}~{rows[-1]['date']} | "
             f"高{counts['price_high']} 低{counts['price_low']} "
             f"量峰{counts['volume_peak']} 量谷{counts['volume_trough']} "
-            f"候选{candidates}"
+            f"候选{candidates}{quality_label}"
         )
         ax.set_title(title, color='#e5e7eb', fontsize=11, fontproperties=font)
         ax.set_facecolor('#10131f')
@@ -287,6 +346,8 @@ def main() -> None:
             'asset_type': sample['asset_type'],
             'source': sample['source'],
             'date_range': [sample['rows'][0]['date'], sample['rows'][-1]['date']] if sample['rows'] else [],
+            'data_quality': sample.get('data_quality', 'ok'),
+            'quality_issues': sample.get('quality_issues', []),
             'points': result['points'],
         })
     summary_path = Path(args.summary)
