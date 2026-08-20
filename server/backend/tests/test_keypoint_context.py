@@ -50,6 +50,9 @@ def test_keypoint_context_marks_range_top_volume_down_as_failed_breakout():
     assert context['volume_price_action']['day_volume_ratio'] == 1.53
     assert context['supply_demand_keypoint']['type'] == 'failed_breakout'
     assert context['supply_demand_keypoint']['direction'] == 'bearish'
+    assert context['transition_points'][0]['type'] == 'failed_breakout'
+    assert context['transition_points'][0]['is_trade_decision'] is False
+    assert context['supply_demand_transition_context']['version'] == 'supply-demand-keypoint-v1'
 
 
 def test_keypoint_context_marks_uptrend_shrink_pullback_as_continuation():
@@ -74,6 +77,8 @@ def test_keypoint_context_marks_uptrend_shrink_pullback_as_continuation():
     assert context['volume_price_action']['type'] == 'shrink_pullback'
     assert context['supply_demand_keypoint']['type'] == 'continuation'
     assert context['supply_demand_keypoint']['direction'] == 'bullish'
+    assert context['transition_points'][0]['type'] == 'bullish_continuation'
+    assert context['transition_points'][0]['is_trade_decision'] is False
 
 
 def test_rejected_bullish_signal_cannot_promote_to_official_buy_point():
