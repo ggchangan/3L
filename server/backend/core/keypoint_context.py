@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from backend.core.ema_utils import ema_list, get_stage, get_structure
+from backend.core.supply_demand_keypoint_detector import detect_supply_demand_keypoints
 
 
 REFERENCE_LOOKBACK = 60
@@ -374,7 +375,8 @@ def detect_supply_demand_keypoint(structure: str, stage: str, current_zone: Dict
 
 
 def build_keypoint_context(klines: List[Dict], idx: int = -1,
-                           structure: str = '', stage: str = '') -> Dict:
+                           structure: str = '', stage: str = '',
+                           asset_type: str = 'stock') -> Dict:
     """构建统一关键点上下文。"""
     rows = _normalize_klines(klines)
     if not rows:
@@ -404,19 +406,29 @@ def build_keypoint_context(klines: List[Dict], idx: int = -1,
     zone = detect_current_zone(rows, end, resolved_structure, resolved_stage, refs)
     vpa = detect_volume_price_action(rows, end)
     sd = detect_supply_demand_keypoint(resolved_structure, resolved_stage, zone, vpa)
+    transition_context = detect_supply_demand_keypoints(
+        rows[:end + 1],
+        asset_type=asset_type,
+        structure=resolved_structure,
+        stage=resolved_stage,
+    )
     return {
         'version': 'keypoint-context-p0',
         'status': 'ok',
         'date': str(rows[end].get('date', '')),
+        'asset_type': asset_type,
         'structure': resolved_structure,
         'stage': resolved_stage,
         'reference_points': refs,
         'current_zone': zone,
         'volume_price_action': vpa,
         'supply_demand_keypoint': sd,
+        'supply_demand_transition_context': transition_context,
+        'transition_points': transition_context.get('transition_points', []),
         'definitions': {
             'reference_points': '前高、前低、天量/地量K线高低点等明显参考点；不直接等于买卖点',
             'volume_price_action': '当前关键位置/走势中的放量、缩量、长阳、长阴、十字星等量价证据',
-            'supply_demand_keypoint': '突破、跌破、反转、中继等供需格局打破或延续的位置',
+            'supply_demand_keypoint': '旧版兼容字段：突破、跌破、反转、中继等供需格局打破或延续的位置',
+            'transition_points': 'P0.2新版字段：供需格局转换关键点；不直接等于买卖点',
         },
     }
