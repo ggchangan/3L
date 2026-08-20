@@ -303,3 +303,26 @@ def test_user_confirmed_pure_keypoint_benchmark_v1():
             f"{sample['name']}({sample['slug']}) 关键点基准漂移："
             f"date_range={sample['date_range']}, source={sample['source']}"
         )
+
+
+def test_user_confirmed_pure_keypoint_benchmark_v2():
+    fixture_path = Path(__file__).parent / 'fixtures' / 'pure_keypoint_benchmark_v2.json'
+    fixture = json.loads(fixture_path.read_text(encoding='utf-8'))
+
+    assert fixture['version'] == 'pure-keypoint-benchmark-v2'
+    assert fixture['algorithm_version'] == 'pure-keypoint-v1'
+    assert len(fixture['samples']) == 25
+    assert {item['name'] for item in fixture['excluded_samples']} == {'工业富联', '新易盛', '寒武纪'}
+
+    for sample in fixture['samples']:
+        assert sample['data_quality'] == 'ok'
+        if sample['asset_type'] == 'stock':
+            assert sample['source'].endswith(':qfq')
+
+        result = detect_pure_keypoints(sample['rows'], asset_type=sample['asset_type'])
+        actual = [_benchmark_point(point) for point in result['points']]
+
+        assert actual == sample['expected_points'], (
+            f"{sample['name']}({sample['slug']}) 关键点基准 v2 漂移："
+            f"date_range={sample['date_range']}, source={sample['source']}"
+        )

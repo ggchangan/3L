@@ -615,6 +615,36 @@ test:    server/backend/tests/test_pure_keypoint_detector.py::test_user_confirme
 无意义的测试失败。后续如果人工确认新增样本，应追加到同一 fixture 或新
 建 v2 fixture，并在文档中记录确认日期和样本来源。
 
+#### 第二版人工确认基准集
+
+2026-08-20 追加第二批人工确认样本：
+
+```text
+fixture: server/backend/tests/fixtures/pure_keypoint_benchmark_v2.json
+test:    server/backend/tests/test_pure_keypoint_detector.py::test_user_confirmed_pure_keypoint_benchmark_v2
+```
+
+样本范围：
+
+| 类型 | 样本 |
+|---|---|
+| 大盘 | 创业板指、上证指数 |
+| 板块/概念 | 机器人、人形机器人、半导体、汽车零部件、创新药、医疗服务、通信设备、消费电子、算力租赁、人工智能、贵金属、煤炭开采加工、证券、房地产 |
+| 个股 | 拓普集团、圣邦股份、美年健康、永鼎股份、绿的谐波、长川科技、中际旭创、北方华创、胜宏科技 |
+
+第二版生成时已修正个股口径：所有个股校准样本均来自 `stock_daily` 前复权
+`qfq` 序列。用户已确认：旧图中除断层样本外的关键点均无问题；新版 qfq
+图中这些有效样本的关键点日期、类型和状态没有变化，因此可进入 v2 基准。
+
+以下样本因前复权后仍存在异常价格断层，仅记录在 `excluded_samples`，不
+参与 benchmark：
+
+```text
+工业富联：2026-08-03 附近异常跳变
+新易盛：2026-05-18~2026-06-11 多处异常跳变
+寒武纪：2026-05-08 附近异常跳变
+```
+
 #### 形成中关键点状态机
 
 当天复盘最重要的是“正在形成的关键点”。这类点不能因为右侧确认不足而被
