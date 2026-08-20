@@ -710,6 +710,366 @@ PYTHONPATH=server:core python server/scripts/render_pure_keypoint_validation.py 
 解释的价格断层，脚本应标记 `suspicious_price_gap`，这类样本只能用于排查
 数据质量，不能直接进入人工确认 benchmark。
 
+### P0.2：供需格局转换关键点识别器
+
+P0.2 在 P0.1 之上继续推进，但仍然不直接生成买卖点。
+
+它只回答一个问题：
+
+```text
+当前 K 线或当前一段走势，是否正在改变或延续原有供需格局？
+```
+
+它不回答：
+
+```text
+是否应该立刻买入？
+是否应该重仓？
+是否属于最终交易计划？
+```
+
+这一步非常关键，因为 3L 的买点不是孤立技术形态，而是：
+
+```text
+关键点 + 量价行为 + 结构位置 + 市场/主线背景
+```
+
+P0.2 只负责前 3 项中的“供需格局点”，为后续买卖点提供统一、可解释、可回归
+的上下文。
+
+#### 原文依据
+
+3L/量价原文里，供需格局转换点主要包括：
+
+- 突破点：原有区间或压力被需求打破，趋势可能开始；
+- 跌破点：原有区间或支撑被供应打破，风险释放或下降趋势可能开始；
+- 反转点：原趋势被反向力量改变；
+- 中继点：当前行为不能改变原趋势，原趋势延续；
+- 恐慌/滞跌点：下降或调整末端出现天量滞跌，供应集中释放并被需求承接；
+- 高潮/滞涨点：上涨或加速末端出现天量滞涨，需求推进效率下降并出现派发。
+
+其中“恐慌买点”的原文核心不是简单放量下跌，而是：
+
+```text
+天量滞跌。
+```
+
+工程解释：
+
+- `天量` 是供给或需求的极端努力；
+- `滞跌` 是供应努力没有换来继续下跌的结果；
+- 两者合在一起才说明“供应可能被吸收”；
+- 因此恐慌点在 P0.2 中只能先输出 `panic_stagnation` 供需点，不能自动升级为买点。
+
+#### 与 P0.1 的边界
+
+P0.1 的明显参考点和 P0.2 的供需转换点不是父子关系。
+
+```text
+P0.1：图上客观可见的锚定点
+  - 前高
+  - 前低
+  - 局部量峰
+  - 局部量谷
+
+P0.2：供需格局改变或延续的位置
+  - 向上突破
+  - 向下跌破
+  - 向上反转
+  - 向下反转
+  - 上涨中继
+  - 下跌中继
+  - 恐慌滞跌
+  - 高潮滞涨
+  - 突破失败 / 跌破失败
+```
+
+P0.2 可以使用 P0.1 的锚定点作为证据，例如“接近前高压力”“跌破前低支撑”，
+但不能要求所有供需转换点都必须从锚定点派生。
+
+例如：
+
+- 一根明显天量滞跌 K 线，即使不在精确前低，也可能是供需转换候选；
+- 上涨趋势中的缩量回踩，即使没有刚好踩到某个前高，也可能是中继候选；
+- 区间顶部放量下跌，哪怕没有正式突破，也可能构成突破失败或压力确认。
+
+#### P0.2 输出契约
+
+新增统一输出：
+
+```json
+{
+  "version": "supply-demand-keypoint-v1",
+  "asset_type": "stock",
+  "date": "20260818",
+  "structure": "区间震荡",
+  "stage": "区间顶部",
+  "transition_points": [
+    {
+      "idx": 59,
+      "date": "20260818",
+      "type": "failed_breakout",
+      "direction": "bearish",
+      "status": "candidate",
+      "confidence": 72,
+      "structure": "区间震荡",
+      "stage": "区间顶部",
+      "anchor": {
+        "type": "price_high",
+        "date": "20260814",
+        "price": 123.8,
+        "distance_pct": -1.6
+      },
+      "evidence": {
+        "volume_price_action": "volume_down",
+        "price_change_pct": -5.13,
+        "day_volume_ratio": 1.53,
+        "volume_ma20_ratio": 1.24,
+        "close_location": 0.28,
+        "supply_entry": 68,
+        "demand_entry": 21
+      },
+      "invalidations": [
+        "后续放量收复压力位则突破失败失效"
+      ],
+      "reason": "区间顶部附近放量下跌，供应进入，需求未能突破压力",
+      "is_trade_decision": false
+    }
+  ]
+}
+```
+
+字段原则：
+
+- `type` 描述供需点，不写“买点/卖点”；
+- `direction` 只描述供需方向倾向；
+- `status` 必须区分 `candidate / confirmed`；
+- `confidence` 是证据强弱，不等于胜率；
+- `evidence` 必须保存原始可解释数值，避免只给形容词；
+- `is_trade_decision` 固定为 `false`。
+
+#### 状态定义
+
+供需转换点比纯关键点更依赖右侧验证，因此状态要更保守：
+
+```text
+candidate    当天或最近几天出现供需变化证据，但右侧确认不足；
+confirmed    后续 K 线确认供需变化有效；
+failed       后续走势否定该供需转换；
+expired      超过观察窗口仍未确认，失去交易意义。
+```
+
+当天复盘默认大量输出应为 `candidate`。这不是算法保守，而是为了符合现实：
+
+```text
+当日只能看到“正在发生什么”，不能用未来 K 线证明“已经完成什么”。
+```
+
+#### 供需点类型定义
+
+| 类型 | 结构位置 | 量价核心 | 供需含义 | 交易层含义 |
+|---|---|---|---|---|
+| `upward_breakout` | 区间顶部/压力位 | 放量上涨、实体有效、收盘站上压力 | 需求打破供应区 | 后续可进入突破买点候选 |
+| `downward_breakdown` | 区间底部/支撑位 | 跌破支撑，下降不一定需要放量 | 供应占优或需求撤退 | 风险/卖点候选 |
+| `bullish_reversal` | 下降趋势或调整末端 | 下跌放缓、反包、长下影、收复短均 | 供应衰竭后需求进入 | 后续可进入反转买点候选 |
+| `bearish_reversal` | 上涨趋势或加速末端 | 放量滞涨、长上影、跌破短均 | 需求衰竭后供应进入 | 风险/卖点候选 |
+| `bullish_continuation` | 上涨趋势中 | 缩量回踩、不破趋势支撑 | 供应不足，原上升格局延续 | 后续可进入中继买点候选 |
+| `bearish_continuation` | 下降趋势中 | 缩量反弹受阻或继续弱势 | 需求不足，原下降格局延续 | 禁止低吸/反弹风险 |
+| `panic_stagnation` | 下降/调整末端或低位 | 天量滞跌、长下影、收盘不再有效创新低 | 供应集中释放并被承接 | 只进入恐慌候选，需确认 |
+| `climax_stagnation` | 上涨/加速末端或高位 | 天量滞涨、长上影、推进效率下降 | 需求高潮或派发 | 风险/止盈候选 |
+| `failed_breakout` | 区间顶部/压力位 | 冲高回落、放量下跌、收不回压力 | 需求突破失败，供应进入 | 风险/卖点候选 |
+| `failed_breakdown` | 区间底部/支撑位 | 跌破后收回、放量承接 | 供应跌破失败，需求承接 | 反转/恐慌候选 |
+
+这里特别约束：
+
+```text
+区间顶部 + 放量下跌 不能输出 bullish_continuation；
+下降趋势 + 缩量 不能输出 bullish_continuation；
+天量下跌但继续有效创新低，不能输出 panic_stagnation；
+放量上涨但收盘没有越过压力，不能输出 upward_breakout。
+```
+
+#### 量价证据口径
+
+P0.2 需要同时保存多个成交量口径，不能只展示一个“量 X 倍”：
+
+```text
+day_volume_ratio     今日量 / 昨日量
+volume_ma5_ratio     今日量 / 前 5 日均量
+volume_ma20_ratio    今日量 / 前 20 日均量
+volume_percentile    今日量在近 60/120 日中的分位
+local_volume_role    volume_peak / volume_trough / normal
+```
+
+使用原则：
+
+- 当天展示语义优先用 `day_volume_ratio`，避免圣邦股份这类“今天明显放量却显示缩量”的冲突；
+- 背景强度使用 `volume_ma20_ratio` 和 `volume_percentile`；
+- “天量/地量”优先使用 P0.1 的局部量峰/量谷，不再使用固定历史最大/最小；
+- “缩量回踩”必须同时满足相对昨日和均量收缩，不能只用最近 5 日均量 / 前上涨段均量。
+
+#### 伪算法
+
+```python
+def detect_supply_demand_keypoints(bars, asset_type, idx=-1):
+    bars = normalize_bars(bars, adjust='qfq' if asset_type == 'stock' else None)
+    assert_no_suspicious_gap(bars)
+
+    pure = detect_pure_keypoints(bars, asset_type, idx)
+    structure = detect_structure(bars, idx)
+    stage = detect_stage(bars, idx, structure)
+    zone = detect_current_zone(bars, idx, structure, stage, pure)
+    vpa = detect_volume_price_action(bars, idx, pure)
+    evidence = score_supply_demand_evidence(bars, idx, structure, zone, vpa)
+
+    candidates = []
+
+    if is_upward_breakout(structure, zone, vpa, evidence):
+        candidates.append(point('upward_breakout', 'bullish'))
+
+    if is_downward_breakdown(structure, zone, vpa, evidence):
+        candidates.append(point('downward_breakdown', 'bearish'))
+
+    if is_bullish_continuation(structure, zone, vpa, evidence):
+        candidates.append(point('bullish_continuation', 'bullish'))
+
+    if is_bearish_continuation(structure, zone, vpa, evidence):
+        candidates.append(point('bearish_continuation', 'bearish'))
+
+    if is_bullish_reversal(structure, zone, vpa, evidence):
+        candidates.append(point('bullish_reversal', 'bullish'))
+
+    if is_bearish_reversal(structure, zone, vpa, evidence):
+        candidates.append(point('bearish_reversal', 'bearish'))
+
+    if is_panic_stagnation(structure, zone, vpa, evidence):
+        candidates.append(point('panic_stagnation', 'bullish'))
+
+    if is_climax_stagnation(structure, zone, vpa, evidence):
+        candidates.append(point('climax_stagnation', 'bearish'))
+
+    return resolve_conflicts(candidates)
+```
+
+冲突处理原则：
+
+```text
+同一天允许同时存在“量价证据”和“供需候选”，但正式供需点要收敛；
+bearish 风险点优先阻断 bullish 买点；
+如果 bullish 与 bearish 证据接近，输出 neutral / conflict，而不是硬给买点；
+技术买点检测器只能消费 P0.2 结果，不能绕过 P0.2 自行写 buy_point。
+```
+
+#### 旧代码审计与取舍
+
+可借鉴：
+
+- `pure_keypoint_detector.py`
+  - 已完成 P0.1 的局部前高、前低、量峰、量谷；
+  - P0.2 应直接消费它，不再复制局部极值逻辑。
+- `market_peak_valley.py`
+  - `panic_release / supply_exhaustion / absorption / demand_entry`
+    和 `buying_climax / demand_exhaustion / distribution / supply_entry`
+    这些证据名称符合供需语言；
+  - 可抽出为通用 `score_supply_demand_evidence()`，供大盘、板块、个股复用。
+- `signal_detector/*`
+  - 各检测器中关于突破、反转、供应衰竭、需求衰竭的局部条件可作为
+    P0.2 的候选证据；
+  - 但它们当前输出的是“信号”，不是统一供需点。
+- `keypoint_contract.py`
+  - 已明确 reference / volume_evidence / transition / decision 的展示层语义；
+  - P0.2 应扩展这套契约，而不是另起一套前端含义。
+
+需要重写或降级：
+
+- `keypoint_context.detect_supply_demand_keypoint()`
+  - 当前是 P0 临时实现，规则过少；
+  - 未消费 P0.1 的 `candidate / confirmed`；
+  - 未覆盖恐慌滞跌、高潮滞涨、失败突破/跌破等完整语义。
+- `stock_chart_service._find_breakthrough_points()`
+  - 继续可作为旧图表兼容层；
+  - 不能再作为供需关键点来源；
+  - 后续应改为消费 P0.1/P0.2 输出再绘图。
+- `buy_point_detection.detect_buy_point()`
+  - 内部支撑/压力/突破/中继逻辑只能作为历史参考；
+  - 后续买点应从 `supply_demand_keypoint` 派生；
+  - 被 P0.2 拒绝的 bullish 技术事实不得写入正式 `buy_point`。
+- `signal_detector/upward_continuation.py`
+  - 当前更像趋势回踩评分器；
+  - 应改为消费 `bullish_continuation` 供需点；
+  - 不能在“区间顶部/放量下跌/供应进入”时输出中继买点。
+
+#### P0.2 人工回归样本
+
+P0.2 不追求一上来全市场准确率，而是先建立人眼可复查样本库。
+
+第一批建议样本：
+
+| 类型 | 应包含样本 | 目标 |
+|---|---|---|
+| 区间顶部受阻 | 圣邦股份 2026-08-18、美年健康待补充 | 不得输出上涨中继/买点 |
+| 上涨中继 | 太辰光、中际旭创、胜宏科技待人工截取 | 缩量回踩不破趋势支撑 |
+| 突破点 | CPO/元件/存储内强势个股待人工截取 | 放量有效突破压力 |
+| 恐慌滞跌 | 绿的谐波等待复查 | 必须是天量滞跌，不是任意下跌 |
+| 高潮滞涨 | 高位放量滞涨样本待补充 | 风险点优先阻断买点 |
+| 下跌中继 | 下降趋势缩量反弹受阻样本待补充 | 明确“缩量不等于买点” |
+
+每个样本需要标注：
+
+```json
+{
+  "target": "圣邦股份",
+  "code": "300661",
+  "date": "20260818",
+  "asset_type": "stock",
+  "expected": {
+    "must_include": [
+      {"type": "failed_breakout", "direction": "bearish"}
+    ],
+    "must_exclude": [
+      {"type": "bullish_continuation"},
+      {"trade_signal": "buy"},
+      {"buy_point": "中继买点"}
+    ]
+  },
+  "human_note": "区间顶部放量下跌，供应进入，不是中继。"
+}
+```
+
+#### P0.2 实施顺序
+
+```text
+1. 新增设计文档和 fixture 格式
+2. 新增 supply_demand_keypoint_detector.py 纯函数
+3. 用合成 K 线写单元测试，先覆盖类型边界
+4. 用真实历史样本生成校准图，交给人工确认
+5. 固化 benchmark fixture
+6. 改 stock_chart_service 使用 P0.1/P0.2 输出画图
+7. 改股票卡片和复盘页只从 P0.2 派生买卖点候选
+8. 逐步迁移突破/中继/反转/恐慌买点检测器
+```
+
+其中第 2～3 步不依赖人工标注即可开始；第 4～5 步需要人工确认样本；
+第 6～8 步必须等 P0.2 回归稳定后再接入生产展示。
+
+#### P0.2 验收标准
+
+最低验收：
+
+- 圣邦股份 `300661 / 2026-08-18` 不再被解释为上涨中继；
+- 区间顶部放量下跌输出 `failed_breakout` 或 bearish 风险点；
+- 上涨中继必须满足上涨趋势 + 回踩支撑 + 缩量 + 未破趋势支撑；
+- 恐慌点必须体现“天量滞跌”，不是简单“跌多了”；
+- 所有供需点输出均带原始证据数值；
+- 供需点不得直接写 `buy_point`。
+
+工程验收：
+
+- 单元测试覆盖所有供需点类型的正反例；
+- 真实样本 benchmark 只锁定人工确认的必须包含/必须排除项；
+- 个股样本默认使用前复权，异常价格断层样本不进入 benchmark；
+- 前端图表、股票卡片、复盘页三处展示来自同一上下文，不再各算各的。
+
 ### P1：重写上涨中继算法
 
 1. 上涨中继只消费 `keypoint_context`；
