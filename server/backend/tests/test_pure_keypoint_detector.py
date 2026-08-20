@@ -1,4 +1,6 @@
 from datetime import date, timedelta
+import json
+from pathlib import Path
 
 from backend.core.pure_keypoint_detector import (
     detect_pure_keypoints,
@@ -33,6 +35,19 @@ def _types(result, point_type=None):
     if point_type:
         points = [p for p in points if p['type'] == point_type]
     return [(p['date'], p['type'], p['status']) for p in points]
+
+
+def _benchmark_point(point):
+    result = {
+        'date': point['date'],
+        'type': point['type'],
+        'status': point['status'],
+    }
+    if 'price' in point:
+        result['price'] = point['price']
+    if 'volume' in point:
+        result['volume'] = point['volume']
+    return result
 
 
 def test_latest_price_high_is_candidate_not_confirmed():
@@ -271,3 +286,20 @@ def test_keypoint_regression_cases_cover_market_sector_and_stock():
             assert expected in detected, f"{case['name']} missing {expected}"
         for unexpected in case['must_exclude']:
             assert unexpected not in detected, f"{case['name']} should exclude {unexpected}"
+
+
+def test_user_confirmed_pure_keypoint_benchmark_v1():
+    fixture_path = Path(__file__).parent / 'fixtures' / 'pure_keypoint_benchmark_v1.json'
+    fixture = json.loads(fixture_path.read_text(encoding='utf-8'))
+
+    assert fixture['version'] == 'pure-keypoint-benchmark-v1'
+    assert fixture['algorithm_version'] == 'pure-keypoint-v1'
+
+    for sample in fixture['samples']:
+        result = detect_pure_keypoints(sample['rows'], asset_type=sample['asset_type'])
+        actual = [_benchmark_point(point) for point in result['points']]
+
+        assert actual == sample['expected_points'], (
+            f"{sample['name']}({sample['slug']}) 关键点基准漂移："
+            f"date_range={sample['date_range']}, source={sample['source']}"
+        )
