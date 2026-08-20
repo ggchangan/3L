@@ -676,6 +676,10 @@ PYTHONPATH=server:core python server/scripts/render_pure_keypoint_validation.py 
 半透明标记表示 candidate，实心/高亮标记表示 confirmed。
 ```
 
+个股样本必须使用前复权价格生成校准图。若前复权后仍出现无法由正常涨跌幅
+解释的价格断层，脚本应标记 `suspicious_price_gap`，这类样本只能用于排查
+数据质量，不能直接进入人工确认 benchmark。
+
 ### P1：重写上涨中继算法
 
 1. 上涨中继只消费 `keypoint_context`；
