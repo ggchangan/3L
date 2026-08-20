@@ -587,6 +587,34 @@ stock_keypoint_cases.json    中国巨石、太辰光、普冉股份
 稳定性：大盘、板块、个股是否需要不同参数。
 ```
 
+#### 第一版人工确认基准集
+
+2026-08-20 已将第一批人工校准图固化为回归基准：
+
+```text
+fixture: server/backend/tests/fixtures/pure_keypoint_benchmark_v1.json
+test:    server/backend/tests/test_pure_keypoint_detector.py::test_user_confirmed_pure_keypoint_benchmark_v1
+```
+
+样本范围：
+
+| 类型 | 样本 | 用途 |
+|---|---|---|
+| 大盘 | 科创50、中证全指 | 验证指数级前高/前低/量峰/量谷的稳健性 |
+| 板块 | CPO、元件、存储 | 验证板块轮动更快时的关键点敏感度 |
+| 个股 | 中国巨石、太辰光、普冉股份 | 验证个股噪音更高时的关键点过滤 |
+
+该基准只锁定 P0.1 的“纯关键点”：
+
+- 日期；
+- 类型：`price_high / price_low / volume_peak / volume_trough`；
+- 状态：`confirmed / candidate`；
+- 对应价格或成交量。
+
+它不锁定成交量分位数、均量比等解释性指标，避免小数级辅助指标变化导致
+无意义的测试失败。后续如果人工确认新增样本，应追加到同一 fixture 或新
+建 v2 fixture，并在文档中记录确认日期和样本来源。
+
 #### 形成中关键点状态机
 
 当天复盘最重要的是“正在形成的关键点”。这类点不能因为右侧确认不足而被
