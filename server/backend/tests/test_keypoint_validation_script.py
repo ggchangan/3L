@@ -80,3 +80,24 @@ def test_supply_demand_validation_fixture_builds_summary():
     assert summary[0]['asset_type'] == 'stock'
     assert summary[0]['transition_points']
     assert all(point['is_trade_decision'] is False for point in summary[0]['transition_points'])
+
+
+def _load_structure_script():
+    script = Path(__file__).resolve().parents[2] / 'scripts' / 'render_structure_validation.py'
+    spec = importlib.util.spec_from_file_location('render_structure_validation', script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_structure_validation_fixture_builds_summary():
+    module = _load_structure_script()
+
+    samples = module.collect_fixture_samples()
+    summary = module.build_summary(samples)
+
+    assert summary[0]['name'] == 'fixture-P0-structure'
+    assert summary[0]['asset_type'] == 'stock'
+    assert summary[0]['states']
+    assert {'date', 'structure', 'stage', 'metrics', 'reason'} <= set(summary[0]['states'][-1])
+    assert any(state['structure'] in ('上涨趋势', '区间震荡', '下降趋势') for state in summary[0]['states'])
