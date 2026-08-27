@@ -2,6 +2,26 @@
 
 这是 P0-structure 的旁路实验：先识别主导波段，再派生结构。
 它不替换 `get_structure()`，也不接入生产页面。
+
+口径说明：
+- `structure` / `phase` 描述的是大级别结构，用来判断背景和风险偏好；
+- `trading_wave` / `trading_state` 描述的是当前正在交易的波段，用来服务 3L
+  的波段操作语义。
+
+例如一个标的仍处在上涨趋势，但最近 10 个交易日从阶段高点持续回落：
+
+```text
+structure      = 上涨趋势
+phase          = pullback
+trading_wave   = 下降波段
+trading_state  = 上涨趋势中的下降波段/回调
+```
+
+这样可以避免把“主结构仍上涨”误读成“当前仍应按上涨推动波交易”。
+
+当前交易波段允许使用 candidate 反向波。也就是说：主结构继续使用较稳定的
+confirmed pivot，但交易波段不必等主结构完全确认才翻向。3L 是波段交易，
+暴涨后的快速回落、主跌中的快速反弹，都需要更早暴露给交易层。
 """
 
 from __future__ import annotations
@@ -101,9 +121,11 @@ def get_wave_profile(asset_type: str = 'stock') -> WaveProfile:
 def _threshold(rows: List[Dict], profile: WaveProfile) -> Dict:
     atr = _atr_pct(rows)
     reversal = max(profile.min_reversal_pct, atr * profile.atr_multiplier)
+    candidate_reversal = max(profile.min_impulse_pct, reversal * 0.60)
     return {
         'atr_pct': round(atr, 4),
         'reversal_pct': round(reversal, 4),
+        'candidate_reversal_pct': round(candidate_reversal, 4),
         'min_impulse_pct': profile.min_impulse_pct,
     }
 
@@ -261,6 +283,8 @@ def judge_wave_structure(klines: Iterable[Dict], *, asset_type: str = 'stock') -
             'reason': f'至少需要 {MIN_BARS} 根有效 K 线',
             'structure': '--',
             'phase': '--',
+            'trading_wave': {},
+            'trading_state': '--',
             'pivots': [],
             'active_wave': {},
         }
@@ -271,6 +295,7 @@ def judge_wave_structure(klines: Iterable[Dict], *, asset_type: str = 'stock') -
     active = _active_wave(rows, pivots)
     previous = _previous_wave(pivots)
     structure, phase, reason = _classify(active, thresholds, previous)
+    trading_wave, trading_state = _trading_wave_context(rows, active, structure, phase, thresholds)
 
     return {
         'version': VERSION,
@@ -279,12 +304,156 @@ def judge_wave_structure(klines: Iterable[Dict], *, asset_type: str = 'stock') -
         'asset_type': asset_type,
         'structure': structure,
         'phase': phase,
+        'trading_wave': trading_wave,
+        'trading_state': trading_state,
         'active_wave': active,
         'previous_wave': previous,
         'thresholds': thresholds,
         'pivots': pivots,
         'reason': reason,
     }
+
+
+def _trading_wave_context(
+    rows: List[Dict],
+    active: Dict,
+    structure: str,
+    phase: str,
+    thresholds: Dict,
+) -> tuple[Dict, str]:
+    """把 active_wave 翻译成 3L 波段交易语义。
+
+    `active_wave` 是算法内部字段，表达“最后一个确认 pivot 到当前极值”的方向。
+    `trading_wave` 是给交易判断/验证图使用的字段：当前到底处在上涨波段、
+    下降波段还是横向整理。它不替代 `structure`，而是和主结构并列展示。
+    """
+    trading_wave = _candidate_trading_wave(rows, active, thresholds) or _confirmed_trading_wave(active)
+    direction = trading_wave.get('direction')
+
+    if structure == '上涨趋势':
+        if direction == 'up':
+            state = '上涨趋势中的上涨推动波'
+        elif direction == 'down':
+            state = '上涨趋势中的下降波段/回调'
+        else:
+            state = '上涨趋势中的横向整理'
+    elif structure == '下降趋势':
+        if direction == 'down':
+            state = '下降趋势中的下降推动波'
+        elif direction == 'up':
+            state = '下降趋势中的反弹波'
+        else:
+            state = '下降趋势中的横向整理'
+    elif structure == '区间震荡':
+        if direction == 'up':
+            state = '区间震荡中的上行波段'
+        elif direction == 'down':
+            state = '区间震荡中的下行波段'
+        else:
+            state = '区间震荡'
+    else:
+        state = phase or '--'
+
+    return trading_wave, state
+
+
+def _confirmed_trading_wave(active: Dict) -> Dict:
+    direction = active.get('direction')
+    if direction == 'up':
+        wave_label = '上涨波段'
+    elif direction == 'down':
+        wave_label = '下降波段'
+    else:
+        wave_label = '横向波段'
+
+    return {
+        'direction': direction or 'flat',
+        'label': wave_label,
+        'start_date': active.get('start_date'),
+        'start_price': active.get('start_price'),
+        'extreme_date': active.get('extreme_date'),
+        'extreme_price': active.get('extreme_price'),
+        'change_pct': active.get('change_pct'),
+        'counter_move_pct': active.get('counter_move_pct'),
+        'confirmed': active.get('confirmed'),
+        'source': 'confirmed_active_wave',
+    }
+
+
+def _candidate_trading_wave(rows: List[Dict], active: Dict, thresholds: Dict) -> Optional[Dict]:
+    """识别尚未改变主结构、但交易上已经需要按反向波段处理的 candidate wave。
+
+    confirmed pivot 用于稳定确认主结构；candidate trading wave 用于 3L 交易层。
+    当一个上涨活动波从高点明显回撤，或下降活动波从低点明显反弹，即使新 pivot
+    还没被 confirmed，也应尽早暴露“当前交易波段已经反向”。
+    """
+    if not rows:
+        return None
+
+    direction = active.get('direction')
+    candidate_threshold = float(thresholds.get('candidate_reversal_pct') or thresholds.get('min_impulse_pct') or 0)
+    extreme_idx = active.get('extreme_idx')
+    if not isinstance(extreme_idx, int) or extreme_idx >= len(rows) - 1:
+        return None
+
+    scoped = rows[extreme_idx:]
+    if direction == 'up':
+        extreme_rel_idx, extreme = min(enumerate(scoped), key=lambda item: item[1]['low'])
+        end_idx = extreme_idx + extreme_rel_idx
+        start_price = float(active.get('extreme_price') or rows[extreme_idx]['high'])
+        end_price = extreme['low']
+        change_pct = _pct_change(end_price, start_price)
+        current_counter = abs(float(active.get('counter_move_pct') or 0))
+        if abs(change_pct) < candidate_threshold:
+            return None
+        if current_counter < candidate_threshold * 0.60:
+            return None
+        rebound_pct = max(0.0, _pct_change(rows[-1]['close'], end_price))
+        return {
+            'direction': 'down',
+            'label': '下降波段',
+            'start_idx': extreme_idx,
+            'start_date': active.get('extreme_date') or rows[extreme_idx]['date'],
+            'start_price': round(start_price, 4),
+            'extreme_idx': end_idx,
+            'extreme_date': rows[end_idx]['date'],
+            'extreme_price': round(float(end_price), 4),
+            'change_pct': round(change_pct, 2),
+            'counter_move_pct': round(rebound_pct, 2),
+            'confirmed': False,
+            'source': 'candidate_counter_wave',
+            'candidate_threshold_pct': round(candidate_threshold, 4),
+        }
+
+    if direction == 'down':
+        extreme_rel_idx, extreme = max(enumerate(scoped), key=lambda item: item[1]['high'])
+        end_idx = extreme_idx + extreme_rel_idx
+        start_price = float(active.get('extreme_price') or rows[extreme_idx]['low'])
+        end_price = extreme['high']
+        change_pct = _pct_change(end_price, start_price)
+        current_counter = abs(float(active.get('counter_move_pct') or 0))
+        if abs(change_pct) < candidate_threshold:
+            return None
+        if current_counter < candidate_threshold * 0.60:
+            return None
+        pullback_pct = max(0.0, -_pct_change(rows[-1]['close'], end_price))
+        return {
+            'direction': 'up',
+            'label': '上涨波段',
+            'start_idx': extreme_idx,
+            'start_date': active.get('extreme_date') or rows[extreme_idx]['date'],
+            'start_price': round(start_price, 4),
+            'extreme_idx': end_idx,
+            'extreme_date': rows[end_idx]['date'],
+            'extreme_price': round(float(end_price), 4),
+            'change_pct': round(change_pct, 2),
+            'counter_move_pct': round(pullback_pct, 2),
+            'confirmed': False,
+            'source': 'candidate_counter_wave',
+            'candidate_threshold_pct': round(candidate_threshold, 4),
+        }
+
+    return None
 
 
 def _previous_wave(pivots: List[Dict]) -> Dict:
