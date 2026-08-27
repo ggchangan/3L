@@ -12,6 +12,7 @@ from typing import Dict, Iterable, List, Optional
 
 from backend.core.ema_utils import ema_list, get_stage, get_structure
 from backend.core.pure_keypoint_detector import detect_pure_keypoints
+from backend.core.wave_structure_detector import judge_wave_structure
 
 
 VERSION = 'supply-demand-keypoint-v1'
@@ -346,9 +347,37 @@ def _is_high_or_up_context(structure: str, stage: str, zone: Dict) -> bool:
     return any(token in stage_text for token in ('顶', '高位', '加速', '波峰'))
 
 
+def _trading_direction(wave_context: Dict) -> str:
+    trading_wave = (wave_context or {}).get('trading_wave') or {}
+    return str(trading_wave.get('direction') or '')
+
+
+def _trading_state(wave_context: Dict) -> str:
+    return str((wave_context or {}).get('trading_state') or '')
+
+
+def _is_up_trading_wave(wave_context: Dict) -> bool:
+    return _trading_direction(wave_context) == 'up'
+
+
+def _is_down_trading_wave(wave_context: Dict) -> bool:
+    return _trading_direction(wave_context) == 'down'
+
+
+def _is_pullback_trading_state(wave_context: Dict) -> bool:
+    state = _trading_state(wave_context)
+    return '下降波段/回调' in state or '回调' in state
+
+
+def _is_countertrend_bounce(wave_context: Dict) -> bool:
+    state = _trading_state(wave_context)
+    return '反弹波' in state
+
+
 def _point(point_type: str, direction: str, *, rows: List[Dict], end: int,
            structure: str, stage: str, zone: Dict, vpa: Dict, evidence: Dict,
-           confidence: float, reason: str, invalidations: Optional[List[str]] = None) -> Dict:
+           confidence: float, reason: str, invalidations: Optional[List[str]] = None,
+           wave_context: Optional[Dict] = None) -> Dict:
     return {
         'idx': end,
         'date': str(rows[end].get('date', '')),
@@ -358,6 +387,8 @@ def _point(point_type: str, direction: str, *, rows: List[Dict], end: int,
         'confidence': round(max(0, min(confidence, 100)), 1),
         'structure': structure,
         'stage': stage,
+        'trading_wave': (wave_context or {}).get('trading_wave'),
+        'trading_state': (wave_context or {}).get('trading_state'),
         'anchor': zone.get('anchor'),
         'evidence': {
             'volume_price_action': vpa.get('type'),
@@ -397,6 +428,7 @@ def detect_supply_demand_keypoints(
     structure: str = '',
     stage: str = '',
     pure_keypoints: Optional[Dict] = None,
+    wave_context: Optional[Dict] = None,
 ) -> Dict:
     """识别 3L 供需格局转换关键点。
 
@@ -434,6 +466,7 @@ def detect_supply_demand_keypoints(
         volumes=volumes,
         opens_p=opens,
     )
+    resolved_wave_context = wave_context or judge_wave_structure(rows[:end + 1], asset_type=asset_type)
     pure = pure_keypoints or detect_pure_keypoints(rows, asset_type=asset_type, end_idx=end)
     pure_points = pure.get('points') or []
     zone = _detect_current_zone(rows, end, resolved_structure, resolved_stage, pure_points)
@@ -456,6 +489,7 @@ def detect_supply_demand_keypoints(
                 confidence=55 + min(evidence['demand_entry'], 35),
                 reason='压力位附近放量上涨并收在相对高位，需求尝试打破供应区',
                 invalidations=['后续跌回压力位下方且放量转弱，则突破失效'],
+                wave_context=resolved_wave_context,
             ))
         elif vpa_type in ('volume_down', 'climax_stagnation', 'panic_stagnation') or price_change <= -2:
             points.append(_point(
@@ -465,6 +499,7 @@ def detect_supply_demand_keypoints(
                 confidence=55 + min(evidence['supply_entry'], 35),
                 reason='区间顶部或压力位附近放量转弱，需求突破失败；高位巨量长下影也不能按恐慌低吸解释',
                 invalidations=['后续放量收复压力位，则突破失败失效'],
+                wave_context=resolved_wave_context,
             ))
 
     if zone_type == 'near_support':
@@ -476,6 +511,7 @@ def detect_supply_demand_keypoints(
                 confidence=50 + min(evidence['supply_entry'], 40),
                 reason='支撑位附近收弱并跌破倾向明显，供应占优或需求撤退',
                 invalidations=['后续快速收回支撑并放量承接，则跌破失效'],
+                wave_context=resolved_wave_context,
             ))
         elif vpa_type == 'panic_stagnation' or (price_change < 0 and close_location >= 0.55):
             points.append(_point(
@@ -485,10 +521,16 @@ def detect_supply_demand_keypoints(
                 confidence=50 + min(evidence['supply_absorption'], 40),
                 reason='支撑位附近下探后收回，供应跌破失败并出现承接',
                 invalidations=['后续再度放量跌破支撑，则承接失败'],
+                wave_context=resolved_wave_context,
             ))
 
     if resolved_structure == '上涨趋势':
-        if zone_type == 'trend_pullback' and vpa_type == 'shrink_pullback' and evidence['no_supply'] >= 55:
+        if (
+            zone_type == 'trend_pullback'
+            and vpa_type == 'shrink_pullback'
+            and evidence['no_supply'] >= 55
+            and not _is_down_trading_wave(resolved_wave_context)
+        ):
             points.append(_point(
                 'bullish_continuation', 'bullish',
                 rows=rows, end=end, structure=resolved_structure, stage=resolved_stage,
@@ -496,6 +538,7 @@ def detect_supply_demand_keypoints(
                 confidence=55 + min(evidence['no_supply'], 35),
                 reason='上涨趋势中缩量回踩且未破坏关键支撑，供应不足，原上升格局延续',
                 invalidations=['后续放量跌破回踩支撑，则中继失效'],
+                wave_context=resolved_wave_context,
             ))
         elif vpa_type in ('climax_stagnation', 'volume_down') and zone_type in ('trend_body', 'near_resistance'):
             points.append(_point(
@@ -505,10 +548,15 @@ def detect_supply_demand_keypoints(
                 confidence=50 + min(max(evidence['distribution'], evidence['supply_entry']), 40),
                 reason='上涨趋势中出现放量滞涨或放量转弱，需求衰竭后供应进入',
                 invalidations=['后续放量新高并收强，则转弱失效'],
+                wave_context=resolved_wave_context,
             ))
 
     if resolved_structure == '下降趋势':
-        if vpa_type in ('shrink', 'shrink_pullback') and evidence['no_demand'] >= 55:
+        if (
+            vpa_type in ('shrink', 'shrink_pullback')
+            and evidence['no_demand'] >= 55
+            and not _is_up_trading_wave(resolved_wave_context)
+        ):
             points.append(_point(
                 'bearish_continuation', 'bearish',
                 rows=rows, end=end, structure=resolved_structure, stage=resolved_stage,
@@ -516,6 +564,7 @@ def detect_supply_demand_keypoints(
                 confidence=55 + min(evidence['no_demand'], 35),
                 reason='下降趋势中缩量反弹或弱整理，需求不足，原下降格局延续',
                 invalidations=['后续放量收复关键压力并形成需求进入，则下跌中继失效'],
+                wave_context=resolved_wave_context,
             ))
         if vpa_type == 'panic_stagnation' and evidence['supply_absorption'] >= 50:
             points.append(_point(
@@ -525,8 +574,14 @@ def detect_supply_demand_keypoints(
                 confidence=55 + min(evidence['supply_absorption'], 35),
                 reason='下降或调整末端出现天量滞跌，供应集中释放并被需求承接',
                 invalidations=['后续继续放量有效创新低，则恐慌滞跌失效'],
+                wave_context=resolved_wave_context,
             ))
-        elif price_change >= 2 and close_location >= 0.65 and evidence['demand_entry'] >= 55:
+        elif (
+            price_change >= 2
+            and close_location >= 0.65
+            and evidence['demand_entry'] >= 55
+            and not _is_down_trading_wave(resolved_wave_context)
+        ):
             points.append(_point(
                 'bullish_reversal', 'bullish',
                 rows=rows, end=end, structure=resolved_structure, stage=resolved_stage,
@@ -534,9 +589,14 @@ def detect_supply_demand_keypoints(
                 confidence=50 + min(evidence['demand_entry'], 40),
                 reason='下降趋势中出现需求进入并收强，原供应占优格局开始改变',
                 invalidations=['后续跌回反转 K 线低点，则反转失效'],
+                wave_context=resolved_wave_context,
             ))
 
-    if vpa_type == 'panic_stagnation' and _is_low_or_decline_context(resolved_structure, resolved_stage, zone):
+    if (
+        vpa_type == 'panic_stagnation'
+        and _is_low_or_decline_context(resolved_structure, resolved_stage, zone)
+        and not _is_up_trading_wave(resolved_wave_context)
+    ):
         points.append(_point(
             'panic_stagnation', 'bullish',
             rows=rows, end=end, structure=resolved_structure, stage=resolved_stage,
@@ -544,6 +604,7 @@ def detect_supply_demand_keypoints(
             confidence=50 + min(evidence['supply_absorption'], 40),
             reason='低位或调整中出现天量滞跌，供应释放但下跌推进效率下降',
             invalidations=['后续继续放量有效创新低，则恐慌滞跌失效'],
+            wave_context=resolved_wave_context,
         ))
 
     if vpa_type == 'climax_stagnation' and _is_high_or_up_context(resolved_structure, resolved_stage, zone):
@@ -554,6 +615,7 @@ def detect_supply_demand_keypoints(
             confidence=50 + min(evidence['distribution'], 40),
             reason='高位或上涨中出现天量滞涨，需求推进效率下降并有派发风险',
             invalidations=['后续继续放量有效突破并站稳，则高潮滞涨失效'],
+            wave_context=resolved_wave_context,
         ))
 
     points = _resolve_conflicts(points)
@@ -564,6 +626,13 @@ def detect_supply_demand_keypoints(
         'date': str(rows[end].get('date', '')),
         'structure': resolved_structure,
         'stage': resolved_stage,
+        'wave_context': {
+            'structure': resolved_wave_context.get('structure'),
+            'phase': resolved_wave_context.get('phase'),
+            'trading_wave': resolved_wave_context.get('trading_wave'),
+            'trading_state': resolved_wave_context.get('trading_state'),
+            'thresholds': resolved_wave_context.get('thresholds'),
+        },
         'current_zone': zone,
         'volume_price_action': vpa,
         'transition_points': points,

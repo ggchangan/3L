@@ -83,7 +83,7 @@ SAMPLE_GROUPS = [
         'items': [
             {'name': '科创50', 'table': 'index_daily', 'code': '000688.SH', 'asset_type': 'market', 'days': 120},
             {'name': '中证全指', 'table': 'index_daily', 'code': '000985.CSI', 'asset_type': 'market', 'days': 120},
-            {'name': '元件', 'table': 'ths_daily', 'code': '881124.TI', 'asset_type': 'sector', 'days': 120},
+            {'name': '元件', 'table': 'ths_daily', 'code': '881270.TI', 'asset_type': 'sector', 'days': 120},
             {'name': '共封装光学(CPO)', 'table': 'ths_daily', 'code': '885902.TI', 'asset_type': 'sector', 'days': 120},
             {'name': '存储芯片', 'table': 'ths_daily', 'code': '885756.TI', 'asset_type': 'sector', 'days': 120},
         ],
