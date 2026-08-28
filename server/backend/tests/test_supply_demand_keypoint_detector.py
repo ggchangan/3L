@@ -88,6 +88,34 @@ def test_uptrend_shrink_pullback_can_be_bullish_continuation():
     assert 'buy_point' not in point
 
 
+def test_down_trading_wave_blocks_bullish_continuation_in_uptrend_context():
+    rows = []
+    close = 100.0
+    for i in range(35):
+        close += 1.0
+        rows.append(_row(f'202607{i + 1:02d}', close - 0.5, close + 1, close - 1, close, 100000 + i * 1000))
+    rows.extend([
+        _row('20260810', 135.0, 136.0, 132.0, 133.0, 85000),
+        _row('20260811', 133.0, 134.0, 131.8, 132.6, 65000),
+    ])
+
+    result = detect_supply_demand_keypoints(
+        rows,
+        asset_type='stock',
+        structure='上涨趋势',
+        stage='缩量整理',
+        wave_context={
+            'structure': '上涨趋势',
+            'phase': 'pullback',
+            'trading_wave': {'direction': 'down', 'label': '下降波段'},
+            'trading_state': '上涨趋势中的下降波段/回调',
+        },
+    )
+
+    assert result['wave_context']['trading_state'] == '上涨趋势中的下降波段/回调'
+    assert 'bullish_continuation' not in _types(result)
+
+
 def test_downtrend_shrink_is_bearish_continuation_not_buy_signal():
     rows = []
     close = 130.0
@@ -110,6 +138,34 @@ def test_downtrend_shrink_is_bearish_continuation_not_buy_signal():
     assert result['transition_points'][0]['direction'] == 'bearish'
     assert result['transition_points'][0]['is_trade_decision'] is False
     assert 'buy_point' not in result['transition_points'][0]
+
+
+def test_up_trading_wave_blocks_bearish_continuation_in_downtrend_context():
+    rows = []
+    close = 130.0
+    for i in range(28):
+        close -= 1.0
+        rows.append(_row(f'202607{i + 1:02d}', close + 0.5, close + 1, close - 1, close, 120000))
+    rows.extend([
+        _row('20260801', 102, 104, 101, 103, 85000),
+        _row('20260802', 103, 104, 101.5, 102.8, 70000),
+    ])
+
+    result = detect_supply_demand_keypoints(
+        rows,
+        asset_type='stock',
+        structure='下降趋势',
+        stage='缩量反弹',
+        wave_context={
+            'structure': '下降趋势',
+            'phase': 'countertrend_bounce',
+            'trading_wave': {'direction': 'up', 'label': '上涨波段'},
+            'trading_state': '下降趋势中的反弹波',
+        },
+    )
+
+    assert result['wave_context']['trading_state'] == '下降趋势中的反弹波'
+    assert 'bearish_continuation' not in _types(result)
 
 
 def test_panic_keypoint_requires_huge_volume_stagnation():

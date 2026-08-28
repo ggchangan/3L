@@ -39,6 +39,7 @@ from backend.core.supply_demand_keypoint_detector import (  # noqa: E402
     MIN_BARS,
     detect_supply_demand_keypoints,
 )
+from backend.core.wave_structure_detector import judge_wave_structure  # noqa: E402
 from backend.data_access.tushare_db import TushareDB  # noqa: E402
 
 
@@ -70,6 +71,14 @@ POINT_STYLES = {
     'bearish_reversal': {'label': '反↓', 'color': '#34d399', 'marker': '*', 'offset': -0.07},
     'panic_stagnation': {'label': '恐慌', 'color': '#f43f5e', 'marker': 'D', 'offset': -0.10},
     'climax_stagnation': {'label': '高潮', 'color': '#c084fc', 'marker': 'D', 'offset': 0.10},
+}
+
+
+WAVE_BAND_COLORS = {
+    'up': '#ef4444',
+    'down': '#22c55e',
+    'flat': '#64748b',
+    None: '#64748b',
 }
 
 
@@ -224,6 +233,39 @@ def detect_all_transition_points(rows: List[Dict], asset_type: str) -> List[Dict
     return points
 
 
+def detect_all_wave_states(rows: List[Dict], asset_type: str) -> List[Dict]:
+    states = []
+    for idx in range(MIN_BARS - 1, len(rows)):
+        state = judge_wave_structure(rows[:idx + 1], asset_type=asset_type)
+        states.append({
+            'idx': idx,
+            'date': rows[idx]['date'],
+            'structure': state.get('structure'),
+            'phase': state.get('phase'),
+            'trading_wave': state.get('trading_wave') or {},
+            'trading_state': state.get('trading_state'),
+        })
+    return states
+
+
+def _wave_segments(states: List[Dict]) -> List[Tuple[int, int, str]]:
+    if not states:
+        return []
+    result = []
+    start = states[0]['idx']
+    end = start
+    current = (states[0].get('trading_wave') or {}).get('direction')
+    for state in states[1:]:
+        direction = (state.get('trading_wave') or {}).get('direction')
+        if direction != current:
+            result.append((start, end, current))
+            start = state['idx']
+            current = direction
+        end = state['idx']
+    result.append((start, end, current))
+    return result
+
+
 def render(samples: List[Dict], output: Path) -> None:
     import matplotlib
 
@@ -258,6 +300,7 @@ def render(samples: List[Dict], output: Path) -> None:
             ax.set_title(f"{sample['name']} 无数据", color='#e5e7eb', fontproperties=font)
             continue
         points = detect_all_transition_points(rows, sample['asset_type'])
+        wave_states = detect_all_wave_states(rows, sample['asset_type'])
         y_range = max(r['high'] for r in rows) - min(r['low'] for r in rows)
 
         for i, k in enumerate(rows):
@@ -269,6 +312,27 @@ def render(samples: List[Dict], output: Path) -> None:
                 (i - 0.28, lower), 0.56, height,
                 facecolor=color, edgecolor=color, alpha=0.75,
             ))
+
+        for start, end, direction in _wave_segments(wave_states):
+            ax.axvspan(
+                start - 0.5,
+                end + 0.5,
+                ymin=0.0,
+                ymax=0.045,
+                color=WAVE_BAND_COLORS.get(direction, '#64748b'),
+                alpha=0.38,
+                linewidth=0,
+            )
+        if rows:
+            ax.text(
+                0,
+                min(r['low'] for r in rows) - y_range * 0.07,
+                '底部色带：交易波段 红=上涨 绿=下降 灰=横向',
+                color='#cbd5e1',
+                fontsize=7.2,
+                va='top',
+                fontproperties=font,
+            )
 
         for point in points:
             style = POINT_STYLES.get(point['type'])
@@ -296,11 +360,16 @@ def render(samples: List[Dict], output: Path) -> None:
         quality_label = ''
         if sample.get('data_quality') and sample.get('data_quality') != 'ok':
             quality_label = f" | ⚠ {sample['data_quality']}({len(sample.get('quality_issues') or [])})"
+        final_state = wave_states[-1].get('trading_state') if wave_states else '--'
         title = (
             f"{sample['name']} · {sample['asset_type']}\n"
-            f"{rows[0]['date']}~{rows[-1]['date']} | {compact_counts}{quality_label}"
+            f"{rows[0]['date']}~{rows[-1]['date']} | {compact_counts}{quality_label} | {final_state}"
         )
         ax.set_title(title, color='#e5e7eb', fontsize=10.5, fontproperties=font)
+        ax.set_ylim(
+            min(r['low'] for r in rows) - y_range * 0.10,
+            max(r['high'] for r in rows) + y_range * 0.13,
+        )
         ax.set_facecolor('#10131f')
         ax.grid(color='#283044', linestyle='--', linewidth=0.45, alpha=0.55)
         for spine in ax.spines.values():
@@ -340,6 +409,7 @@ def build_summary(samples: List[Dict]) -> List[Dict]:
     for sample in samples:
         rows = sample.get('rows') or []
         points = detect_all_transition_points(rows, sample['asset_type']) if rows else []
+        wave_states = detect_all_wave_states(rows, sample['asset_type']) if rows else []
         summary.append({
             'name': sample['name'],
             'asset_type': sample['asset_type'],
@@ -347,6 +417,7 @@ def build_summary(samples: List[Dict]) -> List[Dict]:
             'date_range': [rows[0]['date'], rows[-1]['date']] if rows else [],
             'data_quality': sample.get('data_quality', 'ok'),
             'quality_issues': sample.get('quality_issues', []),
+            'wave_states_tail': wave_states[-10:],
             'transition_points': points,
         })
     return summary
