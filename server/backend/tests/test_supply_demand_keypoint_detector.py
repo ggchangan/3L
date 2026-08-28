@@ -57,6 +57,9 @@ def test_range_top_volume_down_is_failed_breakout_not_bullish_continuation():
     assert _types(result) == ['failed_breakout']
     point = result['transition_points'][0]
     assert point['direction'] == 'bearish'
+    assert point['tier'] in ('core', 'watch')
+    assert point['display_level'] in ('primary', 'secondary')
+    assert point['priority_reasons']
     assert point['is_trade_decision'] is False
     assert 'buy_point' not in point
 
@@ -84,6 +87,9 @@ def test_uptrend_shrink_pullback_can_be_bullish_continuation():
     assert _types(result) == ['bullish_continuation']
     point = result['transition_points'][0]
     assert point['direction'] == 'bullish'
+    assert point['tier'] in ('core', 'watch', 'weak')
+    assert point['display_level'] in ('primary', 'secondary', 'muted')
+    assert point['priority_reasons']
     assert point['is_trade_decision'] is False
     assert 'buy_point' not in point
 
@@ -114,6 +120,7 @@ def test_down_trading_wave_blocks_bullish_continuation_in_uptrend_context():
 
     assert result['wave_context']['trading_state'] == '上涨趋势中的下降波段/回调'
     assert 'bullish_continuation' not in _types(result)
+    assert result['transition_point_tiers']['total'] == len(result['transition_points'])
 
 
 def test_downtrend_shrink_is_bearish_continuation_not_buy_signal():
@@ -135,9 +142,12 @@ def test_downtrend_shrink_is_bearish_continuation_not_buy_signal():
     )
 
     assert _types(result) == ['bearish_continuation']
-    assert result['transition_points'][0]['direction'] == 'bearish'
-    assert result['transition_points'][0]['is_trade_decision'] is False
-    assert 'buy_point' not in result['transition_points'][0]
+    point = result['transition_points'][0]
+    assert point['direction'] == 'bearish'
+    assert point['tier'] in ('core', 'watch', 'weak')
+    assert point['priority_reasons']
+    assert point['is_trade_decision'] is False
+    assert 'buy_point' not in point
 
 
 def test_up_trading_wave_blocks_bearish_continuation_in_downtrend_context():
@@ -193,7 +203,39 @@ def test_panic_keypoint_requires_huge_volume_stagnation():
 
     assert _types(result) == ['panic_stagnation']
     assert result['volume_price_action']['type'] == 'panic_stagnation'
-    assert '天量滞跌' in result['transition_points'][0]['reason']
+    point = result['transition_points'][0]
+    assert point['tier'] == 'core'
+    assert point['display_level'] == 'primary'
+    assert '天量滞跌' in point['reason']
+
+
+def test_reversal_style_point_treats_opposite_trading_wave_as_turning_evidence():
+    rows = _range_top_volume_down_rows()
+    rows[-1].update({
+        'open': 122.8,
+        'high': 123.5,
+        'low': 114.8,
+        'close': 122.2,
+        'volume': 260000,
+    })
+
+    result = detect_supply_demand_keypoints(
+        rows,
+        asset_type='stock',
+        structure='区间震荡',
+        stage='区间顶部',
+        wave_context={
+            'structure': '上涨趋势',
+            'phase': 'impulse',
+            'trading_wave': {'direction': 'up', 'label': '上涨波段'},
+            'trading_state': '上涨趋势中的上涨推动波',
+        },
+    )
+
+    assert _types(result) == ['failed_breakout']
+    point = result['transition_points'][0]
+    assert point['direction'] == 'bearish'
+    assert '当前交易波段转折/衰竭候选' in point['priority_reasons']
 
 
 def test_huge_volume_close_at_low_is_not_panic_stagnation():

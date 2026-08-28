@@ -374,17 +374,116 @@ def _is_countertrend_bounce(wave_context: Dict) -> bool:
     return '反弹波' in state
 
 
+def _point_priority(point_type: str, direction: str, confidence: float,
+                    zone: Dict, vpa: Dict, wave_context: Optional[Dict]) -> Dict:
+    """给供需转换点做展示分层。
+
+    P0.2 仍然只输出供需点，不输出买卖点。这里的分层只解决展示/后续消费的
+    噪音问题：
+
+    - core：核心供需点，位置、量价和当前交易波段较匹配；
+    - watch：需要关注，但证据或波段上下文不完整；
+    - weak：背景提示，默认不应在复盘页抢占注意力。
+    """
+    # confidence 是供需证据强弱；priority_score 是展示优先级，不能简单等同。
+    # 否则历史图上所有高置信点都会变成 core，无法帮助复盘页排序注意力。
+    score = float(confidence or 0) * 0.62
+    reasons: List[str] = []
+    zone_type = zone.get('type')
+    vpa_type = vpa.get('type')
+    trading_direction = _trading_direction(wave_context or {})
+
+    if point_type in ('failed_breakout', 'failed_breakdown', 'panic_stagnation', 'climax_stagnation'):
+        score += 12
+        reasons.append('关键供需转换类型')
+    elif point_type in ('upward_breakout', 'downward_breakdown'):
+        score += 8
+        reasons.append('突破/跌破类型')
+    elif point_type in ('bullish_continuation', 'bearish_continuation'):
+        score += 4
+        reasons.append('中继类型')
+
+    if zone_type in ('near_resistance', 'near_support', 'trend_pullback'):
+        score += 8
+        reasons.append('处在关键位置')
+    elif zone_type in ('trend_body', 'downtrend'):
+        score -= 4
+        reasons.append('位置证据较弱')
+    elif zone_type in ('mid_range', 'unknown'):
+        score -= 10
+        reasons.append('未到清晰关键位置')
+
+    if vpa_type in ('panic_stagnation', 'climax_stagnation', 'volume_down', 'volume_up'):
+        score += 8
+        reasons.append('量价行为突出')
+    elif vpa_type in ('shrink_pullback', 'shrink', 'dry_volume'):
+        score += 3
+        reasons.append('量能行为可参考')
+    else:
+        score -= 8
+        reasons.append('量价行为不突出')
+
+    continuation_types = {'bullish_continuation', 'bearish_continuation'}
+    breakout_types = {'upward_breakout', 'downward_breakdown'}
+    reversal_types = {
+        'failed_breakout',
+        'failed_breakdown',
+        'panic_stagnation',
+        'climax_stagnation',
+        'bullish_reversal',
+        'bearish_reversal',
+    }
+    point_direction = 'up' if direction == 'bullish' else 'down' if direction == 'bearish' else ''
+    if trading_direction in ('up', 'down') and point_direction:
+        is_same_direction = trading_direction == point_direction
+        if point_type in continuation_types or point_type in breakout_types:
+            if is_same_direction:
+                score += 6
+                reasons.append('当前交易波段顺向')
+            else:
+                score -= 10
+                reasons.append('当前交易波段逆向')
+        elif point_type in reversal_types:
+            if is_same_direction:
+                score += 2
+                reasons.append('当前交易波段延续验证')
+            else:
+                score += 8
+                reasons.append('当前交易波段转折/衰竭候选')
+
+    score = round(max(0, min(score, 100)), 1)
+    if score >= 78:
+        tier = 'core'
+        display_level = 'primary'
+    elif score >= 62:
+        tier = 'watch'
+        display_level = 'secondary'
+    else:
+        tier = 'weak'
+        display_level = 'muted'
+
+    return {
+        'priority_score': score,
+        'tier': tier,
+        'display_level': display_level,
+        'priority_reasons': reasons,
+    }
+
+
 def _point(point_type: str, direction: str, *, rows: List[Dict], end: int,
            structure: str, stage: str, zone: Dict, vpa: Dict, evidence: Dict,
            confidence: float, reason: str, invalidations: Optional[List[str]] = None,
            wave_context: Optional[Dict] = None) -> Dict:
+    confidence = round(max(0, min(confidence, 100)), 1)
+    priority = _point_priority(point_type, direction, confidence, zone, vpa, wave_context)
     return {
         'idx': end,
         'date': str(rows[end].get('date', '')),
         'type': point_type,
         'direction': direction,
         'status': _status_for_idx(end, len(rows)),
-        'confidence': round(max(0, min(confidence, 100)), 1),
+        'confidence': confidence,
+        **priority,
         'structure': structure,
         'stage': stage,
         'trading_wave': (wave_context or {}).get('trading_wave'),
@@ -412,12 +511,21 @@ def _resolve_conflicts(points: List[Dict]) -> List[Dict]:
     bearish = [p for p in points if p['direction'] == 'bearish']
     bullish = [p for p in points if p['direction'] == 'bullish']
     if bearish and bullish:
-        best_bear = max(bearish, key=lambda p: p['confidence'])
-        best_bull = max(bullish, key=lambda p: p['confidence'])
+        best_bear = max(bearish, key=lambda p: p.get('priority_score', p['confidence']))
+        best_bull = max(bullish, key=lambda p: p.get('priority_score', p['confidence']))
         # bearish 风险证据明显时优先阻断看多供需点。
-        if best_bear['confidence'] >= best_bull['confidence'] - 10:
+        if best_bear.get('priority_score', best_bear['confidence']) >= best_bull.get('priority_score', best_bull['confidence']) - 10:
             return [best_bear]
-    return [max(points, key=lambda p: p['confidence'])]
+    return [max(points, key=lambda p: p.get('priority_score', p['confidence']))]
+
+
+def _tier_counts(points: List[Dict]) -> Dict[str, int]:
+    return {
+        'core': sum(1 for point in points if point.get('tier') == 'core'),
+        'watch': sum(1 for point in points if point.get('tier') == 'watch'),
+        'weak': sum(1 for point in points if point.get('tier') == 'weak'),
+        'total': len(points),
+    }
 
 
 def detect_supply_demand_keypoints(
@@ -636,6 +744,7 @@ def detect_supply_demand_keypoints(
         'current_zone': zone,
         'volume_price_action': vpa,
         'transition_points': points,
+        'transition_point_tiers': _tier_counts(points),
         'is_trade_decision': False,
         'definitions': {
             'transition_points': '突破、跌破、反转、中继、恐慌滞跌、高潮滞涨等供需格局点；不直接等于买卖点',
