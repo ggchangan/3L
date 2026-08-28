@@ -342,28 +342,40 @@ def render(samples: List[Dict], output: Path) -> None:
             if idx < 0 or idx >= len(rows):
                 continue
             y = rows[idx]['high'] + y_range * style['offset'] if style['offset'] > 0 else rows[idx]['low'] + y_range * style['offset']
-            alpha = 1.0 if point.get('status') == 'confirmed' else 0.62
+            tier = point.get('tier') or 'watch'
+            display_level = point.get('display_level') or 'secondary'
+            alpha = {'primary': 1.0, 'secondary': 0.72, 'muted': 0.28}.get(display_level, 0.72)
+            if point.get('status') != 'confirmed':
+                alpha *= 0.78
+            size = {'core': 90, 'watch': 70, 'weak': 40}.get(tier, 70)
             ax.scatter(
-                idx, y, s=75, marker=style['marker'], color=style['color'],
+                idx, y, s=size, marker=style['marker'], color=style['color'],
                 edgecolors='white', linewidths=0.6, alpha=alpha, zorder=6,
             )
-            ax.text(
-                idx, y + y_range * 0.012, style['label'],
-                color=style['color'], fontsize=7.5, ha='center', va='bottom',
-                fontproperties=font, zorder=7,
-            )
+            if tier == 'core':
+                ax.text(
+                    idx, y + y_range * 0.012, style['label'],
+                    color=style['color'], fontsize=7.5, ha='center', va='bottom',
+                    fontproperties=font, zorder=7,
+                )
 
         counts = {kind: sum(1 for p in points if p['type'] == kind) for kind in POINT_STYLES}
         compact_counts = ' '.join(
             f"{POINT_STYLES[k]['label']}{v}" for k, v in counts.items() if v
         ) or '无供需点'
+        tier_counts = {
+            'core': sum(1 for p in points if p.get('tier') == 'core'),
+            'watch': sum(1 for p in points if p.get('tier') == 'watch'),
+            'weak': sum(1 for p in points if p.get('tier') == 'weak'),
+        }
+        tier_label = f"核心{tier_counts['core']} 关注{tier_counts['watch']} 弱提示{tier_counts['weak']}"
         quality_label = ''
         if sample.get('data_quality') and sample.get('data_quality') != 'ok':
             quality_label = f" | ⚠ {sample['data_quality']}({len(sample.get('quality_issues') or [])})"
         final_state = wave_states[-1].get('trading_state') if wave_states else '--'
         title = (
             f"{sample['name']} · {sample['asset_type']}\n"
-            f"{rows[0]['date']}~{rows[-1]['date']} | {compact_counts}{quality_label} | {final_state}"
+            f"{rows[0]['date']}~{rows[-1]['date']} | {tier_label} | {compact_counts}{quality_label} | {final_state}"
         )
         ax.set_title(title, color='#e5e7eb', fontsize=10.5, fontproperties=font)
         ax.set_ylim(

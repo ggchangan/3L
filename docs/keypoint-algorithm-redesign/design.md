@@ -199,6 +199,42 @@ wave_context.trading_wave / wave_context.trading_state
 每个 `transition_point` 也携带 `trading_wave` / `trading_state`，方便图表和后续
 买卖点层解释“为什么这个供需点被允许或被阻断”。
 
+### P0.2 供需点展示分层
+
+供需点不是越多越好。复盘页真正需要的是“注意力排序”，因此 P0.2 输出新增
+展示分层字段：
+
+```json
+{
+  "confidence": 82.0,
+  "priority_score": 91.0,
+  "tier": "core",
+  "display_level": "primary",
+  "priority_reasons": ["关键供需转换类型", "处在关键位置", "当前交易波段顺向"]
+}
+```
+
+字段含义：
+
+```text
+confidence
+  供需证据强弱，不等于胜率。
+
+priority_score
+  在 confidence 基础上，综合供需类型、关键位置、量价行为、当前交易波段方向后得到的展示优先级。
+
+tier
+  core  核心供需点：值得在复盘页优先展示；
+  watch 关注供需点：有意义但证据/上下文略弱；
+  weak  弱提示：保留给调试和图表，但默认不应抢占注意力。
+
+display_level
+  primary / secondary / muted，供前端或验证图决定视觉权重。
+```
+
+注意：`tier=core` 仍然不是买点/卖点。它只是说明该供需点更值得进入后续
+买卖点层判断。
+
 ## 现有程序偏差
 
 ### 1. 关键点识别不统一
