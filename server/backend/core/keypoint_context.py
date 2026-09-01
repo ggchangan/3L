@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from backend.core.ema_utils import ema_list, get_stage, get_structure
+from backend.core.structure_position_context import detect_structure_position_context
 from backend.core.supply_demand_keypoint_detector import detect_supply_demand_keypoints
 
 
@@ -154,79 +155,14 @@ def _nearest_anchor(points: List[Dict], close: float, role: str) -> Optional[Dic
 def detect_current_zone(klines: List[Dict], idx: int, structure: str, stage: str,
                         reference_points: List[Dict]) -> Dict:
     """判断当前价格处在什么关键区域。"""
-    rows = _normalize_klines(klines)
-    if not rows:
-        return {'type': 'unknown', 'reason': '数据不足'}
-    end = idx if idx >= 0 else len(rows) - 1
-    end = min(end, len(rows) - 1)
-    row = rows[end]
-    close = _safe_float(row.get('close'))
-    highs = [_safe_float(k.get('high')) for k in rows[max(0, end - RANGE_LOOKBACK):end]]
-    lows = [_safe_float(k.get('low')) for k in rows[max(0, end - RANGE_LOOKBACK):end]]
-    resistance = _nearest_anchor(reference_points, close, 'resistance')
-    support = _nearest_anchor(reference_points, close, 'support')
-
-    if structure == '区间震荡' and highs and lows:
-        range_high = max(highs)
-        range_low = min(lows)
-        pct = _pct(close - range_low, range_high - range_low) if range_high > range_low else None
-        if pct is not None and pct >= 70:
-            anchor = resistance or _point(end, row, 'range_high', 'resistance', range_high, source='range')
-            return {
-                'type': 'near_resistance',
-                'anchor_type': anchor.get('type'),
-                'anchor_price': anchor.get('price'),
-                'distance_pct': round(_pct(close - float(anchor['price']), float(anchor['price'])) or 0, 2),
-                'range_position_pct': round(pct, 2),
-                'reason': '区间震荡接近上沿/前高压力',
-            }
-        if pct is not None and pct <= 30:
-            anchor = support or _point(end, row, 'range_low', 'support', range_low, source='range')
-            return {
-                'type': 'near_support',
-                'anchor_type': anchor.get('type'),
-                'anchor_price': anchor.get('price'),
-                'distance_pct': round(_pct(close - float(anchor['price']), float(anchor['price'])) or 0, 2),
-                'range_position_pct': round(pct, 2),
-                'reason': '区间震荡接近下沿/前低支撑',
-            }
-        return {
-            'type': 'mid_range',
-            'range_position_pct': round(pct, 2) if pct is not None else None,
-            'reason': '处于支撑和压力之间，方向胜负未明',
-        }
-
-    closes = [_safe_float(k.get('close')) for k in rows[:end + 1]]
-    ema10 = ema_list(closes, 10)[-1] if len(closes) >= 10 else None
-    ema20 = ema_list(closes, 20)[-1] if len(closes) >= 20 else None
-    if structure == '上涨趋势':
-        if stage in ('加速',):
-            return {'type': 'extended', 'reason': '上涨趋势加速段，非回踩关键区'}
-        anchors = []
-        if ema10:
-            anchors.append({'type': 'ema10', 'price': float(ema10)})
-        if ema20:
-            anchors.append({'type': 'ema20', 'price': float(ema20)})
-        if support:
-            anchors.append({'type': support.get('type'), 'price': float(support.get('price'))})
-        anchors.sort(key=lambda a: abs(close - a['price']))
-        if anchors:
-            nearest = anchors[0]
-            dist = _pct(close - nearest['price'], nearest['price']) or 0
-            if abs(dist) <= NEAR_ANCHOR_PCT:
-                return {
-                    'type': 'trend_pullback',
-                    'anchor_type': nearest['type'],
-                    'anchor_price': round(nearest['price'], 2),
-                    'distance_pct': round(dist, 2),
-                    'reason': '上涨趋势内回踩到关键支撑附近',
-                }
-        return {'type': 'trend_body', 'reason': '上涨趋势中，但未接近可识别回踩支撑'}
-
-    if structure == '下降趋势':
-        return {'type': 'downtrend', 'reason': '下降趋势中，缩量不能直接解释为买点'}
-
-    return {'type': 'unknown', 'reason': '结构未确认'}
+    context = detect_structure_position_context(
+        klines,
+        idx=idx,
+        structure=structure,
+        stage=stage,
+        reference_points=reference_points,
+    )
+    return context['current_zone']
 
 
 def detect_volume_price_action(klines: List[Dict], idx: int = -1) -> Dict:
@@ -403,7 +339,15 @@ def build_keypoint_context(klines: List[Dict], idx: int = -1,
         opens_p=opens,
     )
     refs = detect_reference_keypoints(rows, end)
-    zone = detect_current_zone(rows, end, resolved_structure, resolved_stage, refs)
+    position_context = detect_structure_position_context(
+        rows,
+        idx=end,
+        structure=resolved_structure,
+        stage=resolved_stage,
+        reference_points=refs,
+    )
+    resolved_stage = position_context.get('stage') or resolved_stage
+    zone = position_context.get('current_zone') or {'type': 'unknown', 'anchor': None}
     vpa = detect_volume_price_action(rows, end)
     sd = detect_supply_demand_keypoint(resolved_structure, resolved_stage, zone, vpa)
     transition_context = detect_supply_demand_keypoints(
@@ -419,6 +363,8 @@ def build_keypoint_context(klines: List[Dict], idx: int = -1,
         'asset_type': asset_type,
         'structure': resolved_structure,
         'stage': resolved_stage,
+        'raw_stage': position_context.get('raw_stage'),
+        'stage_position_normalization': position_context.get('normalization'),
         'reference_points': refs,
         'current_zone': zone,
         'volume_price_action': vpa,
