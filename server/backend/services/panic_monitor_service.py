@@ -2,12 +2,15 @@
 恐慌监测服务 — 实时检测A股恐慌，提供应对策略
 """
 import json
+import logging
 import os
 from datetime import datetime
 
 from backend.core.config import DATA_DIR, atomic_json_dump
 
 from backend.core import config
+
+log = logging.getLogger(__name__)
 
 # ── 恐慌阈值（基于历史回测：上证指数最近6个月） ──
 # 回测结论（2026-06-06，94个交易日）：
