@@ -1,0 +1,172 @@
+{
+  "version": "structure-context-benchmark-v1",
+  "algorithm_version": "3l-structure-context-v1",
+  "confirmed_by": "user",
+  "confirmed_at": "2026-09-02",
+  "description": "3L P0 结构上下文第一批人工确认基准：只锁定结构/交易波段/主跌风险等前置上下文，不表达买卖点含义。",
+  "principles": [
+    "关键点、波段、结构、供需事件、买卖点不能互相替代。",
+    "买卖点必须建立在关键点和结构上下文之上。",
+    "结构上下文只回答当前处于什么结构、什么阶段、什么波段位置、是否有主跌风险。",
+    "波谷左侧、波谷确认、区间底部等位置标签不是自动买入信号。"
+  ],
+  "samples": [
+    {
+      "slug": "kc50",
+      "name": "科创50",
+      "asset_type": "market",
+      "table": "index_daily",
+      "code": "000688.SH",
+      "source": "index_daily:000688.SH",
+      "windows": [
+        {
+          "start": "20260408",
+          "end": "20260525",
+          "expected_trading_wave": "up",
+          "expected_structure": "上涨趋势",
+          "user_note": "用户指出 4月8日到5月25日整体应按上升趋势/上涨段理解。",
+          "acceptance": {
+            "primary": "trading_wave",
+            "min_match_ratio": 0.75,
+            "structure_min_match_ratio": 0.55
+          }
+        },
+        {
+          "start": "20260526",
+          "end": "20260609",
+          "expected_trading_wave": "down",
+          "expected_structure": "下降趋势",
+          "user_note": "用户指出 5月26日到6月9日应是新的下降段。",
+          "acceptance": {
+            "primary": "trading_wave",
+            "min_match_ratio": 0.70,
+            "structure_min_match_ratio": 0.55
+          }
+        },
+        {
+          "start": "20260612",
+          "end": "20260630",
+          "expected_trading_wave": "up",
+          "expected_structure": "上涨趋势",
+          "user_note": "用户指出 6月12日到6月15日前后是下降转上涨的供需转换区，随后到6月30日是一大波上涨。",
+          "acceptance": {
+            "primary": "trading_wave",
+            "min_match_ratio": 0.75,
+            "structure_min_match_ratio": 0.55
+          }
+        },
+        {
+          "start": "20260710",
+          "end": "20260803",
+          "expected_trading_wave": "down",
+          "expected_structure": "下降趋势",
+          "user_note": "用户指出 7月10日到7月20日附近是一大波下降，若无7月21日扰动可能延续到8月3日。",
+          "acceptance": {
+            "primary": "trading_wave",
+            "min_match_ratio": 0.75,
+            "structure_min_match_ratio": 0.45
+          }
+        }
+      ]
+    },
+    {
+      "slug": "zzqz",
+      "name": "中证全指",
+      "asset_type": "market",
+      "table": "index_daily",
+      "code": "000985.CSI",
+      "source": "index_daily:000985.CSI",
+      "windows": [
+        {
+          "start": "20260514",
+          "end": "20260611",
+          "expected_trading_wave": "down",
+          "expected_structure": "下降趋势",
+          "user_note": "用户指出 5月14日到6月11日看起来是新的下降段，不应和前一段连在一起判定偏上涨。",
+          "acceptance": {
+            "primary": "trading_wave",
+            "min_match_ratio": 0.75,
+            "structure_min_match_ratio": 0.50
+          }
+        }
+      ]
+    },
+    {
+      "slug": "cpo",
+      "name": "共封装光学(CPO)",
+      "asset_type": "sector",
+      "table": "ths_daily",
+      "code": "886033.TI",
+      "source": "ths_daily:886033.TI",
+      "windows": [
+        {
+          "start": "20260401",
+          "end": "20260902",
+          "expected_review": "accepted_overview",
+          "user_note": "用户对 CPO 结构/波段验证图整体反馈为没有问题；后续若要锁定日期窗口，需要继续细化人工标注。",
+          "acceptance": {
+            "primary": "manual_review_only"
+          }
+        }
+      ]
+    },
+    {
+      "slug": "yuanjian",
+      "name": "元件",
+      "asset_type": "sector",
+      "table": "ths_daily",
+      "code": "881270.TI",
+      "source": "ths_daily:881270.TI",
+      "windows": [
+        {
+          "start": "20260401",
+          "end": "20260902",
+          "expected_review": "accepted_overview",
+          "user_note": "用户对元件结构/波段验证图整体反馈为没有问题；后续若要锁定日期窗口，需要继续细化人工标注。",
+          "acceptance": {
+            "primary": "manual_review_only"
+          }
+        }
+      ]
+    },
+    {
+      "slug": "puran",
+      "name": "普冉股份",
+      "asset_type": "stock",
+      "table": "stock_daily",
+      "code": "688766.SH",
+      "source": "stock_daily:688766.SH:qfq",
+      "windows": [
+        {
+          "start": "20260702",
+          "end": "20260731",
+          "expected_trading_wave": "down",
+          "expected_structure": "下降趋势",
+          "user_note": "用户指出普冉股份到7月2日左右开始出现下降段。",
+          "acceptance": {
+            "primary": "trading_wave",
+            "min_match_ratio": 0.70,
+            "structure_min_match_ratio": 0.45
+          }
+        }
+      ]
+    }
+  ],
+  "known_current_gaps": [
+    {
+      "sample": "科创50",
+      "window": "20260408-20260525",
+      "issue": "当前 3l-structure-context-v1 对交易波段方向大体能识别，但结构标签偏保守，常输出区间震荡。"
+    },
+    {
+      "sample": "科创50",
+      "window": "20260612-20260630",
+      "issue": "当前算法能识别上涨交易波段，但结构标签仍可能被旧 pivot 序列拖累为下降趋势。"
+    },
+    {
+      "sample": "中证全指",
+      "window": "20260514-20260611",
+      "issue": "当前算法对下降交易波段方向识别较好，但结构标签偏区间。"
+    }
+  ]
+}
