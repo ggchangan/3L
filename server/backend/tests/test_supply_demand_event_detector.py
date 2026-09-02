@@ -59,6 +59,22 @@ def test_failed_breakout_becomes_bearish_failure_event_not_trade_decision():
     assert result['is_trade_decision'] is False
 
 
+def test_range_stage_is_normalized_before_event_semantic_check():
+    result = detect_supply_demand_events(
+        _range_top_volume_down_rows(),
+        asset_type='stock',
+        structure='区间震荡',
+        stage='区间中段',
+    )
+
+    event = result['events'][0]
+    assert result['structure_context']['stage'] == '区间顶部'
+    assert event['structure_context']['stage'] == '区间顶部'
+    assert event['position_context']['zone_type'] == 'near_resistance'
+    assert event['definition_aligned'] is True
+    assert not event['semantic_warnings']
+
+
 def test_bullish_continuation_keeps_continuation_semantics():
     rows = []
     close = 100.0

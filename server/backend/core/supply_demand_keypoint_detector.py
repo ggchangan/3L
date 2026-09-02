@@ -12,6 +12,7 @@ from typing import Dict, Iterable, List, Optional
 
 from backend.core.ema_utils import ema_list, get_stage, get_structure
 from backend.core.pure_keypoint_detector import detect_pure_keypoints
+from backend.core.structure_position_context import detect_structure_position_context
 from backend.core.wave_structure_detector import judge_wave_structure
 
 
@@ -577,7 +578,15 @@ def detect_supply_demand_keypoints(
     resolved_wave_context = wave_context or judge_wave_structure(rows[:end + 1], asset_type=asset_type)
     pure = pure_keypoints or detect_pure_keypoints(rows, asset_type=asset_type, end_idx=end)
     pure_points = pure.get('points') or []
-    zone = _detect_current_zone(rows, end, resolved_structure, resolved_stage, pure_points)
+    position_context = detect_structure_position_context(
+        rows,
+        idx=end,
+        structure=resolved_structure,
+        stage=resolved_stage,
+        reference_points=pure_points,
+    )
+    resolved_stage = position_context.get('stage') or resolved_stage
+    zone = position_context.get('current_zone') or {'type': 'unknown', 'anchor': None}
     metrics = _bar_metrics(rows, end)
     vpa = _detect_volume_price_action(metrics, pure_points, end)
     evidence = _score_evidence(resolved_structure, zone, vpa, metrics)
@@ -734,6 +743,8 @@ def detect_supply_demand_keypoints(
         'date': str(rows[end].get('date', '')),
         'structure': resolved_structure,
         'stage': resolved_stage,
+        'raw_stage': position_context.get('raw_stage'),
+        'stage_position_normalization': position_context.get('normalization'),
         'wave_context': {
             'structure': resolved_wave_context.get('structure'),
             'phase': resolved_wave_context.get('phase'),
