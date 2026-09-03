@@ -214,3 +214,29 @@ def test_stock_card_downgrades_range_bottom_breakdown_risk_action(monkeypatch):
     assert '跌破风险' in card['action_reason']
     assert card['conclusion'] == card['action_reason']
     assert card['major_decline_risk']['level'] == 'watch'
+
+
+def test_analysis_signal_contract_passes_structure_context_fields():
+    from backend.services.analysis_service import _stock_card_signal_contract
+
+    card = {
+        'signal': 'hold',
+        'technical_signal': 'buy',
+        'technical_confidence': 66,
+        'technical_reason': '测试技术事实',
+        'triggered_signals': [],
+        'structure_context': {'status': 'ok', 'is_trade_decision': False},
+        'structure_context_status': 'ok',
+        'major_decline_risk': {'level': 'watch'},
+        'structure_wave_position': {'position': 'falling_middle', 'label': '区间底部跌破风险'},
+        'legacy_structure': {'structure': '上涨趋势', 'stage': '上行'},
+        'decision': {'action': '持有', 'signal': '等确认', 'reason': '等待需求确认'},
+    }
+
+    result = _stock_card_signal_contract(card)
+
+    assert result['structure_context']['is_trade_decision'] is False
+    assert result['structure_context_status'] == 'ok'
+    assert result['major_decline_risk']['level'] == 'watch'
+    assert result['structure_wave_position']['label'] == '区间底部跌破风险'
+    assert result['legacy_structure']['stage'] == '上行'

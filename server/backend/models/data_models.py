@@ -313,4 +313,9 @@ class StockCardData:
     vs_sector_5d: Optional[float]   # 个股vs板块5日对比
     conclusion: str              # 结论文字
     tags: list                   # 标签列表
+    structure_context: Optional[dict] = None  # 3L统一结构上下文
+    structure_context_status: str = ''        # ok/fallback/unavailable
+    major_decline_risk: dict = field(default_factory=dict)  # 主跌风险
+    structure_wave_position: dict = field(default_factory=dict)  # 结构上下文波段位置
+    legacy_structure: dict = field(default_factory=dict)  # 旧EMA结构诊断
     decision: Optional[TradeDecision] = None  # 权威交易决策；平铺字段仅用于兼容
