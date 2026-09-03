@@ -47,6 +47,7 @@ from backend.core.trend_trading import (
 from backend.core.signal_detector.fusion import fusion_judge
 from backend.core.signal_detector.sell_point_detection import detect_sell_point
 from backend.core.structure_wave import judge_structure_wave
+from backend.core.structure_context_detector import detect_3l_structure_context
 from backend.core.trade_signal_contract import is_buy_point_allowed_by_structure
 from backend.core.keypoint_context import build_keypoint_context
 from backend.models.data_models import TradeDecision
@@ -134,6 +135,48 @@ def _analyze_structure(klines, idx):
         'stage': stage or '--',
         'ema': ema or '--',
     }
+
+
+def _analyze_3l_structure_context(klines, idx, legacy_info=None, asset_type='stock'):
+    """用统一 3L 结构上下文修正卡片结构口径。
+
+    这是生产消费的轻量包装：底层 detector 仍然是旁路事实输出，
+    这里仅把 structure/stage 统一到同一套 3L 语义，避免旧 EMA 阶段
+    与区间/波段位置各说各话。
+    """
+    legacy_info = legacy_info or _analyze_structure(klines, idx)
+    result = {
+        'structure': legacy_info.get('structure', '--'),
+        'stage': legacy_info.get('stage', '--'),
+        'ema': legacy_info.get('ema', '--'),
+        'legacy_structure': dict(legacy_info),
+        'structure_context': None,
+        'structure_context_status': 'fallback',
+    }
+    try:
+        context = detect_3l_structure_context(
+            klines[:idx + 1],
+            asset_type=asset_type,
+        )
+    except Exception as exc:
+        result['structure_context_error'] = str(exc)
+        return result
+
+    if context.get('status') != 'ok':
+        result['structure_context_status'] = context.get('status', 'unavailable')
+        result['structure_context'] = context
+        return result
+
+    market = context.get('market_structure') or {}
+    structure = market.get('structure') or result['structure']
+    stage = market.get('stage') or result['stage']
+    result.update({
+        'structure': structure or '--',
+        'stage': stage or '--',
+        'structure_context': context,
+        'structure_context_status': 'ok',
+    })
+    return result
 
 
 def _decide_trading_system(code):
@@ -241,6 +284,15 @@ def _build_conclusion(card):
 
     if fusion_type == 'conflict_bullish':
         return f'结构偏空但出现看多信号，等确认再入场'
+
+    decision = card.get('decision') or {}
+    if (
+        s == 'hold'
+        and decision.get('action') == '持有'
+        and decision.get('signal') == '等确认'
+        and decision.get('reason')
+    ):
+        return decision['reason']
 
     # 回退到原有逻辑
     if s == 'buy':
@@ -376,6 +428,33 @@ def _can_promote_detected_buy_point(fusion_type, triggered_signals):
     return True
 
 
+def _structure_context_blocks_support_action(structure_context):
+    """统一结构上下文显示风险时，禁止把区间底部机械解释成加仓。
+
+    3L 里“区间底部”只是位置；如果同时出现跌破风险/主跌高风险，
+    它不是买点，必须等待需求重新进入或跌破失败确认。
+    """
+    if not structure_context or structure_context.get('status') != 'ok':
+        return False, ''
+    market = structure_context.get('market_structure') or {}
+    wave_position = structure_context.get('wave_position') or {}
+    major_decline_risk = structure_context.get('major_decline_risk') or {}
+    label = str(wave_position.get('label') or '')
+    position = str(wave_position.get('position') or '')
+    risk_level = str(major_decline_risk.get('level') or '')
+
+    if risk_level == 'high':
+        return True, f"{market.get('structure', '--')}·{market.get('stage', '--')}，主跌风险高，等待风险解除"
+    if '跌破风险' in label or (
+        market.get('structure') == '区间震荡'
+        and market.get('stage') == '区间底部'
+        and position == 'falling_middle'
+        and risk_level == 'watch'
+    ):
+        return True, f"{market.get('structure', '--')}·{market.get('stage', '--')}，{label or '支撑跌破风险'}，等待需求确认"
+    return False, ''
+
+
 def build_trade_decision(*, signal, structure, stage, fusion_type='',
                          fusion_reason='', triggered_signals=None, buy_point='',
                          stop_loss=None, stop_loss_pct=None):
@@ -474,7 +553,13 @@ def get_stock_card(code, date_str, market_position='波中',
             change = round((close - prev_close) / prev_close * 100, 2)
 
     # 3. 结构分析
-    struct_info = _analyze_structure(klines, idx)
+    legacy_struct_info = _analyze_structure(klines, idx)
+    struct_info = _analyze_3l_structure_context(
+        klines,
+        idx,
+        legacy_info=legacy_struct_info,
+        asset_type='stock',
+    )
     keypoint_context = build_keypoint_context(
         klines,
         idx,
@@ -610,11 +695,22 @@ def get_stock_card(code, date_str, market_position='波中',
         technical_confidence = f_result.get('technical_confidence', 0)
         technical_reason = f_result.get('technical_reason', '')
 
+        fusion_buy_allowed = True
+        fusion_buy_reject_reason = ''
+        if detected_buy_point:
+            fusion_buy_allowed, fusion_buy_reject_reason, _ = is_buy_point_allowed_by_structure(
+                detected_buy_point,
+                struct_info.get('structure', ''),
+                struct_info.get('stage', ''),
+                triggered_signals=triggered_signals,
+            )
+
         # 下降结构可以降低执行优先级，但不能抹掉已经发生的反转/恐慌量价事实。
         if (
             technical_signal == 'buy'
             and detected_buy_point
             and not buy_point
+            and fusion_buy_allowed
             and _can_promote_detected_buy_point(fusion_type, triggered_signals)
         ):
             buy_point = detected_buy_point
@@ -628,7 +724,15 @@ def get_stock_card(code, date_str, market_position='波中',
         # - 无买点但融合出buy→采用
         # - 无卖出但融合出sell→采用
         if fusion_type in ('strong_buy', 'signal_buy'):
-            if signal == 'hold':
+            if not fusion_buy_allowed:
+                signal = 'hold'
+                signal_text = (
+                    f'{detected_buy_point}与{struct_info.get("stage", "")}位置冲突：'
+                    f'{fusion_buy_reject_reason}，按观察/等待确认处理'
+                )
+                buy_point = ''
+                score = max(score, min(50, technical_confidence))
+            elif signal == 'hold':
                 signal = 'buy'
                 buy_point = detected_buy_point or '信号确认'
                 signal_text = f_result.get('signal_text', '')
@@ -753,6 +857,15 @@ def get_stock_card(code, date_str, market_position='波中',
         stop_loss=stop_loss,
         stop_loss_pct=stop_loss_pct,
     )
+    support_blocked, support_block_reason = _structure_context_blocks_support_action(
+        struct_info.get('structure_context')
+    )
+    if signal == 'hold' and support_blocked and decision.action in ('加仓', '买入'):
+        decision.action = '持有'
+        decision.signal = '等确认'
+        decision.priority = '高'
+        decision.reason = support_block_reason
+        signal_text = signal_text or support_block_reason
 
     # 8. 构建卡片
     card = {
@@ -798,6 +911,11 @@ def get_stock_card(code, date_str, market_position='波中',
         'technical_signal': technical_signal,
         'technical_confidence': technical_confidence,
         'technical_reason': technical_reason,
+        'structure_context': struct_info.get('structure_context'),
+        'structure_context_status': struct_info.get('structure_context_status', ''),
+        'major_decline_risk': (struct_info.get('structure_context') or {}).get('major_decline_risk', {}),
+        'structure_wave_position': (struct_info.get('structure_context') or {}).get('wave_position', {}),
+        'legacy_structure': struct_info.get('legacy_structure', {}),
         'keypoint_context': keypoint_context,
         'wave_position': wave_position,
         # 操作建议（卡片统一推导）
@@ -861,6 +979,14 @@ def _empty_card(code, name, sector, direction, reason):
         'triggered_signals': [],
         'fusion_type': '',
         'fusion_reason': '',
+        'technical_signal': 'hold',
+        'technical_confidence': 0,
+        'technical_reason': '',
+        'structure_context': None,
+        'structure_context_status': 'unavailable',
+        'major_decline_risk': {},
+        'structure_wave_position': {},
+        'legacy_structure': {},
         'keypoint_context': {
             'version': 'keypoint-context-p0',
             'status': 'unavailable',
