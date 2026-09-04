@@ -36,6 +36,11 @@ def test_buy_signal_review_preserves_authoritative_card_date():
         'stop_loss_pct': 8.0, 'structure': '区间震荡', 'stage': '区间底部',
         'signal': 'hold', 'technical_signal': 'buy', 'ema': '多头',
         'vol_analysis': '量能正常',
+        'structure_context': {'status': 'ok', 'is_trade_decision': False},
+        'structure_context_status': 'ok',
+        'major_decline_risk': {'level': 'watch'},
+        'structure_wave_position': {'position': 'falling_middle', 'label': '区间底部跌破风险'},
+        'legacy_structure': {'structure': '下降趋势', 'stage': '下行'},
     }
 
     result = generate_buy_signals_review(
@@ -44,6 +49,11 @@ def test_buy_signal_review_preserves_authoritative_card_date():
     )
 
     assert result[0]['date'] == '20260808'
+    assert result[0]['structure_context']['is_trade_decision'] is False
+    assert result[0]['structure_context_status'] == 'ok'
+    assert result[0]['major_decline_risk']['level'] == 'watch'
+    assert result[0]['structure_wave_position']['label'] == '区间底部跌破风险'
+    assert result[0]['legacy_structure']['stage'] == '下行'
 
 
 def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path):
@@ -55,6 +65,11 @@ def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path)
         'structure': '区间震荡', 'stage': '区间底部', 'signal': 'hold',
         'technical_signal': 'buy', 'profit_model1': False, 'trend_stock': False,
         'trading_system': '3l',
+        'structure_context': {'status': 'ok', 'is_trade_decision': False},
+        'structure_context_status': 'ok',
+        'major_decline_risk': {'level': 'watch'},
+        'structure_wave_position': {'position': 'falling_middle', 'label': '区间底部跌破风险'},
+        'legacy_structure': {'structure': '下降趋势', 'stage': '下行'},
     }
     monkeypatch.setattr('backend.services.stock_card_service.get_stock_card', lambda **kwargs: card)
     rows = [
@@ -69,6 +84,11 @@ def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path)
     )
 
     assert signals[0]['date'] == '20260808'
+    assert signals[0]['structure_context']['is_trade_decision'] is False
+    assert signals[0]['structure_context_status'] == 'ok'
+    assert signals[0]['major_decline_risk']['level'] == 'watch'
+    assert signals[0]['structure_wave_position']['label'] == '区间底部跌破风险'
+    assert signals[0]['legacy_structure']['stage'] == '下行'
 
 
 def test_cached_review_contract_is_completed_without_losing_legacy_sector():
