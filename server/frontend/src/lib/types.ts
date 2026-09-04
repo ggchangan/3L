@@ -209,6 +209,44 @@ export interface BuySignalItem {
   fusion_type?: string
   fusion_reason?: string
   wave_position?: string
+  /** 3L统一结构上下文：只解释结构/阶段/波段位置/主跌风险，不直接等于买卖点 */
+  structure_context_status?: 'ok' | 'fallback' | 'unavailable' | string
+  structure_context?: {
+    status?: string
+    is_trade_decision?: boolean
+    market_structure?: {
+      structure?: string
+      stage?: string
+      evidence?: string[]
+      confidence?: number
+    }
+    wave_position?: {
+      position?: string
+      label?: string
+      evidence?: string[]
+      confidence?: number
+    }
+    major_decline_risk?: {
+      level?: 'none' | 'watch' | 'high' | string
+      reason?: string
+      evidence?: string[]
+    }
+  } | null
+  major_decline_risk?: {
+    level?: 'none' | 'watch' | 'high' | string
+    reason?: string
+    evidence?: string[]
+  }
+  structure_wave_position?: {
+    position?: string
+    label?: string
+    evidence?: string[]
+  }
+  legacy_structure?: {
+    structure?: string
+    stage?: string
+    ema?: string
+  }
   /** 操作建议（由卡片统一推导） */
   action_type?: string       // 交易动作，或复盘分层后的'观察'/'技术信号'/'待确认'
   action_signal?: string     // '强势买入·缩量回踩(85)' / '偏多等确认' / ...
