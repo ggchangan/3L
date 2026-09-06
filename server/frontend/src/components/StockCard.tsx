@@ -18,6 +18,18 @@ const strengthLevelLabel = (level?: string) => {
   if (level === '非主线') return '10日强度榜外'
   return level || ''
 }
+const riskLabel = (level?: string) => {
+  if (level === 'high') return '主跌高风险'
+  if (level === 'watch') return '风险观察'
+  if (level === 'none') return '无主跌风险'
+  return level || ''
+}
+const riskColor = (level?: string) => {
+  if (level === 'high') return '#e94560'
+  if (level === 'watch') return '#ffd700'
+  if (level === 'none') return '#4ecdc4'
+  return '#888'
+}
 
 import type { BuySignalItem } from '../lib/types'
 import { buyDecisionAction } from '../lib/buyDecision'
@@ -54,6 +66,14 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
   const icon = STAGE_ICONS[s.stage] || '•'
   const stageColor = STAGE_COLORS[s.stage] || '#888'
   const structIcon = STRUCT_ICONS[s.structure] || ''
+  const structureRisk = s.major_decline_risk || s.structure_context?.major_decline_risk
+  const structureWave = s.structure_wave_position || s.structure_context?.wave_position
+  const structureEvidence = [
+    ...(s.structure_context?.market_structure?.evidence || []),
+    ...(structureWave?.evidence || []),
+    ...(structureRisk?.evidence || []),
+    structureRisk?.reason || '',
+  ].filter(Boolean).join('；')
 
   const isBuy = s.technical_signal === 'buy' || s.signal === 'buy'
   const rejectedTechnicalBuy = isRejectedTechnicalBuy(s)
@@ -195,6 +215,14 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
         <div className="field"><span className="l">操作:</span> <span className={`v ${cls}`} style={{ fontWeight: 'bold' }}>{displayAction}</span></div>
         <div className="field"><span className="l">结构:</span> <span className="v">{structIcon} {s.structure || '--'}</span></div>
         <div className="field"><span className="l">阶段:</span> <span className="v" style={{ color: stageColor, fontWeight: 'bold' }}>{icon} {s.stage || '--'}</span></div>
+        {(structureRisk?.level || structureWave?.label) && (
+          <div className="field" title={structureEvidence || '3L结构上下文：只解释环境和位置，不直接等于买卖点'}>
+            <span className="l">结构上下文:</span>
+            {structureWave?.label && <span className="v" style={{ color: '#aaa', fontSize: 11 }}> {structureWave.label}</span>}
+            {structureRisk?.level && <span className="v" style={{ color: riskColor(structureRisk.level), fontSize: 11, marginLeft: 4 }}>| {riskLabel(structureRisk.level)}</span>}
+            {s.structure_context_status === 'ok' && <span style={{ color: '#555', fontSize: 10, marginLeft: 4 }}>ⓘ</span>}
+          </div>
+        )}
         {bpContent}
         {rejectedTechnicalBuy && (
           <div className="field">

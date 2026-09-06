@@ -215,6 +215,33 @@ describe('StockCard', () => {
     expect(screen.queryByText(/可执行买入计划/)).toBeNull()
   })
 
+  it('展示3L结构上下文和主跌风险说明', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      signal: 'hold',
+      technical_signal: 'hold',
+      execution_signal: 'hold',
+      action_type: '持有',
+      action_signal: '等确认',
+      structure: '区间震荡',
+      stage: '区间底部',
+      structure_context_status: 'ok',
+      structure_wave_position: {
+        position: 'falling_middle',
+        label: '区间底部跌破风险',
+        evidence: ['支撑附近被供应跌破'],
+      },
+      major_decline_risk: {
+        level: 'watch',
+        reason: '等待需求确认',
+      },
+    }} idx={1} mode="review" decisionContext="buy-signal" />)
+
+    expect(screen.getByText(/结构上下文:/)).toBeTruthy()
+    expect(screen.getByText(/区间底部跌破风险/)).toBeTruthy()
+    expect(screen.getByText(/风险观察/)).toBeTruthy()
+  })
+
   it('个股分析页的技术信号不冒充已完成复盘门禁', () => {
     render(<StockCard s={{
       ...buySignal,
