@@ -216,6 +216,48 @@ def test_stock_card_downgrades_range_bottom_breakdown_risk_action(monkeypatch):
     assert card['major_decline_risk']['level'] == 'watch'
 
 
+def test_stock_card_exposes_supply_demand_events_as_diagnostics(monkeypatch):
+    from backend.services import stock_card_service as scs
+
+    klines = _rows([100, 102, 104, 106, 108, 110, 109, 108, 109, 110] * 4)
+    event_context = {
+        'version': 'supply-demand-event-v1',
+        'status': 'ok',
+        'events': [{
+            'event_type': 'failure',
+            'event_label': '突破失败',
+            'subtype': 'failed_breakout',
+            'direction': 'bearish',
+            'trade_implication': 'risk_or_sell_context',
+            'is_trade_decision': False,
+        }],
+        'event_counts': {'total': 1, 'core': 1, 'watch': 0, 'weak': 0},
+        'is_trade_decision': False,
+    }
+    monkeypatch.setattr(scs, '_ALL_A_STOCKS', {'000001': '测试股'})
+    monkeypatch.setattr(scs, '_decide_trading_system', lambda code: '3l')
+    monkeypatch.setattr(scs, 'get_stock_klines', lambda code, direction=None: klines)
+    monkeypatch.setattr(
+        scs,
+        'get_industry_map',
+        lambda: {'000001': {'name': '测试股', 'ths_industry': '半导体'}},
+    )
+    monkeypatch.setattr(
+        scs,
+        'detect_3l_structure_context',
+        lambda *args, **kwargs: _ok_context('区间震荡', '区间顶部'),
+    )
+    monkeypatch.setattr(scs, 'detect_buy_point', lambda *args, **kwargs: None)
+    monkeypatch.setattr(scs, 'detect_supply_demand_events', lambda *args, **kwargs: event_context)
+
+    card = scs.get_stock_card('000001', '20260740')
+
+    assert card['supply_demand_event_context']['is_trade_decision'] is False
+    assert card['supply_demand_event_counts']['total'] == 1
+    assert card['supply_demand_events'][0]['event_label'] == '突破失败'
+    assert card['supply_demand_events'][0]['trade_implication'] == 'risk_or_sell_context'
+
+
 def test_analysis_signal_contract_passes_structure_context_fields():
     from backend.services.analysis_service import _stock_card_signal_contract
 
@@ -230,6 +272,13 @@ def test_analysis_signal_contract_passes_structure_context_fields():
         'major_decline_risk': {'level': 'watch'},
         'structure_wave_position': {'position': 'falling_middle', 'label': '区间底部跌破风险'},
         'legacy_structure': {'structure': '上涨趋势', 'stage': '上行'},
+        'supply_demand_event_context': {'status': 'ok', 'is_trade_decision': False},
+        'supply_demand_events': [{
+            'event_type': 'continuation',
+            'event_label': '上涨中继',
+            'is_trade_decision': False,
+        }],
+        'supply_demand_event_counts': {'total': 1},
         'decision': {'action': '持有', 'signal': '等确认', 'reason': '等待需求确认'},
     }
 
@@ -240,3 +289,6 @@ def test_analysis_signal_contract_passes_structure_context_fields():
     assert result['major_decline_risk']['level'] == 'watch'
     assert result['structure_wave_position']['label'] == '区间底部跌破风险'
     assert result['legacy_structure']['stage'] == '上行'
+    assert result['supply_demand_event_context']['is_trade_decision'] is False
+    assert result['supply_demand_events'][0]['event_label'] == '上涨中继'
+    assert result['supply_demand_event_counts']['total'] == 1

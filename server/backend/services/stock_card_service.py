@@ -50,6 +50,7 @@ from backend.core.structure_wave import judge_structure_wave
 from backend.core.structure_context_detector import detect_3l_structure_context
 from backend.core.trade_signal_contract import is_buy_point_allowed_by_structure
 from backend.core.keypoint_context import build_keypoint_context
+from backend.core.supply_demand_event_detector import detect_supply_demand_events
 from backend.models.data_models import TradeDecision
 from threel_core.parameters import PARAMETER_VERSION
 
@@ -566,6 +567,13 @@ def get_stock_card(code, date_str, market_position='波中',
         structure=struct_info.get('structure', ''),
         stage=struct_info.get('stage', ''),
     )
+    supply_demand_event_context = detect_supply_demand_events(
+        klines[:idx + 1],
+        asset_type='stock',
+        structure=struct_info.get('structure', ''),
+        stage=struct_info.get('stage', ''),
+        supply_demand_result=keypoint_context.get('supply_demand_transition_context'),
+    )
 
     # 通用 EMA 数值、偏离率、量比
     closes_all = [k['close'] for k in klines[:idx + 1]]
@@ -917,6 +925,9 @@ def get_stock_card(code, date_str, market_position='波中',
         'structure_wave_position': (struct_info.get('structure_context') or {}).get('wave_position', {}),
         'legacy_structure': struct_info.get('legacy_structure', {}),
         'keypoint_context': keypoint_context,
+        'supply_demand_event_context': supply_demand_event_context,
+        'supply_demand_events': supply_demand_event_context.get('events', []),
+        'supply_demand_event_counts': supply_demand_event_context.get('event_counts', {}),
         'wave_position': wave_position,
         # 操作建议（卡片统一推导）
         'decision': decision.to_dict(),
@@ -992,6 +1003,16 @@ def _empty_card(code, name, sector, direction, reason):
             'status': 'unavailable',
             'reason': reason,
         },
+        'supply_demand_event_context': {
+            'version': 'supply-demand-event-v1',
+            'status': 'unavailable',
+            'reason': reason,
+            'events': [],
+            'event_counts': {'total': 0, 'core': 0, 'watch': 0, 'weak': 0},
+            'is_trade_decision': False,
+        },
+        'supply_demand_events': [],
+        'supply_demand_event_counts': {'total': 0, 'core': 0, 'watch': 0, 'weak': 0},
         'wave_position': '',
         'decision': decision.to_dict(),
         'action_type': decision.action,
