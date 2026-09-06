@@ -242,6 +242,32 @@ describe('StockCard', () => {
     expect(screen.getByText(/风险观察/)).toBeTruthy()
   })
 
+  it('展示供需事件但不把它描述成交易指令', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      signal: 'hold',
+      technical_signal: 'hold',
+      execution_signal: 'hold',
+      action_type: '持有',
+      buy_point: '',
+      supply_demand_events: [{
+        event_type: 'breakout',
+        event_label: '向下跌破',
+        subtype: 'downward_breakdown',
+        direction: 'bearish',
+        tier: 'core',
+        meaning: '供应打破支撑',
+        source_definition: '供需事件不是买卖点',
+        invalidations: ['后续快速收回支撑'],
+        is_trade_decision: false,
+      }],
+    }} idx={1} mode="review" decisionContext="buy-signal" />)
+
+    expect(screen.getByText(/供需事件:/)).toBeTruthy()
+    expect(screen.getByText(/向下跌破 · 核心/)).toBeTruthy()
+    expect(screen.queryByText(/可执行买入计划/)).toBeNull()
+  })
+
   it('个股分析页的技术信号不冒充已完成复盘门禁', () => {
     render(<StockCard s={{
       ...buySignal,
