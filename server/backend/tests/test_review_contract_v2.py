@@ -41,6 +41,9 @@ def test_buy_signal_review_preserves_authoritative_card_date():
         'major_decline_risk': {'level': 'watch'},
         'structure_wave_position': {'position': 'falling_middle', 'label': '区间底部跌破风险'},
         'legacy_structure': {'structure': '下降趋势', 'stage': '下行'},
+        'supply_demand_event_context': {'status': 'ok', 'is_trade_decision': False},
+        'supply_demand_events': [{'event_label': '跌破失败', 'is_trade_decision': False}],
+        'supply_demand_event_counts': {'total': 1},
     }
 
     result = generate_buy_signals_review(
@@ -54,6 +57,9 @@ def test_buy_signal_review_preserves_authoritative_card_date():
     assert result[0]['major_decline_risk']['level'] == 'watch'
     assert result[0]['structure_wave_position']['label'] == '区间底部跌破风险'
     assert result[0]['legacy_structure']['stage'] == '下行'
+    assert result[0]['supply_demand_event_context']['is_trade_decision'] is False
+    assert result[0]['supply_demand_events'][0]['event_label'] == '跌破失败'
+    assert result[0]['supply_demand_event_counts']['total'] == 1
 
 
 def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path):
@@ -70,6 +76,9 @@ def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path)
         'major_decline_risk': {'level': 'watch'},
         'structure_wave_position': {'position': 'falling_middle', 'label': '区间底部跌破风险'},
         'legacy_structure': {'structure': '下降趋势', 'stage': '下行'},
+        'supply_demand_event_context': {'status': 'ok', 'is_trade_decision': False},
+        'supply_demand_events': [{'event_label': '跌破失败', 'is_trade_decision': False}],
+        'supply_demand_event_counts': {'total': 1},
     }
     monkeypatch.setattr('backend.services.stock_card_service.get_stock_card', lambda **kwargs: card)
     rows = [
@@ -89,6 +98,9 @@ def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path)
     assert signals[0]['major_decline_risk']['level'] == 'watch'
     assert signals[0]['structure_wave_position']['label'] == '区间底部跌破风险'
     assert signals[0]['legacy_structure']['stage'] == '下行'
+    assert signals[0]['supply_demand_event_context']['is_trade_decision'] is False
+    assert signals[0]['supply_demand_events'][0]['event_label'] == '跌破失败'
+    assert signals[0]['supply_demand_event_counts']['total'] == 1
 
 
 def test_cached_review_contract_is_completed_without_losing_legacy_sector():

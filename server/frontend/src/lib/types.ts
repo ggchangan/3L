@@ -247,6 +247,22 @@ export interface BuySignalItem {
     stage?: string
     ema?: string
   }
+  /** 结构化供需事件：解释突破/跌破/失败/中继/衰竭等供需事实，不是买卖点 */
+  supply_demand_event_context?: {
+    version?: string
+    status?: string
+    date?: string
+    structure_context?: {
+      structure?: string
+      stage?: string
+    }
+    events?: SupplyDemandEvent[]
+    event_counts?: Record<string, unknown>
+    is_trade_decision?: boolean
+    definitions?: Record<string, string>
+  }
+  supply_demand_events?: SupplyDemandEvent[]
+  supply_demand_event_counts?: Record<string, unknown>
   /** 操作建议（由卡片统一推导） */
   action_type?: string       // 交易动作，或复盘分层后的'观察'/'技术信号'/'待确认'
   action_signal?: string     // '强势买入·缩量回踩(85)' / '偏多等确认' / ...
@@ -274,6 +290,35 @@ export interface BuySignalItem {
   stop_condition?: string
   valid_for?: string
   plan_readiness?: 'ready' | 'needs_stop'
+}
+
+export interface SupplyDemandEvent {
+  version?: string
+  id?: string
+  idx?: number
+  date?: string
+  event_type?: 'breakout' | 'failure' | 'continuation' | 'reversal' | 'exhaustion' | string
+  event_label?: string
+  subtype?: string
+  direction?: 'bullish' | 'bearish' | 'neutral' | string
+  dominant_force?: string
+  status?: string
+  confidence?: number
+  tier?: 'core' | 'watch' | 'weak' | string
+  display_level?: 'primary' | 'secondary' | 'muted' | string
+  priority_score?: number
+  priority_reasons?: string[]
+  structure_context?: Record<string, unknown>
+  position_context?: Record<string, unknown>
+  wave_context?: Record<string, unknown>
+  volume_price_evidence?: Record<string, unknown>
+  meaning?: string
+  source_definition?: string
+  invalidations?: string[]
+  trade_implication?: string
+  is_trade_decision?: boolean
+  semantic_warnings?: string[]
+  definition_aligned?: boolean
 }
 
 /** 止损预警API返回类型 */
