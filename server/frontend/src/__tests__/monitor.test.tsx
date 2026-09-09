@@ -268,6 +268,27 @@ describe('StockCard', () => {
     expect(screen.queryByText(/可执行买入计划/)).toBeNull()
   })
 
+  it('展示买点与供需事件一致性诊断', () => {
+    render(<StockCard s={{
+      ...buySignal,
+      signal: 'hold',
+      technical_signal: 'buy',
+      execution_signal: 'hold',
+      action_type: '技术信号',
+      buy_point: '中继买点',
+      supply_demand_alignment: {
+        status: 'missing_event',
+        reason: '买点/技术信号暂未找到对应的结构化供需事件',
+        expected_subtypes: ['bullish_continuation'],
+        is_trade_decision: false,
+      },
+    }} idx={1} mode="review" decisionContext="buy-signal" />)
+
+    expect(screen.getByText(/供需校验:/)).toBeTruthy()
+    expect(screen.getByText(/缺少供需事件/)).toBeTruthy()
+    expect(screen.queryByText(/可执行买入计划/)).toBeNull()
+  })
+
   it('个股分析页的技术信号不冒充已完成复盘门禁', () => {
     render(<StockCard s={{
       ...buySignal,

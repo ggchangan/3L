@@ -321,4 +321,5 @@ class StockCardData:
     supply_demand_event_context: dict = field(default_factory=dict)  # 结构化供需事件诊断
     supply_demand_events: list = field(default_factory=list)  # 供需事件列表；不是买卖点
     supply_demand_event_counts: dict = field(default_factory=dict)  # 供需事件分层统计
+    supply_demand_alignment: dict = field(default_factory=dict)  # 买点与供需事件一致性诊断
     decision: Optional[TradeDecision] = None  # 权威交易决策；平铺字段仅用于兼容

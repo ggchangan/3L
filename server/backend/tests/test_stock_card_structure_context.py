@@ -258,6 +258,48 @@ def test_stock_card_exposes_supply_demand_events_as_diagnostics(monkeypatch):
     assert card['supply_demand_events'][0]['trade_implication'] == 'risk_or_sell_context'
 
 
+def test_supply_demand_alignment_marks_matched_missing_and_conflict():
+    from backend.services.stock_card_service import _build_supply_demand_alignment
+
+    matched = _build_supply_demand_alignment({
+        'buy_point': '突破买点',
+        'technical_signal': 'buy',
+        'triggered_signals': [],
+        'supply_demand_events': [{
+            'subtype': 'upward_breakout',
+            'event_label': '向上突破',
+            'direction': 'bullish',
+            'tier': 'core',
+        }],
+    })
+    assert matched['status'] == 'matched'
+    assert matched['is_trade_decision'] is False
+    assert matched['matched_subtypes'] == ['upward_breakout']
+
+    missing = _build_supply_demand_alignment({
+        'buy_point': '中继买点',
+        'technical_signal': 'buy',
+        'triggered_signals': [],
+        'supply_demand_events': [],
+    })
+    assert missing['status'] == 'missing_event'
+    assert missing['expected_subtypes'] == ['bullish_continuation']
+
+    conflict = _build_supply_demand_alignment({
+        'buy_point': '反转买点',
+        'technical_signal': 'buy',
+        'triggered_signals': [],
+        'supply_demand_events': [{
+            'subtype': 'downward_breakdown',
+            'event_label': '向下跌破',
+            'direction': 'bearish',
+            'tier': 'core',
+        }],
+    })
+    assert conflict['status'] == 'conflict'
+    assert conflict['event_labels'] == ['向下跌破']
+
+
 def test_analysis_signal_contract_passes_structure_context_fields():
     from backend.services.analysis_service import _stock_card_signal_contract
 
@@ -279,6 +321,7 @@ def test_analysis_signal_contract_passes_structure_context_fields():
             'is_trade_decision': False,
         }],
         'supply_demand_event_counts': {'total': 1},
+        'supply_demand_alignment': {'status': 'matched', 'is_trade_decision': False},
         'decision': {'action': '持有', 'signal': '等确认', 'reason': '等待需求确认'},
     }
 
@@ -292,3 +335,4 @@ def test_analysis_signal_contract_passes_structure_context_fields():
     assert result['supply_demand_event_context']['is_trade_decision'] is False
     assert result['supply_demand_events'][0]['event_label'] == '上涨中继'
     assert result['supply_demand_event_counts']['total'] == 1
+    assert result['supply_demand_alignment']['status'] == 'matched'

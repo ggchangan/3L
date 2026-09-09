@@ -42,6 +42,20 @@ const eventTierLabel = (tier?: string) => {
   if (tier === 'weak') return '弱提示'
   return tier || ''
 }
+const alignmentLabel = (status?: string) => {
+  if (status === 'matched') return '已匹配供需事件'
+  if (status === 'missing_event') return '缺少供需事件'
+  if (status === 'conflict') return '供需冲突'
+  if (status === 'unknown_mapping') return '映射待补'
+  return status || ''
+}
+const alignmentColor = (status?: string) => {
+  if (status === 'matched') return '#4ecdc4'
+  if (status === 'missing_event') return '#ffd700'
+  if (status === 'conflict') return '#e94560'
+  if (status === 'unknown_mapping') return '#ff9800'
+  return '#888'
+}
 
 import type { BuySignalItem } from '../lib/types'
 import { buyDecisionAction } from '../lib/buyDecision'
@@ -89,6 +103,10 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
   const supplyDemandEvents = (s.supply_demand_events || s.supply_demand_event_context?.events || [])
     .filter(event => event && event.event_label)
     .slice(0, 2)
+  const supplyDemandAlignment = s.supply_demand_alignment
+  const showSupplyDemandAlignment = Boolean(
+    supplyDemandAlignment?.status && supplyDemandAlignment.status !== 'not_applicable'
+  )
 
   const isBuy = s.technical_signal === 'buy' || s.signal === 'buy'
   const rejectedTechnicalBuy = isRejectedTechnicalBuy(s)
@@ -257,6 +275,20 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
                 {event.event_label}{eventTierLabel(event.tier) ? ` · ${eventTierLabel(event.tier)}` : ''} ⓘ
               </span>
             ))}
+          </div>
+        )}
+        {showSupplyDemandAlignment && (
+          <div className="field" title={[
+            supplyDemandAlignment?.reason || '',
+            supplyDemandAlignment?.expected_subtypes?.length ? `期望：${supplyDemandAlignment.expected_subtypes.join(' / ')}` : '',
+            supplyDemandAlignment?.matched_subtypes?.length ? `匹配：${supplyDemandAlignment.matched_subtypes.join(' / ')}` : '',
+            supplyDemandAlignment?.event_labels?.length ? `当前事件：${supplyDemandAlignment.event_labels.join(' / ')}` : '',
+            '仅用于算法诊断，不是交易指令',
+          ].filter(Boolean).join('；')}>
+            <span className="l">供需校验:</span>
+            <span className="v" style={{ color: alignmentColor(supplyDemandAlignment?.status), fontSize: 11, marginLeft: 4 }}>
+              {alignmentLabel(supplyDemandAlignment?.status)} ⓘ
+            </span>
           </div>
         )}
         {bpContent}

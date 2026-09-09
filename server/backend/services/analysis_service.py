@@ -32,6 +32,7 @@ def _stock_card_signal_contract(card):
         'supply_demand_event_context': card.get('supply_demand_event_context', {}),
         'supply_demand_events': card.get('supply_demand_events', []),
         'supply_demand_event_counts': card.get('supply_demand_event_counts', {}),
+        'supply_demand_alignment': card.get('supply_demand_alignment', {}),
         'action_type': card.get('action_type', '持有'),
         'action_signal': card.get('action_signal', ''),
         'action_priority': card.get('action_priority', '低'),

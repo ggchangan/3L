@@ -456,6 +456,93 @@ def _structure_context_blocks_support_action(structure_context):
     return False, ''
 
 
+def _expected_supply_demand_event_subtypes(buy_point, triggered_signals=None):
+    """按 3L 买点语义映射期望的供需事件类型。
+
+    这是诊断映射，不参与交易决策。买点是否执行仍由 signal/decision 决定。
+    """
+    triggered_signals = triggered_signals or []
+    signal_keys = {
+        str(signal.get('key') or signal.get('signal_key') or '')
+        for signal in triggered_signals
+        if signal.get('direction') == 'bullish'
+    }
+    text = str(buy_point or '')
+    if 'upward_breakout' in signal_keys or '突破' in text:
+        return ['upward_breakout']
+    if 'upward_continuation' in signal_keys or '中继' in text or '回踩' in text:
+        return ['bullish_continuation']
+    if 'upward_reversal' in signal_keys or '反转' in text:
+        return ['bullish_reversal', 'failed_breakdown']
+    if 'panic_stagnation' in signal_keys or '恐慌' in text:
+        return ['panic_stagnation']
+    if '区底' in text or '区间底部' in text:
+        return ['failed_breakdown', 'panic_stagnation']
+    return []
+
+
+def _build_supply_demand_alignment(card):
+    """诊断买点信号是否有对应的结构化供需事件支撑。
+
+    返回结果只用于解释/回归，不改变 `signal`、`buy_point` 或 `decision`。
+    """
+    buy_point = card.get('buy_point') or ''
+    technical_buy = card.get('technical_signal') == 'buy'
+    if not buy_point and not technical_buy:
+        return {
+            'status': 'not_applicable',
+            'is_trade_decision': False,
+            'reason': '当前没有买点或看多技术信号，无需供需事件校验',
+        }
+
+    expected = _expected_supply_demand_event_subtypes(
+        buy_point or card.get('technical_reason', ''),
+        card.get('triggered_signals') or [],
+    )
+    events = card.get('supply_demand_events') or []
+    event_subtypes = [event.get('subtype') for event in events if event.get('subtype')]
+    bearish_events = [
+        event for event in events
+        if event.get('direction') == 'bearish'
+        and event.get('tier') in ('core', 'watch')
+    ]
+
+    if expected and any(subtype in event_subtypes for subtype in expected):
+        return {
+            'status': 'matched',
+            'expected_subtypes': expected,
+            'matched_subtypes': [subtype for subtype in event_subtypes if subtype in expected],
+            'event_labels': [event.get('event_label') for event in events if event.get('subtype') in expected],
+            'is_trade_decision': False,
+            'reason': '买点/技术信号已有同向供需事件支撑',
+        }
+
+    if bearish_events:
+        return {
+            'status': 'conflict',
+            'expected_subtypes': expected,
+            'event_labels': [event.get('event_label') for event in bearish_events],
+            'is_trade_decision': False,
+            'reason': '买点/技术信号与当前核心/关注级别看空供需事件冲突',
+        }
+
+    if expected:
+        return {
+            'status': 'missing_event',
+            'expected_subtypes': expected,
+            'event_labels': [event.get('event_label') for event in events],
+            'is_trade_decision': False,
+            'reason': '买点/技术信号暂未找到对应的结构化供需事件，需回看关键点/供需事件识别',
+        }
+
+    return {
+        'status': 'unknown_mapping',
+        'event_labels': [event.get('event_label') for event in events],
+        'is_trade_decision': False,
+        'reason': '当前买点类型尚未建立供需事件映射',
+    }
+
+
 def build_trade_decision(*, signal, structure, stage, fusion_type='',
                          fusion_reason='', triggered_signals=None, buy_point='',
                          stop_loss=None, stop_loss_pct=None):
@@ -938,6 +1025,7 @@ def get_stock_card(code, date_str, market_position='波中',
         'conclusion': '',
         'tags': [],
     }
+    card['supply_demand_alignment'] = _build_supply_demand_alignment(card)
     card['conclusion'] = _build_conclusion(card)
     card['tags'] = _build_tags(card)
 
@@ -1013,6 +1101,11 @@ def _empty_card(code, name, sector, direction, reason):
         },
         'supply_demand_events': [],
         'supply_demand_event_counts': {'total': 0, 'core': 0, 'watch': 0, 'weak': 0},
+        'supply_demand_alignment': {
+            'status': 'not_applicable',
+            'is_trade_decision': False,
+            'reason': '数据不足，无法校验供需事件',
+        },
         'wave_position': '',
         'decision': decision.to_dict(),
         'action_type': decision.action,

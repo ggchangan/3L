@@ -44,6 +44,7 @@ def test_buy_signal_review_preserves_authoritative_card_date():
         'supply_demand_event_context': {'status': 'ok', 'is_trade_decision': False},
         'supply_demand_events': [{'event_label': '跌破失败', 'is_trade_decision': False}],
         'supply_demand_event_counts': {'total': 1},
+        'supply_demand_alignment': {'status': 'matched', 'is_trade_decision': False},
     }
 
     result = generate_buy_signals_review(
@@ -60,6 +61,7 @@ def test_buy_signal_review_preserves_authoritative_card_date():
     assert result[0]['supply_demand_event_context']['is_trade_decision'] is False
     assert result[0]['supply_demand_events'][0]['event_label'] == '跌破失败'
     assert result[0]['supply_demand_event_counts']['total'] == 1
+    assert result[0]['supply_demand_alignment']['status'] == 'matched'
 
 
 def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path):
@@ -79,6 +81,7 @@ def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path)
         'supply_demand_event_context': {'status': 'ok', 'is_trade_decision': False},
         'supply_demand_events': [{'event_label': '跌破失败', 'is_trade_decision': False}],
         'supply_demand_event_counts': {'total': 1},
+        'supply_demand_alignment': {'status': 'matched', 'is_trade_decision': False},
     }
     monkeypatch.setattr('backend.services.stock_card_service.get_stock_card', lambda **kwargs: card)
     rows = [
@@ -101,6 +104,7 @@ def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path)
     assert signals[0]['supply_demand_event_context']['is_trade_decision'] is False
     assert signals[0]['supply_demand_events'][0]['event_label'] == '跌破失败'
     assert signals[0]['supply_demand_event_counts']['total'] == 1
+    assert signals[0]['supply_demand_alignment']['status'] == 'matched'
 
 
 def test_cached_review_contract_is_completed_without_losing_legacy_sector():
