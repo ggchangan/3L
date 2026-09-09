@@ -263,6 +263,14 @@ export interface BuySignalItem {
   }
   supply_demand_events?: SupplyDemandEvent[]
   supply_demand_event_counts?: Record<string, unknown>
+  supply_demand_alignment?: {
+    status?: 'matched' | 'missing_event' | 'conflict' | 'not_applicable' | 'unknown_mapping' | string
+    reason?: string
+    expected_subtypes?: string[]
+    matched_subtypes?: string[]
+    event_labels?: string[]
+    is_trade_decision?: boolean
+  }
   /** 操作建议（由卡片统一推导） */
   action_type?: string       // 交易动作，或复盘分层后的'观察'/'技术信号'/'待确认'
   action_signal?: string     // '强势买入·缩量回踩(85)' / '偏多等确认' / ...
