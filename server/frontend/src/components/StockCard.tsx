@@ -30,6 +30,18 @@ const riskColor = (level?: string) => {
   if (level === 'none') return '#4ecdc4'
   return '#888'
 }
+const eventColor = (direction?: string, tier?: string) => {
+  if (tier === 'weak') return '#777'
+  if (direction === 'bullish') return '#4ecdc4'
+  if (direction === 'bearish') return '#e94560'
+  return '#aaa'
+}
+const eventTierLabel = (tier?: string) => {
+  if (tier === 'core') return '核心'
+  if (tier === 'watch') return '关注'
+  if (tier === 'weak') return '弱提示'
+  return tier || ''
+}
 
 import type { BuySignalItem } from '../lib/types'
 import { buyDecisionAction } from '../lib/buyDecision'
@@ -74,6 +86,9 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
     ...(structureRisk?.evidence || []),
     structureRisk?.reason || '',
   ].filter(Boolean).join('；')
+  const supplyDemandEvents = (s.supply_demand_events || s.supply_demand_event_context?.events || [])
+    .filter(event => event && event.event_label)
+    .slice(0, 2)
 
   const isBuy = s.technical_signal === 'buy' || s.signal === 'buy'
   const rejectedTechnicalBuy = isRejectedTechnicalBuy(s)
@@ -221,6 +236,27 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
             {structureWave?.label && <span className="v" style={{ color: '#aaa', fontSize: 11 }}> {structureWave.label}</span>}
             {structureRisk?.level && <span className="v" style={{ color: riskColor(structureRisk.level), fontSize: 11, marginLeft: 4 }}>| {riskLabel(structureRisk.level)}</span>}
             {s.structure_context_status === 'ok' && <span style={{ color: '#555', fontSize: 10, marginLeft: 4 }}>ⓘ</span>}
+          </div>
+        )}
+        {supplyDemandEvents.length > 0 && (
+          <div className="field" title="供需事件只解释供需事实和后续验证条件，不直接等于买卖点或操作指令">
+            <span className="l">供需事件:</span>
+            {supplyDemandEvents.map((event, i) => (
+              <span
+                key={`${event.id || event.event_label}-${i}`}
+                className="v"
+                style={{ color: eventColor(event.direction, event.tier), fontSize: 11, marginLeft: i === 0 ? 4 : 6 }}
+                title={[
+                  event.meaning || '',
+                  event.source_definition ? `定义：${event.source_definition}` : '',
+                  event.invalidations?.length ? `失效：${event.invalidations.join('；')}` : '',
+                  event.semantic_warnings?.length ? `警告：${event.semantic_warnings.join('；')}` : '',
+                  '不是交易指令',
+                ].filter(Boolean).join('；')}
+              >
+                {event.event_label}{eventTierLabel(event.tier) ? ` · ${eventTierLabel(event.tier)}` : ''} ⓘ
+              </span>
+            ))}
           </div>
         )}
         {bpContent}
