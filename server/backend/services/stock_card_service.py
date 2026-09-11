@@ -554,6 +554,35 @@ def _normalize_final_buy_point(signal, buy_point, detected_buy_point):
     return buy_point or '', technical_buy_point
 
 
+def _apply_supply_demand_buy_gate(*, trading_system, signal, buy_point,
+                                  signal_text, score, technical_signal,
+                                  triggered_signals, events):
+    """3L 正式买入必须有同向供需事件支撑；否则降级为观察。
+
+    供需校验仍是诊断字段，但正式执行语义不能与诊断冲突。
+    """
+    if trading_system != '3l' or signal != 'buy' or not buy_point:
+        return signal, buy_point, signal_text, score, None
+
+    alignment = _build_supply_demand_alignment({
+        'buy_point': buy_point,
+        'technical_signal': technical_signal,
+        'triggered_signals': triggered_signals,
+        'supply_demand_events': events,
+    })
+    if alignment.get('status') == 'matched':
+        return signal, buy_point, signal_text, score, alignment
+
+    reason = alignment.get('reason') or '买点缺少供需事件确认'
+    return (
+        'hold',
+        '',
+        f'{buy_point}缺少供需事件确认：{reason}，按观察/等待确认处理',
+        min(score, 50),
+        alignment,
+    )
+
+
 def build_trade_decision(*, signal, structure, stage, fusion_type='',
                          fusion_reason='', triggered_signals=None, buy_point='',
                          stop_loss=None, stop_loss_pct=None):
@@ -956,6 +985,27 @@ def get_stock_card(code, date_str, market_position='波中',
         buy_point,
         detected_buy_point,
     )
+    supply_demand_alignment_precheck = None
+    (
+        signal,
+        buy_point,
+        signal_text,
+        score,
+        supply_demand_alignment_precheck,
+    ) = _apply_supply_demand_buy_gate(
+        trading_system=trading_system,
+        signal=signal,
+        buy_point=buy_point,
+        signal_text=signal_text,
+        score=score,
+        technical_signal=technical_signal,
+        triggered_signals=triggered_signals,
+        events=supply_demand_event_context.get('events', []),
+    )
+    if supply_demand_alignment_precheck and supply_demand_alignment_precheck.get('status') != 'matched':
+        stop_loss = None
+        stop_loss_pct = None
+        _display_stage = _raw_stage
 
     # 7d. 操作建议（由卡片统一推导，外部不重复计算）
     decision = build_trade_decision(
@@ -1043,7 +1093,7 @@ def get_stock_card(code, date_str, market_position='波中',
         'conclusion': '',
         'tags': [],
     }
-    card['supply_demand_alignment'] = _build_supply_demand_alignment(card)
+    card['supply_demand_alignment'] = supply_demand_alignment_precheck or _build_supply_demand_alignment(card)
     card['conclusion'] = _build_conclusion(card)
     card['tags'] = _build_tags(card)
 
