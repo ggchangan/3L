@@ -543,6 +543,17 @@ def _build_supply_demand_alignment(card):
     }
 
 
+def _normalize_final_buy_point(signal, buy_point, detected_buy_point):
+    """最终执行为 sell 时不能继续暴露正式 buy_point。
+
+    `buy_point` 是正式买点字段；`technical_buy_point` 只记录技术事实。
+    """
+    technical_buy_point = detected_buy_point or buy_point or ''
+    if signal == 'sell':
+        return '', technical_buy_point
+    return buy_point or '', technical_buy_point
+
+
 def build_trade_decision(*, signal, structure, stage, fusion_type='',
                          fusion_reason='', triggered_signals=None, buy_point='',
                          stop_loss=None, stop_loss_pct=None):
@@ -940,6 +951,12 @@ def get_stock_card(code, date_str, market_position='波中',
     else:
         _display_stage = _raw_stage
 
+    buy_point, technical_buy_point = _normalize_final_buy_point(
+        signal,
+        buy_point,
+        detected_buy_point,
+    )
+
     # 7d. 操作建议（由卡片统一推导，外部不重复计算）
     decision = build_trade_decision(
         signal=signal,
@@ -985,6 +1002,7 @@ def get_stock_card(code, date_str, market_position='波中',
         'signal': signal,
         'signal_text': signal_text,
         'buy_point': buy_point,
+        'technical_buy_point': technical_buy_point,
         'profit_model1': profit_model1,
         'trend_stock': trend_stock,
         'trading_system': trading_system,
@@ -1060,6 +1078,7 @@ def _empty_card(code, name, sector, direction, reason):
         'signal': 'hold',
         'signal_text': '',
         'buy_point': '',
+        'technical_buy_point': '',
         'profit_model1': False,
         'trend_stock': False,
         'trading_system': '3l',

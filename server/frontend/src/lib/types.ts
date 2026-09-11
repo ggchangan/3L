@@ -176,6 +176,7 @@ export interface BuySignalItem {
   structure: string
   trading_system?: '3l' | 'trend'
   buy_point?: string
+  technical_buy_point?: string
   stop_loss?: number
   stop_loss_price?: number  // 真实API字段名（review返回的数据）
   stop_loss_pct?: number

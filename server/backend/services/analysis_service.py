@@ -20,6 +20,7 @@ def _stock_card_signal_contract(card):
         'technical_confidence': card.get('technical_confidence', card.get('score', 0)),
         'technical_reason': card.get('technical_reason', ''),
         'buy_point': card.get('buy_point', ''),
+        'technical_buy_point': card.get('technical_buy_point', card.get('buy_point', '')),
         'triggered_signals': triggered_signals,
         'fusion_type': card.get('fusion_type', ''),
         'fusion_reason': card.get('fusion_reason', ''),

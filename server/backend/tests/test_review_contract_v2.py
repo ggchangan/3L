@@ -4,6 +4,7 @@ import threading
 import time
 
 import backend.services.review_service as review_service
+import backend.services.review_cache_service as review_cache_service
 from backend.services.review_compute_service import apply_trading_plan_actions, generate_trading_plan, judge_peak_valley
 from backend.services.review_service import normalize_review_response
 
@@ -30,7 +31,8 @@ def test_buy_signal_review_preserves_authoritative_card_date():
 
     card = {
         'code': '000001', 'name': '测试股票', 'industry': '银行', 'sector': '银行',
-        'direction': '金融', 'buy_point': '反转买点', 'date': '20260808',
+        'direction': '金融', 'buy_point': '反转买点',
+        'technical_buy_point': '反转买点', 'date': '20260808',
         'price': 10.0, 'change': 1.0, 'score': 80, 'profit_model1': False,
         'trend_stock': False, 'trading_system': '3l', 'stop_loss': 9.2,
         'stop_loss_pct': 8.0, 'structure': '区间震荡', 'stage': '区间底部',
@@ -53,6 +55,7 @@ def test_buy_signal_review_preserves_authoritative_card_date():
     )
 
     assert result[0]['date'] == '20260808'
+    assert result[0]['technical_buy_point'] == '反转买点'
     assert result[0]['structure_context']['is_trade_decision'] is False
     assert result[0]['structure_context_status'] == 'ok'
     assert result[0]['major_decline_risk']['level'] == 'watch'
@@ -69,7 +72,8 @@ def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path)
     card = {
         'code': '000001', 'name': '测试股票', 'industry': '银行', 'sector': '银行',
         'date': '20260808', 'price': 10.0, 'change': 1.0, 'score': 80,
-        'buy_point': '反转买点', 'stop_loss': 9.2, 'stop_loss_pct': 8.0,
+        'buy_point': '反转买点', 'technical_buy_point': '反转买点',
+        'stop_loss': 9.2, 'stop_loss_pct': 8.0,
         'structure': '区间震荡', 'stage': '区间底部', 'signal': 'hold',
         'technical_signal': 'buy', 'profit_model1': False, 'trend_stock': False,
         'trading_system': '3l',
@@ -96,6 +100,7 @@ def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path)
     )
 
     assert signals[0]['date'] == '20260808'
+    assert signals[0]['technical_buy_point'] == '反转买点'
     assert signals[0]['structure_context']['is_trade_decision'] is False
     assert signals[0]['structure_context_status'] == 'ok'
     assert signals[0]['major_decline_risk']['level'] == 'watch'
@@ -213,7 +218,7 @@ def test_background_refresh_is_single_flight(monkeypatch):
     monkeypatch.setattr(review_service, 'save_review_data', saved.append)
     monkeypatch.setattr(review_service, 'save_review_snapshot', archived.append)
     # 单飞测试不依赖跨进程文件锁，避免与正在运行的生产服务互相等待。
-    monkeypatch.setattr(review_service, 'review_refresh_file_lock', nullcontext)
+    monkeypatch.setattr(review_cache_service, 'review_refresh_file_lock', nullcontext)
     with review_service._review_refresh_lock:
         review_service._review_refresh_state.update({
             'status': 'idle', 'started_at': '', 'completed_at': '', 'error': '',
