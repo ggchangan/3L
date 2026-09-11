@@ -985,6 +985,9 @@ def get_stock_card(code, date_str, market_position='波中',
         buy_point,
         detected_buy_point,
     )
+    if signal == 'sell':
+        stop_loss = None
+        stop_loss_pct = None
     supply_demand_alignment_precheck = None
     (
         signal,
