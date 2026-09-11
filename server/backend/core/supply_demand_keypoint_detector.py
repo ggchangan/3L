@@ -436,21 +436,25 @@ def _point_priority(point_type: str, direction: str, confidence: float,
     }
     point_direction = 'up' if direction == 'bullish' else 'down' if direction == 'bearish' else ''
     if trading_direction in ('up', 'down') and point_direction:
-        is_same_direction = trading_direction == point_direction
-        if point_type in continuation_types or point_type in breakout_types:
-            if is_same_direction:
-                score += 6
-                reasons.append('当前交易波段顺向')
-            else:
-                score -= 10
-                reasons.append('当前交易波段逆向')
-        elif point_type in reversal_types:
-            if is_same_direction:
-                score += 2
-                reasons.append('当前交易波段延续验证')
-            else:
-                score += 8
-                reasons.append('当前交易波段转折/衰竭候选')
+        if point_type == 'bullish_continuation' and _is_pullback_trading_state(wave_context or {}):
+            score += 6
+            reasons.append('上涨趋势回调中的中继候选')
+        else:
+            is_same_direction = trading_direction == point_direction
+            if point_type in continuation_types or point_type in breakout_types:
+                if is_same_direction:
+                    score += 6
+                    reasons.append('当前交易波段顺向')
+                else:
+                    score -= 10
+                    reasons.append('当前交易波段逆向')
+            elif point_type in reversal_types:
+                if is_same_direction:
+                    score += 2
+                    reasons.append('当前交易波段延续验证')
+                else:
+                    score += 8
+                    reasons.append('当前交易波段转折/衰竭候选')
 
     score = round(max(0, min(score, 100)), 1)
     if score >= 78:
