@@ -376,6 +376,122 @@ def test_normalize_final_buy_point_separates_execution_and_diagnostic_fact():
     assert _normalize_final_buy_point('buy', '反转买点', '反转买点') == ('反转买点', '反转买点')
 
 
+def test_supply_demand_gate_downgrades_3l_buy_without_matching_event():
+    from backend.services.stock_card_service import _apply_supply_demand_buy_gate
+
+    signal, buy_point, signal_text, score, alignment = _apply_supply_demand_buy_gate(
+        trading_system='3l',
+        signal='buy',
+        buy_point='中继买点',
+        signal_text='中继买点成立',
+        score=82,
+        technical_signal='buy',
+        triggered_signals=[],
+        events=[],
+    )
+
+    assert signal == 'hold'
+    assert buy_point == ''
+    assert score == 50
+    assert alignment['status'] == 'missing_event'
+    assert '缺少供需事件确认' in signal_text
+
+
+def test_supply_demand_gate_keeps_3l_buy_with_matching_event():
+    from backend.services.stock_card_service import _apply_supply_demand_buy_gate
+
+    signal, buy_point, signal_text, score, alignment = _apply_supply_demand_buy_gate(
+        trading_system='3l',
+        signal='buy',
+        buy_point='突破买点',
+        signal_text='突破买点成立',
+        score=82,
+        technical_signal='buy',
+        triggered_signals=[],
+        events=[{
+            'subtype': 'upward_breakout',
+            'event_label': '向上突破',
+            'direction': 'bullish',
+            'tier': 'core',
+        }],
+    )
+
+    assert signal == 'buy'
+    assert buy_point == '突破买点'
+    assert score == 82
+    assert alignment['status'] == 'matched'
+
+
+def test_stock_card_downgrades_buy_when_supply_demand_event_is_missing(monkeypatch):
+    from backend.services import stock_card_service as scs
+
+    klines = _rows([100, 101, 102, 103, 104, 105, 104, 103, 104, 105] * 4)
+    monkeypatch.setattr(scs, '_ALL_A_STOCKS', {'000001': '测试股'})
+    monkeypatch.setattr(scs, '_decide_trading_system', lambda code: '3l')
+    monkeypatch.setattr(scs, 'get_stock_klines', lambda code, direction=None: klines)
+    monkeypatch.setattr(
+        scs,
+        'get_industry_map',
+        lambda: {'000001': {'name': '测试股', 'ths_industry': '半导体'}},
+    )
+    monkeypatch.setattr(
+        scs,
+        'detect_3l_structure_context',
+        lambda *args, **kwargs: _ok_context('上涨趋势', '上行'),
+    )
+    monkeypatch.setattr(
+        scs,
+        'detect_buy_point',
+        lambda *args, **kwargs: {
+            'buy_type': '中继买点',
+            'score': 82,
+            'vol_ratio': 0.6,
+            'detail': {'reason': '技术层识别中继买点'},
+        },
+    )
+    monkeypatch.setattr(
+        scs,
+        'fusion_judge',
+        lambda *args, **kwargs: {
+            'triggered_signals': [{
+                'key': 'upward_continuation',
+                'name': '上涨中继',
+                'direction': 'bullish',
+                'confidence': 82,
+            }],
+            'fusion_type': 'signal_buy',
+            'reason': '模拟技术中继事实',
+            'signal': 'buy',
+            'signal_text': '上涨中继',
+            'confidence': 82,
+            'technical_signal': 'buy',
+            'detected_buy_point': '中继买点',
+            'technical_confidence': 82,
+            'technical_reason': '技术中继事实',
+        },
+    )
+    monkeypatch.setattr(
+        scs,
+        'detect_supply_demand_events',
+        lambda *args, **kwargs: {
+            'version': 'supply-demand-event-v1',
+            'status': 'ok',
+            'events': [],
+            'event_counts': {'total': 0, 'core': 0, 'watch': 0, 'weak': 0},
+            'is_trade_decision': False,
+        },
+    )
+
+    card = scs.get_stock_card('000001', '20260740')
+
+    assert card['signal'] == 'hold'
+    assert card['buy_point'] == ''
+    assert card['technical_buy_point'] == '中继买点'
+    assert card['supply_demand_alignment']['status'] == 'missing_event'
+    assert card['decision']['action'] == '持有'
+    assert '缺少供需事件确认' in card['signal_text']
+
+
 def test_analysis_signal_contract_passes_structure_context_fields():
     from backend.services.analysis_service import _stock_card_signal_contract
 
