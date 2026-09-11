@@ -300,6 +300,82 @@ def test_supply_demand_alignment_marks_matched_missing_and_conflict():
     assert conflict['event_labels'] == ['向下跌破']
 
 
+def test_final_sell_signal_clears_formal_buy_point_but_keeps_technical_fact(monkeypatch):
+    from backend.services import stock_card_service as scs
+
+    klines = _rows([100, 101, 102, 103, 104, 105, 106, 107, 108, 109] * 4)
+    monkeypatch.setattr(scs, '_ALL_A_STOCKS', {'000001': '测试股'})
+    monkeypatch.setattr(scs, '_decide_trading_system', lambda code: '3l')
+    monkeypatch.setattr(scs, 'get_stock_klines', lambda code, direction=None: klines)
+    monkeypatch.setattr(
+        scs,
+        'get_industry_map',
+        lambda: {'000001': {'name': '测试股', 'ths_industry': '半导体'}},
+    )
+    monkeypatch.setattr(
+        scs,
+        'detect_3l_structure_context',
+        lambda *args, **kwargs: _ok_context('区间震荡', '区间顶部'),
+    )
+    monkeypatch.setattr(
+        scs,
+        'detect_buy_point',
+        lambda *args, **kwargs: {
+            'buy_type': '突破买点',
+            'score': 70,
+            'vol_ratio': 1.8,
+            'detail': {'reason': '技术层曾识别突破买点'},
+        },
+    )
+    monkeypatch.setattr(
+        scs,
+        'detect_sell_point',
+        lambda *args, **kwargs: {
+            'triggered': True,
+            'confidence': 95,
+            'sell_type': '放量滞涨',
+            'reason': '卖点更强，应覆盖执行信号',
+        },
+    )
+    monkeypatch.setattr(
+        scs,
+        'fusion_judge',
+        lambda *args, **kwargs: {
+            'triggered_signals': [{
+                'key': 'upward_breakout',
+                'name': '向上突破',
+                'direction': 'bullish',
+                'confidence': 70,
+            }],
+            'fusion_type': 'signal_buy',
+            'reason': '模拟技术突破事实',
+            'signal': 'buy',
+            'signal_text': '向上突破',
+            'confidence': 70,
+            'technical_signal': 'buy',
+            'detected_buy_point': '突破买点',
+            'technical_confidence': 70,
+            'technical_reason': '技术突破事实',
+        },
+    )
+
+    card = scs.get_stock_card('000001', '20260740')
+
+    assert card['signal'] == 'sell'
+    assert card['buy_point'] == ''
+    assert card['technical_buy_point'] == '突破买点'
+    assert card['decision']['action'] == '卖出'
+    assert 'buy_point' not in card['decision']
+
+
+def test_normalize_final_buy_point_separates_execution_and_diagnostic_fact():
+    from backend.services.stock_card_service import _normalize_final_buy_point
+
+    assert _normalize_final_buy_point('sell', '突破买点', '突破买点') == ('', '突破买点')
+    assert _normalize_final_buy_point('hold', '', '中继买点') == ('', '中继买点')
+    assert _normalize_final_buy_point('buy', '反转买点', '反转买点') == ('反转买点', '反转买点')
+
+
 def test_analysis_signal_contract_passes_structure_context_fields():
     from backend.services.analysis_service import _stock_card_signal_contract
 
@@ -308,6 +384,8 @@ def test_analysis_signal_contract_passes_structure_context_fields():
         'technical_signal': 'buy',
         'technical_confidence': 66,
         'technical_reason': '测试技术事实',
+        'buy_point': '',
+        'technical_buy_point': '反转买点',
         'triggered_signals': [],
         'structure_context': {'status': 'ok', 'is_trade_decision': False},
         'structure_context_status': 'ok',
@@ -328,6 +406,8 @@ def test_analysis_signal_contract_passes_structure_context_fields():
     result = _stock_card_signal_contract(card)
 
     assert result['structure_context']['is_trade_decision'] is False
+    assert result['buy_point'] == ''
+    assert result['technical_buy_point'] == '反转买点'
     assert result['structure_context_status'] == 'ok'
     assert result['major_decline_risk']['level'] == 'watch'
     assert result['structure_wave_position']['label'] == '区间底部跌破风险'

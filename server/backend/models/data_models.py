@@ -285,6 +285,7 @@ class StockCardData:
     signal: str                  # 原始信号 'buy'/'hold'/'sell'
     signal_text: str             # 信号文字
     buy_point: str               # 买点类型
+    technical_buy_point: str      # 技术层识别到的买点；最终卖出时不作为正式买点
     profit_model1: bool          # 是否盈利模式1
     trend_stock: bool            # 是否趋势交易股
     trading_system: str          # '3l'/'trend'
