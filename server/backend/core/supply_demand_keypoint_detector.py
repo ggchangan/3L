@@ -309,7 +309,7 @@ def _score_evidence(structure: str, zone: Dict, vpa: Dict, metrics: Dict) -> Dic
     no_demand = no_supply
 
     if structure == '上涨趋势' and zone.get('type') == 'trend_pullback':
-        no_supply = max(no_supply, 65 if vpa['type'] == 'shrink_pullback' else 0)
+        no_supply = max(no_supply, 65 if vpa['type'] in ('shrink_pullback', 'dry_volume') else 0)
     if structure == '下降趋势':
         no_demand = max(no_demand, 60 if vpa['type'] in ('shrink', 'shrink_pullback') else 0)
 
@@ -644,9 +644,12 @@ def detect_supply_demand_keypoints(
     if resolved_structure == '上涨趋势':
         if (
             zone_type == 'trend_pullback'
-            and vpa_type == 'shrink_pullback'
+            and vpa_type in ('shrink_pullback', 'dry_volume')
             and evidence['no_supply'] >= 55
-            and not _is_down_trading_wave(resolved_wave_context)
+            and not (
+                _is_down_trading_wave(resolved_wave_context)
+                and not _is_pullback_trading_state(resolved_wave_context)
+            )
         ):
             points.append(_point(
                 'bullish_continuation', 'bullish',

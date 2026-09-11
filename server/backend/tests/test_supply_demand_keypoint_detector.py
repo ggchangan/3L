@@ -94,7 +94,7 @@ def test_uptrend_shrink_pullback_can_be_bullish_continuation():
     assert 'buy_point' not in point
 
 
-def test_down_trading_wave_blocks_bullish_continuation_in_uptrend_context():
+def test_uptrend_pullback_trading_wave_can_be_bullish_continuation():
     rows = []
     close = 100.0
     for i in range(35):
@@ -119,8 +119,37 @@ def test_down_trading_wave_blocks_bullish_continuation_in_uptrend_context():
     )
 
     assert result['wave_context']['trading_state'] == '上涨趋势中的下降波段/回调'
-    assert 'bullish_continuation' not in _types(result)
+    assert _types(result) == ['bullish_continuation']
     assert result['transition_point_tiers']['total'] == len(result['transition_points'])
+
+
+def test_uptrend_dry_volume_pullback_can_be_bullish_continuation():
+    rows = []
+    close = 100.0
+    for i in range(35):
+        close += 1.0
+        rows.append(_row(f'202607{i + 1:02d}', close - 0.5, close + 1, close - 1, close, 100000 + i * 1000))
+    rows.extend([
+        _row('20260810', 135.0, 136.0, 132.0, 133.0, 85000),
+        _row('20260811', 133.0, 134.0, 131.8, 132.6, 45000),
+    ])
+
+    result = detect_supply_demand_keypoints(
+        rows,
+        asset_type='stock',
+        structure='上涨趋势',
+        stage='回调',
+        wave_context={
+            'structure': '上涨趋势',
+            'phase': 'pullback',
+            'trading_wave': {'direction': 'down', 'label': '下降波段'},
+            'trading_state': '上涨趋势中的下降波段/回调',
+        },
+    )
+
+    assert result['current_zone']['type'] == 'trend_pullback'
+    assert result['volume_price_action']['type'] in ('dry_volume', 'shrink_pullback')
+    assert _types(result) == ['bullish_continuation']
 
 
 def test_downtrend_shrink_is_bearish_continuation_not_buy_signal():
