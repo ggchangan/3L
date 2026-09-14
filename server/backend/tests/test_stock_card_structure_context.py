@@ -376,6 +376,7 @@ def test_normalize_final_buy_point_separates_execution_and_diagnostic_fact():
 
     assert _normalize_final_buy_point('sell', '突破买点', '突破买点') == ('', '突破买点')
     assert _normalize_final_buy_point('hold', '', '中继买点') == ('', '中继买点')
+    assert _normalize_final_buy_point('hold', '反转买点', '反转买点') == ('', '反转买点')
     assert _normalize_final_buy_point('buy', '反转买点', '反转买点') == ('反转买点', '反转买点')
 
 
