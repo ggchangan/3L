@@ -108,13 +108,13 @@ def test_buy_signal_review_recomputes_cached_card_and_respects_formal_buy_point(
     assert result == []
 
 
-def test_buy_signal_review_uses_card_execution_signal_not_hardcoded_buy(monkeypatch):
+def test_buy_signal_review_skips_non_formal_buy_even_when_technical_buy_exists(monkeypatch):
     from backend.core.review_analysis import generate_buy_signals_review
     from backend.services import stock_card_service as scs
 
     card = {
         'code': '000001', 'name': '测试股票', 'industry': '银行', 'sector': '银行',
-        'direction': '金融', 'buy_point': '反转买点',
+        'direction': '金融', 'buy_point': '',
         'technical_buy_point': '反转买点', 'date': '20260808',
         'price': 10.0, 'change': 1.0, 'score': 80, 'profit_model1': False,
         'trend_stock': False, 'trading_system': '3l', 'trading_reason': '',
@@ -150,9 +150,7 @@ def test_buy_signal_review_uses_card_execution_signal_not_hardcoded_buy(monkeypa
         mainlines={'lines': [], 'secondary': []},
     )
 
-    assert result[0]['signal'] == 'hold'
-    assert result[0]['execution_signal'] == 'hold'
-    assert result[0]['buy_point'] == '反转买点'
+    assert result == []
 
 
 def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path):

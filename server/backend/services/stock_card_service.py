@@ -545,12 +545,12 @@ def _build_supply_demand_alignment(card):
 
 
 def _normalize_final_buy_point(signal, buy_point, detected_buy_point):
-    """最终执行为 sell 时不能继续暴露正式 buy_point。
+    """最终执行不是 buy 时不能继续暴露正式 buy_point。
 
     `buy_point` 是正式买点字段；`technical_buy_point` 只记录技术事实。
     """
     technical_buy_point = detected_buy_point or buy_point or ''
-    if signal == 'sell':
+    if signal != 'buy':
         return '', technical_buy_point
     return buy_point or '', technical_buy_point
 
@@ -986,7 +986,7 @@ def get_stock_card(code, date_str, market_position='波中',
         buy_point,
         detected_buy_point,
     )
-    if signal == 'sell':
+    if signal != 'buy':
         stop_loss = None
         stop_loss_pct = None
     supply_demand_alignment_precheck = None
