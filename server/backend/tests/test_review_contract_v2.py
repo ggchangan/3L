@@ -67,6 +67,94 @@ def test_buy_signal_review_preserves_authoritative_card_date():
     assert result[0]['supply_demand_alignment']['status'] == 'matched'
 
 
+def test_buy_signal_review_recomputes_cached_card_and_respects_formal_buy_point(monkeypatch):
+    from backend.core.review_analysis import generate_buy_signals_review
+    from backend.services import stock_card_service as scs
+
+    stale_card = {
+        'code': '000001', 'name': '测试股票', 'industry': '银行', 'sector': '银行',
+        'direction': '金融', 'buy_point': '反转买点',
+        'technical_buy_point': '反转买点', 'date': '20260808',
+        'price': 10.0, 'change': 1.0, 'score': 80, 'profit_model1': False,
+        'trend_stock': False, 'trading_system': '3l', 'stop_loss': 9.2,
+        'stop_loss_pct': 8.0, 'structure': '区间震荡', 'stage': '区间底部',
+        'signal': 'buy', 'technical_signal': 'buy', 'ema': '多头',
+        'vol_analysis': '量能正常',
+        'supply_demand_alignment': {'status': 'missing_event', 'is_trade_decision': False},
+    }
+    fresh_card = {
+        **stale_card,
+        'buy_point': '',
+        'technical_buy_point': '反转买点',
+        'signal': 'hold',
+        'stop_loss': None,
+        'stop_loss_pct': None,
+        'supply_demand_alignment': {'status': 'not_applicable', 'is_trade_decision': False},
+    }
+    monkeypatch.setattr(scs, 'get_stock_card', lambda **kwargs: fresh_card)
+    rows = [
+        {'date': f'202608{idx + 1:02d}', 'open': 10, 'high': 11, 'low': 9, 'close': 10, 'volume': 100}
+        for idx in range(30)
+    ]
+
+    result = generate_buy_signals_review(
+        [stale_card],
+        stocks={'银行': {'000001': rows}},
+        stock_cache={},
+        date_str='2026-08-11',
+        mainlines={'lines': [], 'secondary': []},
+    )
+
+    assert result == []
+
+
+def test_buy_signal_review_uses_card_execution_signal_not_hardcoded_buy(monkeypatch):
+    from backend.core.review_analysis import generate_buy_signals_review
+    from backend.services import stock_card_service as scs
+
+    card = {
+        'code': '000001', 'name': '测试股票', 'industry': '银行', 'sector': '银行',
+        'direction': '金融', 'buy_point': '反转买点',
+        'technical_buy_point': '反转买点', 'date': '20260808',
+        'price': 10.0, 'change': 1.0, 'score': 80, 'profit_model1': False,
+        'trend_stock': False, 'trading_system': '3l', 'trading_reason': '',
+        'trend_buy_type': '', 'trend_bias': '', 'mainline_level': '',
+        'matched_mainline_direction': '', 'stop_loss': 9.2,
+        'stop_loss_pct': 8.0, 'decision': {'action': '持有'},
+        'structure': '区间震荡', 'stage': '区间底部',
+        'signal': 'hold', 'technical_signal': 'buy', 'ema': '多头',
+        'vol_analysis': '量能正常', 'flags': '', 'triggered_signals': [],
+        'fusion_type': '', 'fusion_reason': '', 'wave_position': '',
+        'technical_confidence': 80, 'technical_reason': '技术事实',
+        'structure_context': None, 'structure_context_status': '',
+        'major_decline_risk': {}, 'structure_wave_position': {},
+        'legacy_structure': {},
+        'supply_demand_event_context': {},
+        'supply_demand_events': [],
+        'supply_demand_event_counts': {},
+        'supply_demand_alignment': {'status': 'matched', 'is_trade_decision': False},
+        'action_type': '持有', 'action_signal': '等确认',
+        'action_priority': '中', 'action_reason': '等待确认',
+    }
+    monkeypatch.setattr(scs, 'get_stock_card', lambda **kwargs: card)
+    rows = [
+        {'date': f'202608{idx + 1:02d}', 'open': 10, 'high': 11, 'low': 9, 'close': 10, 'volume': 100}
+        for idx in range(30)
+    ]
+
+    result = generate_buy_signals_review(
+        [card],
+        stocks={'银行': {'000001': rows}},
+        stock_cache={},
+        date_str='2026-08-11',
+        mainlines={'lines': [], 'secondary': []},
+    )
+
+    assert result[0]['signal'] == 'hold'
+    assert result[0]['execution_signal'] == 'hold'
+    assert result[0]['buy_point'] == '反转买点'
+
+
 def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path):
     monkeypatch.setattr('backend.services.direction_service.get_active', lambda: ['金融'])
     card = {

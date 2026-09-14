@@ -354,20 +354,15 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
         # 方向优先从 watchlist 取（用户手动设定），回退到空让卡片自己算
         direction = direction_map.get(code, '')
 
-        # 扫描已产出完整卡片数据 → 直接格式化（无重复调 get_stock_card）
-        if s.get('stop_loss') is not None or s.get('structure'):
-            card_data = dict(s)
-            if direction:
-                card_data['direction'] = direction
-            card = card_data
-        else:
-            # 补充扫描（盈利模式1/趋势股）没有完整卡片数据，调一次
-            kls_for_card = None
-            for sec, ss in stocks.items():
-                if code in ss:
-                    kls_for_card = ss[code]
-                    break
+        # 复盘缓存里可能已有完整旧卡片，但买点/供需门禁会持续演进；
+        # 只要有 K 线，就重新走 get_stock_card，以当前权威规则为准。
+        kls_for_card = None
+        for sec, ss in stocks.items():
+            if code in ss:
+                kls_for_card = ss[code]
+                break
 
+        if kls_for_card is not None:
             try:
                 card = get_stock_card(
                     code=code,
@@ -380,12 +375,21 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             except Exception:
                 log.warning('个股卡片生成失败（趋势候选）: %s', code)
                 card = None
+        elif s.get('stop_loss') is not None or s.get('structure'):
+            card_data = dict(s)
+            if direction:
+                card_data['direction'] = direction
+            card = card_data
+        else:
+            card = None
 
         if not card:
             continue
 
         # 信号只看最新K线 — 用 get_stock_card 确认
         if card.get("technical_signal", card.get("signal")) != "buy":
+            continue
+        if card.get("buy_point") in ("", None):
             continue
 
         result.append({
@@ -413,7 +417,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
             "decision": card.get('decision', {}),
             "structure": card['structure'],
             "stage": card['stage'],
-            "signal": "buy",
+            "signal": card.get('signal', 'hold'),
             "execution_signal": card.get('execution_signal', card.get('signal', 'hold')),
             "technical_signal": card.get('technical_signal', card.get('signal', 'buy')),
             "technical_confidence": card.get('technical_confidence', card.get('score', 0)),
