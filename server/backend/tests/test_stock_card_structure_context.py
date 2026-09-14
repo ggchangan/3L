@@ -368,6 +368,7 @@ def test_final_sell_signal_clears_formal_buy_point_but_keeps_technical_fact(monk
     assert 'buy_point' not in card['decision']
     assert card['stop_loss'] is None
     assert card['stop_loss_pct'] is None
+    assert card['supply_demand_alignment']['status'] == 'not_applicable'
 
 
 def test_normalize_final_buy_point_separates_execution_and_diagnostic_fact():
