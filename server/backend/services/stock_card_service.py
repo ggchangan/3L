@@ -485,18 +485,19 @@ def _build_supply_demand_alignment(card):
     """诊断买点信号是否有对应的结构化供需事件支撑。
 
     返回结果只用于解释/回归，不改变 `signal`、`buy_point` 或 `decision`。
+    正式卡片只校验正式 buy_point；technical_buy_point 只保留技术事实，
+    不能让最终卖出/观察卡片重新显示为“买点缺少供需事件”。
     """
     buy_point = card.get('buy_point') or ''
-    technical_buy = card.get('technical_signal') == 'buy'
-    if not buy_point and not technical_buy:
+    if not buy_point:
         return {
             'status': 'not_applicable',
             'is_trade_decision': False,
-            'reason': '当前没有买点或看多技术信号，无需供需事件校验',
+            'reason': '当前没有正式买点，无需供需事件校验',
         }
 
     expected = _expected_supply_demand_event_subtypes(
-        buy_point or card.get('technical_reason', ''),
+        buy_point,
         card.get('triggered_signals') or [],
     )
     events = card.get('supply_demand_events') or []
