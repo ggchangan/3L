@@ -120,6 +120,8 @@ def test_uptrend_pullback_trading_wave_can_be_bullish_continuation():
 
     assert result['wave_context']['trading_state'] == '上涨趋势中的下降波段/回调'
     assert _types(result) == ['bullish_continuation']
+    assert result['transition_points'][0]['tier'] in ('core', 'watch')
+    assert '上涨趋势回调中的中继候选' in result['transition_points'][0]['priority_reasons']
     assert result['transition_point_tiers']['total'] == len(result['transition_points'])
 
 
@@ -150,6 +152,7 @@ def test_uptrend_dry_volume_pullback_can_be_bullish_continuation():
     assert result['current_zone']['type'] == 'trend_pullback'
     assert result['volume_price_action']['type'] in ('dry_volume', 'shrink_pullback')
     assert _types(result) == ['bullish_continuation']
+    assert result['transition_points'][0]['tier'] in ('core', 'watch')
 
 
 def test_downtrend_shrink_is_bearish_continuation_not_buy_signal():
