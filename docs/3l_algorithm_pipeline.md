@@ -155,10 +155,25 @@ flowchart TD
 
 - `backend.core.pure_keypoint_detector.detect_pure_keypoints`
 - 验证脚本：`server/scripts/render_pure_keypoint_validation.py`
+- 基准摘要脚本：`server/scripts/summarize_pure_keypoint_benchmark.py`
+- 人工确认基准：
+  - `server/backend/tests/fixtures/pure_keypoint_benchmark_v1.json`
+  - `server/backend/tests/fixtures/pure_keypoint_benchmark_v2.json`
+
+当前基准覆盖：
+
+| 版本 | 样本 | 点位 | 资产类型 | 说明 |
+| --- | ---: | ---: | --- | --- |
+| v1 | 8 | 133 | market=2 / sector=3 / stock=3 | 科创50、中证全指、CPO、元件、存储、中国巨石、太辰光、普冉股份 |
+| v2 | 25 | 435 | market=2 / sector=14 / stock=9 | 扩展指数、板块/概念和 qfq 个股样本；排除工业富联、新易盛、寒武纪三个异常复权断层样本 |
+
+合计已锁定 33 个样本、568 个纯关键点，其中 confirmed=493、
+candidate=75。当前 fixture 只锁定客观事实点：`price_high`、
+`price_low`、`volume_peak`、`volume_trough`，不表达买卖含义。
 
 需要继续改进：
 
-- 固化人工验证基准集；
+- 继续扩大人工验证基准集；
 - 明确天量/地量的窗口参数；
 - 对最新一天候选点增加“可能延续”的状态说明。
 
@@ -341,11 +356,12 @@ flowchart TD
 
 - `backend.services.stock_card_service.build_trade_decision`
 - `backend.core.review_analysis.generate_buy_signals_review`
+- `backend.core.review_analysis.generate_technical_candidates_review`
 - `backend.services.review_compute_service.apply_trading_plan_actions`
+- 复盘页“技术候选/观察信号”区域：PR #224 已上线。
 
 需要继续改进：
 
-- 新增复盘页“技术候选/观察信号”列表；
 - 工作台计划只消费正式 buy/sell，不消费 technical-only；
 - 每条计划要变成条件计划，而不是名词结论。
 
@@ -353,12 +369,12 @@ flowchart TD
 
 | 3L 层级 | 当前核心实现 | 当前状态 |
 | --- | --- | --- |
-| L1 纯关键点 | `pure_keypoint_detector.py` | 已有实现，需扩大样本基准 |
+| L1 纯关键点 | `pure_keypoint_detector.py` | 已有实现；v1/v2 人工确认基准已固化，需继续扩大样本 |
 | L2 波段 | `wave_structure_detector.py` | 已有实现，需区分回调/反转更稳定 |
 | L3 结构 | `structure_context_detector.py` | 已接入卡片，需继续回归 |
 | L4 供需事件 | `supply_demand_keypoint_detector.py` / `supply_demand_event_detector.py` | 已接入卡片，近期已修中继 |
 | L5 买卖点 | `buy_point_detection.py` / `fusion.py` / `stock_card_service.py` | 门禁已初步收口，旧逻辑仍需改造 |
-| L6 执行 | `build_trade_decision` / review services | 正式买点列表已收口，候选列表待做 |
+| L6 执行 | `build_trade_decision` / review services | 正式买点列表与技术候选列表已分离；计划层条件化待做 |
 
 ## 5. 数据契约
 
@@ -458,6 +474,8 @@ flowchart TD
 
 ### PR-B：新增技术候选/观察信号列表
 
+状态：已完成并上线（PR #224）。
+
 目标：解决 #222 后正式买点列表可能为空，但技术候选被完全过滤的问题。
 
 内容：
@@ -468,6 +486,8 @@ flowchart TD
 
 ### PR-C：L1 关键点 fixture 基准
 
+状态：核心基准已完成；本阶段继续补充摘要和维护契约。
+
 目标：固化人工已确认样本。
 
 样本：
@@ -475,7 +495,12 @@ flowchart TD
 - 科创50；
 - 中证全指；
 - CPO、元件、存储；
-- 中国巨石、太辰光、普冉股份、工业富联、新易盛、寒武纪。
+- 中国巨石、太辰光、普冉股份；
+- v2 扩展至创业板指、上证指数、机器人、人形机器人、半导体、汽车零部件、创新药、医疗服务、通信设备、消费电子、算力租赁、人工智能、贵金属、煤炭开采加工、证券、房地产、拓普集团、圣邦股份、美年健康、永鼎股份、绿的谐波、长川科技、中际旭创、北方华创、胜宏科技。
+
+排除：
+
+- 工业富联、新易盛、寒武纪因前复权后仍有异常价格断层，不进入 benchmark。
 
 ### PR-D：L2/L3 波段结构 fixture 基准
 
@@ -530,4 +555,3 @@ flowchart TD
 5. 每一层输出都包含 `is_trade_decision`，事实层和供需层必须为 false；
 6. 最新一天所有未确认关键点/波段必须标记 candidate；
 7. 每次算法变更必须有样本回归图或 fixture 测试。
-

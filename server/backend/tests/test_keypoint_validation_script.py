@@ -101,3 +101,42 @@ def test_structure_validation_fixture_builds_summary():
     assert summary[0]['states']
     assert {'date', 'structure', 'stage', 'metrics', 'reason'} <= set(summary[0]['states'][-1])
     assert any(state['structure'] in ('上涨趋势', '区间震荡', '下降趋势') for state in summary[0]['states'])
+
+
+def _load_pure_benchmark_summary_script():
+    script = Path(__file__).resolve().parents[2] / 'scripts' / 'summarize_pure_keypoint_benchmark.py'
+    spec = importlib.util.spec_from_file_location('summarize_pure_keypoint_benchmark', script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_pure_keypoint_benchmark_summary_tracks_confirmed_baseline():
+    module = _load_pure_benchmark_summary_script()
+
+    summary = module.summarize_all()
+
+    assert summary['fixture_count'] == 2
+    assert summary['sample_count'] == 33
+    assert summary['point_count'] == 568
+    assert summary['asset_types'] == {'market': 4, 'sector': 17, 'stock': 12}
+    assert summary['statuses'] == {'candidate': 75, 'confirmed': 493}
+    assert summary['point_types'] == {
+        'price_high': 141,
+        'price_low': 168,
+        'volume_peak': 99,
+        'volume_trough': 160,
+    }
+    v2 = next(item for item in summary['fixtures'] if item['version'] == 'pure-keypoint-benchmark-v2')
+    assert [item['name'] for item in v2['excluded_samples']] == ['工业富联', '新易盛', '寒武纪']
+
+
+def test_pure_keypoint_benchmark_summary_renders_markdown():
+    module = _load_pure_benchmark_summary_script()
+
+    markdown = module.render_markdown(module.summarize_all())
+
+    assert '# 3L 纯关键点基准摘要' in markdown
+    assert 'pure-keypoint-benchmark-v1' in markdown
+    assert 'pure-keypoint-benchmark-v2' in markdown
+    assert '工业富联、新易盛、寒武纪' in markdown
