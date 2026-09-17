@@ -161,8 +161,6 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
 
         if card.get('technical_signal', card.get('signal')) != 'buy':
             continue
-        if card.get('buy_point') in ('', None):
-            continue
         if code in seen:
             continue
 
@@ -219,7 +217,7 @@ def scan_buy_signals_if_needed(buy_signals, all_stocks_60d, date_str,
             'ema': card.get('ema', ''),
         })
 
-    print(f"[3L复盘] StockCard扫描: {len(buy_signals)} 个买点信号")
+    print(f"[3L复盘] StockCard扫描: {len(buy_signals)} 个技术信号")
 
     # ── 盈利模式1 + 趋势股补充扫描 ──
     try:
@@ -257,7 +255,8 @@ def generate_daily_review(date_str=None):
         generate_trading_plan, apply_trading_plan_actions, get_buy_sell_signals, load_market_data_for_profit_check,
     )
     from backend.core.review_analysis import (
-        build_holdings_risk_exposure, generate_buy_signals_review, generate_holdings_review,
+        build_holdings_risk_exposure, generate_buy_signals_review,
+        generate_technical_candidates_review, generate_holdings_review,
     )
     from backend.core.scan_buy_signals import get_main_lines
     from backend.data_access.data_layer import get_watchlist
@@ -371,6 +370,13 @@ def generate_daily_review(date_str=None):
         trend_mainlines=_trend_mainlines,
         direction_map=_dir_map,
     )
+    technical_candidates_review = generate_technical_candidates_review(
+        buy_signals=buy_signals, stocks=all_stocks_60d,
+        stock_cache=stock_cache,
+        date_str=date_str, mainlines=mainline_data,
+        trend_mainlines=_trend_mainlines,
+        direction_map=_dir_map,
+    )
 
     # 构建行业/概念 → 机会类型映射。机会类型用于排序；未覆盖行业才触发待确认。
     opp_map = {}
@@ -431,6 +437,7 @@ def generate_daily_review(date_str=None):
         'holdings_review': holdings_review,
         'holdings_risk_exposure': holdings_risk_exposure,
         'buy_signals_review': buy_signals_review,
+        'technical_candidates_review': technical_candidates_review,
     }
 
     # 保存动量数据
@@ -563,7 +570,8 @@ def compute_review_real_time(date_str=None):
         generate_trading_plan, apply_trading_plan_actions, get_buy_sell_signals, load_market_data_for_profit_check,
     )
     from backend.core.review_analysis import (
-        build_holdings_risk_exposure, generate_buy_signals_review, generate_holdings_review,
+        build_holdings_risk_exposure, generate_buy_signals_review,
+        generate_technical_candidates_review, generate_holdings_review,
     )
     from backend.core.scan_buy_signals import get_main_lines
     from backend.data_access.data_layer import get_watchlist, get_all_stocks, get_index_klines
@@ -654,6 +662,13 @@ def compute_review_real_time(date_str=None):
     _dir_map = {s['code']: s.get('direction', '') for s in _wl_stocks if isinstance(s, dict) and s.get('code')}
 
     buy_signals_review = generate_buy_signals_review(
+        buy_signals=buy_signals, stocks=all_stocks_60d,
+        stock_cache=stock_cache,
+        date_str=date_str, mainlines=mainline_data,
+        trend_mainlines=_trend_mainlines,
+        direction_map=_dir_map,
+    )
+    technical_candidates_review = generate_technical_candidates_review(
         buy_signals=buy_signals, stocks=all_stocks_60d,
         stock_cache=stock_cache,
         date_str=date_str, mainlines=mainline_data,
@@ -841,6 +856,7 @@ def compute_review_real_time(date_str=None):
         'holdings_review': holdings_review,
         'holdings_risk_exposure': holdings_risk_exposure,
         'buy_signals_review': buy_signals_review,
+        'technical_candidates_review': technical_candidates_review,
         'direction_order': get_all_ordered(),
         'opportunity_map': opp_map,
     }

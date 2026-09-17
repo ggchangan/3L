@@ -153,6 +153,98 @@ def test_buy_signal_review_skips_non_formal_buy_even_when_technical_buy_exists(m
     assert result == []
 
 
+def test_technical_candidates_review_keeps_non_formal_technical_buy(monkeypatch):
+    from backend.core.review_analysis import generate_technical_candidates_review
+    from backend.services import stock_card_service as scs
+
+    card = {
+        'code': '000001', 'name': '测试股票', 'industry': '银行', 'sector': '银行',
+        'direction': '金融', 'buy_point': '',
+        'technical_buy_point': '中继买点', 'date': '20260808',
+        'price': 10.0, 'change': 1.0, 'score': 66, 'profit_model1': False,
+        'trend_stock': False, 'trading_system': '3l', 'trading_reason': '',
+        'trend_buy_type': '', 'trend_bias': '', 'mainline_level': '',
+        'matched_mainline_direction': '', 'stop_loss': None,
+        'stop_loss_pct': None, 'decision': {'action': '持有'},
+        'structure': '上涨趋势', 'stage': '缩量整理',
+        'signal': 'hold', 'execution_signal': 'hold', 'technical_signal': 'buy',
+        'ema': '多头', 'vol_analysis': '缩量',
+        'flags': '', 'triggered_signals': [], 'fusion_type': '',
+        'fusion_reason': '', 'wave_position': '',
+        'technical_confidence': 72, 'technical_reason': '回踩缩量但供需未确认',
+        'structure_context': None, 'structure_context_status': '',
+        'major_decline_risk': {}, 'structure_wave_position': {},
+        'legacy_structure': {},
+        'supply_demand_event_context': {},
+        'supply_demand_events': [],
+        'supply_demand_event_counts': {},
+        'supply_demand_alignment': {'status': 'not_applicable', 'is_trade_decision': False},
+        'decision_status': 'signal_only',
+        'action_type': '技术信号', 'action_signal': '等确认',
+        'action_priority': '中', 'action_reason': '等待供需确认',
+    }
+    monkeypatch.setattr(scs, 'get_stock_card', lambda **kwargs: card)
+    rows = [
+        {'date': f'202608{idx + 1:02d}', 'open': 10, 'high': 11, 'low': 9, 'close': 10, 'volume': 100}
+        for idx in range(30)
+    ]
+
+    result = generate_technical_candidates_review(
+        [card],
+        stocks={'银行': {'000001': rows}},
+        stock_cache={},
+        date_str='2026-08-11',
+        mainlines={'lines': [], 'secondary': []},
+        direction_map={'000001': '金融'},
+    )
+
+    assert len(result) == 1
+    assert result[0]['code'] == '000001'
+    assert result[0]['direction'] == '金融'
+    assert result[0]['buy_point'] == ''
+    assert result[0]['technical_buy_point'] == '中继买点'
+    assert result[0]['technical_signal'] == 'buy'
+    assert result[0]['decision_status'] == 'signal_only'
+    assert result[0]['action_type'] == '技术信号'
+    assert result[0]['execution_signal'] == 'hold'
+    assert result[0]['candidate_reason'] == '回踩缩量但供需未确认'
+
+
+def test_technical_candidates_review_forces_non_executable_semantics(monkeypatch):
+    from backend.core.review_analysis import generate_technical_candidates_review
+    from backend.services import stock_card_service as scs
+
+    card = {
+        'code': '000001', 'name': '测试股票', 'industry': '银行', 'sector': '银行',
+        'direction': '金融', 'buy_point': '',
+        'technical_buy_point': '中继买点', 'date': '20260808',
+        'price': 10.0, 'change': 1.0, 'score': 66, 'profit_model1': False,
+        'trend_stock': False, 'trading_system': '3l',
+        'stop_loss': None, 'stop_loss_pct': None,
+        'structure': '上涨趋势', 'stage': '缩量整理',
+        'signal': 'hold', 'execution_signal': 'buy', 'technical_signal': 'buy',
+        'ema': '多头', 'vol_analysis': '缩量',
+        'technical_confidence': 72, 'technical_reason': '技术事实',
+        'decision_status': 'executable',
+        'action_type': '买入',
+    }
+    monkeypatch.setattr(scs, 'get_stock_card', lambda **kwargs: card)
+    rows = [
+        {'date': f'202608{idx + 1:02d}', 'open': 10, 'high': 11, 'low': 9, 'close': 10, 'volume': 100}
+        for idx in range(30)
+    ]
+
+    result = generate_technical_candidates_review(
+        [card], {'银行': {'000001': rows}}, {}, '2026-08-11',
+        {'lines': [], 'secondary': []},
+    )
+
+    assert result[0]['decision_status'] == 'signal_only'
+    assert result[0]['action_type'] == '技术信号'
+    assert result[0]['execution_signal'] == 'hold'
+    assert '不进入当前交易计划' in result[0]['action_reason']
+
+
 def test_watchlist_scan_preserves_authoritative_card_date(monkeypatch, tmp_path):
     monkeypatch.setattr('backend.services.direction_service.get_active', lambda: ['金融'])
     card = {
@@ -215,6 +307,19 @@ def test_cached_review_contract_is_completed_without_losing_legacy_sector():
     }
 
 
+def test_legacy_buy_signals_backfill_only_uses_formal_buy_points():
+    review = normalize_review_response({
+        'date': '2026-07-15',
+        'buy_signals': [
+            {'code': '000001', 'sector': '银行', 'technical_signal': 'buy', 'buy_point': ''},
+            {'code': '000002', 'sector': '银行', 'technical_signal': 'buy', 'buy_point': '反转买点'},
+            {'code': '000003', 'sector': '银行', 'technical_signal': 'hold', 'buy_point': '反转买点'},
+        ],
+    })
+
+    assert [item['code'] for item in review['buy_signals_review']] == ['000002']
+
+
 def test_live_review_contract_marks_computation_source():
     review = normalize_review_response({}, source='live')
 
@@ -222,6 +327,7 @@ def test_live_review_contract_marks_computation_source():
     assert review['response_meta']['computed_live'] is True
     assert review['holdings_review'] == []
     assert review['buy_signals_review'] == []
+    assert review['technical_candidates_review'] == []
 
 
 def test_estimated_sector_status_is_ready_without_pretending_to_be_confirmed():

@@ -75,6 +75,19 @@ def _legacy_freshness(status):
     return 'unknown'
 
 
+def _legacy_formal_buy_signals(data):
+    """旧缓存 raw buy_signals 只能回填正式买点，不能把技术候选伪装为正式买点。"""
+    items = data.get('buy_signals') if isinstance(data, dict) else []
+    if not isinstance(items, list):
+        return []
+    return [
+        item for item in items
+        if isinstance(item, dict)
+        and item.get('buy_point') not in ('', None)
+        and item.get('technical_signal', item.get('signal')) == 'buy'
+    ]
+
+
 def normalize_review_response(data, source='cache'):
     """补齐 v3 复盘契约，并为历史缓存提供无损兼容。"""
     result = dict(data) if isinstance(data, dict) else {}
@@ -86,9 +99,10 @@ def normalize_review_response(data, source='cache'):
 
     # review 后缀字段是 v3 唯一页面契约；旧字段仅作为历史缓存输入。
     result.setdefault('holdings_review', result.get('holdings') or [])
-    result.setdefault('buy_signals_review', result.get('buy_signals') or [])
+    result.setdefault('buy_signals_review', _legacy_formal_buy_signals(result))
+    result.setdefault('technical_candidates_review', [])
 
-    for key in ('holdings_review', 'buy_signals_review'):
+    for key in ('holdings_review', 'buy_signals_review', 'technical_candidates_review'):
         items = result.get(key)
         if not isinstance(items, list):
             result[key] = []

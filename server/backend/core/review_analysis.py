@@ -193,6 +193,95 @@ def _get_actual_date(code, stocks, date_str):
     return actual
 
 
+def _get_card_for_review_signal(signal, stocks, date_str, mainlines, direction):
+    """用当前 StockCard 规则重算复盘信号；没有 K 线时回退传入缓存。"""
+    from backend.services.stock_card_service import get_stock_card
+
+    code = signal.get("code", "")
+    actual_date = _get_actual_date(code, stocks, date_str)
+    kls_for_card = None
+    for sec, ss in stocks.items():
+        if code in ss:
+            kls_for_card = ss[code]
+            break
+
+    if kls_for_card is not None:
+        try:
+            return get_stock_card(
+                code=code,
+                date_str=actual_date,
+                market_position="波中",
+                main_lines=mainlines,
+                direction=direction,
+                klines=kls_for_card,
+            ), actual_date
+        except Exception:
+            log.warning('个股卡片生成失败（复盘信号）: %s', code)
+            return None, actual_date
+
+    if signal.get('stop_loss') is not None or signal.get('structure'):
+        card_data = dict(signal)
+        if direction:
+            card_data['direction'] = direction
+        return card_data, actual_date
+    return None, actual_date
+
+
+def _review_signal_item(card, actual_date, direction):
+    return {
+        "code": card['code'],
+        "name": card['name'],
+        "industry": card.get('industry', card['sector']),
+        "sector": card['sector'],
+        "direction": direction or card.get('direction', ''),
+        "buy_point": card.get('buy_point', ''),
+        "technical_buy_point": card.get('technical_buy_point', card.get('buy_point', '')),
+        "date": card.get('date', actual_date),
+        "price": card['price'],
+        "change": card['change'],
+        "score": card.get('score', 0),
+        "profit_model1": card['profit_model1'],
+        "trend_stock": card['trend_stock'],
+        "trading_system": card['trading_system'],
+        "trading_reason": card.get('trading_reason', ''),
+        "trend_buy_type": card.get('trend_buy_type', ''),
+        "trend_bias": card.get('trend_bias', ''),
+        "mainline_level": card.get('mainline_level', ''),
+        "matched_mainline_direction": card.get('matched_mainline_direction', ''),
+        "stop_loss": card.get('stop_loss'),
+        "stop_loss_pct": card.get('stop_loss_pct'),
+        "decision": card.get('decision', {}),
+        "structure": card['structure'],
+        "stage": card['stage'],
+        "signal": card.get('signal', 'hold'),
+        "execution_signal": card.get('execution_signal', card.get('signal', 'hold')),
+        "technical_signal": card.get('technical_signal', card.get('signal', 'buy')),
+        "technical_confidence": card.get('technical_confidence', card.get('score', 0)),
+        "technical_reason": card.get('technical_reason', ''),
+        "ema": card['ema'],
+        "vol_analysis": card['vol_analysis'],
+        "flags": card.get('flags', ''),
+        "triggered_signals": card.get('triggered_signals', []),
+        "fusion_type": card.get('fusion_type', ''),
+        "fusion_reason": card.get('fusion_reason', ''),
+        "wave_position": card.get('wave_position', ''),
+        "structure_context": card.get('structure_context'),
+        "structure_context_status": card.get('structure_context_status', ''),
+        "major_decline_risk": card.get('major_decline_risk', {}),
+        "structure_wave_position": card.get('structure_wave_position', {}),
+        "legacy_structure": card.get('legacy_structure', {}),
+        "supply_demand_event_context": card.get('supply_demand_event_context', {}),
+        "supply_demand_events": card.get('supply_demand_events', []),
+        "supply_demand_event_counts": card.get('supply_demand_event_counts', {}),
+        "supply_demand_alignment": card.get('supply_demand_alignment', {}),
+        "decision_status": card.get('decision_status', ''),
+        "action_type": card.get('action_type', '持有'),
+        "action_signal": card.get('action_signal', ''),
+        "action_priority": card.get('action_priority', '中'),
+        "action_reason": card.get('action_reason', ''),
+    }
+
+
 def generate_holdings_review(holdings, stocks, buy_signals,
                               timing_signals_holdings, bs_by_code,
                               date_str, mainlines, trend_mainlines=None):
@@ -336,8 +425,6 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
     Returns:
         [{'code', 'name', 'buy_point', 'score', ...}]
     """
-    from backend.services.stock_card_service import get_stock_card
-
     if direction_map is None:
         direction_map = {}
 
@@ -353,35 +440,7 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
 
         # 方向优先从 watchlist 取（用户手动设定），回退到空让卡片自己算
         direction = direction_map.get(code, '')
-
-        # 复盘缓存里可能已有完整旧卡片，但买点/供需门禁会持续演进；
-        # 只要有 K 线，就重新走 get_stock_card，以当前权威规则为准。
-        kls_for_card = None
-        for sec, ss in stocks.items():
-            if code in ss:
-                kls_for_card = ss[code]
-                break
-
-        if kls_for_card is not None:
-            try:
-                card = get_stock_card(
-                    code=code,
-                    date_str=actual_date,
-                    market_position="波中",
-                    main_lines=mainlines,
-                    direction=direction,
-                    klines=kls_for_card,
-                )
-            except Exception:
-                log.warning('个股卡片生成失败（趋势候选）: %s', code)
-                card = None
-        elif s.get('stop_loss') is not None or s.get('structure'):
-            card_data = dict(s)
-            if direction:
-                card_data['direction'] = direction
-            card = card_data
-        else:
-            card = None
+        card, actual_date = _get_card_for_review_signal(s, stocks, date_str, mainlines, direction)
 
         if not card:
             continue
@@ -392,59 +451,53 @@ def generate_buy_signals_review(buy_signals, stocks, stock_cache,
         if card.get("buy_point") in ("", None):
             continue
 
-        result.append({
-            "code": card['code'],
-            "name": card['name'],
-            "industry": card.get('industry', card['sector']),
-            "sector": card['sector'],
-            "direction": direction or card.get('direction', ''),
-            "buy_point": card['buy_point'],
-            "technical_buy_point": card.get('technical_buy_point', card.get('buy_point', '')),
-            "date": card.get('date', actual_date),
-            "price": card['price'],
-            "change": card['change'],
-            "score": card.get('score', 0),
-            "profit_model1": card['profit_model1'],
-            "trend_stock": card['trend_stock'],
-            "trading_system": card['trading_system'],
-            "trading_reason": card.get('trading_reason', ''),
-            "trend_buy_type": card.get('trend_buy_type', ''),
-            "trend_bias": card.get('trend_bias', ''),
-            "mainline_level": card.get('mainline_level', ''),
-            "matched_mainline_direction": card.get('matched_mainline_direction', ''),
-            "stop_loss": card['stop_loss'],
-            "stop_loss_pct": card['stop_loss_pct'],
-            "decision": card.get('decision', {}),
-            "structure": card['structure'],
-            "stage": card['stage'],
-            "signal": card.get('signal', 'hold'),
-            "execution_signal": card.get('execution_signal', card.get('signal', 'hold')),
-            "technical_signal": card.get('technical_signal', card.get('signal', 'buy')),
-            "technical_confidence": card.get('technical_confidence', card.get('score', 0)),
-            "technical_reason": card.get('technical_reason', ''),
-            "ema": card['ema'],
-            "vol_analysis": card['vol_analysis'],
-            "flags": card.get('flags', ''),
-            "triggered_signals": card.get('triggered_signals', []),
-            "fusion_type": card.get('fusion_type', ''),
-            "fusion_reason": card.get('fusion_reason', ''),
-            "wave_position": card.get('wave_position', ''),
-            "structure_context": card.get('structure_context'),
-            "structure_context_status": card.get('structure_context_status', ''),
-            "major_decline_risk": card.get('major_decline_risk', {}),
-            "structure_wave_position": card.get('structure_wave_position', {}),
-            "legacy_structure": card.get('legacy_structure', {}),
-            "supply_demand_event_context": card.get('supply_demand_event_context', {}),
-            "supply_demand_events": card.get('supply_demand_events', []),
-            "supply_demand_event_counts": card.get('supply_demand_event_counts', {}),
-            "supply_demand_alignment": card.get('supply_demand_alignment', {}),
-            # 操作建议（由卡片统一推导，外部不重复计算）
-            "action_type": card.get('action_type', '持有'),
-            "action_signal": card.get('action_signal', ''),
-            "action_priority": card.get('action_priority', '中'),
-            "action_reason": card.get('action_reason', ''),
-        })
+        result.append(_review_signal_item(card, actual_date, direction))
 
     # 按分数降序
     result.sort(key=lambda x: x.get('score', 0), reverse=True)
+    return result
+
+
+def generate_technical_candidates_review(buy_signals, stocks, stock_cache,
+                                         date_str, mainlines, trend_mainlines=None,
+                                         direction_map=None):
+    """生成技术候选/观察信号列表。
+
+    technical candidates 只说明技术事实已经出现，但尚未通过正式买点门禁。
+    它们不进入正式交易计划。
+    """
+    if direction_map is None:
+        direction_map = {}
+
+    result = []
+    seen = set()
+    for s in buy_signals:
+        code = s.get("code", "")
+        if not code or code in seen:
+            continue
+        direction = direction_map.get(code, '')
+        card, actual_date = _get_card_for_review_signal(s, stocks, date_str, mainlines, direction)
+        if not card:
+            continue
+        if card.get("technical_signal", card.get("signal")) != "buy":
+            continue
+        if card.get("buy_point") not in ("", None):
+            continue
+        if not card.get("technical_buy_point"):
+            continue
+        item = _review_signal_item(card, actual_date, direction)
+        item['candidate_reason'] = (
+            card.get('signal_text')
+            or card.get('technical_reason')
+            or card.get('action_reason')
+            or '技术买点尚未转为正式买点'
+        )
+        item['decision_status'] = 'signal_only'
+        item['action_type'] = '技术信号'
+        item['execution_signal'] = 'hold'
+        item['action_reason'] = f"{item['candidate_reason']}；仅作为技术事实，不进入当前交易计划"
+        result.append(item)
+        seen.add(code)
+
+    result.sort(key=lambda x: x.get('technical_confidence', x.get('score', 0)), reverse=True)
     return result
