@@ -10,13 +10,18 @@ const DIR_COLORS: Record<string, string> = {
 }
 const PER_PAGE = 10
 
-export default function BuySignalsReview({ signals, directionOrder: dirOrder, opportunityMap }: {
-  signals: BuySignalItem[]; directionOrder?: string[]; opportunityMap?: Record<string, string>
+export default function BuySignalsReview({ signals, directionOrder: dirOrder, opportunityMap, emptyText = '暂无买点信号', summaryText, decisionContext = 'buy-signal' }: {
+  signals: BuySignalItem[]
+  directionOrder?: string[]
+  opportunityMap?: Record<string, string>
+  emptyText?: string
+  summaryText?: string
+  decisionContext?: 'buy-signal' | 'technical-candidate'
 }) {
   const [activeDir, setActiveDir] = useState('')
   const [page, setPage] = useState(1)
 
-  if (!signals.length) return <div className="empty">暂无买点信号</div>
+  if (!signals.length) return <div className="empty">{emptyText}</div>
 
   const groups: Record<string, BuySignalItem[]> = {}
   signals.forEach(s => {
@@ -40,7 +45,7 @@ export default function BuySignalsReview({ signals, directionOrder: dirOrder, op
   return (
     <>
       <div style={{ color: '#777', fontSize: 11, marginBottom: 8 }}>
-        共 {signals.length} 个个股技术信号；交易重点请以“每日交易计划”的分层结果为准。
+        {summaryText || `共 ${signals.length} 个个股技术信号；交易重点请以“每日交易计划”的分层结果为准。`}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10, borderBottom: '1px solid #333', paddingBottom: 6 }}>
         {sortedDirs.map(dir => {
@@ -59,7 +64,7 @@ export default function BuySignalsReview({ signals, directionOrder: dirOrder, op
         })}
       </div>
       {pageItems.map((s, i) => (
-        <StockCard key={s.code + '-' + i} s={s} idx={start + i + 1} chartPrefix="bs_" mode="review" decisionContext="buy-signal" opportunityMap={opportunityMap} />
+        <StockCard key={s.code + '-' + i} s={s} idx={start + i + 1} chartPrefix="bs_" mode="review" decisionContext={decisionContext} opportunityMap={opportunityMap} />
       ))}
       {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12 }}>

@@ -529,6 +529,7 @@ export interface ReviewData {
   holdings_risk_exposure?: HoldingsRiskExposure
   holdings?: BuySignalItem[]
   buy_signals_review?: BuySignalItem[]
+  technical_candidates_review?: BuySignalItem[]
   direction_order?: string[]
   opportunity_map?: Record<string, string>  // sector/concept → opportunity type
   trading_plan?: {

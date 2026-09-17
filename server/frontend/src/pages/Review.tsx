@@ -37,6 +37,7 @@ export default function Review() {
         ...reviewData,
         holdings_review: reviewData.holdings_review || [],
         buy_signals_review: reviewData.buy_signals_review || [],
+        technical_candidates_review: reviewData.technical_candidates_review || [],
       })
       setRefreshStatus(reviewData.refresh_status || null)
       setLoading(false)
@@ -172,6 +173,22 @@ export default function Review() {
                   <BuySignalsReview signals={data.buy_signals_review as any} directionOrder={data.direction_order} opportunityMap={data.opportunity_map} />
                 ) : (
                   <div className="empty">暂无买点信号</div>
+                )}
+              </div>
+            </div>
+
+            {/* STEP 4B: 技术候选/观察信号 */}
+            <div className="section">
+              <div className="section-title">
+                <span className="step">STEP 4B</span>
+                技术候选 / 观察信号
+                <span style={{ fontSize: 12, color: '#666', fontWeight: 'normal' }}>→ 技术事实已出现，但尚未转为正式买点</span>
+              </div>
+              <div id="technicalCandidateList">
+                {data?.technical_candidates_review && data.technical_candidates_review.length > 0 ? (
+                  <BuySignalsReview signals={data.technical_candidates_review as any} directionOrder={data.direction_order} opportunityMap={data.opportunity_map} emptyText="暂无技术候选" summaryText={`共 ${data.technical_candidates_review.length} 个观察候选；仅表示技术事实，需等待结构/供需/计划确认。`} decisionContext="technical-candidate" />
+                ) : (
+                  <div className="empty">暂无技术候选</div>
                 )}
               </div>
             </div>

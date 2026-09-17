@@ -66,13 +66,16 @@ interface StockCardProps {
   idx: number
   chartPrefix?: string
   mode?: 'review' | 'monitor'
-  decisionContext?: 'buy-signal' | 'holding' | 'analysis'
+  decisionContext?: 'buy-signal' | 'technical-candidate' | 'holding' | 'analysis'
   opportunityMap?: Record<string, string>
 }
 
 export default function StockCard({ s, idx, chartPrefix = '', mode, decisionContext, opportunityMap }: StockCardProps) {
   const [showChart, setShowChart] = useState(false)
-  const decisionAction = buyDecisionAction(s, decisionContext === 'buy-signal' ? 'signal' : 'raw')
+  const decisionAction = buyDecisionAction(
+    s,
+    decisionContext === 'buy-signal' || decisionContext === 'technical-candidate' ? 'signal' : 'raw',
+  )
   const isBlocked = decisionAction === '待确认'
   const isCandidate = decisionAction === '观察'
   const isSignalOnly = decisionAction === '技术信号'
@@ -151,6 +154,8 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
     }
   } else if (s.buy_point) {
     bpContent = <div className="field"><span className="l">买点:</span> <span className="v">{s.buy_point}</span></div>
+  } else if (decisionContext === 'technical-candidate' && s.technical_buy_point) {
+    bpContent = <div className="field"><span className="l">技术买点:</span> <span className="v" style={{ color: '#888' }}>{s.technical_buy_point}</span></div>
   }
 
   // 板块对比标识（个股 vs 板块 5日涨幅）
@@ -179,18 +184,19 @@ export default function StockCard({ s, idx, chartPrefix = '', mode, decisionCont
   }
 
   // 结论
+  const buyPointLabel = s.buy_point || s.technical_buy_point || '买点'
   let conclusion = `阶段${s.stage}，${s.structure}`
   let conclusionColor = '#aaa'
   if (isBlocked) {
-    conclusion = `${s.buy_point || '买点信号'}已触发，但${rejectReason || s.action_reason || '板块数据待补齐'}，操作暂待确认`
+    conclusion = `${buyPointLabel}已触发，但${rejectReason || s.action_reason || '板块数据待补齐'}，操作暂待确认`
     conclusionColor = '#ffd700'
   } else if (isCandidate) {
-    conclusion = `${s.buy_point || '买点'}技术信号已触发；${rejectReason || s.action_reason || '尚未满足当前市场执行条件'}，列入观察，尚非可执行买入`
+    conclusion = `${buyPointLabel}技术信号已触发；${rejectReason || s.action_reason || '尚未满足当前市场执行条件'}，列入观察，尚非可执行买入`
     conclusionColor = '#ffd700'
   } else if (isSignalOnly) {
     conclusion = decisionContext === 'analysis'
-      ? `${s.buy_point || '买点'}技术信号已触发；${rejectReason || '本页尚未叠加复盘市场环境和方向优先级'}，最终操作以复盘页为准`
-      : `${s.buy_point || '买点'}技术信号已触发；${rejectReason || s.action_reason || '当前方向优先级不足'}，仅作为技术事实，不进入当前核心交易计划`
+      ? `${buyPointLabel}技术信号已触发；${rejectReason || '本页尚未叠加复盘市场环境和方向优先级'}，最终操作以复盘页为准`
+      : `${buyPointLabel}技术信号已触发；${rejectReason || s.action_reason || '当前方向优先级不足'}，仅作为技术事实，不进入当前核心交易计划`
     conclusionColor = rejectedTechnicalBuy ? '#ff9800' : '#888'
   } else if (isBuy) {
     const slText = (s.stop_loss && s.stop_loss_pct)
