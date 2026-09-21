@@ -1,0 +1,1130 @@
+{
+  "version": "wave-structure-benchmark-v3",
+  "algorithm_version": "wave-structure-v2",
+  "confirmed_by": "codex-regression",
+  "confirmed_at": "2026-09-21",
+  "description": "3L PR-D L2/L3 波段结构真实行情长前史回归基准：用于避免短窗口 warmup 吞掉启动前低波段；不表达买卖点。",
+  "samples": [
+    {
+      "slug": "puran_long_history",
+      "name": "普冉股份-长前史",
+      "asset_type": "stock",
+      "source": "stock_daily:688766.SH:qfq:server-snapshot",
+      "date_range": [
+        "20260401",
+        "20260921"
+      ],
+      "confirmation_note": "用户指出原 20260520 起样本截断前史，导致 20260615 前低波段不可见；本样本从 20260401 起覆盖完整启动前后，用于复核低波段/上升/高波段切换。",
+      "rows": [
+        {
+          "date": "20260401",
+          "open": 239.0,
+          "high": 241.0,
+          "low": 223.38,
+          "close": 238.29,
+          "volume": 66885.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260402",
+          "open": 235.17,
+          "high": 244.33,
+          "low": 221.39,
+          "close": 224.1,
+          "volume": 62664.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260403",
+          "open": 226.9,
+          "high": 229.25,
+          "low": 218.78,
+          "close": 218.78,
+          "volume": 34465.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260407",
+          "open": 225.0,
+          "high": 231.84,
+          "low": 224.61,
+          "close": 225.95,
+          "volume": 41949.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260408",
+          "open": 238.0,
+          "high": 240.68,
+          "low": 229.0,
+          "close": 239.86,
+          "volume": 70222.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260409",
+          "open": 235.0,
+          "high": 246.6,
+          "low": 233.0,
+          "close": 242.79,
+          "volume": 54201.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260410",
+          "open": 249.95,
+          "high": 261.1,
+          "low": 247.91,
+          "close": 254.25,
+          "volume": 67402.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260413",
+          "open": 249.08,
+          "high": 259.95,
+          "low": 249.0,
+          "close": 252.78,
+          "volume": 50764.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260414",
+          "open": 257.33,
+          "high": 277.0,
+          "low": 256.0,
+          "close": 271.03,
+          "volume": 71814.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260415",
+          "open": 273.1,
+          "high": 275.86,
+          "low": 262.5,
+          "close": 265.45,
+          "volume": 51251.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260416",
+          "open": 264.97,
+          "high": 271.86,
+          "low": 258.37,
+          "close": 265.18,
+          "volume": 50555.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260417",
+          "open": 261.03,
+          "high": 270.0,
+          "low": 258.0,
+          "close": 264.5,
+          "volume": 47877.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260420",
+          "open": 265.53,
+          "high": 273.5,
+          "low": 261.62,
+          "close": 271.4,
+          "volume": 45407.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260421",
+          "open": 270.0,
+          "high": 280.0,
+          "low": 258.75,
+          "close": 275.1,
+          "volume": 52904.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260422",
+          "open": 273.73,
+          "high": 277.7,
+          "low": 265.0,
+          "close": 273.5,
+          "volume": 67538.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260423",
+          "open": 281.01,
+          "high": 282.5,
+          "low": 260.61,
+          "close": 266.13,
+          "volume": 50425.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260424",
+          "open": 264.39,
+          "high": 270.54,
+          "low": 255.0,
+          "close": 261.58,
+          "volume": 42610.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260427",
+          "open": 263.31,
+          "high": 266.0,
+          "low": 256.0,
+          "close": 262.41,
+          "volume": 39655.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260428",
+          "open": 265.09,
+          "high": 284.59,
+          "low": 260.35,
+          "close": 275.86,
+          "volume": 75000.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260429",
+          "open": 276.21,
+          "high": 278.88,
+          "low": 248.98,
+          "close": 267.7,
+          "volume": 109967.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260430",
+          "open": 272.0,
+          "high": 283.03,
+          "low": 260.02,
+          "close": 271.09,
+          "volume": 92669.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260506",
+          "open": 289.97,
+          "high": 323.55,
+          "low": 289.0,
+          "close": 318.52,
+          "volume": 108130.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260507",
+          "open": 318.0,
+          "high": 321.59,
+          "low": 308.88,
+          "close": 319.0,
+          "volume": 68341.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260508",
+          "open": 315.0,
+          "high": 325.66,
+          "low": 312.3,
+          "close": 317.5,
+          "volume": 56210.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260511",
+          "open": 348.77,
+          "high": 381.0,
+          "low": 342.9,
+          "close": 381.0,
+          "volume": 104384.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260512",
+          "open": 388.23,
+          "high": 408.18,
+          "low": 377.0,
+          "close": 398.85,
+          "volume": 120374.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260513",
+          "open": 392.24,
+          "high": 444.23,
+          "low": 391.64,
+          "close": 441.0,
+          "volume": 118125.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260514",
+          "open": 430.47,
+          "high": 435.87,
+          "low": 417.3,
+          "close": 421.77,
+          "volume": 92899.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260515",
+          "open": 421.77,
+          "high": 423.88,
+          "low": 393.12,
+          "close": 404.5,
+          "volume": 91902.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260518",
+          "open": 399.85,
+          "high": 428.8,
+          "low": 399.85,
+          "close": 412.4,
+          "volume": 75691.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260519",
+          "open": 403.58,
+          "high": 422.26,
+          "low": 390.37,
+          "close": 421.61,
+          "volume": 70303.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260520",
+          "open": 420.65,
+          "high": 428.74,
+          "low": 412.42,
+          "close": 421.88,
+          "volume": 59386.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260521",
+          "open": 425.34,
+          "high": 428.59,
+          "low": 381.12,
+          "close": 383.58,
+          "volume": 85535.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260522",
+          "open": 392.97,
+          "high": 406.72,
+          "low": 386.48,
+          "close": 402.04,
+          "volume": 73183.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260525",
+          "open": 402.87,
+          "high": 426.23,
+          "low": 389.95,
+          "close": 413.51,
+          "volume": 75051.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260526",
+          "open": 415.68,
+          "high": 419.33,
+          "low": 392.16,
+          "close": 402.04,
+          "volume": 66510.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260527",
+          "open": 431.0,
+          "high": 444.0,
+          "low": 412.0,
+          "close": 415.5,
+          "volume": 100099.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260528",
+          "open": 416.75,
+          "high": 423.45,
+          "low": 396.0,
+          "close": 398.1,
+          "volume": 65541.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260529",
+          "open": 406.2,
+          "high": 419.78,
+          "low": 379.79,
+          "close": 386.1,
+          "volume": 64572.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260601",
+          "open": 389.0,
+          "high": 396.25,
+          "low": 369.07,
+          "close": 373.04,
+          "volume": 57706.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260602",
+          "open": 378.0,
+          "high": 381.84,
+          "low": 355.7,
+          "close": 372.03,
+          "volume": 63835.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260603",
+          "open": 372.03,
+          "high": 389.49,
+          "low": 366.36,
+          "close": 374.0,
+          "volume": 64309.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260604",
+          "open": 363.99,
+          "high": 435.99,
+          "low": 363.99,
+          "close": 427.35,
+          "volume": 95315.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260605",
+          "open": 404.0,
+          "high": 421.0,
+          "low": 393.0,
+          "close": 396.0,
+          "volume": 63409.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260608",
+          "open": 370.38,
+          "high": 389.96,
+          "low": 360.08,
+          "close": 373.0,
+          "volume": 60112.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260609",
+          "open": 385.0,
+          "high": 416.17,
+          "low": 378.78,
+          "close": 409.02,
+          "volume": 67983.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260610",
+          "open": 410.26,
+          "high": 413.51,
+          "low": 376.27,
+          "close": 383.34,
+          "volume": 64881.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260611",
+          "open": 386.38,
+          "high": 402.52,
+          "low": 375.01,
+          "close": 387.58,
+          "volume": 59518.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260612",
+          "open": 408.3,
+          "high": 422.0,
+          "low": 390.59,
+          "close": 390.59,
+          "volume": 106353.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260615",
+          "open": 406.5,
+          "high": 464.68,
+          "low": 388.01,
+          "close": 457.0,
+          "volume": 101083.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260616",
+          "open": 466.01,
+          "high": 493.0,
+          "low": 460.0,
+          "close": 483.5,
+          "volume": 88528.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260617",
+          "open": 470.11,
+          "high": 580.2,
+          "low": 467.0,
+          "close": 580.2,
+          "volume": 107659.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260618",
+          "open": 570.2,
+          "high": 615.68,
+          "low": 565.88,
+          "close": 590.0,
+          "volume": 100899.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260622",
+          "open": 600.0,
+          "high": 680.0,
+          "low": 592.04,
+          "close": 670.31,
+          "volume": 88359.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260623",
+          "open": 650.0,
+          "high": 718.77,
+          "low": 636.26,
+          "close": 703.0,
+          "volume": 95908.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260624",
+          "open": 675.0,
+          "high": 753.3,
+          "low": 649.0,
+          "close": 740.0,
+          "volume": 87704.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260625",
+          "open": 764.44,
+          "high": 815.56,
+          "low": 733.33,
+          "close": 754.15,
+          "volume": 95767.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260626",
+          "open": 727.0,
+          "high": 794.15,
+          "low": 719.71,
+          "close": 727.01,
+          "volume": 88671.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260629",
+          "open": 740.0,
+          "high": 776.0,
+          "low": 700.0,
+          "close": 737.2,
+          "volume": 83831.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260630",
+          "open": 721.5,
+          "high": 788.98,
+          "low": 702.1,
+          "close": 766.6,
+          "volume": 75258.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260701",
+          "open": 770.53,
+          "high": 909.8,
+          "low": 758.01,
+          "close": 870.0,
+          "volume": 97203.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260702",
+          "open": 768.0,
+          "high": 844.0,
+          "low": 731.0,
+          "close": 784.57,
+          "volume": 84806.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260703",
+          "open": 768.0,
+          "high": 866.01,
+          "low": 735.5,
+          "close": 815.88,
+          "volume": 100669.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260706",
+          "open": 848.0,
+          "high": 851.88,
+          "low": 723.16,
+          "close": 759.99,
+          "volume": 97002.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260707",
+          "open": 702.0,
+          "high": 757.01,
+          "low": 680.0,
+          "close": 710.0,
+          "volume": 93558.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260708",
+          "open": 722.01,
+          "high": 761.0,
+          "low": 693.41,
+          "close": 694.0,
+          "volume": 82196.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260709",
+          "open": 742.56,
+          "high": 805.55,
+          "low": 707.88,
+          "close": 762.07,
+          "volume": 113949.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260710",
+          "open": 762.0,
+          "high": 784.48,
+          "low": 701.0,
+          "close": 703.0,
+          "volume": 81111.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260713",
+          "open": 677.77,
+          "high": 719.34,
+          "low": 586.2,
+          "close": 603.0,
+          "volume": 138486.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260714",
+          "open": 626.52,
+          "high": 650.32,
+          "low": 585.0,
+          "close": 645.0,
+          "volume": 97792.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260715",
+          "open": 666.0,
+          "high": 671.0,
+          "low": 576.22,
+          "close": 578.0,
+          "volume": 93008.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260716",
+          "open": 557.44,
+          "high": 583.0,
+          "low": 510.0,
+          "close": 526.0,
+          "volume": 90102.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260717",
+          "open": 515.53,
+          "high": 524.98,
+          "low": 422.0,
+          "close": 428.0,
+          "volume": 114716.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260720",
+          "open": 460.53,
+          "high": 466.68,
+          "low": 376.66,
+          "close": 400.0,
+          "volume": 120569.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260721",
+          "open": 413.0,
+          "high": 479.9,
+          "low": 373.66,
+          "close": 470.02,
+          "volume": 155780.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260722",
+          "open": 472.0,
+          "high": 499.22,
+          "low": 432.11,
+          "close": 435.0,
+          "volume": 156688.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260723",
+          "open": 450.0,
+          "high": 458.88,
+          "low": 403.15,
+          "close": 407.4,
+          "volume": 109491.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260724",
+          "open": 413.81,
+          "high": 422.37,
+          "low": 383.8,
+          "close": 389.64,
+          "volume": 104929.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260727",
+          "open": 384.02,
+          "high": 398.46,
+          "low": 348.0,
+          "close": 371.78,
+          "volume": 133118.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260728",
+          "open": 335.29,
+          "high": 349.01,
+          "low": 304.22,
+          "close": 309.99,
+          "volume": 146516.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260729",
+          "open": 308.0,
+          "high": 338.68,
+          "low": 285.0,
+          "close": 338.5,
+          "volume": 208006.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260730",
+          "open": 328.01,
+          "high": 368.98,
+          "low": 312.02,
+          "close": 353.12,
+          "volume": 250094.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260731",
+          "open": 423.74,
+          "high": 423.74,
+          "low": 353.18,
+          "close": 354.9,
+          "volume": 283956.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260803",
+          "open": 342.54,
+          "high": 345.5,
+          "low": 312.0,
+          "close": 312.9,
+          "volume": 190806.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260804",
+          "open": 316.21,
+          "high": 337.69,
+          "low": 305.6,
+          "close": 335.76,
+          "volume": 164485.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260805",
+          "open": 340.0,
+          "high": 385.82,
+          "low": 339.76,
+          "close": 373.88,
+          "volume": 188413.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260806",
+          "open": 350.01,
+          "high": 381.0,
+          "low": 347.77,
+          "close": 374.8,
+          "volume": 157962.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260807",
+          "open": 378.92,
+          "high": 408.0,
+          "low": 377.39,
+          "close": 393.63,
+          "volume": 182983.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260810",
+          "open": 392.93,
+          "high": 397.58,
+          "low": 353.38,
+          "close": 374.5,
+          "volume": 173721.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260811",
+          "open": 365.0,
+          "high": 388.89,
+          "low": 360.07,
+          "close": 384.5,
+          "volume": 149891.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260812",
+          "open": 395.88,
+          "high": 415.0,
+          "low": 385.23,
+          "close": 394.6,
+          "volume": 146284.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260813",
+          "open": 410.0,
+          "high": 423.5,
+          "low": 383.4,
+          "close": 383.4,
+          "volume": 161080.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260814",
+          "open": 400.0,
+          "high": 412.01,
+          "low": 396.65,
+          "close": 411.0,
+          "volume": 148039.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260817",
+          "open": 420.0,
+          "high": 469.88,
+          "low": 418.0,
+          "close": 466.0,
+          "volume": 168739.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260818",
+          "open": 470.18,
+          "high": 489.28,
+          "low": 460.97,
+          "close": 466.81,
+          "volume": 167443.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260819",
+          "open": 448.15,
+          "high": 455.0,
+          "low": 419.0,
+          "close": 447.2,
+          "volume": 173704.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260820",
+          "open": 450.0,
+          "high": 480.36,
+          "low": 431.19,
+          "close": 480.36,
+          "volume": 177790.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260821",
+          "open": 470.0,
+          "high": 481.86,
+          "low": 454.71,
+          "close": 463.65,
+          "volume": 125662.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260824",
+          "open": 451.0,
+          "high": 451.0,
+          "low": 403.66,
+          "close": 411.0,
+          "volume": 134369.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260825",
+          "open": 385.05,
+          "high": 418.8,
+          "low": 385.05,
+          "close": 410.0,
+          "volume": 107070.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260826",
+          "open": 407.58,
+          "high": 407.58,
+          "low": 381.24,
+          "close": 397.18,
+          "volume": 106128.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260827",
+          "open": 405.0,
+          "high": 433.0,
+          "low": 399.0,
+          "close": 429.89,
+          "volume": 118960.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260828",
+          "open": 415.44,
+          "high": 422.3,
+          "low": 400.88,
+          "close": 401.18,
+          "volume": 117031.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260831",
+          "open": 385.1,
+          "high": 415.0,
+          "low": 384.03,
+          "close": 415.0,
+          "volume": 88544.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260901",
+          "open": 412.0,
+          "high": 416.97,
+          "low": 397.0,
+          "close": 398.5,
+          "volume": 61435.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260902",
+          "open": 391.12,
+          "high": 399.28,
+          "low": 387.6,
+          "close": 388.5,
+          "volume": 52671.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260903",
+          "open": 394.0,
+          "high": 394.0,
+          "low": 377.0,
+          "close": 385.9,
+          "volume": 69928.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260904",
+          "open": 390.0,
+          "high": 391.93,
+          "low": 363.63,
+          "close": 367.26,
+          "volume": 92935.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260907",
+          "open": 389.0,
+          "high": 398.06,
+          "low": 385.0,
+          "close": 397.29,
+          "volume": 105874.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260908",
+          "open": 397.87,
+          "high": 419.93,
+          "low": 392.52,
+          "close": 401.3,
+          "volume": 104603.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260909",
+          "open": 407.03,
+          "high": 411.85,
+          "low": 391.0,
+          "close": 393.39,
+          "volume": 73048.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260910",
+          "open": 389.0,
+          "high": 406.98,
+          "low": 389.0,
+          "close": 398.95,
+          "volume": 63526.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260911",
+          "open": 387.62,
+          "high": 392.99,
+          "low": 375.0,
+          "close": 388.0,
+          "volume": 75224.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260914",
+          "open": 371.0,
+          "high": 381.49,
+          "low": 368.62,
+          "close": 373.8,
+          "volume": 55695.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260915",
+          "open": 375.0,
+          "high": 395.48,
+          "low": 375.0,
+          "close": 386.0,
+          "volume": 81982.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260916",
+          "open": 393.71,
+          "high": 405.49,
+          "low": 384.0,
+          "close": 398.84,
+          "volume": 79732.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260917",
+          "open": 393.0,
+          "high": 403.48,
+          "low": 389.51,
+          "close": 390.7,
+          "volume": 62147.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260918",
+          "open": 405.61,
+          "high": 440.48,
+          "low": 398.27,
+          "close": 430.0,
+          "volume": 153284.0,
+          "adjustment_status": "qfq"
+        },
+        {
+          "date": "20260921",
+          "open": 438.67,
+          "high": 442.29,
+          "low": 423.61,
+          "close": 428.2,
+          "volume": 108354.0,
+          "adjustment_status": "qfq"
+        }
+      ],
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "impulse",
+        "trading_wave_direction": "up",
+        "trading_wave_label": "上涨波段",
+        "trading_wave_source": "confirmed_active_wave",
+        "trading_state": "上涨趋势中的上涨推动波",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      },
+      "trade_band_checkpoints": [
+        {
+          "date": "20260604",
+          "expected_band": "low",
+          "note": "上升启动早期低波段"
+        },
+        {
+          "date": "20260609",
+          "expected_band": "low",
+          "note": "上升启动早期低波段"
+        },
+        {
+          "date": "20260615",
+          "expected_band": "low",
+          "note": "样本前史充足后，启动前低波段不应被 warmup 吞掉"
+        },
+        {
+          "date": "20260617",
+          "expected_band": "high",
+          "note": "快速冲到区间上沿，高波段/鱼尾风险"
+        },
+        {
+          "date": "20260702",
+          "expected_band": "falling",
+          "note": "高位回落后进入下降波段"
+        }
+      ]
+    }
+  ]
+}

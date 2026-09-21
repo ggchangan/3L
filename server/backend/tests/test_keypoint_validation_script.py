@@ -155,14 +155,15 @@ def test_wave_structure_benchmark_summary_tracks_confirmed_baseline():
 
     summary = module.summarize_all()
 
-    assert summary['fixture_count'] == 2
-    assert summary['sample_count'] == 21
-    assert summary['asset_types'] == {'market': 6, 'sector': 3, 'stock': 12}
-    assert summary['structures'] == {'上涨趋势': 18, '下降趋势': 2, '区间震荡': 1}
-    assert summary['trading_wave_directions'] == {'down': 13, 'up': 7}
+    assert summary['fixture_count'] == 3
+    assert summary['sample_count'] == 22
+    assert summary['asset_types'] == {'market': 6, 'sector': 3, 'stock': 13}
+    assert summary['structures'] == {'上涨趋势': 19, '下降趋势': 2, '区间震荡': 1}
+    assert summary['trading_wave_directions'] == {'down': 13, 'up': 8}
     assert [fixture['version'] for fixture in summary['fixtures']] == [
         'wave-structure-benchmark-v1',
         'wave-structure-benchmark-v2',
+        'wave-structure-benchmark-v3',
     ]
     assert all(fixture['algorithm_version'] == 'wave-structure-v2' for fixture in summary['fixtures'])
 
@@ -175,6 +176,7 @@ def test_wave_structure_benchmark_summary_renders_markdown():
     assert '# 3L 波段结构基准摘要' in markdown
     assert 'wave-structure-benchmark-v1' in markdown
     assert 'wave-structure-benchmark-v2' in markdown
+    assert 'wave-structure-benchmark-v3' in markdown
     assert '上涨趋势' in markdown
     assert '下降趋势' in markdown
 
@@ -192,9 +194,10 @@ def test_wave_structure_review_pack_loads_benchmark_samples_and_rows():
 
     samples = module._load_benchmark_samples()
 
-    assert len(samples) == 21
+    assert len(samples) == 22
     assert any(sample.get('recipe') for _, sample in samples)
     assert any(sample.get('source_fixture') for _, sample in samples)
+    assert any(sample.get('rows') for _, sample in samples)
     assert all(module._sample_rows(sample) for _, sample in samples)
 
 
