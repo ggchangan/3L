@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from backend.core.wave_structure_detector import judge_wave_structure
 
 
@@ -14,6 +17,114 @@ def _row(date, open_, high, low, close, volume=100000):
 
 def _date(day):
     return f'202606{day:02d}' if day <= 30 else f'202607{day - 30:02d}'
+
+
+def _recipe_fall_then_strong_rise():
+    rows = []
+    price = 100.0
+    for idx in range(1, 16):
+        price -= 1.0
+        rows.append(_row(_date(idx), price + 0.4, price + 0.8, price - 0.8, price))
+    for idx in range(16, 24):
+        price += 2.0
+        rows.append(_row(_date(idx), price - 0.4, price + 0.9, price - 0.7, price))
+    return rows
+
+
+def _recipe_rise_then_downtrend_bounce():
+    rows = []
+    price = 120.0
+    for idx in range(1, 18):
+        price += 1.0
+        rows.append(_row(_date(idx), price - 0.4, price + 0.8, price - 0.8, price))
+    for idx in range(18, 31):
+        price -= 2.2
+        rows.append(_row(_date(idx), price + 0.4, price + 0.8, price - 0.9, price))
+    for idx in range(31, 34):
+        price += 1.2
+        rows.append(_row(_date(idx), price - 0.3, price + 0.8, price - 0.5, price))
+    return rows
+
+
+def _recipe_range_oscillation():
+    rows = []
+    price = 100.0
+    for idx in range(1, 30):
+        price += 0.5 if idx % 2 else -0.45
+        rows.append(_row(_date(idx), price - 0.3, price + 0.6, price - 0.6, price))
+    return rows
+
+
+def _recipe_uptrend_pullback():
+    rows = []
+    price = 100.0
+    for idx in range(1, 23):
+        price += 1.5
+        rows.append(_row(_date(idx), price - 0.4, price + 0.9, price - 0.6, price))
+    for idx in range(23, 29):
+        price -= 1.4
+        rows.append(_row(_date(idx), price + 0.3, price + 0.7, price - 0.8, price))
+    return rows
+
+
+def _recipe_stock_candidate_counter_wave():
+    rows = []
+    price = 100.0
+    for idx in range(1, 25):
+        price += 2.0
+        rows.append(_row(_date(idx), price - 1.0, price + 6.0, price - 5.5, price))
+    price -= 12.0
+    rows.append(_row(_date(25), price + 1.0, price + 3.0, price - 2.0, price))
+    return rows
+
+
+def _recipe_stock_intraday_dip_close_back():
+    rows = []
+    price = 100.0
+    for idx in range(1, 25):
+        price += 2.0
+        rows.append(_row(_date(idx), price - 1.0, price + 6.0, price - 5.5, price))
+    rows.append(_row(_date(25), price - 1.0, price + 2.0, price - 18.0, price - 2.0))
+    return rows
+
+
+RECIPES = {
+    'fall_then_strong_rise': _recipe_fall_then_strong_rise,
+    'rise_then_downtrend_bounce': _recipe_rise_then_downtrend_bounce,
+    'range_oscillation': _recipe_range_oscillation,
+    'uptrend_pullback': _recipe_uptrend_pullback,
+    'stock_candidate_counter_wave': _recipe_stock_candidate_counter_wave,
+    'stock_intraday_dip_close_back': _recipe_stock_intraday_dip_close_back,
+}
+
+
+def _assert_expected_wave_result(result, expected, sample_name):
+    if 'structure' in expected:
+        assert result['structure'] == expected['structure'], sample_name
+    if 'phase' in expected:
+        assert result['phase'] == expected['phase'], sample_name
+    if 'phase_in' in expected:
+        assert result['phase'] in expected['phase_in'], sample_name
+    if 'trading_state' in expected:
+        assert result['trading_state'] == expected['trading_state'], sample_name
+    if 'trading_state_in' in expected:
+        assert result['trading_state'] in expected['trading_state_in'], sample_name
+
+    trading_wave = result.get('trading_wave') or {}
+    if 'trading_wave_direction' in expected:
+        assert trading_wave.get('direction') == expected['trading_wave_direction'], sample_name
+    if 'trading_wave_label' in expected:
+        assert trading_wave.get('label') == expected['trading_wave_label'], sample_name
+    if 'trading_wave_source' in expected:
+        assert trading_wave.get('source') == expected['trading_wave_source'], sample_name
+
+    active_wave = result.get('active_wave') or {}
+    if 'active_wave_direction' in expected:
+        assert active_wave.get('direction') == expected['active_wave_direction'], sample_name
+
+    previous_wave = result.get('previous_wave') or {}
+    if 'previous_wave_direction' in expected:
+        assert previous_wave.get('direction') == expected['previous_wave_direction'], sample_name
 
 
 def test_wave_structure_detects_rising_wave_before_ema_confirmation_style_lag():
@@ -135,3 +246,19 @@ def test_wave_structure_does_not_flip_trading_wave_on_intraday_dip_that_closes_b
     assert result['trading_wave']['direction'] == 'up'
     assert result['trading_wave']['source'] == 'confirmed_active_wave'
     assert result['trading_state'] == '上涨趋势中的上涨推动波'
+
+
+def test_user_confirmed_wave_structure_benchmark_v1():
+    fixture_path = Path(__file__).parent / 'fixtures' / 'wave_structure_benchmark_v1.json'
+    fixture = json.loads(fixture_path.read_text(encoding='utf-8'))
+
+    assert fixture['version'] == 'wave-structure-benchmark-v1'
+    assert fixture['algorithm_version'] == 'wave-structure-v1'
+    assert len(fixture['samples']) == 6
+
+    for sample in fixture['samples']:
+        rows = RECIPES[sample['recipe']]()
+        result = judge_wave_structure(rows, asset_type=sample['asset_type'])
+        _assert_expected_wave_result(result, sample['expected'], sample['name'])
+        assert result['version'] == fixture['algorithm_version']
+        assert result['status'] == 'ok'

@@ -1,0 +1,92 @@
+{
+  "version": "wave-structure-benchmark-v1",
+  "algorithm_version": "wave-structure-v1",
+  "confirmed_by": "codex-regression",
+  "confirmed_at": "2026-09-21",
+  "description": "3L PR-D L2/L3 波段结构离线基准：锁定结构、阶段、当前交易波段和交易状态；只表达结构/波段语义，不表达买卖点。",
+  "samples": [
+    {
+      "slug": "market_rising_wave_before_ema_lag",
+      "name": "大盘：先跌后强反弹，较 EMA 更早识别上涨波段",
+      "asset_type": "market",
+      "recipe": "fall_then_strong_rise",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase_in": ["impulse", "pullback"],
+        "trading_wave_direction": "up",
+        "trading_wave_label": "上涨波段",
+        "trading_wave_source": "confirmed_active_wave",
+        "trading_state": "上涨趋势中的上涨推动波",
+        "active_wave_direction": "up"
+      }
+    },
+    {
+      "slug": "market_downtrend_countertrend_bounce",
+      "name": "大盘：主跌后的反弹，不反转成上涨趋势",
+      "asset_type": "market",
+      "recipe": "rise_then_downtrend_bounce",
+      "expected": {
+        "structure": "下降趋势",
+        "phase": "countertrend_bounce",
+        "trading_wave_direction": "up",
+        "trading_wave_label": "上涨波段",
+        "trading_wave_source": "confirmed_active_wave",
+        "trading_state": "下降趋势中的反弹波",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "market_range_no_dominant_wave",
+      "name": "大盘：无主导波段时保持区间震荡",
+      "asset_type": "market",
+      "recipe": "range_oscillation",
+      "expected": {
+        "structure": "区间震荡",
+        "phase": "range",
+        "trading_state_in": ["区间震荡中的上行波段", "区间震荡中的下行波段", "区间震荡"]
+      }
+    },
+    {
+      "slug": "market_uptrend_pullback_exposes_down_wave",
+      "name": "大盘：上涨趋势中的下降波段/回调",
+      "asset_type": "market",
+      "recipe": "uptrend_pullback",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "pullback",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "stock_candidate_counter_wave_before_confirmed_pivot",
+      "name": "个股：确认 pivot 未翻空前，交易波段先暴露候选下降波",
+      "asset_type": "stock",
+      "recipe": "stock_candidate_counter_wave",
+      "expected": {
+        "structure": "上涨趋势",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "candidate_counter_wave",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "up"
+      }
+    },
+    {
+      "slug": "stock_intraday_dip_close_back_does_not_flip_wave",
+      "name": "个股：深下影但收回，不仅因影线翻成下降波段",
+      "asset_type": "stock",
+      "recipe": "stock_intraday_dip_close_back",
+      "expected": {
+        "structure": "上涨趋势",
+        "trading_wave_direction": "up",
+        "trading_wave_label": "上涨波段",
+        "trading_wave_source": "confirmed_active_wave",
+        "trading_state": "上涨趋势中的上涨推动波"
+      }
+    }
+  ]
+}
