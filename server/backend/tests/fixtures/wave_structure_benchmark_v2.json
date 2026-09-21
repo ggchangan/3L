@@ -1,0 +1,354 @@
+{
+  "version": "wave-structure-benchmark-v2",
+  "algorithm_version": "wave-structure-v1",
+  "confirmed_by": "codex-regression",
+  "confirmed_at": "2026-09-21",
+  "description": "3L PR-D L2/L3 波段结构真实行情回归基准：引用 pure_keypoint_benchmark v1/v2 中已固化的行情 rows，锁定当前结构/阶段/交易波段输出；不表达买卖点。",
+  "samples": [
+    {
+      "slug": "kc50",
+      "name": "科创50",
+      "asset_type": "market",
+      "source_fixture": "pure-keypoint-benchmark-v1",
+      "source_sample": "科创50",
+      "source": "index_daily:000688.SH",
+      "date_range": [
+        "20260520",
+        "20260819"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "pullback",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "candidate_counter_wave",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "zzqz",
+      "name": "中证全指",
+      "asset_type": "market",
+      "source_fixture": "pure-keypoint-benchmark-v1",
+      "source_sample": "中证全指",
+      "source": "index_daily:000985.CSI",
+      "date_range": [
+        "20260520",
+        "20260819"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "pullback",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "confirmed_active_wave",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "down",
+        "previous_wave_direction": "up"
+      }
+    },
+    {
+      "slug": "cpo",
+      "name": "CPO",
+      "asset_type": "sector",
+      "source_fixture": "pure-keypoint-benchmark-v1",
+      "source_sample": "CPO",
+      "source": "ths_daily:886033.TI",
+      "date_range": [
+        "20260520",
+        "20260818"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "impulse",
+        "trading_wave_direction": "up",
+        "trading_wave_label": "上涨波段",
+        "trading_wave_source": "confirmed_active_wave",
+        "trading_state": "上涨趋势中的上涨推动波",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "yuanjian",
+      "name": "元件",
+      "asset_type": "sector",
+      "source_fixture": "pure-keypoint-benchmark-v1",
+      "source_sample": "元件",
+      "source": "ths_daily:881270.TI",
+      "date_range": [
+        "20260520",
+        "20260818"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "impulse",
+        "trading_wave_direction": "up",
+        "trading_wave_label": "上涨波段",
+        "trading_wave_source": "confirmed_active_wave",
+        "trading_state": "上涨趋势中的上涨推动波",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "cunchu",
+      "name": "存储",
+      "asset_type": "sector",
+      "source_fixture": "pure-keypoint-benchmark-v1",
+      "source_sample": "存储",
+      "source": "ths_daily:886042.TI",
+      "date_range": [
+        "20260520",
+        "20260818"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "impulse",
+        "trading_wave_direction": "up",
+        "trading_wave_label": "上涨波段",
+        "trading_wave_source": "confirmed_active_wave",
+        "trading_state": "上涨趋势中的上涨推动波",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "zhongguojushi",
+      "name": "中国巨石",
+      "asset_type": "stock",
+      "source_fixture": "pure-keypoint-benchmark-v1",
+      "source_sample": "中国巨石",
+      "source": "stock_daily:600176.SH",
+      "date_range": [
+        "20260520",
+        "20260819"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "pullback",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "candidate_counter_wave",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "taichenguang",
+      "name": "太辰光",
+      "asset_type": "stock",
+      "source_fixture": "pure-keypoint-benchmark-v1",
+      "source_sample": "太辰光",
+      "source": "stock_daily:300570.SZ",
+      "date_range": [
+        "20260519",
+        "20260819"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "pullback",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "candidate_counter_wave",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "puran",
+      "name": "普冉股份",
+      "asset_type": "stock",
+      "source_fixture": "pure-keypoint-benchmark-v1",
+      "source_sample": "普冉股份",
+      "source": "stock_daily:688766.SH",
+      "date_range": [
+        "20260520",
+        "20260819"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "impulse",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "candidate_counter_wave",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "shengbang",
+      "name": "圣邦股份",
+      "asset_type": "stock",
+      "source_fixture": "pure-keypoint-benchmark-v2",
+      "source_sample": "圣邦股份",
+      "source": "stock_daily:300661.SZ:qfq",
+      "date_range": [
+        "20260427",
+        "20260820"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "pullback",
+        "trading_wave_direction": "up",
+        "trading_wave_label": "上涨波段",
+        "trading_wave_source": "candidate_counter_wave",
+        "trading_state": "上涨趋势中的上涨推动波",
+        "active_wave_direction": "down",
+        "previous_wave_direction": "up"
+      }
+    },
+    {
+      "slug": "meiniana",
+      "name": "美年健康",
+      "asset_type": "stock",
+      "source_fixture": "pure-keypoint-benchmark-v2",
+      "source_sample": "美年健康",
+      "source": "stock_daily:002044.SZ:qfq",
+      "date_range": [
+        "20260427",
+        "20260820"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "下降趋势",
+        "phase": "impulse",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "confirmed_active_wave",
+        "trading_state": "下降趋势中的下降推动波",
+        "active_wave_direction": "down",
+        "previous_wave_direction": "up"
+      }
+    },
+    {
+      "slug": "yongding",
+      "name": "永鼎股份",
+      "asset_type": "stock",
+      "source_fixture": "pure-keypoint-benchmark-v2",
+      "source_sample": "永鼎股份",
+      "source": "stock_daily:600105.SH:qfq",
+      "date_range": [
+        "20260427",
+        "20260820"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "pullback",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "candidate_counter_wave",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "greend_harmonic",
+      "name": "绿的谐波",
+      "asset_type": "stock",
+      "source_fixture": "pure-keypoint-benchmark-v2",
+      "source_sample": "绿的谐波",
+      "source": "stock_daily:688017.SH:qfq",
+      "date_range": [
+        "20260427",
+        "20260820"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "pullback",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "confirmed_active_wave",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "down",
+        "previous_wave_direction": "up"
+      }
+    },
+    {
+      "slug": "changchuan",
+      "name": "长川科技",
+      "asset_type": "stock",
+      "source_fixture": "pure-keypoint-benchmark-v2",
+      "source_sample": "长川科技",
+      "source": "stock_daily:300604.SZ:qfq",
+      "date_range": [
+        "20260427",
+        "20260820"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "impulse",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "candidate_counter_wave",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "zhongjixuchuang",
+      "name": "中际旭创",
+      "asset_type": "stock",
+      "source_fixture": "pure-keypoint-benchmark-v2",
+      "source_sample": "中际旭创",
+      "source": "stock_daily:300308.SZ:qfq",
+      "date_range": [
+        "20260427",
+        "20260820"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "impulse",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "candidate_counter_wave",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    },
+    {
+      "slug": "shenghong",
+      "name": "胜宏科技",
+      "asset_type": "stock",
+      "source_fixture": "pure-keypoint-benchmark-v2",
+      "source_sample": "胜宏科技",
+      "source": "stock_daily:300476.SZ:qfq",
+      "date_range": [
+        "20260427",
+        "20260820"
+      ],
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "expected": {
+        "structure": "上涨趋势",
+        "phase": "pullback",
+        "trading_wave_direction": "down",
+        "trading_wave_label": "下降波段",
+        "trading_wave_source": "candidate_counter_wave",
+        "trading_state": "上涨趋势中的下降波段/回调",
+        "active_wave_direction": "up",
+        "previous_wave_direction": "down"
+      }
+    }
+  ]
+}
