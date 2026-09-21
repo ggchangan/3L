@@ -292,6 +292,103 @@ def _major_decline_risk(structure: str, stage: str, wave_position: Dict, events:
     }
 
 
+def _trade_band(wave_position: Dict, position_context: Dict, wave_result: Dict) -> Dict:
+    """把内部细分波段位置压缩成 3L 实操四象限。
+
+    内部可以保留 valley_left/peak_confirmed 等细粒度状态，但交易展示层只回答：
+    低波段、上升波段、高波段、下降波段。这样更贴近“低波段进入、高波段出来、
+    鱼尾不吃”的 3L 执行语义，避免状态过多反而难以行动。
+    """
+    position = wave_position.get('position') or 'unknown'
+    zone_type = (position_context.get('current_zone') or {}).get('type') or position_context.get('zone_type')
+    trading_wave = wave_result.get('trading_wave') or {}
+    direction = trading_wave.get('direction')
+    evidence = list(wave_position.get('evidence') or [])
+
+    if position in ('valley_left', 'valley_confirmed'):
+        return {
+            'band': 'low',
+            'label': '低波段',
+            'action': '重点观察需求确认和有效买点，不因下跌末端恐慌机械回避',
+            'confidence': wave_position.get('confidence', 60),
+            'source_position': position,
+            'evidence': evidence or ['波谷候选或波谷确认'],
+        }
+
+    if position in ('peak_left', 'peak_confirmed'):
+        return {
+            'band': 'high',
+            'label': '高波段',
+            'action': '鱼尾不吃，不追高；持仓重点观察兑现、减仓或卖点',
+            'confidence': wave_position.get('confidence', 60),
+            'source_position': position,
+            'evidence': evidence or ['波峰候选或波峰确认'],
+        }
+
+    if position == 'falling_middle':
+        return {
+            'band': 'falling',
+            'label': '下降波段',
+            'action': '不做或降低风险暴露，等待下一次低波段和需求确认',
+            'confidence': wave_position.get('confidence', 58),
+            'source_position': position,
+            'evidence': evidence or ['当前供应占优或交易波段向下'],
+        }
+
+    if position == 'rising_middle':
+        return {
+            'band': 'rising',
+            'label': '上升波段',
+            'action': '持有/跟随为主，新增不追鱼尾，等待回踩或低位买点',
+            'confidence': wave_position.get('confidence', 58),
+            'source_position': position,
+            'evidence': evidence or ['当前需求占优或交易波段向上'],
+        }
+
+    if position == 'range_middle':
+        if zone_type == 'near_support':
+            band, label, action = (
+                'low',
+                '低波段',
+                '区间下沿附近，重点观察承接和需求确认',
+            )
+        elif zone_type == 'near_resistance':
+            band, label, action = (
+                'high',
+                '高波段',
+                '区间上沿附近，不追高，观察滞涨或突破失败',
+            )
+        elif direction == 'down':
+            band, label, action = (
+                'falling',
+                '下降波段',
+                '区间内下行波段，先等待支撑/低波段信号',
+            )
+        else:
+            band, label, action = (
+                'rising',
+                '上升波段',
+                '区间内上行波段，跟随但不追高',
+            )
+        return {
+            'band': band,
+            'label': label,
+            'action': action,
+            'confidence': max(45, int(wave_position.get('confidence') or 52)),
+            'source_position': position,
+            'evidence': evidence or ['区间震荡按位置和交易波段压缩为交易四象限'],
+        }
+
+    return {
+        'band': 'unknown',
+        'label': '未识别',
+        'action': '波段位置不足，暂不作为交易依据',
+        'confidence': 0,
+        'source_position': position,
+        'evidence': evidence or ['波段位置未识别'],
+    }
+
+
 def _compact_wave(wave: Dict) -> Dict:
     return {
         'direction': wave.get('direction') or 'flat',
@@ -367,6 +464,7 @@ def detect_3l_structure_context(
     stage_view = _stage_for_context(structure, wave_result, events, position_context)
     stage = stage_view['stage']
     wave_position = _wave_position(structure, stage, wave_result, events, position_context)
+    trade_band = _trade_band(wave_position, position_context, wave_result)
     risk = _major_decline_risk(structure, stage, wave_position, events)
     warnings: List[str] = []
     if structure == '区间震荡' and position_context.get('stage') not in ('区间顶部', '区间底部', '区间中段'):
@@ -397,6 +495,7 @@ def detect_3l_structure_context(
             'thresholds': wave_result.get('thresholds') or {},
         },
         'wave_position': wave_position,
+        'trade_band': trade_band,
         'major_decline_risk': risk,
         'position_context': {
             'zone_type': (position_context.get('current_zone') or {}).get('type'),
@@ -409,6 +508,7 @@ def detect_3l_structure_context(
         'is_trade_decision': False,
         'definitions': {
             'structure_context': '3L 结构上下文：只描述结构、阶段、波段位置和主跌风险，不直接输出买卖点',
+            'trade_band': '3L 交易波段四象限：低波段/上升波段/高波段/下降波段；用于交易节奏，不等于买卖点',
             'major_decline_risk': '主跌风险用于仓位/节奏过滤，不等于机械清仓指令',
         },
     }

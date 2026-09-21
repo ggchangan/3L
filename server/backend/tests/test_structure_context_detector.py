@@ -67,6 +67,8 @@ def test_structure_context_keeps_sidecar_boundary_for_uptrend():
     assert result['market_structure']['structure'] == '上涨趋势'
     assert result['market_structure']['supply_demand_regime'] == 'demand_dominant'
     assert result['wave_position']['position'] in ('rising_middle', 'peak_left')
+    assert result['trade_band']['band'] in ('rising', 'high')
+    assert result['trade_band']['label'] in ('上升波段', '高波段')
     assert result['major_decline_risk']['level'] in ('none', 'watch')
     assert result['is_trade_decision'] is False
 
@@ -109,6 +111,9 @@ def test_structure_context_marks_downtrend_development_as_high_decline_risk():
     assert result['market_structure']['structure'] == '下降趋势'
     assert result['market_structure']['stage'] == '发展'
     assert result['wave_position']['position'] == 'falling_middle'
+    assert result['trade_band']['band'] == 'falling'
+    assert result['trade_band']['label'] == '下降波段'
+    assert '等待下一次低波段' in result['trade_band']['action']
     assert result['major_decline_risk']['level'] == 'high'
 
 
@@ -143,6 +148,9 @@ def test_panic_exhaustion_overrides_mechanical_high_decline_risk():
 
     assert result['market_structure']['stage'] == '恐慌/供应衰竭'
     assert result['wave_position']['position'] == 'valley_left'
+    assert result['trade_band']['band'] == 'low'
+    assert result['trade_band']['label'] == '低波段'
+    assert '有效买点' in result['trade_band']['action']
     assert result['major_decline_risk']['level'] == 'none'
     assert '不能机械继续判为主跌' in result['major_decline_risk']['reason']
 
@@ -174,6 +182,8 @@ def test_range_top_uses_position_context_as_stage():
     assert result['market_structure']['structure'] == '区间震荡'
     assert result['market_structure']['stage'] in ('区间顶部', '区间中段', '区间底部')
     assert result['position_context']['zone_type'] in ('near_resistance', 'mid_range', 'near_support')
+    if result['position_context']['zone_type'] == 'near_resistance':
+        assert result['trade_band']['band'] == 'high'
     assert result['is_trade_decision'] is False
 
 
@@ -214,6 +224,7 @@ def test_range_support_breakdown_is_not_labeled_as_peak_confirmation():
     assert result['position_context']['zone_type'] == 'near_support'
     assert result['wave_position']['position'] == 'falling_middle'
     assert result['wave_position']['label'] == '区间底部跌破风险'
+    assert result['trade_band']['band'] == 'falling'
     assert result['major_decline_risk']['level'] == 'watch'
 
 
