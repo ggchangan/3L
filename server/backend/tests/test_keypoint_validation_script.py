@@ -164,7 +164,7 @@ def test_wave_structure_benchmark_summary_tracks_confirmed_baseline():
         'wave-structure-benchmark-v1',
         'wave-structure-benchmark-v2',
     ]
-    assert all(fixture['algorithm_version'] == 'wave-structure-v1' for fixture in summary['fixtures'])
+    assert all(fixture['algorithm_version'] == 'wave-structure-v2' for fixture in summary['fixtures'])
 
 
 def test_wave_structure_benchmark_summary_renders_markdown():

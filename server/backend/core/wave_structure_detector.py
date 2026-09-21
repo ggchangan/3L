@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional
 
 
-VERSION = 'wave-structure-v1'
+VERSION = 'wave-structure-v2'
 MIN_BARS = 20
 
 
@@ -46,6 +46,23 @@ PROFILES = {
     'market': WaveProfile('market', min_reversal_pct=3.0, atr_multiplier=1.8, min_impulse_pct=4.0),
     'sector': WaveProfile('sector', min_reversal_pct=4.0, atr_multiplier=2.0, min_impulse_pct=5.0),
     'stock': WaveProfile('stock', min_reversal_pct=5.0, atr_multiplier=2.2, min_impulse_pct=6.0),
+}
+
+
+STRUCTURE_BREAKDOWN_FLOORS = {
+    # 大盘结构更稳定，避免普通指数回撤过早翻成主跌。
+    'market': 10.0,
+    # 板块介于大盘与个股之间。
+    'sector': 14.0,
+    # 个股供需一旦被集中抛压破坏，不能继续用前一波涨幅的固定比例保护红色结构。
+    'stock': 28.0,
+}
+
+
+STRUCTURE_BREAKDOWN_REVERSAL_MULTIPLIERS = {
+    'market': 1.50,
+    'sector': 1.20,
+    'stock': 0.90,
 }
 
 
@@ -294,7 +311,7 @@ def judge_wave_structure(klines: Iterable[Dict], *, asset_type: str = 'stock') -
     pivots = detect_wave_pivots(rows, thresholds['reversal_pct'])
     active = _active_wave(rows, pivots)
     previous = _previous_wave(pivots)
-    structure, phase, reason = _classify(active, thresholds, previous)
+    structure, phase, reason = _classify(active, thresholds, previous, asset_type)
     trading_wave, trading_state = _trading_wave_context(rows, active, structure, phase, thresholds)
 
     return {
@@ -472,7 +489,21 @@ def _previous_wave(pivots: List[Dict]) -> Dict:
     }
 
 
-def _classify(active: Dict, thresholds: Dict, previous: Optional[Dict] = None) -> tuple[str, str, str]:
+def _structure_breakdown_threshold(asset_type: str, thresholds: Dict) -> float:
+    floor = STRUCTURE_BREAKDOWN_FLOORS.get(asset_type, STRUCTURE_BREAKDOWN_FLOORS['stock'])
+    multiplier = STRUCTURE_BREAKDOWN_REVERSAL_MULTIPLIERS.get(
+        asset_type,
+        STRUCTURE_BREAKDOWN_REVERSAL_MULTIPLIERS['stock'],
+    )
+    return max(floor, float(thresholds['reversal_pct']) * multiplier)
+
+
+def _classify(
+    active: Dict,
+    thresholds: Dict,
+    previous: Optional[Dict] = None,
+    asset_type: str = 'stock',
+) -> tuple[str, str, str]:
     direction = active.get('direction')
     change = abs(float(active.get('change_pct') or 0))
     counter = float(active.get('counter_move_pct') or 0)
@@ -481,6 +512,29 @@ def _classify(active: Dict, thresholds: Dict, previous: Optional[Dict] = None) -
     previous = previous or {}
     previous_direction = previous.get('direction')
     previous_change = abs(float(previous.get('change_pct') or 0))
+    structure_breakdown = _structure_breakdown_threshold(asset_type, thresholds)
+
+    if (
+        direction == 'up'
+        and float(active.get('counter_move_pct') or 0) >= structure_breakdown
+    ):
+        return (
+            '下降趋势',
+            'impulse',
+            '主导上涨波段后的反向回撤已达到供需破坏阈值，即使确认 pivot 尚未稳定也先按下降结构处理',
+        )
+
+    if (
+        direction == 'down'
+        and active.get('confirmed')
+        and previous_direction == 'up'
+        and change >= structure_breakdown
+    ):
+        return (
+            '下降趋势',
+            'impulse',
+            '确认下降波已达到供需破坏阈值，不再用前一上涨波幅的固定比例保护上涨结构',
+        )
 
     if (
         direction == 'up'

@@ -1,6 +1,6 @@
 {
   "version": "wave-structure-benchmark-v2",
-  "algorithm_version": "wave-structure-v1",
+  "algorithm_version": "wave-structure-v2",
   "confirmed_by": "codex-regression",
   "confirmed_at": "2026-09-21",
   "description": "3L PR-D L2/L3 波段结构真实行情回归基准：引用 pure_keypoint_benchmark v1/v2 中已固化的行情 rows，锁定当前结构/阶段/交易波段输出；不表达买卖点。",
@@ -16,7 +16,7 @@
         "20260520",
         "20260819"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "pullback",
@@ -39,7 +39,7 @@
         "20260520",
         "20260819"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "pullback",
@@ -62,7 +62,7 @@
         "20260520",
         "20260818"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "impulse",
@@ -85,7 +85,7 @@
         "20260520",
         "20260818"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "impulse",
@@ -108,7 +108,7 @@
         "20260520",
         "20260818"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "impulse",
@@ -131,7 +131,7 @@
         "20260520",
         "20260819"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "pullback",
@@ -154,7 +154,7 @@
         "20260519",
         "20260819"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "pullback",
@@ -177,7 +177,7 @@
         "20260520",
         "20260819"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "impulse",
@@ -200,7 +200,7 @@
         "20260427",
         "20260820"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "pullback",
@@ -223,7 +223,7 @@
         "20260427",
         "20260820"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "下降趋势",
         "phase": "impulse",
@@ -246,7 +246,7 @@
         "20260427",
         "20260820"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "pullback",
@@ -269,7 +269,7 @@
         "20260427",
         "20260820"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "pullback",
@@ -292,7 +292,7 @@
         "20260427",
         "20260820"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "impulse",
@@ -315,7 +315,7 @@
         "20260427",
         "20260820"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "impulse",
@@ -338,7 +338,7 @@
         "20260427",
         "20260820"
       ],
-      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v1 当前结构/波段输出，供后续结构算法改动做漂移回归。",
+      "confirmation_note": "引用已固化的纯关键点行情样本；本 fixture 锁定 wave-structure-v2 当前结构/波段输出，供后续结构算法改动做漂移回归。",
       "expected": {
         "structure": "上涨趋势",
         "phase": "pullback",
