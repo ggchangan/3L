@@ -304,6 +304,13 @@ def _trade_band(wave_position: Dict, position_context: Dict, wave_result: Dict) 
     trading_wave = wave_result.get('trading_wave') or {}
     direction = trading_wave.get('direction')
     evidence = list(wave_position.get('evidence') or [])
+    active = wave_result.get('active_wave') or {}
+    thresholds = wave_result.get('thresholds') or {}
+    change = abs(float(active.get('change_pct') or 0))
+    counter = abs(float(active.get('counter_move_pct') or 0))
+    reversal = float(thresholds.get('reversal_pct') or 0)
+    min_impulse = float(thresholds.get('min_impulse_pct') or 0)
+    early_rising_threshold = max(min_impulse * 6, reversal * 2.5)
 
     if position in ('valley_left', 'valley_confirmed'):
         return {
@@ -336,6 +343,18 @@ def _trade_band(wave_position: Dict, position_context: Dict, wave_result: Dict) 
         }
 
     if position == 'rising_middle':
+        if direction == 'up' and early_rising_threshold and change <= early_rising_threshold and counter <= reversal * 0.60:
+            return {
+                'band': 'low',
+                'label': '低波段',
+                'action': '上升启动早期，重点观察回踩确认和有效买点',
+                'confidence': max(55, int(wave_position.get('confidence') or 58)),
+                'source_position': position,
+                'evidence': evidence + [
+                    f'上涨波段启动涨幅 {round(change, 2)}%，仍处于低波段观察区',
+                    '尚未出现明显波峰/鱼尾信号',
+                ],
+            }
         return {
             'band': 'rising',
             'label': '上升波段',
