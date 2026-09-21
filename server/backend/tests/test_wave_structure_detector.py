@@ -122,6 +122,16 @@ def _sample_rows(sample):
     return rows
 
 
+def _benchmark_sample(name):
+    fixture_paths = sorted((Path(__file__).parent / 'fixtures').glob('wave_structure_benchmark_v*.json'))
+    for fixture_path in fixture_paths:
+        fixture = json.loads(fixture_path.read_text(encoding='utf-8'))
+        for sample in fixture['samples']:
+            if sample['name'] == name:
+                return sample
+    raise AssertionError(f'benchmark sample not found: {name}')
+
+
 def _assert_expected_wave_result(result, expected, sample_name):
     if 'structure' in expected:
         assert result['structure'] == expected['structure'], sample_name
@@ -272,6 +282,30 @@ def test_wave_structure_does_not_flip_trading_wave_on_intraday_dip_that_closes_b
     assert result['trading_state'] == '上涨趋势中的上涨推动波'
 
 
+def test_wave_structure_marks_puran_confirmed_big_down_wave_as_supply_breakdown():
+    sample = _benchmark_sample('普冉股份')
+    rows = _sample_rows(sample)
+
+    early_pullback = judge_wave_structure(
+        [row for row in rows if str(row['date']) <= '20260710'],
+        asset_type='stock',
+    )
+    confirmed_breakdown = judge_wave_structure(
+        [row for row in rows if str(row['date']) <= '20260721'],
+        asset_type='stock',
+    )
+
+    assert early_pullback['structure'] == '上涨趋势'
+    assert early_pullback['trading_wave']['direction'] == 'down'
+    assert early_pullback['trading_state'] == '上涨趋势中的下降波段/回调'
+
+    assert confirmed_breakdown['structure'] == '下降趋势'
+    assert confirmed_breakdown['phase'] == 'impulse'
+    assert confirmed_breakdown['active_wave']['direction'] == 'down'
+    assert confirmed_breakdown['trading_state'] == '下降趋势中的下降推动波'
+    assert '供需破坏阈值' in confirmed_breakdown['reason']
+
+
 def test_user_confirmed_wave_structure_benchmarks():
     fixture_paths = sorted((Path(__file__).parent / 'fixtures').glob('wave_structure_benchmark_v*.json'))
     assert [path.name for path in fixture_paths] == [
@@ -282,7 +316,7 @@ def test_user_confirmed_wave_structure_benchmarks():
     sample_count = 0
     for fixture_path in fixture_paths:
         fixture = json.loads(fixture_path.read_text(encoding='utf-8'))
-        assert fixture['algorithm_version'] == 'wave-structure-v1'
+        assert fixture['algorithm_version'] == 'wave-structure-v2'
         assert fixture['samples']
 
         for sample in fixture['samples']:

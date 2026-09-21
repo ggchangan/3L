@@ -1,6 +1,6 @@
 {
   "version": "wave-structure-benchmark-v1",
-  "algorithm_version": "wave-structure-v1",
+  "algorithm_version": "wave-structure-v2",
   "confirmed_by": "codex-regression",
   "confirmed_at": "2026-09-21",
   "description": "3L PR-D L2/L3 波段结构离线基准：锁定结构、阶段、当前交易波段和交易状态；只表达结构/波段语义，不表达买卖点。",
