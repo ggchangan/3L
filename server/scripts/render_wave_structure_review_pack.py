@@ -211,6 +211,8 @@ def _source_fixture_rows(sample: Dict) -> List[Dict] | None:
 
 
 def _sample_rows(sample: Dict) -> List[Dict]:
+    if sample.get('rows'):
+        return sample['rows']
     if sample.get('recipe'):
         return RECIPES[sample['recipe']]()
     rows = _source_fixture_rows(sample)

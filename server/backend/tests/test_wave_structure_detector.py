@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from backend.core.structure_context_detector import detect_3l_structure_context
 from backend.core.wave_structure_detector import judge_wave_structure
 
 
@@ -114,6 +115,8 @@ def _source_fixture_rows(sample):
 
 
 def _sample_rows(sample):
+    if sample.get('rows'):
+        return sample['rows']
     if sample.get('recipe'):
         return RECIPES[sample['recipe']]()
     rows = _source_fixture_rows(sample)
@@ -311,6 +314,7 @@ def test_user_confirmed_wave_structure_benchmarks():
     assert [path.name for path in fixture_paths] == [
         'wave_structure_benchmark_v1.json',
         'wave_structure_benchmark_v2.json',
+        'wave_structure_benchmark_v3.json',
     ]
 
     sample_count = 0
@@ -327,4 +331,16 @@ def test_user_confirmed_wave_structure_benchmarks():
             assert result['status'] == 'ok'
             sample_count += 1
 
-    assert sample_count == 21
+    assert sample_count == 22
+
+
+def test_puran_long_history_preserves_low_band_before_june_breakout():
+    sample = _benchmark_sample('普冉股份-长前史')
+    rows = _sample_rows(sample)
+
+    for checkpoint in sample['trade_band_checkpoints']:
+        scoped = [row for row in rows if str(row['date']) <= checkpoint['date']]
+        result = detect_3l_structure_context(scoped, asset_type=sample['asset_type'])
+
+        assert result['status'] == 'ok', checkpoint
+        assert result['trade_band']['band'] == checkpoint['expected_band'], checkpoint
