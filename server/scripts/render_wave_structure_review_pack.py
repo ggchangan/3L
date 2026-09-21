@@ -36,6 +36,7 @@ import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib import font_manager  # noqa: E402
 
+from backend.core.structure_context_detector import detect_3l_structure_context  # noqa: E402
 from backend.core.wave_structure_detector import judge_wave_structure  # noqa: E402
 
 
@@ -54,6 +55,15 @@ WAVE_COLORS = {
     'up': '#ef4444',
     'down': '#22c55e',
     'flat': '#64748b',
+    None: '#64748b',
+}
+
+TRADE_BAND_COLORS = {
+    'low': '#22d3ee',
+    'rising': '#ef4444',
+    'high': '#f59e0b',
+    'falling': '#22c55e',
+    'unknown': '#64748b',
     None: '#64748b',
 }
 
@@ -231,12 +241,18 @@ def _rolling_states(rows: List[Dict], asset_type: str) -> List[Dict]:
             })
             continue
         state = judge_wave_structure(rows[:idx + 1], asset_type=asset_type)
+        context = detect_3l_structure_context(
+            rows[:idx + 1],
+            asset_type=asset_type,
+            wave_structure_result=state,
+        )
         states.append({
             'date': row['date'],
             'structure': state.get('structure'),
             'phase': state.get('phase'),
             'trading_wave': state.get('trading_wave') or {},
             'trading_state': state.get('trading_state'),
+            'trade_band': context.get('trade_band') or {},
         })
     return states
 
@@ -316,6 +332,9 @@ def _render_sample(index: int, fixture: Dict, sample: Dict, rows: List[Dict],
     for start, end, direction in _segments(states, lambda state: (state.get('trading_wave') or {}).get('direction')):
         ax.axvspan(dates[start], dates[end], ymin=0.0, ymax=0.055, color=WAVE_COLORS.get(direction, '#64748b'), alpha=0.42, lw=0)
 
+    for start, end, band in _segments(states, lambda state: (state.get('trade_band') or {}).get('band')):
+        ax.axvspan(dates[start], dates[end], ymin=0.06, ymax=0.105, color=TRADE_BAND_COLORS.get(band, '#64748b'), alpha=0.50, lw=0)
+
     pivots = result.get('pivots') or []
     for pivot in pivots:
         idx = pivot.get('idx')
@@ -354,10 +373,13 @@ def _render_sample(index: int, fixture: Dict, sample: Dict, rows: List[Dict],
 
     priority, reason, _ = _priority_and_reason(sample, result)
     tw = result.get('trading_wave') or {}
+    context = detect_3l_structure_context(rows, asset_type=sample['asset_type'], wave_structure_result=result)
+    trade_band = context.get('trade_band') or {}
     title = (
         f"{index:02d}. {sample['name']}｜{sample['asset_type']}｜{fixture['version']}｜重点={priority}\n"
         f"结构={result.get('structure')} / 阶段={result.get('phase')}｜"
-        f"交易波段={tw.get('label')}({tw.get('direction')}, {tw.get('source')})｜{result.get('trading_state')}｜疑点：{reason}"
+        f"交易波段={tw.get('label')}({tw.get('direction')}, {tw.get('source')})｜"
+        f"交易四象限={trade_band.get('label')}｜{result.get('trading_state')}｜疑点：{reason}"
     )
     ax.set_title(title, loc='left', color='#f8fafc', fontsize=11, **_font_kwargs(font_prop))
     ax.set_ylim(ymin - y_range * 0.12, ymax + y_range * 0.13)
@@ -377,7 +399,7 @@ def _render_sample(index: int, fixture: Dict, sample: Dict, rows: List[Dict],
     ax.text(
         dates[0],
         ymin - y_range * 0.09,
-        '背景色：主结构 红=上涨 绿=下降 蓝=区间｜底部色带：交易波段 红=上行 绿=下行 灰=横向｜黄线：active_wave',
+        '背景色：主结构 红=上涨 绿=下降 蓝=区间｜底部第1色带：交易波段 红=上行 绿=下行 灰=横向｜底部第2色带：四象限 青=低 红=升 橙=高 绿=降｜黄线：active_wave',
         color='#cbd5e1',
         fontsize=8,
         va='top',
@@ -414,10 +436,12 @@ def build_review_pack(output_dir: Path) -> List[Dict]:
     for index, (fixture, sample) in enumerate(_load_benchmark_samples(), 1):
         rows = _sample_rows(sample)
         result = judge_wave_structure(rows, asset_type=sample['asset_type'])
+        context = detect_3l_structure_context(rows, asset_type=sample['asset_type'], wave_structure_result=result)
         image = _render_sample(index, fixture, sample, rows, result, output_dir, font_prop)
         priority, reason, suggestion = _priority_and_reason(sample, result)
         tw = result.get('trading_wave') or {}
         aw = result.get('active_wave') or {}
+        trade_band = context.get('trade_band') or {}
         item = {
             'index': index,
             'name': sample['name'],
@@ -438,6 +462,9 @@ def build_review_pack(output_dir: Path) -> List[Dict]:
             'trading_wave_source': tw.get('source'),
             'trading_state': result.get('trading_state'),
             'active_wave_direction': aw.get('direction'),
+            'trade_band': trade_band.get('band'),
+            'trade_band_label': trade_band.get('label'),
+            'trade_band_action': trade_band.get('action'),
         }
         items.append(item)
     return items
@@ -456,28 +483,30 @@ def render_markdown(items: List[Dict], output_dir: Path) -> str:
         '',
         '## 建议你优先看的样本',
         '',
-        '| # | 样本 | 当前判断 | 疑点 | 审查问题 | 图 |',
-        '|---:|---|---|---|---|---|',
+        '| # | 样本 | 当前判断 | 四象限 | 疑点 | 审查问题 | 图 |',
+        '|---:|---|---|---|---|---|---|',
     ]
     for item in high + medium:
         current = f"{item['structure']} / {item['phase']} / {item['trading_wave_label']}({item['trading_wave_direction']})"
         lines.append(
-            f"| {item['index']} | {item['name']} | {current} | {item['risk_reason']} | {item['review_question']} | [图]({item['image']}) |"
+            f"| {item['index']} | {item['name']} | {current} | {item.get('trade_band_label') or '--'} | "
+            f"{item['risk_reason']} | {item['review_question']} | [图]({item['image']}) |"
         )
     lines.extend([
         '',
         '## 全量样本表',
         '',
-        '| # | 优先级 | 样本 | 类型 | 结构 | 阶段 | 交易波段 | trading source | 审查问题 | 图 |',
-        '|---:|---|---|---|---|---|---|---|---|---|',
+        '| # | 优先级 | 样本 | 类型 | 结构 | 阶段 | 交易波段 | 四象限 | 动作 | trading source | 审查问题 | 图 |',
+        '|---:|---|---|---|---|---|---|---|---|---|---|---|',
     ])
     priority_order = {'high': 0, 'medium': 1, 'low': 2}
     for item in sorted(items, key=lambda x: (priority_order.get(x['priority'], 9), x['index'])):
         wave = f"{item['trading_wave_label']}({item['trading_wave_direction']})"
         lines.append(
             f"| {item['index']} | {item['priority']} | {item['name']} | {item['asset_type']} | "
-            f"{item['structure']} | {item['phase']} | {wave} | {item['trading_wave_source']} | "
-            f"{item['review_question']} | [图]({item['image']}) |"
+            f"{item['structure']} | {item['phase']} | {wave} | "
+            f"{item.get('trade_band_label') or '--'} | {item.get('trade_band_action') or '--'} | "
+            f"{item['trading_wave_source']} | {item['review_question']} | [图]({item['image']}) |"
         )
     lines.extend([
         '',
@@ -486,6 +515,7 @@ def render_markdown(items: List[Dict], output_dir: Path) -> str:
         '- 结构只判断背景：上涨趋势 / 下降趋势 / 区间震荡。',
         '- 交易波段判断当前 3L 波段：上涨波段 / 下降波段 / 横向。',
         '- “上涨趋势 + 下降波段”可以成立，含义是趋势内回调；但需要人工判断是否已经接近结构反转。',
+        '- 交易四象限只保留 低波段 / 上升波段 / 高波段 / 下降波段，用于交易节奏；它不等于买卖点。',
         '- 本材料不判断买卖点，只为后续 L4 供需转换和 L5 买卖点提供结构基线。',
         '',
         f'输出目录：`{output_dir}`',

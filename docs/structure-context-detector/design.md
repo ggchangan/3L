@@ -290,6 +290,15 @@ fixture 回归
     "evidence": []
   },
 
+  "trade_band": {
+    "band": "low|rising|high|falling|unknown",
+    "label": "低波段|上升波段|高波段|下降波段|未识别",
+    "action": "低波段找买点；上升波段持有/跟随；高波段不追高并准备兑现；下降波段规避等待",
+    "confidence": 0,
+    "source_position": "valley_left|...",
+    "evidence": []
+  },
+
   "major_decline_risk": {
     "level": "none|watch|high",
     "reason": "",
@@ -448,6 +457,23 @@ else:
 ### 5.5 第四步：识别波段位置
 
 波段位置用于交易节奏，不直接等于买卖点。
+
+内部可以保留较细的 3L 位置标签，便于回归和解释；但页面和日常交易不应暴露过多状态。
+因此输出额外的 `trade_band` 四象限，把细分位置压缩成最直接的交易语义：
+
+```text
+low 低波段：
+  重点观察需求确认和有效买点。
+
+rising 上升波段：
+  持有/跟随为主，新增不追鱼尾，等待回踩或低位买点。
+
+high 高波段：
+  鱼尾不吃，不追高；持仓重点观察兑现、减仓或卖点。
+
+falling 下降波段：
+  不做或降低风险暴露，等待下一次低波段和需求确认。
+```
 
 ```text
 valley_left 波谷左侧：
@@ -694,4 +720,3 @@ server/scripts/render_structure_context_validation.py
 - 普冉股份 2026-07 初应能暴露下降交易波段；
 - 圣邦股份区间顶部/放量转弱不能成为中继买点前置；
 - 绿的谐波下降趋势里的缩量反弹应解释为下跌中继/需求不足，而不是看多低吸。
-
