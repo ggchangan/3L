@@ -177,3 +177,71 @@ def test_wave_structure_benchmark_summary_renders_markdown():
     assert 'wave-structure-benchmark-v2' in markdown
     assert '上涨趋势' in markdown
     assert '下降趋势' in markdown
+
+
+def _load_wave_structure_review_pack_script():
+    script = Path(__file__).resolve().parents[2] / 'scripts' / 'render_wave_structure_review_pack.py'
+    spec = importlib.util.spec_from_file_location('render_wave_structure_review_pack', script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_wave_structure_review_pack_loads_benchmark_samples_and_rows():
+    module = _load_wave_structure_review_pack_script()
+
+    samples = module._load_benchmark_samples()
+
+    assert len(samples) == 21
+    assert any(sample.get('recipe') for _, sample in samples)
+    assert any(sample.get('source_fixture') for _, sample in samples)
+    assert all(module._sample_rows(sample) for _, sample in samples)
+
+
+def test_wave_structure_review_pack_prioritizes_manual_focus_and_conflicts():
+    module = _load_wave_structure_review_pack_script()
+
+    assert module._priority_and_reason(
+        {'name': '科创50'},
+        {'structure': '上涨趋势', 'phase': 'pullback', 'trading_wave': {'direction': 'up'}},
+    )[0] == 'high'
+
+    assert module._priority_and_reason(
+        {'name': 'fixture'},
+        {'structure': '上涨趋势', 'phase': 'impulse', 'trading_wave': {'direction': 'down'}},
+    )[0] == 'high'
+
+    assert module._priority_and_reason(
+        {'name': 'fixture'},
+        {'structure': '上涨趋势', 'phase': 'pullback', 'trading_wave': {'direction': 'down'}},
+    )[0] == 'medium'
+
+    assert module._priority_and_reason(
+        {'name': 'fixture'},
+        {'structure': '上涨趋势', 'phase': 'impulse', 'trading_wave': {'direction': 'up'}},
+    )[0] == 'low'
+
+
+def test_wave_structure_review_pack_renders_markdown():
+    module = _load_wave_structure_review_pack_script()
+    items = [{
+        'index': 1,
+        'priority': 'high',
+        'name': '科创50',
+        'asset_type': 'market',
+        'structure': '上涨趋势',
+        'phase': 'pullback',
+        'trading_wave_label': '下降波段',
+        'trading_wave_direction': 'down',
+        'trading_wave_source': 'confirmed_pivot_wave',
+        'risk_reason': '用户历史重点讨论样本',
+        'review_question': '是否认可？',
+        'image': '01_kc50.png',
+    }]
+
+    markdown = module.render_markdown(items, Path('/tmp/wave-review'))
+
+    assert '# 3L 波段结构 benchmark 人工审查包' in markdown
+    assert '科创50' in markdown
+    assert '[图](01_kc50.png)' in markdown
+    assert '上涨趋势 + 下降波段' in markdown
