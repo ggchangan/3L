@@ -98,6 +98,30 @@ RECIPES = {
 }
 
 
+def _source_fixture_rows(sample):
+    source_fixture = sample.get('source_fixture')
+    source_sample = sample.get('source_sample')
+    if not source_fixture or not source_sample:
+        return None
+    fixture_files = {
+        'pure-keypoint-benchmark-v1': 'pure_keypoint_benchmark_v1.json',
+        'pure-keypoint-benchmark-v2': 'pure_keypoint_benchmark_v2.json',
+    }
+    fixture_path = Path(__file__).parent / 'fixtures' / fixture_files[source_fixture]
+    fixture = json.loads(fixture_path.read_text(encoding='utf-8'))
+    source = next(item for item in fixture['samples'] if item['name'] == source_sample)
+    return source['rows']
+
+
+def _sample_rows(sample):
+    if sample.get('recipe'):
+        return RECIPES[sample['recipe']]()
+    rows = _source_fixture_rows(sample)
+    if rows is None:
+        raise AssertionError(f"无法解析 benchmark 样本数据: {sample.get('name')}")
+    return rows
+
+
 def _assert_expected_wave_result(result, expected, sample_name):
     if 'structure' in expected:
         assert result['structure'] == expected['structure'], sample_name
@@ -248,17 +272,25 @@ def test_wave_structure_does_not_flip_trading_wave_on_intraday_dip_that_closes_b
     assert result['trading_state'] == '上涨趋势中的上涨推动波'
 
 
-def test_user_confirmed_wave_structure_benchmark_v1():
-    fixture_path = Path(__file__).parent / 'fixtures' / 'wave_structure_benchmark_v1.json'
-    fixture = json.loads(fixture_path.read_text(encoding='utf-8'))
+def test_user_confirmed_wave_structure_benchmarks():
+    fixture_paths = sorted((Path(__file__).parent / 'fixtures').glob('wave_structure_benchmark_v*.json'))
+    assert [path.name for path in fixture_paths] == [
+        'wave_structure_benchmark_v1.json',
+        'wave_structure_benchmark_v2.json',
+    ]
 
-    assert fixture['version'] == 'wave-structure-benchmark-v1'
-    assert fixture['algorithm_version'] == 'wave-structure-v1'
-    assert len(fixture['samples']) == 6
+    sample_count = 0
+    for fixture_path in fixture_paths:
+        fixture = json.loads(fixture_path.read_text(encoding='utf-8'))
+        assert fixture['algorithm_version'] == 'wave-structure-v1'
+        assert fixture['samples']
 
-    for sample in fixture['samples']:
-        rows = RECIPES[sample['recipe']]()
-        result = judge_wave_structure(rows, asset_type=sample['asset_type'])
-        _assert_expected_wave_result(result, sample['expected'], sample['name'])
-        assert result['version'] == fixture['algorithm_version']
-        assert result['status'] == 'ok'
+        for sample in fixture['samples']:
+            rows = _sample_rows(sample)
+            result = judge_wave_structure(rows, asset_type=sample['asset_type'])
+            _assert_expected_wave_result(result, sample['expected'], sample['name'])
+            assert result['version'] == fixture['algorithm_version']
+            assert result['status'] == 'ok'
+            sample_count += 1
+
+    assert sample_count == 21

@@ -203,6 +203,7 @@ candidate=75。当前 fixture 只锁定客观事实点：`price_high`、
 - 验证脚本：`server/scripts/render_wave_structure_validation.py`
 - 基准摘要脚本：`server/scripts/summarize_wave_structure_benchmark.py`
 - 离线基准：`server/backend/tests/fixtures/wave_structure_benchmark_v1.json`
+- 真实行情回归基准：`server/backend/tests/fixtures/wave_structure_benchmark_v2.json`
 
 当前 v1 离线基准覆盖 6 个 3L 波段语义场景：
 
@@ -215,10 +216,24 @@ candidate=75。当前 fixture 只锁定客观事实点：`price_high`、
 | 个股候选反向波 | confirmed pivot 未翻空前，交易波段先暴露候选下降波 |
 | 深下影收回 | 不仅因影线把交易波段翻成下降 |
 
+当前 v2 真实行情回归基准引用已固化的 `pure_keypoint_benchmark`
+行情 rows，覆盖 15 个样本：
+
+| 类型 | 样本 |
+| --- | --- |
+| 大盘 | 科创50、中证全指 |
+| 板块 | CPO、元件、存储 |
+| 个股 | 中国巨石、太辰光、普冉股份、圣邦股份、美年健康、永鼎股份、绿的谐波、长川科技、中际旭创、胜宏科技 |
+
+v2 的用途是锁定 `wave-structure-v1` 当前结构/阶段/交易波段输出，
+方便后续算法改动时发现漂移；它不表达买卖点，也不代表每个样本已经完成
+最终人工定稿。若人工复核发现某样本语义不符合 3L，应先修算法或调整
+expected，并保留变更说明。
+
 需要继续改进：
 
 - 进一步区分“趋势内回调”和“结构反转”；
-- 把科创50、中证全指、CPO、元件、存储、中国巨石、太辰光、普冉股份等真实行情人工校验结果追加为 v2 fixture；
+- 对 v2 真实行情样本做逐样本人工复核，特别关注上涨趋势中回调与结构反转的边界；
 - 对多日供需转换区间增加 `candidate_reversal` / `transition_zone` 标注。
 
 ### L3 结构层
@@ -383,7 +398,7 @@ candidate=75。当前 fixture 只锁定客观事实点：`price_high`、
 | 3L 层级 | 当前核心实现 | 当前状态 |
 | --- | --- | --- |
 | L1 纯关键点 | `pure_keypoint_detector.py` | 已有实现；v1/v2 人工确认基准已固化，需继续扩大样本 |
-| L2 波段 | `wave_structure_detector.py` | 已有实现；v1 离线语义基准已固化，真实行情 fixture 待追加 |
+| L2 波段 | `wave_structure_detector.py` | 已有实现；v1 离线语义基准与 v2 真实行情回归基准已固化，需继续人工复核边界样本 |
 | L3 结构 | `structure_context_detector.py` | 已接入卡片，需继续回归 |
 | L4 供需事件 | `supply_demand_keypoint_detector.py` / `supply_demand_event_detector.py` | 已接入卡片，近期已修中继 |
 | L5 买卖点 | `buy_point_detection.py` / `fusion.py` / `stock_card_service.py` | 门禁已初步收口，旧逻辑仍需改造 |
@@ -517,7 +532,7 @@ candidate=75。当前 fixture 只锁定客观事实点：`price_high`、
 
 ### PR-D：L2/L3 波段结构 fixture 基准
 
-状态：v1 离线语义基准已完成；真实行情人工校验基准待追加。
+状态：v1 离线语义基准与 v2 真实行情回归基准已完成；真实行情样本仍需逐样本人工复核。
 
 目标：结构识别不再只靠局部 EMA/阶段标签。
 
