@@ -117,6 +117,85 @@ def test_structure_context_marks_downtrend_development_as_high_decline_risk():
     assert result['major_decline_risk']['level'] == 'high'
 
 
+def test_trade_band_marks_early_rising_wave_as_low_band():
+    result = detect_3l_structure_context(
+        _trend_rows('up'),
+        asset_type='stock',
+        wave_structure_result={
+            'status': 'ok',
+            'date': '20260740',
+            'structure': '上涨趋势',
+            'phase': 'impulse',
+            'active_wave': {
+                'direction': 'up',
+                'start_idx': 20,
+                'start_date': '20260721',
+                'start_price': 100,
+                'extreme_idx': 39,
+                'extreme_date': '20260740',
+                'extreme_price': 135,
+                'change_pct': 35,
+                'counter_move_pct': 1,
+                'confirmed': True,
+            },
+            'trading_wave': {'direction': 'up', 'label': '上涨波段', 'confirmed': True},
+            'trading_state': '上涨趋势中的上涨推动波',
+            'thresholds': {'min_impulse_pct': 6, 'reversal_pct': 18},
+            'pivots': [
+                {'idx': 0, 'date': '20260701', 'type': 'low', 'price': 90},
+                {'idx': 10, 'date': '20260711', 'type': 'high', 'price': 118},
+                {'idx': 20, 'date': '20260721', 'type': 'low', 'price': 100},
+            ],
+            'reason': 'fixture early rising',
+        },
+        supply_demand_events_result={'status': 'ok', 'events': [], 'is_trade_decision': False},
+    )
+
+    assert result['wave_position']['position'] == 'rising_middle'
+    assert result['trade_band']['band'] == 'low'
+    assert result['trade_band']['label'] == '低波段'
+    assert '上升启动早期' in result['trade_band']['action']
+
+
+def test_trade_band_does_not_keep_extended_rising_wave_as_low_band():
+    result = detect_3l_structure_context(
+        _trend_rows('up'),
+        asset_type='stock',
+        wave_structure_result={
+            'status': 'ok',
+            'date': '20260740',
+            'structure': '上涨趋势',
+            'phase': 'impulse',
+            'active_wave': {
+                'direction': 'up',
+                'start_idx': 20,
+                'start_date': '20260721',
+                'start_price': 100,
+                'extreme_idx': 39,
+                'extreme_date': '20260740',
+                'extreme_price': 180,
+                'change_pct': 80,
+                'counter_move_pct': 1,
+                'confirmed': True,
+            },
+            'trading_wave': {'direction': 'up', 'label': '上涨波段', 'confirmed': True},
+            'trading_state': '上涨趋势中的上涨推动波',
+            'thresholds': {'min_impulse_pct': 6, 'reversal_pct': 18},
+            'pivots': [
+                {'idx': 0, 'date': '20260701', 'type': 'low', 'price': 90},
+                {'idx': 10, 'date': '20260711', 'type': 'high', 'price': 118},
+                {'idx': 20, 'date': '20260721', 'type': 'low', 'price': 100},
+            ],
+            'reason': 'fixture extended rising',
+        },
+        supply_demand_events_result={'status': 'ok', 'events': [], 'is_trade_decision': False},
+    )
+
+    assert result['wave_position']['position'] == 'rising_middle'
+    assert result['trade_band']['band'] == 'rising'
+    assert result['trade_band']['label'] == '上升波段'
+
+
 def test_panic_exhaustion_overrides_mechanical_high_decline_risk():
     result = detect_3l_structure_context(
         _trend_rows('down'),
